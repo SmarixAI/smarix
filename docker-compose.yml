@@ -5,9 +5,9 @@ services:
     image: postgres:16-alpine
     container_name: chatbot_postgres
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: super_employee_memory
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backend/scripts/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql:ro
@@ -21,11 +21,15 @@ services:
     networks:
       - chatbot_network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
   redis:
     image: redis:7-alpine
     container_name: chatbot_redis
-    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
     ports:
@@ -52,10 +56,11 @@ services:
       LLM_PROVIDER: ${LLM_PROVIDER:-openai}
       GMAIL_CLIENT_ID: ${GMAIL_CLIENT_ID}
       GMAIL_CLIENT_SECRET: ${GMAIL_CLIENT_SECRET}
-      MEMORY_DB_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/super_employee_memory
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_DB: 1
+      MEMORY_DB_URL: ${MEMORY_DB_URL}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_DB: ${REDIS_DB}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       PYTHONUNBUFFERED: 1
       PYTHONPATH: /app
     volumes:
@@ -77,6 +82,10 @@ services:
     networks:
       - chatbot_network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1.5G
 
   frontend:
     build:
@@ -97,10 +106,14 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 60s
     networks:
       - chatbot_network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
 
   prometheus:
     image: prom/prometheus:latest
@@ -120,6 +133,10 @@ services:
     networks:
       - chatbot_network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
   grafana:
     image: grafana/grafana:latest
@@ -137,6 +154,10 @@ services:
     networks:
       - chatbot_network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.49.1

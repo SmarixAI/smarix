@@ -10,7 +10,7 @@ import Loader from "./Loader";
 import { useAuth } from "@/components/auth/AuthContext";
 import Chatbot from "@/components/onboarding/Chatbot";
 
-const API_URL = "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 type SectionType = "finalcall" | "handover" | "documentation";
 

@@ -61,6 +61,8 @@ export default function SetupPipelineView({
     }
   }, [repoName, touched.repo]);
 
+  const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
   // Backend validation - validate repository existence when both fields are filled
   useEffect(() => {
     const validateRepository = async () => {
@@ -80,7 +82,7 @@ export default function SetupPipelineView({
       setValidating(true);
       
       try {
-        const response = await fetch("http://localhost:8000/admin/validate-repository", {
+        const response = await fetch(`${baseURL}/admin/validate-repository`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -148,7 +150,7 @@ export default function SetupPipelineView({
     // Then validate repository existence via backend
     setValidating(true);
     try {
-      const response = await fetch("http://localhost:8000/admin/validate-repository", {
+      const response = await fetch(`${baseURL}/admin/validate-repository`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

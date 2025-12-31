@@ -19,7 +19,7 @@ import QASection from "./managerViewSections/QASection";
 import PracticeSection from "./managerViewSections/PracticeSection";
 import BugFixSection from "./managerViewSections/BugFixSection";
 
-const API_URL = "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 type SectionType = "reading" | "qa" | "practice" | "bugfix";
 type ViewType = "dashboard" | "manage";

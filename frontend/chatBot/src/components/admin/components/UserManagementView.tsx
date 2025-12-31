@@ -43,11 +43,13 @@ export default function UserManagementView({ darkMode }: UserManagementViewProps
     lastDay: "",
   });
 
+  const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
   // Fetch users
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const response = await fetch("http://localhost:8000/admin/users");
+      const response = await fetch(`${baseURL}/admin/users`);
       if (response.ok) {
         const data = await response.json();
         setUsers(data.users || []);
@@ -98,7 +100,7 @@ export default function UserManagementView({ darkMode }: UserManagementViewProps
         }
       }
 
-      const response = await fetch("http://localhost:8000/admin/users", {
+      const response = await fetch(`${baseURL}/admin/users`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -145,7 +147,7 @@ export default function UserManagementView({ darkMode }: UserManagementViewProps
         }
       }
 
-      const response = await fetch(`http://localhost:8000/admin/users/${encodeURIComponent(username)}`, {
+      const response = await fetch(`${baseURL}/admin/users/${encodeURIComponent(username)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -181,7 +183,7 @@ export default function UserManagementView({ darkMode }: UserManagementViewProps
     }
 
     try {
-      const response = await fetch(`http://localhost:8000/admin/users/${encodeURIComponent(username)}`, {
+      const response = await fetch(`${baseURL}/admin/users/${encodeURIComponent(username)}`, {
         method: "DELETE",
       });
 

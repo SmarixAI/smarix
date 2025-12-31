@@ -40,6 +40,8 @@ export default function AdminPage() {
   const [offboardingMessage, setOffboardingMessage] = useState<string>("");
   const [offboardingRunning, setOffboardingRunning] = useState(false);
 
+  const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
   // Dark mode effect
   useEffect(() => {
     if (darkMode) {
@@ -53,7 +55,7 @@ export default function AdminPage() {
   useEffect(() => {
     const loadHistory = async () => {
       try {
-        const response = await fetch("http://localhost:8000/admin/history");
+        const response = await fetch(`${baseURL}/admin/history`);
         if (response.ok) {
           const data = await response.json();
           const history = data.history || [];
@@ -128,7 +130,7 @@ export default function AdminPage() {
     }
     
     try {
-      await fetch("http://localhost:8000/admin/setup/cancel", {
+      await fetch(`${baseURL}/admin/setup/cancel`, {
         method: "POST",
       });
     } catch (error) {
@@ -164,7 +166,7 @@ export default function AdminPage() {
 
     // Then validate repository existence via backend
     try {
-      const response = await fetch("http://localhost:8000/admin/validate-repository", {
+      const response = await fetch(`${baseURL}/admin/validate-repository`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -197,7 +199,7 @@ export default function AdminPage() {
     );
 
     // Connect to WebSocket
-    const ws = new WebSocket("ws://localhost:8000/ws/admin/pipeline");
+    const ws = new WebSocket(`${baseURL}/ws/admin/pipeline`);
     setWsConnection(ws);
 
     ws.onopen = () => {
@@ -247,7 +249,7 @@ export default function AdminPage() {
           // Save to backend (async IIFE)
           (async () => {
             try {
-              const response = await fetch("http://localhost:8000/admin/history", {
+              const response = await fetch(`${baseURL}/admin/history`, {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
@@ -294,7 +296,7 @@ export default function AdminPage() {
           // Save to backend (async IIFE)
           (async () => {
             try {
-              const response = await fetch("http://localhost:8000/admin/history", {
+              const response = await fetch(`${baseURL}/admin/history`, {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
@@ -371,7 +373,7 @@ export default function AdminPage() {
 
     // Then validate repository existence via backend
     try {
-      const response = await fetch("http://localhost:8000/admin/validate-repository", {
+      const response = await fetch(`${baseURL}/admin/validate-repository`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -415,7 +417,7 @@ export default function AdminPage() {
         throw new Error(`Unknown step: ${stepId}`);
       }
 
-      const response = await fetch(`http://localhost:8000${endpoint}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -449,9 +451,11 @@ export default function AdminPage() {
         step_name: step.name,
         action_type: "setup" as const,
       };
+
+      const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
       
       try {
-        const historyResponse = await fetch("http://localhost:8000/admin/history", {
+        const historyResponse = await fetch(`${baseURL}/admin/history`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -494,7 +498,7 @@ export default function AdminPage() {
       };
       
       try {
-        const historyResponse = await fetch("http://localhost:8000/admin/history", {
+        const historyResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/history`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -563,7 +567,7 @@ export default function AdminPage() {
     ));
 
     try {
-      const response = await fetch("http://localhost:8000/admin/onboarding/run", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/onboarding/run`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -597,7 +601,7 @@ export default function AdminPage() {
       };
 
       try {
-        const historyResponse = await fetch("http://localhost:8000/admin/history", {
+        const historyResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/history`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -639,7 +643,7 @@ export default function AdminPage() {
       };
 
       try {
-        const historyResponse = await fetch("http://localhost:8000/admin/history", {
+        const historyResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/history`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -685,7 +689,7 @@ export default function AdminPage() {
         employee_name: employeeName.trim()
       };
 
-      const response = await fetch("http://localhost:8000/admin/offboarding/run", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/offboarding/run`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -717,7 +721,7 @@ export default function AdminPage() {
       };
 
       try {
-        const historyResponse = await fetch("http://localhost:8000/admin/history", {
+        const historyResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/history`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -759,7 +763,7 @@ export default function AdminPage() {
       };
 
       try {
-        const historyResponse = await fetch("http://localhost:8000/admin/history", {
+        const historyResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/history`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

@@ -171,6 +171,8 @@ export default function CodeEditor({
     URL.revokeObjectURL(url);
   };
 
+  const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
   const handleSubmitCode = async () => {
     setIsSubmitting(true);
     setSubmissionStatus('submitting');
@@ -203,7 +205,7 @@ export default function CodeEditor({
         if (result.submission_id && prData?.pr_number) {
           setTimeout(async () => {
             try {
-              const evalResponse = await fetch('http://localhost:8000/evaluate-submission', {
+              const evalResponse = await fetch(`${baseURL}/evaluate-submission`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',

@@ -19,6 +19,8 @@ export default function ChangePasswordModal({ isOpen, onClose, darkMode = false 
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -42,7 +44,7 @@ export default function ChangePasswordModal({ isOpen, onClose, darkMode = false 
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:8000/admin/auth/change-password', {
+      const response = await fetch(`${baseURL}/admin/auth/change-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -92,6 +92,8 @@ export default function Chatbot({ darkMode, role = 'onboarding' }: ChatbotProps)
     return () => window.removeEventListener('keydown', handleEsc);
   }, [isFullscreen]);
 
+  const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
   const handleSend = async () => {
     if (!inputValue.trim()) return;
 
@@ -117,7 +119,7 @@ export default function Chatbot({ darkMode, role = 'onboarding' }: ChatbotProps)
         requestBody.session_id = sessionId;
       }
 
-      const response = await fetch('http://localhost:8000/chat', {
+      const response = await fetch(`${baseURL}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody),

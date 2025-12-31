@@ -2793,14 +2793,7 @@ def start_server():
     """Start the FastAPI server"""
     import uvicorn
 
-    print("\n" + "=" * 70)
-    print("Starting Super Employee RAG Chatbot API v2.1...")
-    print("=" * 70)
-    print("Server: http://localhost:8000")
-    print("Docs: http://localhost:8000/docs")
-    print("Health: http://localhost:8000/health")
-    print("=" * 70 + "\n")
-
+    print("Starting FastAPI server")
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)
 
 

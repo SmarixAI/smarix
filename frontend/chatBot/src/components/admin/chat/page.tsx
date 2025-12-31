@@ -461,9 +461,11 @@ export default function ChatPage() {
     return mermaidCode;
   };
 
+  const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
   const fetchStats = async () => {
     try {
-      const response = await fetch("http://localhost:8000/stats");
+      const response = await fetch(`${baseURL}/stats`);
       const data = await response.json();
       setStats(data.stats);
     } catch (error) {
@@ -535,7 +537,7 @@ export default function ChatPage() {
 
   const loadSessions = async () => {
     try {
-      const response = await fetch("http://localhost:8000/sessions");
+      const response = await fetch(`${baseURL}/sessions`);
       const data = await response.json();
       console.log(
         "📋 Titles:",
@@ -551,7 +553,7 @@ export default function ChatPage() {
     try {
       console.log(`Loading session: ${sessionId}`);
       const response = await fetch(
-        `http://localhost:8000/load-session/${sessionId}`
+        `${baseURL}/load-session/${sessionId}`
       );
       const data = await response.json();
       console.log("Loaded messages:", data.messages);
@@ -618,7 +620,7 @@ export default function ChatPage() {
         requestBody.session_id = sessionId;
       }
 
-      const response = await fetch("http://localhost:8000/chat", {
+      const response = await fetch(`${baseURL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
@@ -689,7 +691,7 @@ export default function ChatPage() {
     try {
       const requestBody = { session_id: sessionId };
 
-      await fetch("http://localhost:8000/clear-history", {
+      await fetch(`${baseURL}/clear-history`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
@@ -780,7 +782,7 @@ export default function ChatPage() {
               onClick={async () => {
                 try {
                   const response = await fetch(
-                    "http://localhost:8000/new-session",
+                    `${baseURL}/new-session`,
                     {
                       method: "POST",
                     }
@@ -863,7 +865,7 @@ export default function ChatPage() {
                         if (confirm(`Delete "${session.title}"?`)) {
                           try {
                             await fetch(
-                              `http://localhost:8000/delete-session/${session.session_id}`,
+                              `${baseURL}/delete-session/${session.session_id}`,
                               {
                                 method: "DELETE",
                               }
