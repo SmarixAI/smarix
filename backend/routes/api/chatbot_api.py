@@ -239,6 +239,9 @@ app.add_middleware(
         "http://localhost:3000",
         "http://localhost:3001",
         "http://127.0.0.1:3000",
+        "http://44.207.49.138:3000",
+        "https://smarix.net",
+        "https://www.smarix.net"
     ],
     allow_credentials=True,
     allow_methods=["*"],
