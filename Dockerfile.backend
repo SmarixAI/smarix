@@ -1,0 +1,42 @@
+FROM python:3.11-slim AS base
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    curl \
+    libpq-dev \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM base AS dependencies
+
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir psycopg2-binary
+
+FROM base AS production
+
+COPY --from=dependencies /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=dependencies /usr/local/bin /usr/local/bin
+
+COPY . /app/
+
+RUN mkdir -p /app/logs && \
+    adduser --disabled-password --gecos '' --uid 1000 appuser && \
+    chown -R appuser:appuser /app && \
+    chmod -R 755 /app
+
+USER appuser
+
+WORKDIR /app/routes/api
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+CMD ["uvicorn", "chatbot_api:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]

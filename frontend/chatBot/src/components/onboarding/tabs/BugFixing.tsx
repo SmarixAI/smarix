@@ -1,0 +1,134 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { Bug, Loader2 } from 'lucide-react';
+import type { PRTutorialsResponse, CodingQuestionsResponse } from '../../../../types/onboarding';
+import TutorialSection from '../modals/BugFix/Tutorial/ContentModal';
+import ChallengeSection from '../modals/BugFix/Challenge/ContentModal';
+
+interface BugFixingProps {
+  darkMode: boolean;
+  employeeId?: string | null;
+  onboardingData?: any;
+  onUpdateProgress?: (section: string, itemId: string, updates: any) => void;
+}
+
+export default function BugFixing({ darkMode, employeeId, onboardingData, onUpdateProgress }: BugFixingProps) {
+  const [tutorials, setTutorials] = useState<PRTutorialsResponse | null>(null);
+  const [challenges, setChallenges] = useState<CodingQuestionsResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'tutorials' | 'challenges'>('tutorials');
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        const [tutorialsRes, challengesRes] = await Promise.all([
+          fetch('/api/onboarding/bugFix/tutorials'),
+          fetch('/api/onboarding/bugFix/challenges'),
+        ]);
+
+        if (tutorialsRes.ok) {
+          const tutData = await tutorialsRes.json();
+          setTutorials(tutData);
+        }
+
+        if (challengesRes.ok) {
+          const chalData = await challengesRes.json();
+          setChallenges(chalData);
+        }
+      } catch (error) {
+        console.error('Error fetching bug fix data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-32">
+        <Loader2 className={`w-16 h-16 animate-spin ${darkMode ? 'text-blue-400' : 'text-indigo-600'}`} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Compact Header with Tabs in Same Row */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center space-x-3">
+          <Bug className={`w-6 h-6 ${darkMode ? 'text-green-400' : 'text-green-600'}`} />
+          <div>
+            <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+              Bug Fix Training
+            </h2>
+            <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-slate-600'}`}>
+              Master debugging with hands-on tutorials and real-world challenges!
+            </p>
+          </div>
+        </div>
+
+        {/* Compact Tutorial/Challenge Tabs */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setActiveTab('tutorials')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              activeTab === 'tutorials'
+                ? darkMode
+                  ? 'bg-purple-600 text-white shadow-lg'
+                  : 'bg-purple-500 text-white shadow-lg'
+                : darkMode
+                ? 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700'
+                : 'bg-white text-slate-700 hover:bg-purple-50 border border-purple-200'
+            }`}
+          >
+            <span className="text-lg">🎓</span>
+            <span>Tutorial Bugs</span>
+            <span className={`text-xs px-1.5 py-0.5 rounded ${
+              activeTab === 'tutorials'
+                ? 'bg-white/20'
+                : darkMode ? 'bg-gray-700' : 'bg-purple-100'
+            }`}>
+              {tutorials?.tutorials.length || 0}
+            </span>
+          </button>
+          
+          <button
+            onClick={() => setActiveTab('challenges')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+              activeTab === 'challenges'
+                ? darkMode
+                  ? 'bg-green-600 text-white shadow-lg'
+                  : 'bg-green-500 text-white shadow-lg'
+                : darkMode
+                ? 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700'
+                : 'bg-white text-slate-700 hover:bg-green-50 border border-green-200'
+            }`}
+          >
+            <span className="text-lg">🎯</span>
+            <span>Challenge Bugs</span>
+            <span className={`text-xs px-1.5 py-0.5 rounded ${
+              activeTab === 'challenges'
+                ? 'bg-white/20'
+                : darkMode ? 'bg-gray-700' : 'bg-green-100'
+            }`}>
+              {challenges?.questions.length || 0}
+            </span>
+          </button>
+        </div>
+      </div>
+
+      {/* Content */}
+      {activeTab === 'tutorials' && tutorials && (
+        <TutorialSection darkMode={darkMode} data={tutorials} />
+      )}
+      
+      {activeTab === 'challenges' && challenges && (
+        <ChallengeSection darkMode={darkMode} data={challenges} />
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,133 @@
+# Chunking Configuration
+# Defines chunk sizes and strategies for different content types
+
+chunk_sizes:
+  docs: 256          # Documentation: 256 tokens (1024 chars)
+  code: 512          # Code: 512 tokens (2048 chars) - function-level
+  prs: 1024          # Pull Requests: 1024 tokens (4096 chars) - keep discussions together
+  commits: 128       # Commits: 128 tokens (512 chars) - short messages
+  config: 256        # Config files: 256 tokens (keep entire file if possible)
+  generic: 256       # Generic files: 256 tokens default
+
+chunking_strategies:
+  python:
+    method: "ast"              # Use AST parsing
+    split_by: ["function", "class"]  # Split by functions and classes
+    preserve_docstrings: true
+    max_chunk_size: 512
+    
+  javascript:
+    method: "regex"            # Use regex patterns
+    split_by: ["function", "class"]
+    max_chunk_size: 512
+    
+  markdown:
+    method: "headers"          # Split by markdown headers
+    header_levels: [2, 3]     # Split at ## and ###
+    max_chunk_size: 256
+    
+  test_files:
+    method: "test_cases"      # Split by test cases
+    patterns: ["test_", "Test", "it(", "describe("]
+    max_chunk_size: 512
+    
+  config_files:
+    method: "whole_file"      # Keep entire file as one chunk
+    split_if_larger: 256      # Only split if larger than 256 tokens
+    split_by: "top_level_keys"  # Split by top-level keys if needed
+
+index_types:
+  docs:
+    description: "Documentation and setup guides"
+    chunk_size: 256
+    priority: 1
+    
+  code:
+    description: "Source code files"
+    chunk_size: 512
+    priority: 2
+    
+  prs:
+    description: "Pull requests with discussions"
+    chunk_size: 1024
+    priority: 1
+    
+  commits:
+    description: "Commit messages and history"
+    chunk_size: 128
+    priority: 3
+
+routing_keywords:
+  docs:
+    - "setup"
+    - "install"
+    - "configure"
+    - "configuration"
+    - "readme"
+    - "documentation"
+    - "docs"
+    - "guide"
+    - "tutorial"
+    - "getting started"
+    - "how to install"
+    - "how to setup"
+    - "requirements"
+    - "dependencies"
+    - "prerequisites"
+    
+  code:
+    - "implement"
+    - "function"
+    - "class"
+    - "method"
+    - "code"
+    - "implementation"
+    - "how does"
+    - "how is"
+    - "where is"
+    - "show me the"
+    - "find the"
+    - "locate"
+    - "definition"
+    - "functionality"
+    - "logic"
+    - "algorithm"
+    
+  prs:
+    - "why"
+    - "why was"
+    - "why did"
+    - "feature"
+    - "added"
+    - "pull request"
+    - "pr"
+    - "change"
+    - "changed"
+    - "reason"
+    - "rationale"
+    - "decision"
+    - "why this"
+    - "what was the reason"
+    - "explain the change"
+    
+  commits:
+    - "when"
+    - "who changed"
+    - "who modified"
+    - "who updated"
+    - "commit"
+    - "committed"
+    - "history"
+    - "timeline"
+    - "last modified"
+    - "recent change"
+    - "when was"
+    - "author"
+    - "who wrote"
+    - "who created"
+
+fallback:
+  min_confidence: 0.7        # Minimum confidence for primary index
+  use_combined_on_low_score: true  # Use combined index if score < min_confidence
+  combined_top_k: 10         # Top-k for combined index fallback
+
