@@ -4,13 +4,19 @@ export class QAService {
   private static readonly BASE_URL = '/api/onboarding/qa';
   private static cache: Map<string, QAModuleResponse> = new Map();
 
-  static async fetchQAModule(moduleId: string): Promise<QAModuleResponse | null> {
-    if (this.cache.has(moduleId)) {
-      return this.cache.get(moduleId)!;
+  static async fetchQAModule(moduleId: string, repo?: string): Promise<QAModuleResponse | null> {
+    const cacheKey = repo ? `${moduleId}-${repo}` : moduleId;
+    
+    if (this.cache.has(cacheKey)) {
+      return this.cache.get(cacheKey)!;
     }
 
     try {
-      const response = await fetch(`${this.BASE_URL}/${moduleId}`);
+      const url = repo 
+        ? `${this.BASE_URL}/${moduleId}?repo=${encodeURIComponent(repo)}`
+        : `${this.BASE_URL}/${moduleId}`;
+      
+      const response = await fetch(url);
       
       if (!response.ok) {
         return null;
@@ -23,7 +29,7 @@ export class QAService {
       }
 
       const typedData: QAModuleResponse = data as QAModuleResponse;
-      this.cache.set(moduleId, typedData);
+      this.cache.set(cacheKey, typedData);
       
       return typedData;
     } catch (error) {

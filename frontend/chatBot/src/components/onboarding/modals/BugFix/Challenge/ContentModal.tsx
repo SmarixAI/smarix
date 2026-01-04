@@ -8,9 +8,10 @@ import ChallengeContent from '../../../cards/BugFix/Challenge/ModuleContent';
 interface ChallengeSectionProps {
   darkMode: boolean;
   data: CodingQuestionsResponse;
+  activeRepos?: string[];
 }
 
-export default function ChallengeSection({ darkMode, data }: ChallengeSectionProps) {
+export default function ChallengeSection({ darkMode, data, activeRepos = [] }: ChallengeSectionProps) {
   const [selectedChallenge, setSelectedChallenge] = useState<CodingQuestion | null>(null);
 
   return (
@@ -36,7 +37,7 @@ export default function ChallengeSection({ darkMode, data }: ChallengeSectionPro
       </div>
 
       {selectedChallenge && (
-        <ChallengeContent darkMode={darkMode} challenge={selectedChallenge} />
+        <ChallengeContent darkMode={darkMode} challenge={selectedChallenge} activeRepos={activeRepos} />
       )}
     </div>
   );

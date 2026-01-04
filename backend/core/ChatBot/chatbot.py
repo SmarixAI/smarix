@@ -123,10 +123,16 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         
         self.setup_logging(log_file)
 
-        memory_db_url = os.getenv(
-            "MEMORY_DB_URL",
-            "postgresql://postgres:password@localhost:5432/chatbot_memory"
-        )
+        memory_db_url = os.getenv("MEMORY_DB_URL", "")
+        # Use SQLite if no PostgreSQL URL is provided
+        if not memory_db_url or not memory_db_url.startswith("postgresql://"):
+            # Use SQLite for local development
+            import os
+            from pathlib import Path
+            db_path = Path(__file__).parent.parent.parent.parent / "data" / "local_db.sqlite"
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+            memory_db_url = f"sqlite:///{db_path}"
+        
         # Try to initialize conversation store, but make it optional if database is not available
         try:
             self.conversation_store = ConversationStore(memory_db_url)

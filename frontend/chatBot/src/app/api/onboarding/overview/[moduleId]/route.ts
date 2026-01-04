@@ -60,42 +60,99 @@ export async function GET(
 
     let possiblePaths: string[];
 
-    if (repo) {
-      // If repo is provided, look in the specific repo directory
-      // Assuming repo format is "owner/repo"
-      const [owner, repoName] = repo.split('/');
-      possiblePaths = [
-        path.join(process.cwd(), '..', 'backend', 'data', 'Onboarding', owner, repoName, 'reading', jsonFileName),
-        path.join(process.cwd(), 'backend', 'data', 'Onboarding', owner, repoName, 'reading', jsonFileName),
-        path.join(process.cwd(), '..', '..', 'backend', 'data', 'Onboarding', owner, repoName, 'reading', jsonFileName),
-      ];
-    } else {
-      // Fallback to the old path structure
-      possiblePaths = [
-        path.join(process.cwd(), '..', 'backend', 'data', 'Onboarding', 'onboarding_reading_data', jsonFileName),
-        path.join(process.cwd(), 'backend', 'data', 'Onboarding', 'onboarding_reading_data', jsonFileName),
-        path.join(process.cwd(), '..', '..', 'backend', 'data', 'Onboarding', 'onboarding_reading_data', jsonFileName),
-      ];
-    }
-
-    let fileContent: string | null = null;
-
-    for (const filePath of possiblePaths) {
-      try {
-        await fs.access(filePath);
-        fileContent = await fs.readFile(filePath, 'utf-8');
-        break;
-      } catch {
-        continue;
+    // Helper function to find file in repo folders or old structure
+    const findFileInRepos = async (basePaths: string[], fileName: string, repo?: string): Promise<string | null> => {
+      for (const basePath of basePaths) {
+        try {
+          // If repo is provided, try owner/repo structure first
+          if (repo) {
+            const [owner, repoName] = repo.split('/');
+            // Try new structure: owner/repo/onboarding_reading_data/
+            const newPath = path.join(basePath, owner, repoName, 'onboarding_reading_data', fileName);
+            try {
+              await fs.access(newPath);
+              return newPath;
+            } catch {
+              // Try alternative: owner/repo/reading/
+              const altPath = path.join(basePath, owner, repoName, 'reading', fileName);
+              try {
+                await fs.access(altPath);
+                return altPath;
+              } catch {
+                // Continue to scan
+              }
+            }
+          }
+          
+          // Scan repo folders for the file
+          const entries = await fs.readdir(basePath, { withFileTypes: true });
+          for (const entry of entries) {
+            if (entry.isDirectory()) {
+              // Check if it's owner/repo structure
+              const ownerPath = path.join(basePath, entry.name);
+              const ownerEntries = await fs.readdir(ownerPath, { withFileTypes: true });
+              for (const repoEntry of ownerEntries) {
+                if (repoEntry.isDirectory()) {
+                  // Try new structure: owner/repo/onboarding_reading_data/
+                  const newPath = path.join(ownerPath, repoEntry.name, 'onboarding_reading_data', fileName);
+                  try {
+                    await fs.access(newPath);
+                    return newPath;
+                  } catch {
+                    // Try alternative: owner/repo/reading/
+                    const altPath = path.join(ownerPath, repoEntry.name, 'reading', fileName);
+                    try {
+                      await fs.access(altPath);
+                      return altPath;
+                    } catch {
+                      continue;
+                    }
+                  }
+                }
+              }
+              
+              // Try flat repo structure: repo_name/onboarding_reading_data/
+              const flatPath = path.join(ownerPath, entry.name, 'onboarding_reading_data', fileName);
+              try {
+                await fs.access(flatPath);
+                return flatPath;
+              } catch {
+                continue;
+              }
+            }
+          }
+          
+          // Try old structure (direct file)
+          const oldPath = path.join(basePath, 'onboarding_reading_data', fileName);
+          try {
+            await fs.access(oldPath);
+            return oldPath;
+          } catch {
+            continue;
+          }
+        } catch {
+          continue;
+        }
       }
-    }
+      return null;
+    };
 
-    if (!fileContent) {
+    const possibleBasePaths = [
+      path.join(process.cwd(), '..', '..', 'backend', 'data', 'Onboarding'),
+      path.join(process.cwd(), '..', 'backend', 'data', 'Onboarding'),
+      path.join(process.cwd(), 'backend', 'data', 'Onboarding'),
+    ];
+
+    const filePath = await findFileInRepos(possibleBasePaths, jsonFileName, repo);
+    
+    if (!filePath) {
       return NextResponse.json(
         { error: 'Module file not found' },
         { status: 404 }
       );
     }
+
+    const fileContent = await fs.readFile(filePath, 'utf-8');
 
     const jsonData: JSONData = JSON.parse(fileContent);
     const moduleData = extractSections(jsonData);

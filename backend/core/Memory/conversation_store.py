@@ -1,11 +1,18 @@
-import psycopg2
-from psycopg2.extras import RealDictCursor, Json
-from psycopg2.pool import SimpleConnectionPool
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Check if PostgreSQL is available
+try:
+    import psycopg2
+    from psycopg2.extras import RealDictCursor, Json
+    from psycopg2.pool import SimpleConnectionPool
+    PSYCOPG2_AVAILABLE = True
+except ImportError:
+    PSYCOPG2_AVAILABLE = False
+    logger.warning("psycopg2 not available. ConversationStore will use SQLite or be disabled.")
 
 
 class ConversationStore:
@@ -16,6 +23,15 @@ class ConversationStore:
             max_connections: int = 20
     ):
         self.conn_string = connection_string
+        
+        # If it's a SQLite connection or psycopg2 is not available, raise an error
+        # The chatbot will catch this and use DummyConversationStore
+        if connection_string.startswith("sqlite:///"):
+            raise ValueError("ConversationStore requires PostgreSQL. Use DummyConversationStore for SQLite.")
+        
+        if not PSYCOPG2_AVAILABLE:
+            raise ImportError("psycopg2 is required for ConversationStore but is not installed.")
+        
         self.pool = SimpleConnectionPool(
             min_connections,
             max_connections,
