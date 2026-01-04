@@ -11,11 +11,12 @@ interface ReadingOverviewProps {
   darkMode: boolean;
   mousePosition: { x: number; y: number };
   employeeId?: string | null;
+  activeRepos?: string[];
   onboardingData?: any;
   onUpdateProgress?: (section: string, itemId: string, updates: any) => void;
 }
 
-export default function ReadingOverview({ darkMode, mousePosition, employeeId, onboardingData, onUpdateProgress }: ReadingOverviewProps) {
+export default function ReadingOverview({ darkMode, mousePosition, employeeId, activeRepos = [], onboardingData, onUpdateProgress }: ReadingOverviewProps) {
   // Initialize all modules as visible to prevent disappearing
   const [visibleModules, setVisibleModules] = useState<Set<string>>(
     new Set(modules.map(m => `module-${m.id}`))
@@ -61,8 +62,10 @@ export default function ReadingOverview({ darkMode, mousePosition, employeeId, o
     setSelectedModule(module);
     setIsModalOpen(true);
     
-    fetchContent(moduleId);
-  }, [fetchContent]);
+    // Use the first active repo if available
+    const repo = activeRepos.length > 0 ? activeRepos[0] : undefined;
+    fetchContent(moduleId, repo);
+  }, [fetchContent, activeRepos]);
 
   const handleModalClose = useCallback(() => {
     setIsModalOpen(false);

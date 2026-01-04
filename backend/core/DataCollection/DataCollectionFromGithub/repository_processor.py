@@ -618,21 +618,28 @@ class RepositoryProcessor:
         }
 
     def save_repository_data(self, repo_data: Dict[str, Any], owner: str, repo: str) -> str:
-        """Save repository data to JSON file"""
+        """
+        Save GitHub repository data to:
+        data/DataCollectionFromGit/<owner>/<repo>/<repo>.json
+        """
         from pathlib import Path
+        import json
 
-        # Create output directory
-        output_dir = Path("../../data/DataCollectionFromGit")
-        output_dir.mkdir(parents=True, exist_ok=True)
+        # Base directory
+        base_dir = Path("../../data/DataCollectionFromGit")
 
-        # Create output file path
-        output_file = output_dir / f"{owner}_{repo}_data.json"
+        # Final directory: owner/repo
+        repo_dir = base_dir / owner / repo
+        repo_dir.mkdir(parents=True, exist_ok=True)
 
-        # Save the file
-        with open(output_file, 'w', encoding='utf-8') as f:
+        # File name = repo name
+        output_file = repo_dir / f"{repo}.json"
+
+        with open(output_file, "w", encoding="utf-8") as f:
             json.dump(repo_data, f, indent=2, ensure_ascii=False)
 
         return str(output_file)
+
 
     def _process_directory_recursive(self, owner: str, repo: str, path: str, repo_data: Dict, depth: int = 0) -> None:
         """Recursively process directory contents"""

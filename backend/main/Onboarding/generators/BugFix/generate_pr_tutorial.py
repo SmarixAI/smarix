@@ -8,16 +8,25 @@ import json
 import re
 from pathlib import Path
 from datetime import datetime
-from dotenv import load_dotenv
 import importlib
 import importlib.util
 from typing import List, Dict, Optional
 
-repo_root = Path(__file__).resolve().parent.parent.parent.parent.parent
-if str(repo_root) not in sys.path:
-    sys.path.insert(0, str(repo_root))
+# --- Ensure backend/ is on PYTHONPATH ---
+BACKEND_ROOT = Path(__file__).resolve().parents[4]  # backend/
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
 
-load_dotenv()
+repo_root = BACKEND_ROOT
+
+from utils.repo_context import get_repo_context
+
+ctx = get_repo_context()
+
+REPO_OWNER = ctx["owner"]
+REPO_NAME = ctx["repo"]
+VECTOR_DB_PATH = ctx["vector_db"]
+ONBOARDING_ROOT = ctx["onboarding"]
 
 
 def _load_rag_chatbot_class():
@@ -70,46 +79,72 @@ def get_tutorial_generation_prompt(pr_number: int) -> str:
 
 
 def extract_pr_details(response_text: str) -> Optional[Dict]:
-    """Extract PR details from the minimal 6-line response"""
-
     if not response_text or len(response_text.strip()) < 50:
         return None
 
     pr_details = {}
 
-    # Extract PR Number
-    pr_match = re.search(r'PR Number:\s*#?(\d+)', response_text, re.IGNORECASE)
-    if pr_match:
-        pr_details['pr_number'] = int(pr_match.group(1))
-    else:
-        return None  # PR number is mandatory
+    # --- PR Number ---
+    pr_match = re.search(
+        r'PR\s*Number:\s*\*{0,2}#?(\d+)\*{0,2}',
+        response_text,
+        re.IGNORECASE
+    )
+    if not pr_match:
+        pr_match = re.search(
+            r'Pull\s*Request.*?#(\d+)',
+            response_text,
+            re.IGNORECASE
+        )
 
-    # Extract PR Title
-    title_match = re.search(r'PR Title:\s*(.+?)(?:\n|$)', response_text, re.IGNORECASE)
+    if not pr_match:
+        return None
+
+    pr_details["pr_number"] = int(pr_match.group(1))
+
+    # --- Title ---
+    title_match = re.search(
+        r'Pull\s*Request:\s*(.+)',
+        response_text,
+        re.IGNORECASE
+    )
     if title_match:
-        pr_details['pr_title'] = title_match.group(1).strip()
+        pr_details["pr_title"] = title_match.group(1).strip()
 
-    # Extract Author
-    author_match = re.search(r'Author:\s*(.+?)(?:\n|$)', response_text, re.IGNORECASE)
+    # --- Author ---
+    author_match = re.search(
+        r'Author:\s*\*{0,2}(.+?)\*{0,2}',
+        response_text,
+        re.IGNORECASE
+    )
     if author_match:
-        pr_details['author'] = author_match.group(1).strip()
+        pr_details["author"] = author_match.group(1).strip()
 
-    # Extract Difficulty
-    difficulty_match = re.search(r'Difficulty:\s*(Easy|Medium|Hard)', response_text, re.IGNORECASE)
-    if difficulty_match:
-        pr_details['difficulty'] = difficulty_match.group(1).strip()
+    # --- Code files modified ---
+    files_match = re.search(
+        r'Files\s*Modified.*?\n.*?`.*?`',
+        response_text,
+        re.IGNORECASE | re.DOTALL
+    )
+    pr_details["code_files_modified"] = (
+        len(re.findall(r'`[^`]+`', files_match.group(0)))
+        if files_match else 0
+    )
 
-    # Extract Code Files Modified
-    files_match = re.search(r'Code Files Modified:\s*(\d+)', response_text, re.IGNORECASE)
-    if files_match:
-        pr_details['code_files_modified'] = int(files_match.group(1))
+    # --- Difficulty (fallback inference) ---
+    pr_details["difficulty"] = "Unknown"
 
-    # Extract Brief Description
-    desc_match = re.search(r'Brief Description:\s*(.+?)(?:\n|$)', response_text, re.IGNORECASE | re.DOTALL)
-    if desc_match:
-        pr_details['brief_description'] = desc_match.group(1).strip()
+    # --- Brief description ---
+    summary_match = re.search(
+        r'Summary of Changes\s*\n(.+?)(?:\n\n|$)',
+        response_text,
+        re.IGNORECASE | re.DOTALL
+    )
+    if summary_match:
+        pr_details["brief_description"] = summary_match.group(1).strip()
 
     return pr_details
+
 
 
 def parse_tutorial(response_text: str, pr_details: Dict, tutorial_number: int) -> Optional[Dict]:
@@ -185,7 +220,6 @@ def parse_tutorial(response_text: str, pr_details: Dict, tutorial_number: int) -
 
 
 def generate_pr_tutorials(
-    db_path: str,
     gmail_db_path: str = None,
     provider: str = 'openai',
     model: str = None,
@@ -207,7 +241,7 @@ def generate_pr_tutorials(
     print("Initializing chatbot...")
     try:
         chatbot = RAGChatbot(
-            vector_db_path=db_path,
+            vector_db_path=VECTOR_DB_PATH,
             gmail_db_path=gmail_db_path,
             provider=provider,
             model=model,
@@ -361,50 +395,14 @@ def generate_pr_tutorials(
     }
 
     # Save to JSON
-    repo_root = Path(__file__).resolve().parent.parent.parent.parent.parent
-    output_dir = repo_root / "data" / "Onboarding" / "onboarding_bugfix_data"
+    output_dir = ONBOARDING_ROOT / "bugfix"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     json_file = output_dir / "onboarding_pr_tutorials.json"
-    
-    # Ensure we're saving to the correct category folder (not parent folder)
-    assert "onboarding_bugfix_data" in str(json_file), f"Error: File path should include 'onboarding_bugfix_data' but got: {json_file}"
-    print(f"📁 Saving to: {json_file}")
-    print(f"   Category folder: onboarding_bugfix_data")
+
 
     with open(json_file, 'w', encoding='utf-8') as f:
         json.dump(tutorials_data, f, indent=2, ensure_ascii=False)
-
-    # Print summary
-    print("\n" + "=" * 80)
-    print("GENERATION SUMMARY".center(80))
-    print("=" * 80)
-    print(f"Output: {json_file.name}")
-    print(f"Tutorials Generated: {len(all_tutorials)}/3")
-
-    stats = tutorials_data['statistics']['by_difficulty']
-    print(f"\nDIFFICULTY DISTRIBUTION:")
-    print(f"  Easy: {stats['Easy']}")
-    print(f"  Medium: {stats['Medium']}")
-    print(f"  Hard: {stats['Hard']}")
-
-    print(f"\nCODE STATISTICS:")
-    print(f"  Total code blocks: {tutorials_data['statistics']['total_code_blocks']}")
-    print(f"  Total code lines: {tutorials_data['statistics']['total_code_lines']}")
-    print(f"  Total code files: {tutorials_data['statistics']['total_code_files_covered']}")
-    print(f"  Average sections per tutorial: {tutorials_data['statistics']['average_sections_per_tutorial']}")
-
-    if all_tutorials:
-        print(f"\nGENERATED TUTORIALS:")
-        for t in all_tutorials:
-            num = t.get('tutorial_number', '?')
-            diff = t.get('difficulty', 'Unknown')
-            pr_num = t.get('pr_number', '?')
-            title = t.get('pr_title', 'N/A')[:60]
-            files = t.get('code_files_modified', 0)
-            print(f"  Tutorial {num} ({diff})")
-            print(f"     PR #{pr_num}: {title}...")
-            print(f"     Files: {files}, Blocks: {t.get('code_blocks_count', 0)}\n")
 
     print("=" * 80 + "\n")
     print(f"✅ PR tutorials saved to: {json_file}\n")
@@ -413,33 +411,12 @@ def generate_pr_tutorials(
 
 
 if __name__ == "__main__":
-    GITHUB_DB_PATH = "../../../../data/VectorDB/multi_index"
-    GMAIL_DB_PATH = "../../../../data/VectorDB/gmail_chunks"
-    PROVIDER = "openai"
-    MODEL = "gpt-4o-mini"
-    USE_MULTI_INDEX = True
-    ROUTING_METHOD = "llm"
-
-    print("Configuration:")
-    print(f"  Multi-index path: {GITHUB_DB_PATH}")
-    print(f"  Gmail DB path: {GMAIL_DB_PATH}")
-    print(f"  Provider: {PROVIDER}")
-    print(f"  Model: {MODEL}")
-    print(f"  Routing: {ROUTING_METHOD}")
-    print(f"  Selection Method: Random PR Generator (with code-change filtering)")
-    print(f"  Tutorials: 1 Easy, 1 Medium, 1 Hard = 3 Total")
-    print(f"  Multi-index: {'Enabled' if USE_MULTI_INDEX else 'Disabled'}\n")
-
     result = generate_pr_tutorials(
-        db_path=GITHUB_DB_PATH,
-        gmail_db_path=GMAIL_DB_PATH,
-        provider=PROVIDER,
-        model=MODEL,
-        use_multi_index=USE_MULTI_INDEX,
-        routing_method=ROUTING_METHOD
+        gmail_db_path=None,
+        provider="openai",
+        model="gpt-4o-mini",
+        use_multi_index=True,
+        routing_method="llm"
     )
 
-    if result:
-        print(f"✅ Success! PR tutorials available at: {result}")
-    else:
-        print("❌ Tutorial generation failed")
+

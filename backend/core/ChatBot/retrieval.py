@@ -886,8 +886,13 @@ class RetrievalMixin:
         """
         
         
-        if not self.db:
+        # Support both legacy single-index and new multi-index
+        db = getattr(self, "db", None)
+
+        if db is None:
+            # Multi-index mode → chronological queries not ƒsupported
             return None
+
 
         results = self.db.search(query_embedding, top_k=100)
 

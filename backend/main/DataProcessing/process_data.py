@@ -16,11 +16,41 @@ from datetime import datetime
 from collections import defaultdict, Counter
 import re
 
+
+STATE_FILE = Path(
+    "/Users/vishalkeshari/Desktop/smarix/backend/data/Admin/state/runtime_state.json"
+)
+
+def load_current_repo_from_state():
+    if not STATE_FILE.exists():
+        raise RuntimeError(f"❌ State file not found: {STATE_FILE}")
+
+    with open(STATE_FILE, "r", encoding="utf-8") as f:
+        state = json.load(f)
+
+    curr_repo = state.get("curr_repo")
+    if not curr_repo:
+        raise RuntimeError("❌ curr_repo missing in runtime_state.json")
+
+    owner = curr_repo.get("owner")
+    name = curr_repo.get("name")
+
+    if not owner or not name:
+        raise RuntimeError("❌ curr_repo.owner or curr_repo.name missing")
+
+    return owner, name
+
+
+
+
 # Ensure the backend package directory is on sys.path
 _backend_dir = Path(__file__).resolve().parents[2]
 _backend_dir_str = str(_backend_dir)
 if _backend_dir_str not in sys.path:
     sys.path.insert(0, _backend_dir_str)
+
+REPO_OWNER, REPO_NAME = load_current_repo_from_state()
+FULL_REPO_NAME = f"{REPO_OWNER}/{REPO_NAME}"
 
 
 class CodeAnalyzer:
@@ -1883,7 +1913,8 @@ def process_file(input_file: str, output_dir: str, chunker: 'DataChunker',
     with open(input_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
-    repo_name = Path(input_file).stem
+    repo_name = REPO_NAME
+    repo_owner = REPO_OWNER
     source = data.get('source', 'unknown')
 
     print(f"Source: {source}")
@@ -1912,7 +1943,16 @@ def process_file(input_file: str, output_dir: str, chunker: 'DataChunker',
     print(f" - Raw data references: {len(raw_chunks)}")
 
     print("\nSaving chunks split by type...")
-    os.makedirs(output_dir, exist_ok=True)
+
+    # Create repo-specific directory
+    repo_output_dir = Path(output_dir) / repo_owner / repo_name
+    repo_output_dir.mkdir(parents=True, exist_ok=True)
+
+
+    # Optional subfolders
+    chunks_dir = repo_output_dir / "chunks"
+    chunks_dir.mkdir(exist_ok=True)
+
 
     # GROUP CHUNKS BY TYPE
     from collections import defaultdict
@@ -1929,7 +1969,7 @@ def process_file(input_file: str, output_dir: str, chunker: 'DataChunker',
         if not type_chunks:
             continue
 
-        output_file = os.path.join(output_dir, f"{repo_name}_{chunk_type}_chunks.json")
+        output_file = chunks_dir / f"{chunk_type}_chunks.json"
 
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(type_chunks, f, indent=2, ensure_ascii=False)
@@ -1938,7 +1978,7 @@ def process_file(input_file: str, output_dir: str, chunker: 'DataChunker',
         saved_files.append(output_file)
 
     # ALSO SAVE COMBINED FILE (optional, for backward compatibility)
-    combined_file = os.path.join(output_dir, f"{repo_name}_{source}_chunks.json")
+    combined_file = chunks_dir / "combined_chunks.json"
     with open(combined_file, 'w', encoding='utf-8') as f:
         json.dump(chunks, f, indent=2, ensure_ascii=False)
     print(f"   Saved {len(chunks)} combined chunks -> {Path(combined_file).name}")
@@ -1946,7 +1986,7 @@ def process_file(input_file: str, output_dir: str, chunker: 'DataChunker',
 
     # Save entities
     if entities and source == 'git':
-        entities_file = os.path.join(output_dir, f"{repo_name}_git_entities.json")
+        entities_file = repo_output_dir / "entities.json"
         entities_serializable = {k: list(v) for k, v in entities.items()}
         with open(entities_file, 'w', encoding='utf-8') as f:
             json.dump(entities_serializable, f, indent=2, ensure_ascii=False)
@@ -1954,15 +1994,22 @@ def process_file(input_file: str, output_dir: str, chunker: 'DataChunker',
 
     # Save tech stack
     if tech_stack and source == 'git':
-        techstack_file = os.path.join(output_dir, f"{repo_name}_techstack.json")
+        techstack_file = repo_output_dir / "techstack.json"
         with open(techstack_file, 'w', encoding='utf-8') as f:
             json.dump(tech_stack, f, indent=2, ensure_ascii=False)
         print(f"   Tech stack analysis saved: {techstack_file}")
 
     # Save retrieval strategy
     strategy = {
+
+        "repository": {
+        "owner": REPO_OWNER,
+        "name": REPO_NAME,
+        "full_name": f"{REPO_OWNER}/{REPO_NAME}",
+        "url": f"https://github.com/{REPO_OWNER}/{REPO_NAME}",
+        },
+
         'source': source,
-        'reponame': repo_name,
         'chatbot_flow': [
             "1. User query received",
             "2. Search repository overview for tech stack/metrics queries",
@@ -2009,7 +2056,7 @@ def process_file(input_file: str, output_dir: str, chunker: 'DataChunker',
         strategy['chunk_counts']['git_related_emails'] = len(git_related)
         strategy['chunk_counts']['high_correlation_emails'] = len(high_correlation)
 
-    strategy_file = os.path.join(output_dir, f"{repo_name}_{source}_retrieval_strategy.json")
+    strategy_file = repo_output_dir / "retrieval_strategy.json"
     with open(strategy_file, 'w', encoding='utf-8') as f:
         json.dump(strategy, f, indent=2, ensure_ascii=False)
     print(f"   Retrieval strategy: {strategy_file}")
@@ -2043,7 +2090,7 @@ def batch_process():
 
     git_files = []
     if os.path.exists(git_dir):
-        git_files = list(Path(git_dir).glob("*_data.json"))
+        git_files = list(Path(git_dir).glob("*/*/*.json"))
         print(f"📂 Found {len(git_files)} Git files")
 
     gmail_files = []

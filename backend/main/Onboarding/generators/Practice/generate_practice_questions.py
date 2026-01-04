@@ -14,9 +14,18 @@ import importlib
 import importlib.util
 from typing import List, Dict, Optional
 
-repo_root = Path(__file__).resolve().parent.parent.parent.parent.parent
-if str(repo_root) not in sys.path:
-    sys.path.insert(0, str(repo_root))
+BACKEND_ROOT = Path(__file__).resolve().parents[4]  # backend/
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
+
+from utils.repo_context import get_repo_context
+ctx = get_repo_context()
+
+
+VECTOR_DB_PATH = ctx["vector_db"]
+ONBOARDING_ROOT = ctx["onboarding"]
+
+
 
 load_dotenv()
 
@@ -38,7 +47,7 @@ def _load_rag_chatbot_class():
         except Exception:
             pass
 
-    for path in repo_root.rglob("chatbot.py"):
+    for path in BACKEND_ROOT.rglob("chatbot.py"):
         try:
             spec = importlib.util.spec_from_file_location("rag_chatbot_dynamic", str(path))
             mod = importlib.util.module_from_spec(spec)
@@ -228,7 +237,6 @@ def parse_practice_question(response_text: str, difficulty: str, question_number
 
 
 def generate_practice_questions(
-    db_path: str,
     gmail_db_path: str = None,
     provider: str = 'openai',
     model: str = None,
@@ -251,13 +259,12 @@ def generate_practice_questions(
     print("Initializing chatbot with multi-index support...")
     try:
         chatbot = RAGChatbot(
-            vector_db_path=db_path,
+            vector_db_path=VECTOR_DB_PATH,
             gmail_db_path=gmail_db_path,
             provider=provider,
             model=model,
             temperature=0.4,
             verbose=True,
-            use_multi_index=use_multi_index,
             routing_method=routing_method,
             enable_multi_query=False
         )
@@ -363,8 +370,7 @@ def generate_practice_questions(
         }
     }
 
-    repo_root = Path(__file__).resolve().parent.parent.parent.parent.parent
-    output_dir = repo_root / "data" / "Onboarding" / "onboarding_practice_data"
+    output_dir = ONBOARDING_ROOT / "practice"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     json_file = output_dir / f"onboarding_practice_questions.json"
@@ -372,65 +378,23 @@ def generate_practice_questions(
     with open(json_file, 'w', encoding='utf-8') as f:
         json.dump(questions_data, f, indent=2, ensure_ascii=False)
 
-    print("\n" + "=" * 80)
-    print("GENERATION SUMMARY".center(80))
-    print("=" * 80)
-    print(f"Output: {json_file.name}")
-    print(f"Questions Generated: {len(all_questions)}/4")
-
-    stats = questions_data['statistics']['by_difficulty']
-    print(f"\nDIFFICULTY DISTRIBUTION:")
-    print(f"  Easy: {stats['Easy']}")
-    print(f"  Intermediate: {stats['Intermediate']}")
-    print(f"  Hard: {stats['Hard']}")
-
-    print(f"\nSTEP STATISTICS:")
-    print(f"  Total steps across all questions: {questions_data['statistics']['total_steps']}")
-    print(f"  Average steps per question: {questions_data['statistics']['average_steps_per_question']}")
-
-    if all_questions:
-        print(f"\nGENERATED QUESTIONS:")
-        for q in all_questions:
-            num = q.get('question_number', '?')
-            diff = q.get('difficulty', 'Unknown')
-            step_count = len(q.get('steps', []))
-            desc_preview = q.get('question_description', 'N/A')[:80] + "..."
-            print(f"  Q{num} [{diff}] - {step_count} steps")
-            print(f"     {desc_preview}\n")
-
-    print("=" * 80 + "\n")
+    
     print(f"Practice questions saved to: {json_file.name}\n")
 
     return json_file
 
 
 if __name__ == "__main__":
-    GITHUB_DB_PATH = "../../../../data/VectorDB/multi_index"
-    GMAIL_DB_PATH = "../../../../data/VectorDB/gmail_chunks"
+    gmail_db_path: str = None,
     PROVIDER = "openai"
     MODEL = "gpt-4o-mini"
     USE_MULTI_INDEX = True
     ROUTING_METHOD = "llm"
 
-    print("Configuration:")
-    print(f"  Multi-index path: {GITHUB_DB_PATH}")
-    print(f"  Gmail DB path: {GMAIL_DB_PATH}")
-    print(f"  Provider: {PROVIDER}")
-    print(f"  Model: {MODEL}")
-    print(f"  Routing: {ROUTING_METHOD}")
-    print(f"  Questions: 1 Easy, 2 Intermediate, 1 Hard = 4 Total")
-    print(f"  Multi-index: {'Enabled' if USE_MULTI_INDEX else 'Disabled'}\n")
-
     result = generate_practice_questions(
-        db_path=GITHUB_DB_PATH,
-        gmail_db_path=GMAIL_DB_PATH,
-        provider=PROVIDER,
-        model=MODEL,
-        use_multi_index=USE_MULTI_INDEX,
-        routing_method=ROUTING_METHOD
+        provider="openai",
+        model="gpt-4o-mini",
+        use_multi_index=True,
+        routing_method="llm"
     )
 
-    if result:
-        print(f"Success! Practice questions available at: {result}")
-    else:
-        print("Question generation failed")

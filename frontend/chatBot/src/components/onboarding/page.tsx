@@ -22,6 +22,7 @@ export default function OnboardingPage() {
   const [practiceTasks, setPracticeTasks] = useState<any[]>([]);
   const [selectedPracticeTask, setSelectedPracticeTask] = useState<number | null>(null);
   const [employeeId, setEmployeeId] = useState<string | null>(null);
+  const [activeRepos, setActiveRepos] = useState<string[]>([]);
   const [onboardingData, setOnboardingData] = useState<any>(null);
   const [completedModules, setCompletedModules] = useState(0);
   const [totalModules, setTotalModules] = useState(0);
@@ -45,6 +46,19 @@ export default function OnboardingPage() {
               );
               if (currentUser?.employeeId) {
                 id = currentUser.employeeId;
+                setActiveRepos(currentUser.active_repos || []);
+              }
+            }
+          } else {
+            // If we have id from localStorage, still fetch active_repos
+            const usersRes = await fetch('/api/users');
+            if (usersRes.ok) {
+              const usersData = await usersRes.json();
+              const currentUser = usersData.users?.find((u: any) => 
+                u.employeeId === id || u.username === user.username || u.name === user.username
+              );
+              if (currentUser?.active_repos) {
+                setActiveRepos(currentUser.active_repos);
               }
             }
           }
@@ -193,6 +207,7 @@ export default function OnboardingPage() {
             darkMode={darkMode} 
             mousePosition={mousePosition}
             employeeId={employeeId}
+            activeRepos={activeRepos}
             onboardingData={onboardingData}
             onUpdateProgress={updateProgress}
           />
@@ -229,6 +244,7 @@ export default function OnboardingPage() {
             darkMode={darkMode} 
             mousePosition={mousePosition}
             employeeId={employeeId}
+            activeRepos={activeRepos}
             onboardingData={onboardingData}
             onUpdateProgress={updateProgress}
           />
