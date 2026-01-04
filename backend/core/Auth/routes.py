@@ -9,17 +9,149 @@ import os
 
 from . import models, schemas, utils
 
-# --- FIX START ---
-# 1. Changed env var name to MEMORY_DB_URL to match docker-compose
-# 2. Updated default fallback to match container name (chatbot_postgres) and DB name (super_employee_memory)
-DATABASE_URL = os.environ.get(
-    "MEMORY_DB_URL", 
-    "postgresql://postgres:postgres@chatbot_postgres:5432/super_employee_memory"
-)
-# --- FIX END ---
+# Database configuration - use SQLite for local development, PostgreSQL for production
+# Set FORCE_SQLITE=1 to force SQLite even if MEMORY_DB_URL is set
+FORCE_SQLITE = os.environ.get("FORCE_SQLITE", "").lower() in ("1", "true", "yes")
+MEMORY_DB_URL = os.environ.get("MEMORY_DB_URL", "")
 
-engine = create_engine(DATABASE_URL)
+# Determine which database to use
+use_postgres = not FORCE_SQLITE and MEMORY_DB_URL and MEMORY_DB_URL.startswith("postgresql://")
+
+if use_postgres:
+    # Try PostgreSQL first
+    DATABASE_URL = MEMORY_DB_URL
+    connect_args = {}
+    print(f"Attempting to use PostgreSQL database from MEMORY_DB_URL")
+    
+    # Test PostgreSQL connection, fallback to SQLite if it fails
+    try:
+        from sqlalchemy import text
+        test_engine = create_engine(DATABASE_URL, connect_args=connect_args)
+        with test_engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        print("✓ PostgreSQL connection successful")
+    except Exception as e:
+        print(f"⚠ PostgreSQL connection failed: {e}")
+        print("   Falling back to SQLite...")
+        use_postgres = False
+
+if not use_postgres:
+    # Use SQLite for local development (no PostgreSQL required)
+    db_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "data", "local_db.sqlite")
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    DATABASE_URL = f"sqlite:///{db_path}"
+    print(f"✓ Using SQLite database: {db_path}")
+
+# SQLite-specific configuration
+connect_args = {}
+if DATABASE_URL.startswith("sqlite"):
+    connect_args = {"check_same_thread": False}  # Required for SQLite with FastAPI
+    # Ensure models use SQLite-compatible types
+    os.environ["FORCE_SQLITE"] = "1"
+    # Reload models to pick up SQLite types
+    import importlib
+    importlib.reload(models)
+
+engine = create_engine(DATABASE_URL, connect_args=connect_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+def sync_users_from_json(db: Session):
+    """Sync users from users.json file to database"""
+    try:
+        import json
+        from datetime import datetime
+        from pathlib import Path
+        
+        # Find users.json file
+        # routes.py is at backend/core/Auth/routes.py
+        # So we need: backend/data/Admin/users.json
+        backend_dir = Path(__file__).resolve().parent.parent.parent
+        users_file = backend_dir / "data" / "Admin" / "users.json"
+        
+        if not users_file.exists():
+            print(f"⚠ users.json not found at {users_file}")
+            return
+        
+        with open(users_file, 'r', encoding='utf-8') as f:
+            users_data = json.load(f)
+        
+        users_list = users_data.get('users', [])
+        if not users_list:
+            print("⚠ No users found in users.json")
+            return
+        
+        synced_count = 0
+        skipped_count = 0
+        
+        for user_data in users_list:
+            username = user_data.get('username')
+            if not username:
+                continue
+            
+            # Check if user already exists
+            existing_user = db.query(models.User).filter(models.User.username == username).first()
+            if existing_user:
+                skipped_count += 1
+                continue
+            
+            # Create new user
+            hashed_pwd = utils.get_password_hash(user_data.get('password', username))
+            
+            # Parse lastDay if it exists
+            last_day = None
+            if user_data.get('lastDay'):
+                try:
+                    from datetime import datetime
+                    last_day = datetime.strptime(user_data['lastDay'], '%Y-%m-%d').date()
+                except:
+                    pass
+            
+            new_user = models.User(
+                username=username,
+                password_hash=hashed_pwd,
+                role=user_data.get('role', 'employee'),
+                status=user_data.get('status', 'general'),
+                name=user_data.get('name'),
+                designation=user_data.get('designation'),
+                employee_id=user_data.get('employeeId') or user_data.get('employee_id'),
+                last_day=last_day,
+                managers=user_data.get('managers', []) if isinstance(user_data.get('managers'), list) else []
+            )
+            
+            db.add(new_user)
+            synced_count += 1
+        
+        db.commit()
+        print(f"✓ Synced {synced_count} user(s) from users.json to database")
+        if skipped_count > 0:
+            print(f"  (Skipped {skipped_count} existing user(s))")
+    except Exception as e:
+        db.rollback()
+        print(f"⚠ Warning: Could not sync users from users.json: {e}")
+        import traceback
+        traceback.print_exc()
+
+# Create tables if they don't exist (for SQLite, this creates the file)
+try:
+    models.Base.metadata.create_all(bind=engine)
+    print("✓ Database tables created/verified")
+    
+    # Sync users from users.json to database if database is empty
+    db = SessionLocal()
+    try:
+        user_count = db.query(models.User).count()
+        if user_count == 0:
+            print("📥 Database is empty, syncing users from users.json...")
+            sync_users_from_json(db)
+        else:
+            print(f"✓ Database has {user_count} user(s)")
+    finally:
+        db.close()
+except Exception as e:
+    print(f"⚠ Warning: Could not create database tables: {e}")
+    import traceback
+    traceback.print_exc()
+    # If table creation fails, try to continue anyway (tables might already exist)
 
 def get_db():
     db = SessionLocal()

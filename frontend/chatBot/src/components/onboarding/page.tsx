@@ -213,7 +213,8 @@ export default function OnboardingPage() {
           />
         );
       case "qa":
-        return <QASession 
+        return <QASession
+          activeRepos={activeRepos}
           darkMode={darkMode} 
           selectedSection={selectedQnaSection} 
           employeeId={employeeId}
@@ -223,6 +224,7 @@ export default function OnboardingPage() {
       case "practice":
         return (
           <PracticeTasks
+            activeRepos={activeRepos}
             darkMode={darkMode}
             tasks={practiceTasks}
             openTask={selectedPracticeTask}
@@ -232,7 +234,8 @@ export default function OnboardingPage() {
           />
         );
       case "bugfix":
-        return <BugFixing 
+        return <BugFixing
+          activeRepos={activeRepos}
           darkMode={darkMode}
           employeeId={employeeId}
           onboardingData={onboardingData}

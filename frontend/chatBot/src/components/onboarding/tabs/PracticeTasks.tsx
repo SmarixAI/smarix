@@ -18,6 +18,7 @@ interface PracticeTasksProps {
   openTask?: number | null;
   onSelectTask?: (n: number | null) => void;
   employeeId?: string | null;
+  activeRepos?: string[];
   onUpdateProgress?: (section: string, itemId: string, updates: any) => void;
 }
 
@@ -27,6 +28,7 @@ export default function PracticeTasks({
   openTask,
   onSelectTask,
   employeeId,
+  activeRepos = [],
   onUpdateProgress,
 }: PracticeTasksProps) {
   const [data, setData] = useState<any | null>(null);
@@ -82,8 +84,12 @@ export default function PracticeTasks({
         return;
       }
 
+      // Use the first active repo if available
+      const repo = activeRepos && activeRepos.length > 0 ? activeRepos[0] : undefined;
+      const repoParam = repo ? `?repo=${encodeURIComponent(repo)}` : '';
+      
       try {
-        const response = await fetch("/api/onboarding/practice/practice1");
+        const response = await fetch(`/api/onboarding/practice/practice1${repoParam}`);
         if (response.ok) {
           const json = await response.json();
           setData({ questions: json.tasks || json.questions || [] });

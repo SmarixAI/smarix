@@ -10,10 +10,11 @@ interface BugFixingProps {
   darkMode: boolean;
   employeeId?: string | null;
   onboardingData?: any;
+  activeRepos?: string[];
   onUpdateProgress?: (section: string, itemId: string, updates: any) => void;
 }
 
-export default function BugFixing({ darkMode, employeeId, onboardingData, onUpdateProgress }: BugFixingProps) {
+export default function BugFixing({ darkMode, employeeId, onboardingData, activeRepos = [], onUpdateProgress }: BugFixingProps) {
   const [tutorials, setTutorials] = useState<PRTutorialsResponse | null>(null);
   const [challenges, setChallenges] = useState<CodingQuestionsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -22,10 +23,14 @@ export default function BugFixing({ darkMode, employeeId, onboardingData, onUpda
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
+      // Use the first active repo if available
+      const repo = activeRepos.length > 0 ? activeRepos[0] : undefined;
+      const repoParam = repo ? `?repo=${encodeURIComponent(repo)}` : '';
+      
       try {
         const [tutorialsRes, challengesRes] = await Promise.all([
-          fetch('/api/onboarding/bugFix/tutorials'),
-          fetch('/api/onboarding/bugFix/challenges'),
+          fetch(`/api/onboarding/bugFix/tutorials${repoParam}`),
+          fetch(`/api/onboarding/bugFix/challenges${repoParam}`),
         ]);
 
         if (tutorialsRes.ok) {
@@ -127,7 +132,7 @@ export default function BugFixing({ darkMode, employeeId, onboardingData, onUpda
       )}
       
       {activeTab === 'challenges' && challenges && (
-        <ChallengeSection darkMode={darkMode} data={challenges} />
+        <ChallengeSection darkMode={darkMode} data={challenges} activeRepos={activeRepos} />
       )}
     </div>
   );

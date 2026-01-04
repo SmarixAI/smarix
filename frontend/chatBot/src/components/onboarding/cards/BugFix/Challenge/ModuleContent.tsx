@@ -10,7 +10,6 @@ import {
 import type { CodingQuestion } from "../../../../../../types/onboarding";
 import React from "react";
 import CodeEditor from "../../../utils/BugFix/CodeEditor";
-import challengeSolutionData from "../../../../../../../../backend/data/Onboarding/onboarding_bugfix_data/onboarding_challenge_solution.json";
 import {
   BookOpen,
   Code2,
@@ -25,6 +24,7 @@ import EvaluationModal from "../../../utils/BugFix/EvaluationModal";
 interface ChallengeContentProps {
   darkMode: boolean;
   challenge: CodingQuestion;
+  activeRepos?: string[];
 }
 
 interface PullRequest {
@@ -35,6 +35,7 @@ interface PullRequest {
 export default function ChallengeContent({
   darkMode,
   challenge,
+  activeRepos = [],
 }: ChallengeContentProps) {
   const [prData, setPrData] = useState<PullRequest | null>(null);
   const [activeTab, setActiveTab] = useState<
@@ -45,8 +46,32 @@ export default function ChallengeContent({
   const [showEvaluationModal, setShowEvaluationModal] = useState(false);
   const [leftPanelWidth, setLeftPanelWidth] = useState(50); // Percentage
   const [isResizing, setIsResizing] = useState(false);
+  const [challengeSolutionData, setChallengeSolutionData] = useState<any>(null);
+
+  // Fetch challenge solution data from API
+  React.useEffect(() => {
+    const fetchSolutionData = async () => {
+      try {
+        // Use the first active repo if available
+        const repo = activeRepos.length > 0 ? activeRepos[0] : undefined;
+        const repoParam = repo ? `?repo=${encodeURIComponent(repo)}` : '';
+        
+        const response = await fetch(`/api/onboarding/bugFix/solutions${repoParam}`);
+        if (response.ok) {
+          const data = await response.json();
+          setChallengeSolutionData(data);
+        }
+      } catch (error) {
+        console.error('Error fetching challenge solution data:', error);
+      }
+    };
+
+    fetchSolutionData();
+  }, [activeRepos]);
 
   React.useEffect(() => {
+    if (!challengeSolutionData) return;
+
     let prMatch = challenge.raw_response.match(/Issue\/PR\s*#?(\d+)/i);
     if (!prMatch) {
       prMatch = challenge.raw_response.match(/PR\s*#?(\d+)/i);
@@ -70,7 +95,7 @@ export default function ChallengeContent({
         setPrData(pr);
       }
     }
-  }, [challenge]);
+  }, [challenge, challengeSolutionData]);
 
   const challengeContent = challenge.raw_response.split("**Solution**")[0];
   const difficultyMatch = challenge.raw_response.match(/Difficulty:\s*(\w+)/i);

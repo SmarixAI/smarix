@@ -70,32 +70,123 @@ def check_api_keys():
 
 
 def find_vector_databases():
-    """Find multi-index vector database (single-index no longer supported)"""
-    possible_multi_index_dirs = [
-        Path("../../data/VectorDB/multi_index"),
-        Path("data/VectorDB/multi_index"),
-        Path("VectorDB/multi_index"),
+    """Find multi-index vector database using repo-based structure"""
+    import json
+    
+    # Try to find runtime_state.json to get current repo
+    possible_state_files = [
+        Path("../../data/Admin/state/runtime_state.json"),
+        Path("data/Admin/state/runtime_state.json"),
+        Path("backend/data/Admin/state/runtime_state.json"),
     ]
-
+    
+    state_file = None
+    for sf in possible_state_files:
+        if sf.exists():
+            state_file = sf
+            break
+    
     github_db = None
-
-    for multi_index_dir in possible_multi_index_dirs:
-        if multi_index_dir.exists():
-            has_structure = any(
-                (multi_index_dir / idx_type / "faiss.index").exists()
-                for idx_type in [
-                    "code",
-                    "commit",
-                    "pr",
-                    "issue",
-                    "documentation",
-                    "all",
+    
+    if state_file:
+        try:
+            with open(state_file, 'r', encoding='utf-8') as f:
+                state = json.load(f)
+            
+            curr_repo = state.get("curr_repo", {})
+            owner = curr_repo.get("owner")
+            repo_name = curr_repo.get("name")
+            
+            if owner and repo_name:
+                # New structure: data/VectorDB/{owner}/{repo_name}/
+                possible_db_dirs = [
+                    Path("../../data/VectorDB") / owner / repo_name,
+                    Path("data/VectorDB") / owner / repo_name,
+                    Path("backend/data/VectorDB") / owner / repo_name,
                 ]
-            )
-            if has_structure:
-                github_db = str(multi_index_dir)
-                print(f"Found Multi-Index DB: {multi_index_dir}")
-                break
+                
+                for db_dir in possible_db_dirs:
+                    if db_dir.exists():
+                        # Check if it has the expected structure (type subdirectories)
+                        has_structure = any(
+                            (db_dir / idx_type / "faiss.index").exists()
+                            for idx_type in [
+                                "code",
+                                "commit",
+                                "pr",
+                                "issue",
+                                "documentation",
+                                "all",
+                            ]
+                        )
+                        if has_structure:
+                            github_db = str(db_dir)
+                            print(f"Found Multi-Index DB: {db_dir} (repo: {owner}/{repo_name})")
+                            break
+        except Exception as e:
+            print(f"⚠ Warning: Could not read runtime_state.json: {e}")
+    
+    # Fallback: try to discover all repos in VectorDB directory
+    if not github_db:
+        possible_vectordb_roots = [
+            Path("../../data/VectorDB"),
+            Path("data/VectorDB"),
+            Path("backend/data/VectorDB"),
+        ]
+        
+        for vectordb_root in possible_vectordb_roots:
+            if vectordb_root.exists():
+                # Look for owner/repo subdirectories
+                for owner_dir in vectordb_root.iterdir():
+                    if owner_dir.is_dir():
+                        for repo_dir in owner_dir.iterdir():
+                            if repo_dir.is_dir():
+                                # Check if this repo has index structure
+                                has_structure = any(
+                                    (repo_dir / idx_type / "faiss.index").exists()
+                                    for idx_type in [
+                                        "code",
+                                        "commit",
+                                        "pr",
+                                        "issue",
+                                        "documentation",
+                                        "all",
+                                    ]
+                                )
+                                if has_structure:
+                                    github_db = str(repo_dir)
+                                    print(f"Found Multi-Index DB: {repo_dir} (repo: {owner_dir.name}/{repo_dir.name})")
+                                    break
+                        if github_db:
+                            break
+                if github_db:
+                    break
+    
+    # Legacy fallback: old multi_index structure
+    if not github_db:
+        possible_multi_index_dirs = [
+            Path("../../data/VectorDB/multi_index"),
+            Path("data/VectorDB/multi_index"),
+            Path("VectorDB/multi_index"),
+        ]
+
+        for multi_index_dir in possible_multi_index_dirs:
+            if multi_index_dir.exists():
+                has_structure = any(
+                    (multi_index_dir / idx_type / "faiss.index").exists()
+                    for idx_type in [
+                        "code",
+                        "commit",
+                        "pr",
+                        "issue",
+                        "documentation",
+                        "all",
+                    ]
+                )
+                if has_structure:
+                    github_db = str(multi_index_dir)
+                    print(f"Found Multi-Index DB (legacy): {multi_index_dir}")
+                    break
 
     return github_db, None
 

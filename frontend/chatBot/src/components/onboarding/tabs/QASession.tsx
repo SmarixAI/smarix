@@ -10,6 +10,7 @@ interface QASessionProps {
   selectedSection?: string | null;
   employeeId?: string | null;
   onboardingData?: any;
+  activeRepos?: string[];
   onUpdateProgress?: (section: string, itemId: string, updates: any) => void;
 }
 
@@ -22,7 +23,7 @@ interface ModuleData {
   isExpanded: boolean;
 }
 
-export default function QASession({ darkMode, selectedSection, employeeId, onboardingData, onUpdateProgress }: QASessionProps) {
+export default function QASession({ darkMode, selectedSection, employeeId, onboardingData, activeRepos = [], onUpdateProgress }: QASessionProps) {
   const [modules, setModules] = useState<ModuleData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedAnswers, setSelectedAnswers] = useState<{ [key: string]: string }>({});
@@ -49,10 +50,16 @@ export default function QASession({ darkMode, selectedSection, employeeId, onboa
         ? moduleConfig.filter(config => config.id === selectedSection)
         : moduleConfig;
 
+      // Use the first active repo if available
+      const repo = activeRepos.length > 0 ? activeRepos[0] : undefined;
+      
       for (const config of modulesToFetch) {
         // Try to fetch from new API first (using module id like 'overview', 'tech_stack', etc.)
         try {
-          const response = await fetch(`/api/onboarding/qa/${config.id}`);
+          const url = repo 
+            ? `/api/onboarding/qa/${config.id}?repo=${encodeURIComponent(repo)}`
+            : `/api/onboarding/qa/${config.id}`;
+          const response = await fetch(url);
           if (response.ok) {
             const data = await response.json();
             if (data.questions && data.questions.length > 0) {

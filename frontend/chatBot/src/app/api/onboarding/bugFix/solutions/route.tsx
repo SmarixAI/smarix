@@ -94,11 +94,11 @@ export async function GET(request: Request) {
       path.join(process.cwd(), 'backend', 'data', 'Onboarding'),
     ];
 
-    const filePath = await findFileInRepos(possibleBasePaths, 'onboarding_coding_questions.json', repo);
+    const filePath = await findFileInRepos(possibleBasePaths, 'onboarding_challenge_solution.json', repo);
     
     if (!filePath) {
       return NextResponse.json(
-        { error: 'Coding questions file not found' },
+        { error: 'Challenge solution file not found' },
         { status: 404 }
       );
     }
@@ -113,103 +113,9 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     return NextResponse.json({
-      error: 'Failed to load coding questions',
+      error: 'Failed to load challenge solution data',
       details: error instanceof Error ? error.message : 'Unknown error',
     }, { status: 500 });
   }
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const submissionData = await request.json();
-
-    const possibleBasePaths = [
-      path.join(process.cwd(), '..', 'backend', 'data', 'Onboarding', 'onboarding_bugfix_data'),
-      path.join(process.cwd(), 'backend', 'data', 'Onboarding', 'onboarding_bugfix_data'),
-      path.join(process.cwd(), '..', '..', 'backend', 'data', 'Onboarding', 'onboarding_bugfix_data'),
-      path.join(process.cwd(), 'backend/data/Onboarding/onboarding_bugfix_data'),
-    ];
-
-    let basePath: string | null = null;
-
-    for (const testPath of possibleBasePaths) {
-      try {
-        await fs.access(testPath);
-        basePath = testPath;
-        break;
-      } catch {
-        continue;
-      }
-    }
-
-    if (!basePath) {
-      for (const testPath of possibleBasePaths) {
-        try {
-          await fs.mkdir(testPath, { recursive: true });
-          basePath = testPath;
-          break;
-        } catch {
-          continue;
-        }
-      }
-    }
-
-    if (!basePath) {
-      return NextResponse.json(
-        { 
-          success: false,
-          error: 'Could not find or create directory for submissions' 
-        },
-        { status: 500 }
-      );
-    }
-
-    const filePath = path.join(basePath, 'onboarding_challenge_submitted_code.json');
-
-    let existingData: any = {
-      metadata: {
-        total_submissions: 0,
-        last_updated: new Date().toISOString()
-      },
-      submissions: []
-    };
-
-    try {
-      await fs.access(filePath);
-      const fileContent = await fs.readFile(filePath, 'utf-8');
-      existingData = JSON.parse(fileContent);
-    } catch {
-      console.log('Creating new submissions file');
-    }
-
-    const newSubmission = {
-      submission_id: `sub_${Date.now()}`,
-      pr_number: submissionData.pr_number,
-      submitted_at: submissionData.timestamp,
-      file_changes: submissionData.file_changes
-    };
-
-    existingData.submissions.push(newSubmission);
-    existingData.metadata.total_submissions = existingData.submissions.length;
-    existingData.metadata.last_updated = new Date().toISOString();
-
-    await fs.writeFile(filePath, JSON.stringify(existingData, null, 2), 'utf-8');
-
-    return NextResponse.json({
-      success: true,
-      message: 'Code submitted successfully',
-      submission_id: newSubmission.submission_id
-    });
-
-  } catch (error) {
-    console.error('Error saving submission:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        message: 'Failed to submit code',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
-  }
-}
