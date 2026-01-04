@@ -4,13 +4,19 @@ export class ContentService {
   private static readonly BASE_URL = '/api/onboarding/overview';
   private static cache: Map<string, ModuleSectionResponse> = new Map();
 
-  static async fetchModuleContent(moduleId: string): Promise<ModuleSectionResponse | null> {
-    if (this.cache.has(moduleId)) {
-      return this.cache.get(moduleId)!;
+  static async fetchModuleContent(moduleId: string, repo?: string): Promise<ModuleSectionResponse | null> {
+    const cacheKey = repo ? `${moduleId}-${repo}` : moduleId;
+    
+    if (this.cache.has(cacheKey)) {
+      return this.cache.get(cacheKey)!;
     }
 
     try {
-      const response = await fetch(`${this.BASE_URL}/${moduleId}`);
+      const url = repo 
+        ? `${this.BASE_URL}/${moduleId}?repo=${encodeURIComponent(repo)}`
+        : `${this.BASE_URL}/${moduleId}`;
+      
+      const response = await fetch(url);
       
       if (!response.ok) {
         return null;
@@ -23,7 +29,7 @@ export class ContentService {
       }
 
       const typedData: ModuleSectionResponse = data as ModuleSectionResponse;
-      this.cache.set(moduleId, typedData);
+      this.cache.set(cacheKey, typedData);
       
       return typedData;
     } catch (error) {

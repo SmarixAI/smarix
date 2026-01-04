@@ -46,6 +46,9 @@ export async function GET(
 ) {
   try {
     const { moduleId } = await params;
+    const { searchParams } = new URL(request.url);
+    const repo = searchParams.get('repo');
+    
     const jsonFileName = MODULE_FILE_MAPPING[moduleId];
 
     if (!jsonFileName) {
@@ -55,12 +58,25 @@ export async function GET(
       );
     }
 
-    const possiblePaths = [
-      path.join(process.cwd(), '..', 'backend', 'data', 'Onboarding', 'onboarding_reading_data', jsonFileName),
-      path.join(process.cwd(), 'backend', 'data', 'Onboarding', 'onboarding_reading_data', jsonFileName),
-      path.join(process.cwd(), '..', '..', 'backend', 'data', 'Onboarding', 'onboarding_reading_data', jsonFileName),
-      path.join(process.cwd(), 'backend/data/Onboarding/onboarding_reading_data', jsonFileName),
-    ];
+    let possiblePaths: string[];
+
+    if (repo) {
+      // If repo is provided, look in the specific repo directory
+      // Assuming repo format is "owner/repo"
+      const [owner, repoName] = repo.split('/');
+      possiblePaths = [
+        path.join(process.cwd(), '..', 'backend', 'data', 'Onboarding', owner, repoName, 'reading', jsonFileName),
+        path.join(process.cwd(), 'backend', 'data', 'Onboarding', owner, repoName, 'reading', jsonFileName),
+        path.join(process.cwd(), '..', '..', 'backend', 'data', 'Onboarding', owner, repoName, 'reading', jsonFileName),
+      ];
+    } else {
+      // Fallback to the old path structure
+      possiblePaths = [
+        path.join(process.cwd(), '..', 'backend', 'data', 'Onboarding', 'onboarding_reading_data', jsonFileName),
+        path.join(process.cwd(), 'backend', 'data', 'Onboarding', 'onboarding_reading_data', jsonFileName),
+        path.join(process.cwd(), '..', '..', 'backend', 'data', 'Onboarding', 'onboarding_reading_data', jsonFileName),
+      ];
+    }
 
     let fileContent: string | null = null;
 

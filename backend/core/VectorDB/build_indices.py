@@ -16,10 +16,31 @@ import pickle
 from collections import defaultdict
 import re
 
-EMBEDDINGS_DIR = Path("../../data/Embeddings/")
-VECTORDB_ROOT = Path("../../data/VectorDB/multi_index/")
+
+STATE_FILE = Path(
+    "/Users/vishalkeshari/Desktop/smarix/backend/data/Admin/state/runtime_state.json"
+)
+
+def load_current_repo_from_state():
+    with open(STATE_FILE, "r", encoding="utf-8") as f:
+        state = json.load(f)
+
+    curr_repo = state.get("curr_repo")
+    if not curr_repo:
+        raise RuntimeError("curr_repo missing in runtime_state.json")
+
+    return curr_repo["owner"], curr_repo["name"]
+
+REPO_OWNER, REPO_NAME = load_current_repo_from_state()
+
+EMBEDDINGS_DIR = Path("../../data/Embeddings") / REPO_OWNER / REPO_NAME
+VECTORDB_ROOT = Path("../../data/VectorDB") / REPO_OWNER / REPO_NAME
 
 VECTORDB_ROOT.mkdir(parents=True, exist_ok=True)
+
+
+
+
 
 
 def load_embeddings(base_path: Path):
@@ -144,10 +165,13 @@ def main():
     """
 
     # Skip cache directories
-    skip_dirs = {"embeddings_cache", "all"}
+    skip_dirs = {"embeddings_cache"}
 
     # List subfolders inside Embeddings directory
-    type_dirs = [d for d in EMBEDDINGS_DIR.iterdir() if d.is_dir() and d.name not in skip_dirs]
+    type_dirs = [
+        d for d in EMBEDDINGS_DIR.iterdir()
+        if d.is_dir() and (d / f"{d.name}.npy").exists()
+    ]
 
     if not type_dirs:
         print("❌ No folders found in Embeddings/. Expected: Embeddings/<type>/<type>.npy")

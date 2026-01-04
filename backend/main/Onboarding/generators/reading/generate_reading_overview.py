@@ -12,14 +12,21 @@ from dotenv import load_dotenv
 import importlib
 import importlib.util
 
-# Make repository root importable BEFORE trying to import the chatbot module.
-# This mirrors "Ensure repository root is on sys.path..." from your original file,
-# but placed earlier so imports can succeed when run as a script.
-repo_root = Path(__file__).resolve().parent.parent.parent.parent.parent
-if str(repo_root) not in sys.path:
-    sys.path.insert(0, str(repo_root))
+BACKEND_ROOT = Path(__file__).resolve().parents[4]  # backend/
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
+
+from utils.repo_context import get_repo_context
 
 load_dotenv()
+ctx = get_repo_context()
+
+REPO_OWNER = ctx["owner"]
+REPO_NAME = ctx["repo"]
+VECTOR_DB_PATH = ctx["vector_db"]
+ONBOARDING_ROOT = ctx["onboarding"]
+
+REPO_FULL_NAME = f"{REPO_OWNER}/{REPO_NAME}"
 
 
 def _load_rag_chatbot_class():
@@ -41,7 +48,7 @@ def _load_rag_chatbot_class():
             pass
 
     # Fallback: search the repo for a file named chatbot.py and load it dynamically
-    for path in repo_root.rglob("chatbot.py"):
+    for path in BACKEND_ROOT.rglob("chatbot.py"):
         try:
             spec = importlib.util.spec_from_file_location("rag_chatbot_dynamic", str(path))
             mod = importlib.util.module_from_spec(spec)
@@ -65,7 +72,7 @@ def _load_rag_chatbot_class():
 RAGChatbot = _load_rag_chatbot_class()
 
 
-def generate_reading_overview(db_path, gmail_db_path=None, provider='openai', model=None):
+def generate_reading_overview( gmail_db_path=None, provider='openai', model=None):
     """Generate complete reading overview data with a single function call"""
 
     print("Starting Reading Overview Data Generation...\n")
@@ -73,7 +80,7 @@ def generate_reading_overview(db_path, gmail_db_path=None, provider='openai', mo
     # Initialize chatbot
     print("Loading chatbot...")
     chatbot = RAGChatbot(
-        vector_db_path=db_path,
+        vector_db_path=VECTOR_DB_PATH,
         gmail_db_path=gmail_db_path,
         provider=provider,
         model=model,
@@ -216,7 +223,7 @@ def generate_reading_overview(db_path, gmail_db_path=None, provider='openai', mo
             }
 
     # Save to file
-    output_dir = repo_root / "data" / "Onboarding" / "onboarding_reading_data"
+    output_dir = ONBOARDING_ROOT / "reading"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     json_file = output_dir / f"onboarding_project_overview.json"
@@ -231,9 +238,8 @@ def generate_reading_overview(db_path, gmail_db_path=None, provider='openai', mo
 
 
 if __name__ == "__main__":
-    GITHUB_DB_PATH = "../../../../data/VectorDB/multi_index"
     GMAIL_DB_PATH = "../../../../data/VectorDB/gmail_chunks"
     PROVIDER = "openai"
     MODEL = None
 
-    generate_reading_overview(GITHUB_DB_PATH, GMAIL_DB_PATH, PROVIDER, MODEL)
+    generate_reading_overview(GMAIL_DB_PATH, PROVIDER, MODEL)

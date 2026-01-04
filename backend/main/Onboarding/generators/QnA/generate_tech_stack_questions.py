@@ -13,11 +13,16 @@ from dotenv import load_dotenv
 import importlib
 import importlib.util
 
-repo_root = Path(__file__).resolve().parent.parent.parent.parent.parent
-if str(repo_root) not in sys.path:
-    sys.path.insert(0, str(repo_root))
+BACKEND_ROOT = Path(__file__).resolve().parents[4]
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
 
-load_dotenv()
+from utils.repo_context import get_repo_context
+ctx = get_repo_context()
+
+VECTOR_DB_PATH = ctx["vector_db"]
+ONBOARDING_ROOT = ctx["onboarding"]
+
 
 
 def _load_rag_chatbot_class():
@@ -37,7 +42,7 @@ def _load_rag_chatbot_class():
         except Exception:
             pass
 
-    for path in repo_root.rglob("chatbot.py"):
+    for path in BACKEND_ROOT.rglob("chatbot.py"):
         try:
             spec = importlib.util.spec_from_file_location("rag_chatbot_dynamic", str(path))
             mod = importlib.util.module_from_spec(spec)
@@ -220,7 +225,6 @@ def format_tech_stack_context(tech_stack_data: dict) -> str:
 
 
 def generate_tech_stack_questions(
-    db_path: str,
     gmail_db_path: str = None,
     provider: str = 'openai',
     model: str = None,
@@ -242,9 +246,7 @@ def generate_tech_stack_questions(
         Path to generated questions JSON file
     """
 
-    print("╔" + "═" * 78 + "╗")
-    print("║" + " Tech Stack MCQ Questions Generator - Developer Onboarding ".center(78) + "║")
-    print("╚" + "═" * 78 + "╝\n")
+
 
     if model is None:
         model = "gpt-4o-mini" if provider == 'openai' else None
@@ -253,7 +255,7 @@ def generate_tech_stack_questions(
     print("⚙  Initializing chatbot with multi-index support...")
     try:
         chatbot = RAGChatbot(
-            vector_db_path=db_path,
+            vector_db_path=VECTOR_DB_PATH,
             gmail_db_path=gmail_db_path,
             provider=provider,
             model=model,
@@ -279,7 +281,7 @@ def generate_tech_stack_questions(
         return None
 
     # Load tech stack data
-    tech_stack_file = repo_root / "data" / "Onboarding" / "onboarding_reading_data" / "onboarding_tech_stack.json"
+    tech_stack_file = ONBOARDING_ROOT / "reading" / "onboarding_tech_stack.json"
 
     if not tech_stack_file.exists():
         print(f"✗  Tech stack file not found: {tech_stack_file}")
@@ -292,8 +294,7 @@ def generate_tech_stack_questions(
     # Format tech stack context
     tech_context = format_tech_stack_context(tech_stack_data)
 
-    print(f"✓  Loaded tech stack information")
-    print(f"   • Total characters: {len(tech_context):,}")
+   
 
     # Count categories
     data = tech_stack_data.get('data', {})
@@ -304,9 +305,7 @@ def generate_tech_stack_questions(
     if len(categories) > 5:
         print(f"     ... and {len(categories) - 5} more")
 
-    print("\n" + "═" * 80)
-    print("Generating tech stack MCQ questions for new developers...")
-    print("═" * 80 + "\n")
+   
 
     # Tech stack specific prompt - EXPLICITLY request question generation format
     question_prompt = f"""Generate {num_questions} MCQ quiz questions about the technology stack for new developer onboarding.
@@ -463,48 +462,13 @@ GENERATE THE QUESTIONS NOW."""
     }
 
     # Save to file
-    output_dir = repo_root / "data" / "Onboarding" / "onboarding_QnA_data"
+    output_dir = ONBOARDING_ROOT / "qna"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     json_file = output_dir / "onboarding_tech_stack_questions.json"
 
     with open(json_file, 'w', encoding='utf-8') as f:
         json.dump(questions_data, f, indent=2, ensure_ascii=False)
-
-    # Print summary
-    print("\n" + "═" * 80)
-    print("GENERATION SUMMARY".center(80))
-    print("═" * 80)
-    print(f"📁 Output: {json_file}")
-    print(f"✓  MCQ Questions: {len(valid_questions)}/{num_questions}")
-
-    stats = questions_data['statistics']['by_difficulty']
-    print(f"\n{'DIFFICULTY DISTRIBUTION:'.upper()}")
-    print(f"   • Easy: {stats['Easy']}")
-    print(f"   • Medium: {stats['Medium']}")
-    print(f"   • Hard: {stats['Hard']}")
-
-    if valid_questions:
-        print(f"\n{'GENERATED TECH STACK MCQ QUESTIONS:'.upper()}")
-        for i, q in enumerate(valid_questions, 1):
-            difficulty = q.get('difficulty', 'Unknown')
-            question_preview = q.get('question', 'N/A')[:75] + "..."
-            print(f"   Q{i} [{difficulty}]: {question_preview}")
-
-    if valid_questions:
-        print(f"\n{'SAMPLE TECH STACK MCQ QUESTION (DETAILED):'.upper()}")
-        sample = valid_questions[0]
-        print(f"   Question {sample.get('question_number', 1)} - Difficulty: {sample.get('difficulty', 'N/A')}")
-        print(f"   Q: {sample.get('question', 'N/A')}")
-        print(f"\n   Options:")
-        if sample.get('options'):
-            for opt_key in ['A', 'B', 'C', 'D']:
-                if opt_key in sample['options']:
-                    opt_val = sample['options'][opt_key]
-                    marker = "✓" if opt_key == sample.get('correct_answer') else " "
-                    print(f"      {marker} {opt_key}. {opt_val}")
-        print(f"\n   Correct Answer: {sample.get('correct_answer', 'N/A')}")
-        print(f"   Explanation: {sample.get('explanation', 'N/A')}")
 
     print(f"\n{'═' * 80}\n")
     print(f"✓  Tech stack MCQ questions saved to: {json_file.name}\n")
@@ -513,25 +477,14 @@ GENERATE THE QUESTIONS NOW."""
 
 
 if __name__ == "__main__":
-    # Configuration
-    GITHUB_DB_PATH = "../../../../data/VectorDB/multi_index"
     GMAIL_DB_PATH = "../../../../data/VectorDB/gmail_chunks"
     PROVIDER = "openai"
     MODEL = "gpt-4o-mini"
     NUM_QUESTIONS = 5
     ROUTING_METHOD = "llm"
 
-    print("Configuration:")
-    print(f"  • Multi-index path: {GITHUB_DB_PATH}")
-    print(f"  • Gmail DB path: {GMAIL_DB_PATH}")
-    print(f"  • Provider: {PROVIDER}")
-    print(f"  • Model: {MODEL}")
-    print(f"  • Routing: {ROUTING_METHOD}")
-    print(f"  • MCQ Questions: {NUM_QUESTIONS}")
-    print(f"  • Focus: Technology Stack for Developer Onboarding\n")
 
     result = generate_tech_stack_questions(
-        db_path=GITHUB_DB_PATH,
         gmail_db_path=GMAIL_DB_PATH,
         provider=PROVIDER,
         model=MODEL,

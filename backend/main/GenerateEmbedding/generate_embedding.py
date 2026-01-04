@@ -24,6 +24,23 @@ if _backend_dir_str not in sys.path:
 
 from core.GenerateEmbedding.generator import EmbeddingGenerator
 
+STATE_FILE = Path(
+    "/Users/vishalkeshari/Desktop/smarix/backend/data/Admin/state/runtime_state.json"
+)
+
+def load_current_repo_from_state():
+    with open(STATE_FILE, "r", encoding="utf-8") as f:
+        state = json.load(f)
+
+    curr_repo = state.get("curr_repo")
+    if not curr_repo:
+        raise RuntimeError("curr_repo missing in runtime_state.json")
+
+    return curr_repo["owner"], curr_repo["name"]
+
+REPO_OWNER, REPO_NAME = load_current_repo_from_state()
+
+
 def auto_detect_provider():
     if os.getenv('OPENAI_API_KEY'):
         return 'openai', 'text-embedding-3-small'
@@ -34,7 +51,7 @@ def auto_detect_provider():
 
 
 def find_latest_chunks_file():
-    processed_dir = Path("../../data/DataProcessing")
+    processed_dir = Path("../../data/DataProcessing") / REPO_OWNER / REPO_NAME / "chunks"
     if not processed_dir.exists():
         return None
     chunks_files = list(processed_dir.glob("*_chunks.json"))
@@ -1308,8 +1325,9 @@ def estimate_cost(provider: str, model: str, num_chunks: int, stats: dict):
 
 
 def batch_generate(args):
-    processed_dir = Path("../../data/DataProcessing")
-    output_dir = Path(str(args.output_dir))
+    processed_dir = Path("../../data/DataProcessing") / REPO_OWNER / REPO_NAME / "chunks"
+    base_output_dir = Path(str(args.output_dir))
+    output_dir = base_output_dir / REPO_OWNER / REPO_NAME
 
     try:
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -1554,8 +1572,11 @@ def main():
         batch_generate(args)
         return
 
-    processed_dir = Path("../../data/DataProcessing")
-    chunks_files = sorted(processed_dir.glob("*.json"))
+    processed_dir = Path("../../data/DataProcessing") / REPO_OWNER / REPO_NAME / "chunks"
+    chunks_files = sorted(
+        f for f in processed_dir.glob("*_chunks.json")
+        if not any(skip in f.name for skip in ['strategy', 'entities', 'aggregated'])
+    )
 
     if not chunks_files:
         print(f"Error: No JSON files found in {processed_dir}")
@@ -1571,8 +1592,10 @@ def main():
     cache_dir = Path(str(args.cache_dir))
     cache_dir.mkdir(parents=True, exist_ok=True)
 
-    output_dir = Path(str(args.output_dir))
+    base_output_dir = Path(str(args.output_dir))
+    output_dir = base_output_dir / REPO_OWNER / REPO_NAME
     output_dir.mkdir(parents=True, exist_ok=True)
+
 
     if not provider:
         print("Auto-detecting embedding provider...")
