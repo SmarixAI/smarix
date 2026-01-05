@@ -1,6 +1,6 @@
 """
 Build Multi-Index VectorDB (Step 4)
-Creates ONE folder per embedding type inside: data/VectorDB/multi_index/<type>
+Creates ONE folder per embedding type inside: data/VectorDB/{owner}/{repo_name}/<type>
 Each folder contains:
    - faiss.index
    - metadata.pkl

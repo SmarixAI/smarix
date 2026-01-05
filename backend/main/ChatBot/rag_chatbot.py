@@ -23,21 +23,57 @@ from core.ChatBot.chatbot import RAGChatbot
 
 
 def find_latest_vector_db(db_type="multi-index"):
-    """Find the multi-index vector database (replaces single-index)"""
-    multi_index_dir = Path("../../data/VectorDB/multi_index")
-
-    if not multi_index_dir.exists():
-        return None
-
-    # Multi-index is a single directory with subdirectories per type
-    if multi_index_dir.exists():
-        # Check if it has the expected structure
-        has_structure = any(
-            (multi_index_dir / idx_type / "faiss.index").exists()
-            for idx_type in ["code", "commit", "pr", "issue", "documentation", "all"]
-        )
-        if has_structure:
-            return str(multi_index_dir)
+    """Find the multi-index vector database using new repo-based structure"""
+    import json
+    
+    # Try to get repo from runtime_state.json
+    possible_state_files = [
+        Path("../../data/Admin/state/runtime_state.json"),
+        Path("data/Admin/state/runtime_state.json"),
+        Path("backend/data/Admin/state/runtime_state.json"),
+        Path(__file__).resolve().parent.parent.parent / "data" / "Admin" / "state" / "runtime_state.json",
+    ]
+    
+    state_file = None
+    for sf in possible_state_files:
+        if sf.exists():
+            state_file = sf
+            break
+    
+    if state_file:
+        try:
+            with open(state_file, 'r', encoding='utf-8') as f:
+                state = json.load(f)
+            
+            # First try curr_repo, then fallback to user_default_repo
+            repo_config = state.get("curr_repo", {})
+            if not repo_config or not repo_config.get("owner") or not repo_config.get("name"):
+                # Use user_default_repo if curr_repo is not available
+                repo_config = state.get("user_default_repo", {})
+            
+            owner = repo_config.get("owner")
+            repo_name = repo_config.get("name")
+            
+            if owner and repo_name:
+                # New structure: data/VectorDB/{owner}/{repo_name}/
+                possible_db_dirs = [
+                    Path("../../data/VectorDB") / owner / repo_name,
+                    Path("data/VectorDB") / owner / repo_name,
+                    Path("backend/data/VectorDB") / owner / repo_name,
+                    Path(__file__).resolve().parent.parent.parent / "data" / "VectorDB" / owner / repo_name,
+                ]
+                
+                for db_dir in possible_db_dirs:
+                    if db_dir.exists():
+                        # Check if it has the expected structure
+                        has_structure = any(
+                            (db_dir / idx_type / "faiss.index").exists()
+                            for idx_type in ["code", "commit", "pr", "issue", "documentation", "all"]
+                        )
+                        if has_structure:
+                            return str(db_dir)
+        except Exception as e:
+            print(f"⚠ Warning: Could not read runtime_state.json: {e}")
     
     return None
 
@@ -51,11 +87,11 @@ Examples:
   # Auto-detect latest databases
   python rag_chatbot.py
   
-  # Specify multi-index database
-  python rag_chatbot.py --github-db data/VectorDB/multi_index
+  # Specify multi-index database (new structure)
+  python rag_chatbot.py --github-db data/VectorDB/{owner}/{repo_name}
   
   # Use multi-index with Gmail database
-  python rag_chatbot.py --github-db data/VectorDB/multi_index --gmail-db data/VectorDB/gmail_chunks
+  python rag_chatbot.py --github-db data/VectorDB/{owner}/{repo_name} --gmail-db data/VectorDB/gmail_chunks
   
   # Use Anthropic Claude
   python rag_chatbot.py --provider anthropic
@@ -144,7 +180,8 @@ Environment Variables:
         if github_db_path:
             print(f"✅ Found Multi-Index DB: {github_db_path}")
         else:
-            print("❌ No multi-index vector database found in ../../data/VectorDB/multi_index/")
+            print("❌ No multi-index vector database found.")
+            print("   Expected: data/VectorDB/{owner}/{repo_name}/")
             print("\nRun step 4 first to build vector database:")
             print("  python core/VectorDB/build_indices.py")
             sys.exit(1)
@@ -167,7 +204,7 @@ Environment Variables:
     )
     if not has_indices:
         print(f"❌ Invalid multi-index database (missing index files): {github_db_path}")
-        print("Expected structure: multi_index/<type>/faiss.index")
+        print("Expected structure: <type>/faiss.index (e.g., code/faiss.index, pr/faiss.index)")
         sys.exit(1)
 
     print(f"{'='*70}")

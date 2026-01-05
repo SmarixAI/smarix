@@ -269,7 +269,8 @@ def generate_app_features_data(db_path, gmail_db_path=None, provider='openai', m
 
 
 if __name__ == "__main__":
-    GITHUB_DB_PATH = "../../../../data/VectorDB/multi_index"
+    # Use repo context to get correct vector DB path (new structure: data/VectorDB/{owner}/{repo_name})
+    GITHUB_DB_PATH = str(VECTOR_DB_PATH)
     GMAIL_DB_PATH = "../../../../data/VectorDB/gmail_chunks"
     PROVIDER = "openai"
     MODEL = None

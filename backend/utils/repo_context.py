@@ -1,9 +1,24 @@
 import json
 from pathlib import Path
 
-STATE_FILE = Path(
-    "/Users/vishalkeshari/Desktop/smarix/backend/data/Admin/state/runtime_state.json"
-)
+def get_runtime_state_file_path() -> Path:
+    """Get the path to the runtime state JSON file"""
+    repo_root = Path(__file__).resolve().parent.parent
+    possible_paths = [
+        repo_root / "data" / "Admin" / "state" / "runtime_state.json",
+        Path("data/Admin/state/runtime_state.json"),
+        Path("../../data/Admin/state/runtime_state.json"),
+        Path("backend/data/Admin/state/runtime_state.json"),
+    ]
+    
+    for path in possible_paths:
+        if path.exists():
+            return path
+    
+    # Return default path if none exist
+    return repo_root / "data" / "Admin" / "state" / "runtime_state.json"
+
+STATE_FILE = get_runtime_state_file_path()
 
 def get_repo_context():
     with open(STATE_FILE, "r", encoding="utf-8") as f:
