@@ -612,12 +612,28 @@ export default function ChatPage() {
     setIsLoading(true);
 
     try {
-      const requestBody: { query: string; session_id?: string } = {
+      // Try to get username from localStorage
+      let username: string | undefined;
+      try {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          const user = JSON.parse(storedUser);
+          username = user.username;
+        }
+      } catch (e) {
+        // Ignore errors getting username
+      }
+
+      const requestBody: { query: string; session_id?: string; username?: string } = {
         query: input,
       };
 
       if (sessionId) {
         requestBody.session_id = sessionId;
+      }
+
+      if (username) {
+        requestBody.username = username;
       }
 
       const response = await fetch(`${baseURL}/chat`, {

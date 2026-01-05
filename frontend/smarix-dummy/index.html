@@ -1,0 +1,1078 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SmariX - Continuous Knowledge Flow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    /* ---------- SECTIONS ---------- */
+    section {
+      min-height: 100vh;
+      padding: 140px 5% 80px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .container {
+      max-width: 1100px;
+      width: 100%;
+      text-align: center;
+    }
+
+    .eyebrow {
+      font-size: 12px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--primary);
+      font-weight: 700;
+      margin-bottom: 20px;
+      display: inline-block;
+      padding: 6px 16px;
+      background: rgba(99, 102, 241, 0.1);
+      border-radius: 20px;
+    }
+
+    h1 {
+      font-size: 56px;
+      line-height: 1.1;
+      font-weight: 800;
+      margin-bottom: 24px;
+      letter-spacing: -0.02em;
+      color: var(--text-primary);
+    }
+
+    h2 {
+      font-size: 48px;
+      line-height: 1.2;
+      font-weight: 800;
+      margin-bottom: 24px;
+      letter-spacing: -0.02em;
+      color: var(--text-primary);
+    }
+
+    p {
+      font-size: 18px;
+      color: var(--text-secondary);
+      margin-bottom: 24px;
+      line-height: 1.7;
+    }
+
+    .list {
+      margin-top: 40px;
+      display: grid;
+      gap: 16px;
+      text-align: left;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .list div {
+      font-size: 16px;
+      color: var(--text-secondary);
+      padding: 16px 20px 16px 48px;
+      position: relative;
+      background: var(--bg-primary);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      transition: all 0.2s ease;
+    }
+
+    .list div:hover {
+      border-color: var(--primary-light);
+      box-shadow: var(--shadow-sm);
+      transform: translateX(4px);
+    }
+
+    .list div::before {
+      content: "✓";
+      position: absolute;
+      left: 18px;
+      top: 16px;
+      color: var(--primary);
+      font-weight: 700;
+      font-size: 18px;
+    }
+
+    /* ---------- HERO ---------- */
+    .hero {
+      background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+      text-align: left;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: "";
+      position: absolute;
+      top: -50%;
+      right: -20%;
+      width: 800px;
+      height: 800px;
+      background: radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, transparent 70%);
+      border-radius: 50%;
+    }
+
+    .hero-grid {
+      max-width: 1280px;
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 80px;
+      align-items: center;
+      position: relative;
+      z-index: 1;
+    }
+
+    .cta-group {
+      display: flex;
+      gap: 16px;
+      margin-top: 40px;
+      flex-wrap: wrap;
+    }
+
+    .primary-btn {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      padding: 16px 32px;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: var(--shadow-md);
+    }
+
+    .primary-btn:hover {
+      background: var(--primary-dark);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .primary-btn:active {
+      transform: translateY(0);
+    }
+
+    .secondary-btn {
+      background: var(--bg-primary);
+      border: 2px solid var(--border);
+      color: var(--text-primary);
+      padding: 16px 32px;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .secondary-btn:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-sm);
+      text-decoration: none;
+    }
+
+    .hero-visual {
+      height: 420px;
+      border-radius: 24px;
+      background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 50%, #e0e7ff 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-lg);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-visual::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: 
+        radial-gradient(circle at 20% 30%, rgba(99, 102, 241, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 80% 70%, rgba(139, 92, 246, 0.1) 0%, transparent 50%);
+    }
+
+    .hero-visual-content {
+      position: relative;
+      z-index: 1;
+      font-weight: 500;
+      text-align: center;
+      padding: 20px;
+    }
+
+    /* ---------- SECTION THEMES ---------- */
+    .section-muted {
+      background: var(--bg-secondary);
+    }
+
+    .section-light {
+      background: var(--bg-primary);
+    }
+
+    /* ---------- FEATURE CARDS ---------- */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      margin-top: 32px;
+      max-width: 1000px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .feature-card {
+      background: var(--bg-primary);
+      padding: 24px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      text-align: left;
+      transition: all 0.3s ease;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .feature-card:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-lg);
+      border-color: var(--primary-light);
+    }
+
+    .feature-card h3 {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: var(--text-primary);
+    }
+
+    .feature-card p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-bottom: 0;
+      line-height: 1.5;
+    }
+
+    /* Compact section for feature grid */
+    .section-light:has(.feature-grid) {
+      padding: 60px 5% 50px;
+      min-height: auto !important;
+    }
+
+    .section-light:has(.feature-grid) .eyebrow {
+      margin-bottom: 10px;
+    }
+
+    .section-light:has(.feature-grid) h2 {
+      margin-bottom: 10px;
+      font-size: 36px;
+    }
+
+    .section-light:has(.feature-grid) p {
+      margin-bottom: 0;
+      font-size: 15px;
+    }
+
+    /* ---------- VISUAL ELEMENTS ---------- */
+    .visual-container {
+      position: relative;
+      padding: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .circular-flow {
+      position: relative;
+      width: 450px;
+      height: 450px;
+      margin: 0 auto;
+      --circle-radius: 160px;
+    }
+
+    .circular-path {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border: 2px solid var(--border);
+      border-radius: 50%;
+      opacity: 0.3;
+    }
+
+    .circular-path-active {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border: 3px solid transparent;
+      border-top-color: var(--primary);
+      border-right-color: var(--primary);
+      border-bottom-color: var(--primary);
+      border-radius: 50%;
+      animation: rotateCircle 6s linear infinite;
+      opacity: 0.6;
+    }
+
+    @keyframes rotateCircle {
+      0% {
+        transform: rotate(0deg);
+      }
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+
+    .flow-stage-circle {
+      position: absolute;
+      background: linear-gradient(135deg, var(--bg-primary) 0%, #f8fafc 100%);
+      border: 2.5px solid var(--primary);
+      border-radius: 16px;
+      width: 120px;
+      height: 120px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--text-primary);
+      box-shadow: var(--shadow-lg), 0 0 0 0 rgba(99, 102, 241, 0);
+      z-index: 2;
+      text-align: center;
+      padding: 12px;
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      top: 50%;
+      left: 50%;
+    }
+
+    .flow-stage-circle::before {
+      content: "";
+      position: absolute;
+      inset: -3px;
+      border-radius: 18px;
+      padding: 3px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-light));
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      mask-composite: exclude;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+
+    .flow-stage-circle:hover::before {
+      opacity: 1;
+    }
+
+    .flow-stage-circle:hover {
+      transform: translate(-50%, -50%) scale(1.08);
+      box-shadow: var(--shadow-xl), 0 0 20px rgba(99, 102, 241, 0.3);
+      border-color: var(--primary-light);
+    }
+
+    /* Position 3 stages at equal distances (120° apart) */
+    /* Top position (0°) */
+    .flow-stage-circle:nth-child(2) {
+      transform: translate(-50%, -50%) translateY(calc(-1 * var(--circle-radius)));
+    }
+
+    .flow-stage-circle:nth-child(2):hover {
+      transform: translate(-50%, -50%) translateY(calc(-1 * var(--circle-radius))) scale(1.08);
+    }
+
+    /* Bottom-right position (120°) */
+    .flow-stage-circle:nth-child(3) {
+      transform: translate(-50%, -50%) rotate(120deg) translateY(calc(-1 * var(--circle-radius))) rotate(-120deg);
+    }
+
+    .flow-stage-circle:nth-child(3):hover {
+      transform: translate(-50%, -50%) rotate(120deg) translateY(calc(-1 * var(--circle-radius))) rotate(-120deg) scale(1.08);
+    }
+
+    /* Bottom-left position (240°) */
+    .flow-stage-circle:nth-child(4) {
+      transform: translate(-50%, -50%) rotate(240deg) translateY(calc(-1 * var(--circle-radius))) rotate(-240deg);
+    }
+
+    .flow-stage-circle:nth-child(4):hover {
+      transform: translate(-50%, -50%) rotate(240deg) translateY(calc(-1 * var(--circle-radius))) rotate(-240deg) scale(1.08);
+    }
+
+    /* Animated particles flowing around the circle */
+    .flow-particle {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-light));
+      border-radius: 50%;
+      box-shadow: 0 0 16px var(--primary), 0 0 24px rgba(99, 102, 241, 0.7), 0 0 32px rgba(99, 102, 241, 0.4);
+      z-index: 3;
+      top: 50%;
+      left: 50%;
+      animation: flowCircle 4.5s linear infinite;
+    }
+
+    .particle-1 {
+      animation-delay: 0s;
+    }
+
+    .particle-2 {
+      animation-delay: 1.5s;
+    }
+
+    .particle-3 {
+      animation-delay: 3s;
+    }
+
+    @keyframes flowCircle {
+      0% {
+        transform: translate(-50%, -50%) rotate(0deg) translateY(calc(-1 * var(--circle-radius))) rotate(0deg);
+        opacity: 1;
+      }
+      33.33% {
+        transform: translate(-50%, -50%) rotate(120deg) translateY(calc(-1 * var(--circle-radius))) rotate(-120deg);
+        opacity: 1;
+      }
+      66.66% {
+        transform: translate(-50%, -50%) rotate(240deg) translateY(calc(-1 * var(--circle-radius))) rotate(-240deg);
+        opacity: 1;
+      }
+      100% {
+        transform: translate(-50%, -50%) rotate(360deg) translateY(calc(-1 * var(--circle-radius))) rotate(-360deg);
+        opacity: 1;
+      }
+    }
+
+    .flow-diagram {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .flow-step {
+      flex: 1;
+      min-width: 120px;
+      padding: 24px;
+      background: var(--bg-primary);
+      border-radius: 12px;
+      border: 2px solid var(--border);
+      text-align: center;
+      font-weight: 600;
+      color: var(--text-primary);
+      position: relative;
+      transition: all 0.3s ease;
+    }
+
+    .flow-step:hover {
+      border-color: var(--primary);
+      transform: scale(1.05);
+      box-shadow: var(--shadow-md);
+    }
+
+    .flow-arrow {
+      font-size: 24px;
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    /* ---------- PRODUCT FLOW SECTION ---------- */
+    .product-flow-section {
+      background: var(--bg-primary);
+    }
+
+    .product-flow-container {
+      max-width: 1200px;
+      width: 100%;
+      text-align: center;
+    }
+
+    .product-flow-visual {
+      width: 100%;
+      height: 100%;
+      min-height: 400px;
+      border-radius: 20px;
+      background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 50%, #e0e7ff 100%);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-lg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .product-flow-visual::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: 
+        radial-gradient(circle at 20% 30%, rgba(99, 102, 241, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 80% 70%, rgba(139, 92, 246, 0.1) 0%, transparent 50%);
+    }
+
+    /* Combined section with The Shift and Product Flow side by side */
+    .combined-section {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 60px;
+      align-items: center;
+      max-width: 1400px;
+      width: 100%;
+    }
+
+    .combined-section-wrapper {
+      padding: 100px 5% 60px;
+      min-height: auto;
+    }
+
+    .combined-section-left {
+      text-align: left;
+    }
+
+    .combined-section-right {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .product-flow-compact {
+      text-align: center;
+    }
+
+    .product-flow-compact .eyebrow {
+      margin-bottom: 12px;
+    }
+
+    .product-flow-compact h2 {
+      font-size: 32px;
+      margin-bottom: 12px;
+    }
+
+    .product-flow-compact p {
+      font-size: 15px;
+      margin-bottom: 20px;
+    }
+
+    .product-flow-placeholder {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      color: var(--text-muted);
+    }
+
+    .product-flow-placeholder-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+      opacity: 0.6;
+    }
+
+    .product-flow-placeholder-text {
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    /* ---------- CLOSING CTA SECTION ---------- */
+    .cta-section {
+      background: transparent;
+      color: #ffffff;
+      text-align: center;
+      padding: 40px 5%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: auto !important;
+    }
+
+    .cta-section .container {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      border-radius: 16px;
+      padding: 32px 40px;
+      max-width: 800px;
+      width: 100%;
+      box-shadow: var(--shadow-xl);
+    }
+
+    .cta-section h2 {
+      color: #ffffff;
+      font-size: 28px;
+      margin-bottom: 6px;
+    }
+
+    .cta-section p {
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 14px;
+      margin-bottom: 10px;
+      max-width: 700px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .cta-section .primary-btn {
+      background: #ffffff;
+      color: var(--primary);
+      font-size: 13px;
+      padding: 12px 28px;
+      box-shadow: var(--shadow-xl);
+    }
+
+    .cta-section .primary-btn:hover {
+      background: rgba(255, 255, 255, 0.95);
+      transform: translateY(-3px);
+      box-shadow: 0 20px 30px -5px rgba(0, 0, 0, 0.2);
+    }
+
+    /* ---------- RESPONSIVE ---------- */
+    @media (max-width: 1024px) {
+      h1 {
+        font-size: 48px;
+      }
+
+      h2 {
+        font-size: 40px;
+      }
+
+      .hero-grid {
+        gap: 60px;
+      }
+    }
+
+    @media (max-width: 900px) {
+
+      section {
+        padding: 120px 24px 60px;
+      }
+
+      .combined-section-wrapper {
+        padding: 80px 24px 50px;
+      }
+
+      .hero-grid {
+        grid-template-columns: 1fr;
+        gap: 48px;
+        text-align: center;
+      }
+
+      .hero {
+        text-align: center;
+      }
+
+      .cta-group {
+        justify-content: center;
+      }
+
+      h1 {
+        font-size: 40px;
+      }
+
+      h2 {
+        font-size: 36px;
+      }
+
+      .combined-section {
+        grid-template-columns: 1fr;
+        gap: 40px;
+      }
+
+      .combined-section-left {
+        text-align: center;
+      }
+
+      .product-flow-visual {
+        height: 400px;
+        min-height: 400px;
+      }
+
+      .product-flow-compact h2 {
+        font-size: 32px;
+      }
+
+      .cta-section {
+        padding: 30px 24px;
+      }
+
+      .cta-section .container {
+        padding: 28px 32px;
+        max-width: 100%;
+      }
+
+      .cta-section h2 {
+        font-size: 24px;
+      }
+
+      .cta-section p {
+        font-size: 13px;
+      }
+
+
+      .section-light:has(.feature-grid) {
+        padding: 50px 24px 40px;
+      }
+
+      .section-light:has(.feature-grid) h2 {
+        font-size: 32px;
+      }
+
+      .feature-grid {
+        gap: 16px;
+        margin-top: 28px;
+      }
+
+      .feature-card {
+        padding: 20px;
+      }
+
+      .feature-card h3 {
+        font-size: 17px;
+        margin-bottom: 6px;
+      }
+
+      .feature-card p {
+        font-size: 13px;
+      }
+
+      .flow-diagram {
+        flex-direction: column;
+      }
+
+      .flow-arrow {
+        transform: rotate(90deg);
+      }
+
+      .circular-flow {
+        width: 350px;
+        height: 350px;
+        --circle-radius: 125px;
+      }
+
+      .flow-stage-circle {
+        width: 100px;
+        height: 100px;
+        font-size: 12px;
+        padding: 10px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      h1 {
+        font-size: 32px;
+      }
+
+      h2 {
+        font-size: 28px;
+      }
+
+      .combined-section-wrapper {
+        padding: 60px 24px 40px;
+      }
+
+      .combined-section {
+        gap: 30px;
+      }
+
+      .product-flow-visual {
+        height: 300px;
+        min-height: 300px;
+      }
+
+      .product-flow-compact h2 {
+        font-size: 28px;
+      }
+
+      .product-flow-placeholder-icon {
+        font-size: 48px;
+      }
+
+      .product-flow-placeholder-text {
+        font-size: 14px;
+      }
+
+      .cta-section {
+        padding: 24px 16px;
+      }
+
+      .cta-section .container {
+        padding: 24px 24px;
+        border-radius: 12px;
+      }
+
+      .cta-section h2 {
+        font-size: 22px;
+      }
+
+      .cta-section p {
+        font-size: 13px;
+        margin-bottom: 10px;
+      }
+
+      .section-light:has(.feature-grid) {
+        padding: 40px 16px 30px;
+      }
+
+      .section-light:has(.feature-grid) h2 {
+        font-size: 28px;
+      }
+
+      .feature-grid {
+        gap: 14px;
+        margin-top: 24px;
+      }
+
+      .feature-card {
+        padding: 18px;
+      }
+
+      .feature-card h3 {
+        font-size: 16px;
+        margin-bottom: 6px;
+      }
+
+      .feature-card p {
+        font-size: 12px;
+      }
+
+      p {
+        font-size: 16px;
+      }
+
+      .primary-btn,
+      .secondary-btn {
+        padding: 14px 24px;
+        font-size: 14px;
+      }
+
+      .hero-visual {
+        height: 300px;
+      }
+
+      .circular-flow {
+        width: 280px;
+        height: 280px;
+        --circle-radius: 100px;
+      }
+
+      .flow-stage-circle {
+        width: 85px;
+        height: 85px;
+        font-size: 11px;
+        padding: 8px;
+      }
+
+      .logo img {
+        height: 32px;
+      }
+
+      .logo {
+        font-size: 20px;
+      }
+
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo">
+      <img src="logo.png" alt="SmariX Logo" />
+      <span>SmariX</span>
+    </div>
+    <a href="" class="contact-btn">Watch Demo</a>
+  </header>
+
+  <!-- SECTION 1: HERO -->
+  <section class="hero">
+    <div class="hero-grid">
+      <div>
+        <h1>Onboarding and Offboarding shouldn't break the chain</h1>
+        <p>
+          SmariX connects people, knowledge, and context —
+          ensuring continuity from day one to the last day.
+        </p>
+
+        <div class="cta-group">
+          <button class="primary-btn">Watch Demo</button>
+          <a href="try-now.html" class="secondary-btn">Try Now</a>
+        </div>
+      </div>
+
+      <div class="hero-visual">
+        <div class="hero-visual-content">
+          <div style="font-size: 48px; margin-bottom: 16px;">🔗</div>
+          <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">Continuous Knowledge Flow</div>
+          <div style="font-size: 13px;">Visual representation of seamless transitions</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 2: ONBOARDING PROBLEM -->
+  <section class="section-muted">
+    <div class="container">
+      <div class="eyebrow">The Reality</div>
+      <h2>Most onboarding is just formality</h2>
+
+      <p>
+        New hires get access, documents, and a welcome call.
+        But they rarely get real clarity.
+      </p>
+
+      <div class="list">
+        <div>What actually matters</div>
+        <div>How things really work day to day</div>
+        <div>Where decisions are made and stored</div>
+        <div>Who owns what — and why it matters</div>
+      </div>
+
+      <p style="margin-top: 40px; font-size: 17px; font-weight: 500; color: var(--text-primary);">
+        Onboarding takes months.
+      </p>
+    </div>
+  </section>
+
+  <!-- SECTION 3: OFFBOARDING PROBLEM -->
+  <section class="section-light">
+    <div class="container">
+      <div class="eyebrow">The Hidden Cost</div>
+      <h2>Offboarding is where companies lose Intelligence</h2>
+
+      <p>
+        When people leave, knowledge leaves quietly with them.
+      </p>
+
+      <div class="list">
+        <div>Context disappears</div>
+        <div>Decisions lack historical traceability</div>
+        <div>Mistakes get repeated — Team slow down again</div>
+      </div>
+
+      <p style="margin-top: 40px; font-size: 17px; font-weight: 500; color: var(--text-primary);">
+        Offboarding today is an exit form —<br/>
+        not a knowledge transfer.
+      </p>
+    </div>
+  </section>
+
+  <!-- SECTION 4: ONE CONTINUOUS SYSTEM + PRODUCT FLOW -->
+<section class="section-muted combined-section-wrapper">
+  <div class="combined-section">
+    <!-- LEFT: The Shift Content -->
+    <div class="combined-section-left">
+      <div class="eyebrow">The Shift</div>
+      <h2>One continuous system.<br/>Not two broken processes.</h2>
+
+      <p>
+        SmariX treats onboarding and offboarding as one connected flow.
+      </p>
+
+      <p>
+        From the first task you learn from to the last insight you leave behind —
+        everything stays connected.
+      </p>
+
+      <p>
+        AI captures context automatically, without adding work for your team.
+      </p>
+    </div>
+
+    <!-- RIGHT: Product Flow GIF -->
+    <div class="combined-section-right">    
+      <div class="product-flow-visual">
+        <div class="product-flow-placeholder">
+          <div class="product-flow-placeholder-icon">🎬</div>
+          <div class="product-flow-placeholder-text">Product Flow GIF<br/><span style="font-size: 14px; opacity: 0.7;">(Placeholder - Replace with actual GIF)</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 5: BUILT FOR REAL WORK -->
+<section class="section-light">
+  <div class="container">
+    <div class="eyebrow">Designed for Reality</div>
+    <h2>Built for how teams actually work</h2>
+
+      <p style="max-width: 700px; margin-left: auto; margin-right: auto;">
+        SmariX adapts to your workflow, capturing knowledge where it happens — 
+        not where documentation says it should.
+      </p>
+
+      <div class="feature-grid">
+        <div class="feature-card">
+          <h3>Learns from real work</h3>
+          <p>Not templates or forced processes. Captures knowledge as it naturally occurs in your team's workflow.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Preserves decisions</h3>
+          <p>Goes beyond documents to capture the why behind decisions, maintaining context for future teams.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Reduces ramp-up time</h3>
+          <p>New team members get up to speed faster with contextual knowledge, not just access and documents.</p>
+        </div>
+        <div class="feature-card">
+          <h3>Works in background</h3>
+          <p>Automatically captures context without interrupting your team's natural workflow or adding overhead.</p>
+        </div>
+        <div class="feature-card">
+          <h3>No heavy processes</h3>
+          <p>Lightweight integration that enhances your existing tools without requiring major workflow changes.</p>
+        </div>
+        <div class="feature-card">
+          <h3>No forced documentation</h3>
+          <p>Knowledge flows naturally. No mandatory forms or documentation requirements that slow teams down.</p>
+        </div>
+    </div>
+  </div>
+</section>
+
+<!-- CLOSING CTA SECTION -->
+<section class="cta-section">
+  <div class="container">
+    <h2>Keep the chain intact.</h2>
+    <p>Turn onboarding and offboarding into a continuous intelligence loop.</p>
+    <button class="primary-btn">Watch Demo</button>
+  </div>
+</section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="footer-content">
+      <a href="contact.html">About</a>
+      <a href="contact.html">Blog</a>
+      <a href="contact.html">Careers</a>
+      <a href="contact.html">Contact</a>
+      <a href="contact.html">Features</a>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2026 SmariX. All rights reserved.</p>
+    </div>
+  </footer>
+
+</body>
+</html>

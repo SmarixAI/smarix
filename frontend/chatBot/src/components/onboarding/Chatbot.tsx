@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Maximize2, Minimize2, X } from 'lucide-react';
+import { useAuth } from '@/components/auth/AuthContext';
 
 interface Message {
   id: string;
@@ -16,6 +17,7 @@ interface ChatbotProps {
 }
 
 export default function Chatbot({ darkMode, role = 'onboarding' }: ChatbotProps) {
+  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
@@ -110,13 +112,17 @@ export default function Chatbot({ darkMode, role = 'onboarding' }: ChatbotProps)
     setIsTyping(true);
 
     try {
-      const requestBody: { query: string; session_id?: string; role?: string } = {
+      const requestBody: { query: string; session_id?: string; role?: string; username?: string } = {
         query: currentInput,
         role: role,
       };
 
       if (sessionId) {
         requestBody.session_id = sessionId;
+      }
+
+      if (user?.username) {
+        requestBody.username = user.username;
       }
 
       const response = await fetch(`${baseURL}/chat`, {
