@@ -18,7 +18,7 @@ import re
 
 
 STATE_FILE = Path(
-    "/Users/vishalkeshari/Desktop/smarix/backend/data/Admin/state/runtime_state.json"
+    Path(__file__).resolve().parents[2] / "data" / "Admin" / "state" / "runtime_state.json"
 )
 
 def load_current_repo_from_state():

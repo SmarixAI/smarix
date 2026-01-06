@@ -1,5 +1,5 @@
 # File: backend/core/DataCollection/__init__.py
-from .github_client import GitHubClient
-from .repository_processor import RepositoryProcessor
+from .github_client import AsyncGitHubClient
+from .repository_processor import AsyncRepositoryProcessor
 
-__all__ = ["GitHubClient", "RepositoryProcessor"]
+__all__ = ["AsyncGitHubClient", "AsyncRepositoryProcessor"]

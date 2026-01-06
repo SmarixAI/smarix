@@ -33,7 +33,7 @@ def find_output_dir():
     possible_paths = [
         repo_root / "data" / "Offboarding",
         repo_root / "backend" / "data" / "Offboarding",
-        Path(r"C:\Users\vishalke\Desktop\AI007\super-employee\backend\data\Offboarding"),
+        Path("../..") / "data" / "Offboarding",
         Path("data/Offboarding"),
         Path("../data/Offboarding"),
     ]
