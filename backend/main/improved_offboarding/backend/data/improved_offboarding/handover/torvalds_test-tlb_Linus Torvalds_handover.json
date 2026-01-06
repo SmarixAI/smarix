@@ -1,0 +1,243 @@
+{
+  "metadata": {
+    "employee_username": "Linus Torvalds",
+    "processed_at": "2026-01-06T01:34:40.295786",
+    "processor_version": "1.0.0",
+    "features_implemented": [
+      53,
+      54,
+      55,
+      56,
+      57,
+      58,
+      59,
+      60,
+      61,
+      62,
+      63,
+      64,
+      65,
+      66,
+      67,
+      68,
+      69,
+      70,
+      71,
+      72,
+      73
+    ]
+  },
+  "ownership_identification": {
+    "ownership_gaps": {
+      "ownership_gaps": [],
+      "total_gaps": 0,
+      "gaps_by_severity": {},
+      "critical_gaps": [],
+      "high_severity_gaps": [],
+      "gaps_by_type": {}
+    },
+    "successor_requirements": {
+      "successor_requirements": [],
+      "total_requirements": 0,
+      "requirements_by_type": {},
+      "critical_requirements": [],
+      "primary_successor_requirements": [],
+      "backup_successor_requirements": []
+    },
+    "ownership_risk_scoring": {
+      "ownership_risks": {},
+      "high_risk_files": [],
+      "critical_risk_files": [],
+      "files_requiring_successor": [],
+      "files_requiring_backup": [],
+      "risk_summary": {
+        "critical": 0,
+        "high": 0,
+        "medium": 0,
+        "low": 0
+      }
+    },
+    "backup_owner_requirements": {
+      "backup_requirements": [],
+      "total_backup_requirements": 0,
+      "critical_backup_requirements": [],
+      "backup_requirements_by_priority": {
+        "critical": [],
+        "high": []
+      }
+    },
+    "critical_system_validation": {
+      "validation_results": [],
+      "validation_summary": {
+        "total_subsystems": 0,
+        "valid": 0,
+        "needs_attention": 0,
+        "critical": 0,
+        "overall_status": "valid"
+      },
+      "critical_subsystems": [],
+      "subsystems_requiring_action": []
+    }
+  },
+  "smart_assignment": {
+    "capability_based_recommendations": {
+      "recommendations": [],
+      "total_recommendations": 0,
+      "high_confidence_recommendations": [],
+      "recommendations_by_type": {}
+    },
+    "contribution_based_matching": {
+      "contribution_matches": [],
+      "total_matches": 0,
+      "high_confidence_matches": [],
+      "matches_with_candidates": []
+    },
+    "context_proximity_scoring": {
+      "proximity_scores": {},
+      "total_requirements_scored": 0,
+      "high_proximity_candidates": 0
+    },
+    "role_aware_assignment": {
+      "role_aware_assignments": [],
+      "total_assignments": 0,
+      "high_confidence_assignments": [],
+      "role_appropriate_assignments": [],
+      "assignments_by_role": {}
+    },
+    "load_balanced_assignment": {
+      "balanced_assignments": [],
+      "load_distribution": {},
+      "load_statistics": {
+        "total_assignments": 0,
+        "average_load": 0,
+        "max_load": 0,
+        "min_load": 0,
+        "overloaded_candidates": []
+      },
+      "risk_overrides": [],
+      "load_warnings": []
+    }
+  },
+  "knowledge_transfer_planning": {
+    "kt_type_recommendations": {
+      "kt_recommendations": [],
+      "total_kt_sessions": 0,
+      "kt_types_summary": {
+        "intensive_hands_on": 0,
+        "hands_on_session": 0,
+        "documentation": 0
+      }
+    },
+    "handover_agenda": {
+      "handover_agenda": [],
+      "total_candidates": 0,
+      "total_agenda_items": 0,
+      "total_estimated_hours": 0
+    },
+    "expected_artifacts": {
+      "artifact_definitions": [],
+      "total_artifacts_required": 0,
+      "artifacts_by_type": {
+        "documentation": 0,
+        "code_walkthrough": 0,
+        "runbook": 0
+      }
+    },
+    "kt_time_estimation": {
+      "time_by_candidate": {},
+      "time_by_file": {},
+      "total_kt_hours": 0,
+      "average_kt_hours_per_candidate": 0,
+      "max_kt_hours_per_candidate": 0,
+      "kt_time_breakdown": {
+        "hands_on_sessions": 0,
+        "documentation": 0
+      }
+    },
+    "kt_dependency_ordering": {
+      "ordered_kt": [],
+      "total_items": 0,
+      "critical_first": [],
+      "dependency_chain": []
+    }
+  },
+  "execution_validation": {
+    "ownership_acceptance_workflow": {
+      "acceptance_workflows": [],
+      "total_workflows": 0,
+      "workflows_by_status": {
+        "pending": 0,
+        "in_progress": 0,
+        "completed": 0
+      }
+    },
+    "kt_completion_tracking": {
+      "completion_tracking": [],
+      "total_kt_items": 0,
+      "completed_items": [],
+      "in_progress_items": [],
+      "overall_completion_percentage": 0
+    },
+    "partial_handover_tracking": {
+      "partial_handover_tracking": [],
+      "total_items": 0,
+      "fully_complete": [],
+      "partially_complete": [],
+      "not_started": [],
+      "overall_progress": 0
+    },
+    "backup_ownership_confirmation": {
+      "backup_confirmations": [],
+      "total_backup_requirements": 0,
+      "confirmed_backups": [],
+      "pending_backups": [],
+      "critical_backup_requirements": []
+    },
+    "manager_approval_flow": {
+      "approval_workflows": [],
+      "total_workflows": 0,
+      "workflows_by_stage": {
+        "assignment_approval": 0,
+        "kt_plan_approval": 0,
+        "kt_completion_approval": 0,
+        "ownership_transfer_approval": 0
+      },
+      "fully_approved": []
+    },
+    "sla_due_date_tracking": {
+      "sla_tracking": [],
+      "total_sla_items": 0,
+      "sla_summary": {
+        "on_track": 0,
+        "at_risk": 0,
+        "overdue": 0
+      },
+      "upcoming_due_dates": []
+    }
+  },
+  "summary": {
+    "ownership_summary": {
+      "total_gaps": 0,
+      "successor_requirements": 0,
+      "critical_risk_files": 0,
+      "backup_requirements": 0
+    },
+    "assignment_summary": {
+      "total_assignments": 0,
+      "high_confidence_assignments": 0,
+      "unique_candidates": 0
+    },
+    "kt_planning_summary": {
+      "total_kt_sessions": 0,
+      "total_kt_hours": 0,
+      "agenda_items": 0,
+      "required_artifacts": 0
+    },
+    "execution_summary": {
+      "acceptance_workflows": 0,
+      "kt_completion_items": 0,
+      "sla_tracking_items": 0,
+      "approval_workflows": 0
+    }
+  }
+}

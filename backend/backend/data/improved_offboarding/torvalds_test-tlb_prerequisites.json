@@ -1,0 +1,2350 @@
+{
+  "metadata": {
+    "repository": "torvalds/test-tlb",
+    "processed_at": "2026-01-06T00:05:53.736135",
+    "processor_version": "1.0.0",
+    "features_implemented": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30
+    ]
+  },
+  "data_collection": {
+    "pr_activity": {
+      "total_prs": 13,
+      "prs_by_state": {
+        "closed": 6,
+        "open": 7
+      },
+      "prs_by_author": {
+        "naseridev": 1,
+        "melihxz": 1,
+        "omsandippatil": 1,
+        "coderGtm": 1,
+        "Mahdi-Hazrati": 1,
+        "PIYUSH-MISHRA-00": 3,
+        "Privanom": 1,
+        "TacoMarco": 1,
+        "KSH-code": 1,
+        "ramlaxman": 1,
+        "lalitkishor": 1
+      },
+      "prs_by_file": {
+        "test-tlb.c": [
+          33,
+          32,
+          30,
+          27,
+          16,
+          14,
+          11
+        ],
+        "Makefile": [
+          32
+        ],
+        "README": [
+          32,
+          29,
+          17
+        ],
+        "README.md": [
+          32,
+          19,
+          18,
+          6,
+          4
+        ],
+        "github.sh": [
+          19
+        ]
+      },
+      "pr_details": [
+        {
+          "number": 33,
+          "title": "Improved memory access test with better error handling and signal man…",
+          "state": "closed",
+          "author": "naseridev",
+          "created_at": "2024-08-19T21:13:35Z",
+          "merged_at": null,
+          "changed_files_count": 1
+        },
+        {
+          "number": 32,
+          "title": "Add New Memory Access Tests and Update Documentation for test-tlb",
+          "state": "open",
+          "author": "melihxz",
+          "created_at": "2024-08-10T11:20:08Z",
+          "merged_at": null,
+          "changed_files_count": 4
+        },
+        {
+          "number": 30,
+          "title": "Pull Request - The Grand Makeover Chronicles 🚀",
+          "state": "open",
+          "author": "omsandippatil",
+          "created_at": "2024-01-03T14:18:31Z",
+          "merged_at": null,
+          "changed_files_count": 1
+        },
+        {
+          "number": 29,
+          "title": "Update README",
+          "state": "open",
+          "author": "coderGtm",
+          "created_at": "2023-12-25T07:58:56Z",
+          "merged_at": null,
+          "changed_files_count": 1
+        },
+        {
+          "number": 27,
+          "title": "Refactor code to improve performance",
+          "state": "closed",
+          "author": "Mahdi-Hazrati",
+          "created_at": "2023-06-07T13:23:13Z",
+          "merged_at": null,
+          "changed_files_count": 1
+        },
+        {
+          "number": 19,
+          "title": "Added github.sh for git automation from terminal and updated readme",
+          "state": "open",
+          "author": "PIYUSH-MISHRA-00",
+          "created_at": "2022-08-20T04:20:18Z",
+          "merged_at": null,
+          "changed_files_count": 2
+        },
+        {
+          "number": 18,
+          "title": "Updated README to README.md for more readability",
+          "state": "closed",
+          "author": "PIYUSH-MISHRA-00",
+          "created_at": "2022-08-07T13:02:06Z",
+          "merged_at": null,
+          "changed_files_count": 1
+        },
+        {
+          "number": 17,
+          "title": "Update README",
+          "state": "closed",
+          "author": "PIYUSH-MISHRA-00",
+          "created_at": "2022-08-07T12:53:45Z",
+          "merged_at": null,
+          "changed_files_count": 1
+        },
+        {
+          "number": 16,
+          "title": "changed PAGE_SIZE and HUGEPAGE to auto get the page size",
+          "state": "open",
+          "author": "Privanom",
+          "created_at": "2022-01-15T23:51:15Z",
+          "merged_at": null,
+          "changed_files_count": 1
+        },
+        {
+          "number": 14,
+          "title": "Quality of life improvements",
+          "state": "open",
+          "author": "TacoMarco",
+          "created_at": "2021-12-09T08:28:17Z",
+          "merged_at": null,
+          "changed_files_count": 1
+        },
+        {
+          "number": 11,
+          "title": "Fix - element size of rnd is not enough",
+          "state": "closed",
+          "author": "KSH-code",
+          "created_at": "2020-04-26T11:51:55Z",
+          "merged_at": null,
+          "changed_files_count": 1
+        },
+        {
+          "number": 6,
+          "title": "Update and rename README to README.md",
+          "state": "open",
+          "author": "ramlaxman",
+          "created_at": "2018-10-13T02:22:36Z",
+          "merged_at": null,
+          "changed_files_count": 1
+        },
+        {
+          "number": 4,
+          "title": "Rename README to README.md",
+          "state": "closed",
+          "author": "lalitkishor",
+          "created_at": "2018-09-06T18:48:40Z",
+          "merged_at": null,
+          "changed_files_count": 1
+        }
+      ]
+    },
+    "commit_activity": {
+      "total_commits": 11,
+      "commits_by_author": {
+        "Christopher Diaz Riveros": 1,
+        "Linus Torvalds": 10
+      },
+      "commits_by_date": {},
+      "commit_timeline": [],
+      "commit_details": [
+        {
+          "sha": "14321e3356829d4c6e7724b7b7fd406a4af31667",
+          "message": "README: minor typos fix\n\nVerified with GNU Aspell spell checker.\n\nSigned-off-by: Christopher Diaz Riveros <chrisadr@gentoo.org>\nSigned-off-by: Linus Torvalds <torvalds@linux-foundation.org>",
+          "author": "Christopher Diaz Riveros",
+          "date": null,
+          "files_count": 0
+        },
+        {
+          "sha": "16e929a524b116167491d8cab822197646ff3af5",
+          "message": "Improve on the timing logic a bit more\n\nTime the warmup run to make a better estimate of how long to run the\nreal runs.  We want to balance getting timely results with still\nactually having the time to actually traverse the full list a few times.\n\nThis basically aims for the real run to traverse the list at least five\ntimes, but to also run for at least a fifth of a second.  Because five\nis obviously a holy random number, and is also how many times we run the\ntest to try to de-noise the final number.\n\nThis also changes \"make run\" to actuall test the 256M case like the\nREADME says (rather than stop at 128M).\n\nSigned-off-by: Linus Torvalds <torvalds@linux-foundation.org>",
+          "author": "Linus Torvalds",
+          "date": null,
+          "files_count": 0
+        },
+        {
+          "sha": "4210d1cfc58f2d8a3da0730389ee63d68c6fe914",
+          "message": "Improve on map re-allocation strategy\n\nDon't bother reallocating hugepage mappings, the cache associativity\nissues are hopefully not all that noticeable with big pages to begin\nwith, and with fewer big pages to go around it's likely less effective\nto try to change the mapping anyway.\n\nFor the regular page case, force any remapping to over-map the old\nmapping, which will free the old pages.  That might cause the new\nmapping to have similar allocation patterns as the old one, but not\nusing excessive amounts of memory still makes this the better option.\n\nSigned-off-by: Linus Torvalds <torvalds@linux-foundation.org>",
+          "author": "Linus Torvalds",
+          "date": null,
+          "files_count": 0
+        },
+        {
+          "sha": "4ac62b9733ffd669df882894efaf2afc2b8fa5ef",
+          "message": "Try to increase result stability by running multiple rounds\n\nThis runs things five times, randomizing the list in between each run,\nand then picks the minimum cycle time of the five.  That makes the\nresults more stable.\n\nThere's a few downsides to this:\n\n (a) to avoid taking five times as long, each run only runs for half a\n     second. Which might not actually be enough to go around for big\n     memory areas.\n\n (b) is minimum cycle time actually good? It's _usually_ the right thing\n     to do for latency benchmarks, but it might also end up showing the\n     \"good case\", ie when the mapping happened to cause the fewest\n     associativity misses etc.\n\n (c) the code is currently intentionally stupid and doesn't even free\n     the old mappings, which is good to make sure that we don't get the\n     same virtual memory pattern, but might cause problems when you want\n     to test under low-memory conditions (just to pick one example).\n\nI'll have to think about this some more, but let's try it.\n\nSigned-off-by: Linus Torvalds <torvalds@linux-foundation.org>",
+          "author": "Linus Torvalds",
+          "date": null,
+          "files_count": 0
+        },
+        {
+          "sha": "d352c0df205df0c6b4ee34de20ca4fe414000cb3",
+          "message": "Add README and LICENSE.txt file\n\n... and a .gitignore file.\n\nAll prepping for putting it on github or something\n\nSigned-off-by: Linus Torvalds <torvalds@linux-foundation.org>",
+          "author": "Linus Torvalds",
+          "date": null,
+          "files_count": 0
+        },
+        {
+          "sha": "784130fab5b9dc23c405f15d48e09d2a1850c0ab",
+          "message": "Allow odd stride values\n\nThey are actually quite useful for testing unaligned behavior: does it\nslow down every access, or does it slow down only some accesses?\n\nFor example, on my i7-6700K, I get\n\n\t[torvalds@i7 test-tlb]$ ./test-tlb 16k 12\n\t  1.29ns (~5.0 cycles)\n\n\t[torvalds@i7 test-tlb]$ ./test-tlb 16k 11\n\t  1.36ns (~5.3 cycles)\n\nwhich means that the unaligned load case is actually very low in pointer\nchasing situations.  With a stride of 11, 75% of all the memory accesses\nwill be unaligned, but it only costs an additional 0.3 cycles on average.\n\nThe reason is that unaligned loads are basically free, except when they\ncross some other boundary (*).  To test what the cost of that is, I'd\nneed to add a \"offset\" parameter and allow people to force every access\nto be a bank crosser.\n\nSome day.\n\n(*) There may be other costs, like just resource use costs.  But the\nkinds of boundaries that tend to matter are L1 D$ boundaries (that need\nto access two lines), but also obviously page-crossers (that need two\nTLB entries), and also sub-banks in the L1 (depending on width of the L1\ninterface).\n\nSigned-off-by: Linus Torvalds <torvalds@linux-foundation.org>",
+          "author": "Linus Torvalds",
+          "date": null,
+          "files_count": 0
+        },
+        {
+          "sha": "cedcf70019525126b5c7a866d494b1ac9ff6f9d7",
+          "message": "Work even in the presense of transparent hugepage  \"always\".\n\nChristian Borntraeger tested on an s390, and had transparent hugepages\nset to \"always\", which meant that the small-page case never triggered at\nall.\n\nSo when not testing the hugepage case, explicitly do a\n\n\tmadvise(MADV_NOHUGEPAGE)\n\non the memory allocation.\n\nReported-by: Christian Borntraeger <christian@borntraeger.net>\nSigned-off-by: Linus Torvalds <torvalds@linux-foundation.org>",
+          "author": "Linus Torvalds",
+          "date": null,
+          "files_count": 0
+        },
+        {
+          "sha": "3a301fed084a9bcafaba5167d942b5ae087baef9",
+          "message": "Use gettimeofday for start/end\n\nIn case your \"alarm(1)\" isn't entirely precise.",
+          "author": "Linus Torvalds",
+          "date": null,
+          "files_count": 0
+        },
+        {
+          "sha": "fba590607d628957cc95fab18b51a45b6556b7c5",
+          "message": "Improve the tester some more, remove the old TLB-only code",
+          "author": "Linus Torvalds",
+          "date": null,
+          "files_count": 0
+        },
+        {
+          "sha": "cea022182fd990b119d04b486c1ff212378797f1",
+          "message": "Try to create test of truly random list walker\n\n.. with hugetlb and without.\n\nIt may be broken.",
+          "author": "Linus Torvalds",
+          "date": null,
+          "files_count": 0
+        },
+        {
+          "sha": "bf9779cf2664c0ca8810a6e23c8f810add7be297",
+          "message": "Very hacky TLB timing tester",
+          "author": "Linus Torvalds",
+          "date": null,
+          "files_count": 0
+        }
+      ]
+    },
+    "file_activity": {
+      "total_files": 1,
+      "files_by_extension": {
+        ".c": 1
+      },
+      "files_by_size": {
+        "small": 0,
+        "medium": 1,
+        "large": 0
+      },
+      "file_modification_count": {
+        "test-tlb.c": 7,
+        "Makefile": 1,
+        "README": 3,
+        "README.md": 5,
+        "github.sh": 1
+      },
+      "file_details": [
+        {
+          "path": "test-tlb.c",
+          "size": 5816,
+          "extension": ".c",
+          "modification_count": 7,
+          "has_been_modified": true
+        }
+      ]
+    },
+    "multi_repo_contribution": {
+      "total_contributors": 13,
+      "contributors": {
+        "naseridev": {
+          "prs": 1,
+          "commits": 0,
+          "files_modified_count": 1,
+          "files_modified": [
+            "test-tlb.c"
+          ],
+          "first_contribution": "2024-08-19T21:13:35Z",
+          "last_contribution": "2024-08-19T21:13:35Z"
+        },
+        "melihxz": {
+          "prs": 1,
+          "commits": 0,
+          "files_modified_count": 4,
+          "files_modified": [
+            "Makefile",
+            "README",
+            "README.md",
+            "test-tlb.c"
+          ],
+          "first_contribution": "2024-08-10T11:20:08Z",
+          "last_contribution": "2024-08-10T11:20:08Z"
+        },
+        "omsandippatil": {
+          "prs": 1,
+          "commits": 0,
+          "files_modified_count": 1,
+          "files_modified": [
+            "test-tlb.c"
+          ],
+          "first_contribution": "2024-01-03T14:18:31Z",
+          "last_contribution": "2024-01-03T14:18:31Z"
+        },
+        "coderGtm": {
+          "prs": 1,
+          "commits": 0,
+          "files_modified_count": 1,
+          "files_modified": [
+            "README"
+          ],
+          "first_contribution": "2023-12-25T07:58:56Z",
+          "last_contribution": "2023-12-25T07:58:56Z"
+        },
+        "Mahdi-Hazrati": {
+          "prs": 1,
+          "commits": 0,
+          "files_modified_count": 1,
+          "files_modified": [
+            "test-tlb.c"
+          ],
+          "first_contribution": "2023-06-07T13:23:13Z",
+          "last_contribution": "2023-06-07T13:23:13Z"
+        },
+        "PIYUSH-MISHRA-00": {
+          "prs": 3,
+          "commits": 0,
+          "files_modified_count": 3,
+          "files_modified": [
+            "README",
+            "github.sh",
+            "README.md"
+          ],
+          "first_contribution": "2022-08-07T12:53:45Z",
+          "last_contribution": "2022-08-20T04:20:18Z"
+        },
+        "Privanom": {
+          "prs": 1,
+          "commits": 0,
+          "files_modified_count": 1,
+          "files_modified": [
+            "test-tlb.c"
+          ],
+          "first_contribution": "2022-01-15T23:51:15Z",
+          "last_contribution": "2022-01-15T23:51:15Z"
+        },
+        "TacoMarco": {
+          "prs": 1,
+          "commits": 0,
+          "files_modified_count": 1,
+          "files_modified": [
+            "test-tlb.c"
+          ],
+          "first_contribution": "2021-12-09T08:28:17Z",
+          "last_contribution": "2021-12-09T08:28:17Z"
+        },
+        "KSH-code": {
+          "prs": 1,
+          "commits": 0,
+          "files_modified_count": 1,
+          "files_modified": [
+            "test-tlb.c"
+          ],
+          "first_contribution": "2020-04-26T11:51:55Z",
+          "last_contribution": "2020-04-26T11:51:55Z"
+        },
+        "ramlaxman": {
+          "prs": 1,
+          "commits": 0,
+          "files_modified_count": 1,
+          "files_modified": [
+            "README.md"
+          ],
+          "first_contribution": "2018-10-13T02:22:36Z",
+          "last_contribution": "2018-10-13T02:22:36Z"
+        },
+        "lalitkishor": {
+          "prs": 1,
+          "commits": 0,
+          "files_modified_count": 1,
+          "files_modified": [
+            "README.md"
+          ],
+          "first_contribution": "2018-09-06T18:48:40Z",
+          "last_contribution": "2018-09-06T18:48:40Z"
+        },
+        "Christopher Diaz Riveros": {
+          "prs": 0,
+          "commits": 1,
+          "files_modified_count": 0,
+          "files_modified": [],
+          "first_contribution": null,
+          "last_contribution": null
+        },
+        "Linus Torvalds": {
+          "prs": 0,
+          "commits": 10,
+          "files_modified_count": 0,
+          "files_modified": [],
+          "first_contribution": null,
+          "last_contribution": null
+        }
+      }
+    },
+    "commit_timeline": {
+      "total_commits": 0,
+      "first_commit": null,
+      "last_commit": null,
+      "timeline": []
+    },
+    "file_ownership_history": {
+      "ownership_history": {
+        "test-tlb.c": [
+          {
+            "author": "KSH-code",
+            "date": "2020-04-26T11:51:55Z",
+            "pr_number": 11,
+            "change_type": "pr"
+          },
+          {
+            "author": "TacoMarco",
+            "date": "2021-12-09T08:28:17Z",
+            "pr_number": 14,
+            "change_type": "pr"
+          },
+          {
+            "author": "Privanom",
+            "date": "2022-01-15T23:51:15Z",
+            "pr_number": 16,
+            "change_type": "pr"
+          },
+          {
+            "author": "Mahdi-Hazrati",
+            "date": "2023-06-07T13:23:13Z",
+            "pr_number": 27,
+            "change_type": "pr"
+          },
+          {
+            "author": "omsandippatil",
+            "date": "2024-01-03T14:18:31Z",
+            "pr_number": 30,
+            "change_type": "pr"
+          },
+          {
+            "author": "melihxz",
+            "date": "2024-08-10T11:20:08Z",
+            "pr_number": 32,
+            "change_type": "pr"
+          },
+          {
+            "author": "naseridev",
+            "date": "2024-08-19T21:13:35Z",
+            "pr_number": 33,
+            "change_type": "pr"
+          }
+        ],
+        "Makefile": [
+          {
+            "author": "melihxz",
+            "date": "2024-08-10T11:20:08Z",
+            "pr_number": 32,
+            "change_type": "pr"
+          }
+        ],
+        "README": [
+          {
+            "author": "PIYUSH-MISHRA-00",
+            "date": "2022-08-07T12:53:45Z",
+            "pr_number": 17,
+            "change_type": "pr"
+          },
+          {
+            "author": "coderGtm",
+            "date": "2023-12-25T07:58:56Z",
+            "pr_number": 29,
+            "change_type": "pr"
+          },
+          {
+            "author": "melihxz",
+            "date": "2024-08-10T11:20:08Z",
+            "pr_number": 32,
+            "change_type": "pr"
+          }
+        ],
+        "README.md": [
+          {
+            "author": "lalitkishor",
+            "date": "2018-09-06T18:48:40Z",
+            "pr_number": 4,
+            "change_type": "pr"
+          },
+          {
+            "author": "ramlaxman",
+            "date": "2018-10-13T02:22:36Z",
+            "pr_number": 6,
+            "change_type": "pr"
+          },
+          {
+            "author": "PIYUSH-MISHRA-00",
+            "date": "2022-08-07T13:02:06Z",
+            "pr_number": 18,
+            "change_type": "pr"
+          },
+          {
+            "author": "PIYUSH-MISHRA-00",
+            "date": "2022-08-20T04:20:18Z",
+            "pr_number": 19,
+            "change_type": "pr"
+          },
+          {
+            "author": "melihxz",
+            "date": "2024-08-10T11:20:08Z",
+            "pr_number": 32,
+            "change_type": "pr"
+          }
+        ],
+        "github.sh": [
+          {
+            "author": "PIYUSH-MISHRA-00",
+            "date": "2022-08-20T04:20:18Z",
+            "pr_number": 19,
+            "change_type": "pr"
+          }
+        ]
+      },
+      "current_owners": {
+        "test-tlb.c": "naseridev",
+        "Makefile": "melihxz",
+        "README": "melihxz",
+        "README.md": "melihxz",
+        "github.sh": "PIYUSH-MISHRA-00"
+      },
+      "total_files_tracked": 5
+    },
+    "change_frequency": {
+      "file_churn": {
+        "test-tlb.c": {
+          "total_changes": 7,
+          "churn_rate": "medium",
+          "changes_by_date": {}
+        },
+        "Makefile": {
+          "total_changes": 1,
+          "churn_rate": "low",
+          "changes_by_date": {}
+        },
+        "README": {
+          "total_changes": 3,
+          "churn_rate": "low",
+          "changes_by_date": {}
+        },
+        "README.md": {
+          "total_changes": 5,
+          "churn_rate": "low",
+          "changes_by_date": {}
+        },
+        "github.sh": {
+          "total_changes": 1,
+          "churn_rate": "low",
+          "changes_by_date": {}
+        }
+      },
+      "high_churn_files": [],
+      "total_files_with_changes": 5
+    },
+    "pr_lifecycle": {
+      "pr_lifecycles": {
+        "33": {
+          "state": "closed",
+          "is_merged": false,
+          "created_at": "2024-08-19T21:13:35Z",
+          "updated_at": "2025-02-13T11:56:25Z",
+          "closed_at": "2025-02-13T11:56:25Z",
+          "merged_at": null,
+          "lifecycle_stage": "closed",
+          "duration_days": 177.61
+        },
+        "32": {
+          "state": "open",
+          "is_merged": false,
+          "created_at": "2024-08-10T11:20:08Z",
+          "updated_at": "2024-08-10T11:20:08Z",
+          "closed_at": null,
+          "merged_at": null,
+          "lifecycle_stage": "open",
+          "duration_days": null
+        },
+        "30": {
+          "state": "open",
+          "is_merged": false,
+          "created_at": "2024-01-03T14:18:31Z",
+          "updated_at": "2024-01-03T14:18:31Z",
+          "closed_at": null,
+          "merged_at": null,
+          "lifecycle_stage": "open",
+          "duration_days": null
+        },
+        "29": {
+          "state": "open",
+          "is_merged": false,
+          "created_at": "2023-12-25T07:58:56Z",
+          "updated_at": "2023-12-25T07:58:56Z",
+          "closed_at": null,
+          "merged_at": null,
+          "lifecycle_stage": "open",
+          "duration_days": null
+        },
+        "27": {
+          "state": "closed",
+          "is_merged": false,
+          "created_at": "2023-06-07T13:23:13Z",
+          "updated_at": "2023-06-08T06:15:20Z",
+          "closed_at": "2023-06-08T06:15:20Z",
+          "merged_at": null,
+          "lifecycle_stage": "closed",
+          "duration_days": 0.7
+        },
+        "19": {
+          "state": "open",
+          "is_merged": false,
+          "created_at": "2022-08-20T04:20:18Z",
+          "updated_at": "2022-08-20T04:21:21Z",
+          "closed_at": null,
+          "merged_at": null,
+          "lifecycle_stage": "open",
+          "duration_days": null
+        },
+        "18": {
+          "state": "closed",
+          "is_merged": false,
+          "created_at": "2022-08-07T13:02:06Z",
+          "updated_at": "2022-08-20T04:17:50Z",
+          "closed_at": "2022-08-20T04:17:50Z",
+          "merged_at": null,
+          "lifecycle_stage": "closed",
+          "duration_days": 12.64
+        },
+        "17": {
+          "state": "closed",
+          "is_merged": false,
+          "created_at": "2022-08-07T12:53:45Z",
+          "updated_at": "2022-08-07T13:01:06Z",
+          "closed_at": "2022-08-07T13:01:06Z",
+          "merged_at": null,
+          "lifecycle_stage": "closed",
+          "duration_days": 0.01
+        },
+        "16": {
+          "state": "open",
+          "is_merged": false,
+          "created_at": "2022-01-15T23:51:15Z",
+          "updated_at": "2022-03-19T02:17:58Z",
+          "closed_at": null,
+          "merged_at": null,
+          "lifecycle_stage": "open",
+          "duration_days": null
+        },
+        "14": {
+          "state": "open",
+          "is_merged": false,
+          "created_at": "2021-12-09T08:28:17Z",
+          "updated_at": "2021-12-09T08:28:17Z",
+          "closed_at": null,
+          "merged_at": null,
+          "lifecycle_stage": "open",
+          "duration_days": null
+        },
+        "11": {
+          "state": "closed",
+          "is_merged": false,
+          "created_at": "2020-04-26T11:51:55Z",
+          "updated_at": "2021-05-27T08:17:17Z",
+          "closed_at": "2020-10-14T07:11:43Z",
+          "merged_at": null,
+          "lifecycle_stage": "closed",
+          "duration_days": 170.81
+        },
+        "6": {
+          "state": "open",
+          "is_merged": false,
+          "created_at": "2018-10-13T02:22:36Z",
+          "updated_at": "2019-03-02T13:28:48Z",
+          "closed_at": null,
+          "merged_at": null,
+          "lifecycle_stage": "open",
+          "duration_days": null
+        },
+        "4": {
+          "state": "closed",
+          "is_merged": false,
+          "created_at": "2018-09-06T18:48:40Z",
+          "updated_at": "2018-09-09T14:28:01Z",
+          "closed_at": "2018-09-09T14:25:46Z",
+          "merged_at": null,
+          "lifecycle_stage": "closed",
+          "duration_days": 2.82
+        }
+      },
+      "stage_distribution": {
+        "closed": 6,
+        "open": 7
+      },
+      "total_prs_tracked": 13
+    },
+    "dependencies": {
+      "file_dependencies": {
+        "test-tlb.c": [
+          "sys/stat.h",
+          "stdlib.h",
+          "time.h",
+          "sys/time.h",
+          "unistd.h",
+          "sys/mman.h",
+          "stdio.h",
+          "stdarg.h",
+          "limits.h",
+          "errno.h",
+          "fcntl.h",
+          "signal.h",
+          "sys/types.h",
+          "math.h"
+        ]
+      },
+      "directory_structure": {
+        ".": [
+          "test-tlb.c"
+        ]
+      },
+      "external_dependencies": [],
+      "total_files_with_deps": 1
+    },
+    "directory_structure": {
+      ".": [
+        "test-tlb.c"
+      ]
+    },
+    "generated_code_detection": {
+      "generated_files": [],
+      "handwritten_files": [
+        "test-tlb.c"
+      ],
+      "generated_count": 0,
+      "handwritten_count": 1,
+      "generation_ratio": 0.0
+    },
+    "critical_subsystems": {
+      "critical_subsystems": [
+        {
+          "path": "root",
+          "score": 8.47448
+        }
+      ],
+      "subsystem_scores": {
+        "root": 8.47448
+      },
+      "file_criticality_scores": {
+        "test-tlb.c": 3.27448,
+        "Makefile": 0.7,
+        "README": 1.5000000000000002,
+        "README.md": 2.3,
+        "github.sh": 0.7
+      },
+      "total_subsystems": 1
+    },
+    "config_vs_logic": {
+      "config_files": [],
+      "logic_files": [
+        "test-tlb.c"
+      ],
+      "config_changes_in_prs": [],
+      "logic_changes_in_prs": [
+        {
+          "pr_number": 33,
+          "files": [
+            "test-tlb.c"
+          ]
+        },
+        {
+          "pr_number": 32,
+          "files": [
+            "test-tlb.c"
+          ]
+        },
+        {
+          "pr_number": 30,
+          "files": [
+            "test-tlb.c"
+          ]
+        },
+        {
+          "pr_number": 27,
+          "files": [
+            "test-tlb.c"
+          ]
+        },
+        {
+          "pr_number": 16,
+          "files": [
+            "test-tlb.c"
+          ]
+        },
+        {
+          "pr_number": 14,
+          "files": [
+            "test-tlb.c"
+          ]
+        },
+        {
+          "pr_number": 11,
+          "files": [
+            "test-tlb.c"
+          ]
+        }
+      ],
+      "config_file_count": 0,
+      "logic_file_count": 1
+    }
+  },
+  "risk_analysis": {
+    "knowledge_loss_risk": {
+      "file_risk_scores": {
+        "test-tlb.c": {
+          "risk_score": 0.2,
+          "risk_level": "low",
+          "owner_count": 7,
+          "current_owner": "naseridev",
+          "recent_activity_count": 0,
+          "total_changes": 7
+        },
+        "Makefile": {
+          "risk_score": 0.6000000000000001,
+          "risk_level": "high",
+          "owner_count": 1,
+          "current_owner": "melihxz",
+          "recent_activity_count": 0,
+          "total_changes": 1
+        },
+        "README": {
+          "risk_score": 0.2,
+          "risk_level": "low",
+          "owner_count": 3,
+          "current_owner": "melihxz",
+          "recent_activity_count": 0,
+          "total_changes": 3
+        },
+        "README.md": {
+          "risk_score": 0.2,
+          "risk_level": "low",
+          "owner_count": 4,
+          "current_owner": "melihxz",
+          "recent_activity_count": 0,
+          "total_changes": 5
+        },
+        "github.sh": {
+          "risk_score": 0.6000000000000001,
+          "risk_level": "high",
+          "owner_count": 1,
+          "current_owner": "PIYUSH-MISHRA-00",
+          "recent_activity_count": 0,
+          "total_changes": 1
+        }
+      },
+      "owner_risk_summary": {
+        "naseridev": {
+          "file_count": 1,
+          "average_risk": 0.2,
+          "high_risk_files": 0
+        },
+        "melihxz": {
+          "file_count": 3,
+          "average_risk": 0.3333333333333333,
+          "high_risk_files": 1
+        },
+        "PIYUSH-MISHRA-00": {
+          "file_count": 1,
+          "average_risk": 0.6000000000000001,
+          "high_risk_files": 1
+        }
+      },
+      "high_risk_files": [
+        "Makefile",
+        "github.sh"
+      ],
+      "total_files_analyzed": 5
+    },
+    "single_owner_detection": {
+      "single_owner_files": [
+        {
+          "file": "Makefile",
+          "owner": "melihxz",
+          "change_count": 1,
+          "first_change": "2024-08-10T11:20:08Z",
+          "last_change": "2024-08-10T11:20:08Z"
+        },
+        {
+          "file": "github.sh",
+          "owner": "PIYUSH-MISHRA-00",
+          "change_count": 1,
+          "first_change": "2022-08-20T04:20:18Z",
+          "last_change": "2022-08-20T04:20:18Z"
+        }
+      ],
+      "files_by_owner": {
+        "melihxz": [
+          "Makefile"
+        ],
+        "PIYUSH-MISHRA-00": [
+          "github.sh"
+        ]
+      },
+      "total_single_owner_files": 2,
+      "owners_at_risk": 2
+    },
+    "bus_factor_analysis": {
+      "file_bus_factors": {
+        "test-tlb.c": {
+          "bus_factor": 4,
+          "total_contributors": 7,
+          "top_contributors": {
+            "KSH-code": 1,
+            "TacoMarco": 1,
+            "Privanom": 1
+          },
+          "risk_level": "low"
+        },
+        "Makefile": {
+          "bus_factor": 1,
+          "total_contributors": 1,
+          "top_contributors": {
+            "melihxz": 1
+          },
+          "risk_level": "high"
+        },
+        "README": {
+          "bus_factor": 2,
+          "total_contributors": 3,
+          "top_contributors": {
+            "PIYUSH-MISHRA-00": 1,
+            "coderGtm": 1,
+            "melihxz": 1
+          },
+          "risk_level": "medium"
+        },
+        "README.md": {
+          "bus_factor": 2,
+          "total_contributors": 4,
+          "top_contributors": {
+            "PIYUSH-MISHRA-00": 2,
+            "lalitkishor": 1,
+            "ramlaxman": 1
+          },
+          "risk_level": "medium"
+        },
+        "github.sh": {
+          "bus_factor": 1,
+          "total_contributors": 1,
+          "top_contributors": {
+            "PIYUSH-MISHRA-00": 1
+          },
+          "risk_level": "high"
+        }
+      },
+      "high_risk_files": [
+        "Makefile",
+        "github.sh"
+      ],
+      "average_bus_factor": 2.0,
+      "high_risk_count": 2,
+      "total_files_analyzed": 5
+    },
+    "knowledge_hotspots": {
+      "knowledge_hotspots": [
+        {
+          "file": "test-tlb.c",
+          "hotspot_score": 3.529,
+          "change_count": 7,
+          "owner_count": 7,
+          "is_critical_subsystem": false,
+          "owners": [
+            "Mahdi-Hazrati",
+            "KSH-code",
+            "omsandippatil",
+            "melihxz",
+            "naseridev",
+            "TacoMarco",
+            "Privanom"
+          ]
+        },
+        {
+          "file": "README.md",
+          "hotspot_score": 2.55,
+          "change_count": 5,
+          "owner_count": 4,
+          "is_critical_subsystem": false,
+          "owners": [
+            "melihxz",
+            "lalitkishor",
+            "PIYUSH-MISHRA-00",
+            "ramlaxman"
+          ]
+        },
+        {
+          "file": "README",
+          "hotspot_score": 1.567,
+          "change_count": 3,
+          "owner_count": 3,
+          "is_critical_subsystem": false,
+          "owners": [
+            "melihxz",
+            "PIYUSH-MISHRA-00",
+            "coderGtm"
+          ]
+        },
+        {
+          "file": "Makefile",
+          "hotspot_score": 0.7,
+          "change_count": 1,
+          "owner_count": 1,
+          "is_critical_subsystem": false,
+          "owners": [
+            "melihxz"
+          ]
+        },
+        {
+          "file": "github.sh",
+          "hotspot_score": 0.7,
+          "change_count": 1,
+          "owner_count": 1,
+          "is_critical_subsystem": false,
+          "owners": [
+            "PIYUSH-MISHRA-00"
+          ]
+        }
+      ],
+      "total_hotspots": 5,
+      "high_priority_hotspots": [
+        {
+          "file": "test-tlb.c",
+          "hotspot_score": 3.529,
+          "change_count": 7,
+          "owner_count": 7,
+          "is_critical_subsystem": false,
+          "owners": [
+            "Mahdi-Hazrati",
+            "KSH-code",
+            "omsandippatil",
+            "melihxz",
+            "naseridev",
+            "TacoMarco",
+            "Privanom"
+          ]
+        },
+        {
+          "file": "README.md",
+          "hotspot_score": 2.55,
+          "change_count": 5,
+          "owner_count": 4,
+          "is_critical_subsystem": false,
+          "owners": [
+            "melihxz",
+            "lalitkishor",
+            "PIYUSH-MISHRA-00",
+            "ramlaxman"
+          ]
+        },
+        {
+          "file": "README",
+          "hotspot_score": 1.567,
+          "change_count": 3,
+          "owner_count": 3,
+          "is_critical_subsystem": false,
+          "owners": [
+            "melihxz",
+            "PIYUSH-MISHRA-00",
+            "coderGtm"
+          ]
+        }
+      ]
+    },
+    "cross_module_impact": {
+      "cross_module_impacts": [],
+      "high_impact_files": [],
+      "total_impact_files": 0
+    },
+    "criticality_scoring": {
+      "criticality_scores": {
+        "test-tlb.c": {
+          "criticality_score": 0.355,
+          "criticality_level": "medium",
+          "factors": [
+            "High change frequency (7 changes)",
+            "High dependency count (14 dependencies)",
+            "Core/root location"
+          ],
+          "explanation": "This file has medium criticality (35.5%) due to: High change frequency (7 changes), High dependency count (14 dependencies), Core/root location"
+        },
+        "README": {
+          "criticality_score": 0.145,
+          "criticality_level": "low",
+          "factors": [
+            "High change frequency (3 changes)",
+            "Core/root location"
+          ],
+          "explanation": "This file has low criticality (14.5%) due to: High change frequency (3 changes), Core/root location"
+        },
+        "Makefile": {
+          "criticality_score": 0.365,
+          "criticality_level": "medium",
+          "factors": [
+            "High change frequency (1 changes)",
+            "Single owner (high risk)",
+            "Core/root location"
+          ],
+          "explanation": "This file has medium criticality (36.5%) due to: High change frequency (1 changes), Single owner (high risk), Core/root location"
+        },
+        "github.sh": {
+          "criticality_score": 0.365,
+          "criticality_level": "medium",
+          "factors": [
+            "High change frequency (1 changes)",
+            "Single owner (high risk)",
+            "Core/root location"
+          ],
+          "explanation": "This file has medium criticality (36.5%) due to: High change frequency (1 changes), Single owner (high risk), Core/root location"
+        },
+        "README.md": {
+          "criticality_score": 0.175,
+          "criticality_level": "low",
+          "factors": [
+            "High change frequency (5 changes)",
+            "Core/root location"
+          ],
+          "explanation": "This file has low criticality (17.5%) due to: High change frequency (5 changes), Core/root location"
+        }
+      },
+      "most_critical_files": [
+        {
+          "file": "Makefile",
+          "score": 0.365,
+          "level": "medium"
+        },
+        {
+          "file": "github.sh",
+          "score": 0.365,
+          "level": "medium"
+        },
+        {
+          "file": "test-tlb.c",
+          "score": 0.355,
+          "level": "medium"
+        },
+        {
+          "file": "README.md",
+          "score": 0.175,
+          "level": "low"
+        },
+        {
+          "file": "README",
+          "score": 0.145,
+          "level": "low"
+        }
+      ],
+      "critical_files_count": 0
+    },
+    "knowledge_decay": {
+      "decay_detection": [
+        {
+          "file": "test-tlb.c",
+          "decay_score": 1.0,
+          "days_since_last_change": 503,
+          "recent_changes": 0,
+          "historical_changes": 7,
+          "indicators": [
+            "No changes in 503 days",
+            "Historical activity but no recent changes",
+            "Declining change frequency"
+          ],
+          "last_change_date": "2024-08-19T21:13:35Z"
+        },
+        {
+          "file": "Makefile",
+          "decay_score": 0.7,
+          "days_since_last_change": 513,
+          "recent_changes": 0,
+          "historical_changes": 1,
+          "indicators": [
+            "No changes in 513 days",
+            "Historical activity but no recent changes"
+          ],
+          "last_change_date": "2024-08-10T11:20:08Z"
+        },
+        {
+          "file": "README",
+          "decay_score": 0.7,
+          "days_since_last_change": 513,
+          "recent_changes": 0,
+          "historical_changes": 3,
+          "indicators": [
+            "No changes in 513 days",
+            "Historical activity but no recent changes"
+          ],
+          "last_change_date": "2024-08-10T11:20:08Z"
+        },
+        {
+          "file": "README.md",
+          "decay_score": 0.7,
+          "days_since_last_change": 513,
+          "recent_changes": 0,
+          "historical_changes": 5,
+          "indicators": [
+            "No changes in 513 days",
+            "Historical activity but no recent changes"
+          ],
+          "last_change_date": "2024-08-10T11:20:08Z"
+        },
+        {
+          "file": "github.sh",
+          "decay_score": 0.7,
+          "days_since_last_change": 1234,
+          "recent_changes": 0,
+          "historical_changes": 1,
+          "indicators": [
+            "No changes in 1234 days",
+            "Historical activity but no recent changes"
+          ],
+          "last_change_date": "2022-08-20T04:20:18Z"
+        }
+      ],
+      "high_decay_files": [
+        {
+          "file": "test-tlb.c",
+          "decay_score": 1.0,
+          "days_since_last_change": 503,
+          "recent_changes": 0,
+          "historical_changes": 7,
+          "indicators": [
+            "No changes in 503 days",
+            "Historical activity but no recent changes",
+            "Declining change frequency"
+          ],
+          "last_change_date": "2024-08-19T21:13:35Z"
+        },
+        {
+          "file": "Makefile",
+          "decay_score": 0.7,
+          "days_since_last_change": 513,
+          "recent_changes": 0,
+          "historical_changes": 1,
+          "indicators": [
+            "No changes in 513 days",
+            "Historical activity but no recent changes"
+          ],
+          "last_change_date": "2024-08-10T11:20:08Z"
+        },
+        {
+          "file": "README",
+          "decay_score": 0.7,
+          "days_since_last_change": 513,
+          "recent_changes": 0,
+          "historical_changes": 3,
+          "indicators": [
+            "No changes in 513 days",
+            "Historical activity but no recent changes"
+          ],
+          "last_change_date": "2024-08-10T11:20:08Z"
+        },
+        {
+          "file": "README.md",
+          "decay_score": 0.7,
+          "days_since_last_change": 513,
+          "recent_changes": 0,
+          "historical_changes": 5,
+          "indicators": [
+            "No changes in 513 days",
+            "Historical activity but no recent changes"
+          ],
+          "last_change_date": "2024-08-10T11:20:08Z"
+        },
+        {
+          "file": "github.sh",
+          "decay_score": 0.7,
+          "days_since_last_change": 1234,
+          "recent_changes": 0,
+          "historical_changes": 1,
+          "indicators": [
+            "No changes in 1234 days",
+            "Historical activity but no recent changes"
+          ],
+          "last_change_date": "2022-08-20T04:20:18Z"
+        }
+      ],
+      "total_decay_files": 5
+    },
+    "hidden_dependencies": {
+      "hidden_dependencies": [],
+      "missing_files": [],
+      "circular_dependencies": [],
+      "total_hidden_deps": 0
+    },
+    "operational_ownership": {
+      "operational_files": [],
+      "operational_files_by_owner": {},
+      "total_operational_files": 0,
+      "owners_with_operational_responsibility": 0
+    },
+    "oncall_responsibility": {
+      "oncall_responsibilities": {},
+      "total_oncall_owners": 0,
+      "high_responsibility_owners": []
+    }
+  },
+  "ai_intelligence": {
+    "semantic_pr_clustering": {
+      "clusters": {
+        "bugfix": {
+          "improved": [
+            {
+              "pr_number": 33,
+              "title": "Improved memory access test with better error handling and signal man…",
+              "keywords": [
+                "improved",
+                "memory",
+                "access",
+                "test",
+                "better"
+              ],
+              "category": "bugfix",
+              "text": "improved memory access test with better error handling and signal man… improved memory access test with better error handling and signal management"
+            }
+          ],
+          "now": [
+            {
+              "pr_number": 30,
+              "title": "Pull Request - The Grand Makeover Chronicles 🚀",
+              "keywords": [
+                "now",
+                "code",
+                "linux",
+                "symphony",
+                "every"
+              ],
+              "category": "bugfix",
+              "text": "pull request - the grand makeover chronicles 🚀 greetings, commander of the linux realm! 🐧✨\r\n\r\ni come bearing gifts in the form of a pull request, transforming the ancient repository into a shiny new m"
+            }
+          ],
+          "update": [
+            {
+              "pr_number": 29,
+              "title": "Update README",
+              "keywords": [
+                "update",
+                "readme",
+                "punctuation",
+                "grammatical",
+                "fixes"
+              ],
+              "category": "bugfix",
+              "text": "update readme punctuation and grammatical fixes"
+            }
+          ],
+          "size": [
+            {
+              "pr_number": 11,
+              "title": "Fix - element size of rnd is not enough",
+              "keywords": [
+                "size",
+                "bit",
+                "use",
+                "memory",
+                "offset"
+              ],
+              "category": "bugfix",
+              "text": "fix - element size of rnd is not enough when we use 64-bit machine, memory offset size is required 64-bit.\r\nbut its size is 32-bit limited, so cannot store offset information when we use huge memory m"
+            }
+          ]
+        },
+        "feature": {
+          "all": [
+            {
+              "pr_number": 32,
+              "title": "Add New Memory Access Tests and Update Documentation for test-tlb",
+              "keywords": [
+                "new",
+                "tests",
+                "test",
+                "memory",
+                "readme"
+              ],
+              "category": "feature",
+              "text": "add new memory access tests and update documentation for test-tlb ## summary\r\n\r\nthis pull request introduces new memory access tests for the `test-tlb` application to evaluate performance with various"
+            },
+            {
+              "pr_number": 19,
+              "title": "Added github.sh for git automation from terminal and updated readme",
+              "keywords": [
+                "added",
+                "github",
+                "git",
+                "automation",
+                "from"
+              ],
+              "category": "feature",
+              "text": "added github.sh for git automation from terminal and updated readme "
+            },
+            {
+              "pr_number": 14,
+              "title": "Quality of life improvements",
+              "keywords": [
+                "quality",
+                "life",
+                "improvements",
+                "added",
+                "help"
+              ],
+              "category": "feature",
+              "text": "quality of life improvements added help menu and the ability to set the cpu frequency via a command line argument"
+            }
+          ]
+        },
+        "refactor": {
+          "using": [
+            {
+              "pr_number": 27,
+              "title": "Refactor code to improve performance",
+              "keywords": [
+                "using",
+                "code",
+                "performance",
+                "memory",
+                "function"
+              ],
+              "category": "refactor",
+              "text": "refactor code to improve performance hi dear linus,\r\n\r\ni'm mehdi, and i've refactored the code to improve its performance. the changes include:\r\n\r\n- replacing `mmap` with `aligned_alloc` where possibl"
+            }
+          ],
+          "readme": [
+            {
+              "pr_number": 18,
+              "title": "Updated README to README.md for more readability",
+              "keywords": [
+                "readme",
+                "updated",
+                "more",
+                "readability"
+              ],
+              "category": "refactor",
+              "text": "updated readme to readme.md for more readability "
+            },
+            {
+              "pr_number": 6,
+              "title": "Update and rename README to README.md",
+              "keywords": [
+                "readme",
+                "update",
+                "rename",
+                "markdown",
+                "style"
+              ],
+              "category": "refactor",
+              "text": "update and rename readme to readme.md - markdown style modifications"
+            }
+          ],
+          "update": [
+            {
+              "pr_number": 17,
+              "title": "Update README",
+              "keywords": [
+                "update",
+                "readme"
+              ],
+              "category": "refactor",
+              "text": "update readme "
+            }
+          ]
+        },
+        "other": {
+          "all": [
+            {
+              "pr_number": 16,
+              "title": "changed PAGE_SIZE and HUGEPAGE to auto get the page size",
+              "keywords": [
+                "page",
+                "size",
+                "changed",
+                "hugepage",
+                "auto"
+              ],
+              "category": "other",
+              "text": "changed page_size and hugepage to auto get the page size with this commit the user won't need to change the variables to match their page size."
+            }
+          ]
+        },
+        "documentation": {
+          "all": [
+            {
+              "pr_number": 4,
+              "title": "Rename README to README.md",
+              "keywords": [
+                "readme",
+                "rename"
+              ],
+              "category": "documentation",
+              "text": "rename readme to readme.md "
+            }
+          ]
+        }
+      },
+      "cluster_summary": {
+        "bugfix": 4,
+        "feature": 3,
+        "refactor": 4,
+        "other": 1,
+        "documentation": 1
+      },
+      "total_clusters": 5,
+      "total_prs_clustered": 13
+    },
+    "knowledge_unit_identification": {
+      "knowledge_units": {
+        "systems": [],
+        "modules": [],
+        "features": [
+          {
+            "name": "root",
+            "type": "feature",
+            "criticality_score": 8.47448,
+            "description": "Critical subsystem: root"
+          }
+        ]
+      },
+      "total_systems": 0,
+      "total_modules": 0,
+      "total_features": 1
+    },
+    "role_detection": {
+      "detected_roles": {
+        "naseridev": {
+          "primary_role": "backend_developer",
+          "role_confidence": 1.0,
+          "role_indicators": {
+            "backend_developer": 1
+          },
+          "contribution_stats": {
+            "prs": 1,
+            "commits": 0,
+            "files_modified": 1
+          }
+        },
+        "melihxz": {
+          "primary_role": "backend_developer",
+          "role_confidence": 0.25,
+          "role_indicators": {
+            "backend_developer": 1
+          },
+          "contribution_stats": {
+            "prs": 1,
+            "commits": 0,
+            "files_modified": 4
+          }
+        },
+        "omsandippatil": {
+          "primary_role": "backend_developer",
+          "role_confidence": 1.0,
+          "role_indicators": {
+            "backend_developer": 1
+          },
+          "contribution_stats": {
+            "prs": 1,
+            "commits": 0,
+            "files_modified": 1
+          }
+        },
+        "coderGtm": {
+          "primary_role": "contributor",
+          "role_confidence": 0.0,
+          "role_indicators": {},
+          "contribution_stats": {
+            "prs": 1,
+            "commits": 0,
+            "files_modified": 1
+          }
+        },
+        "Mahdi-Hazrati": {
+          "primary_role": "backend_developer",
+          "role_confidence": 1.0,
+          "role_indicators": {
+            "backend_developer": 1
+          },
+          "contribution_stats": {
+            "prs": 1,
+            "commits": 0,
+            "files_modified": 1
+          }
+        },
+        "PIYUSH-MISHRA-00": {
+          "primary_role": "contributor",
+          "role_confidence": 0.0,
+          "role_indicators": {},
+          "contribution_stats": {
+            "prs": 3,
+            "commits": 0,
+            "files_modified": 3
+          }
+        },
+        "Privanom": {
+          "primary_role": "backend_developer",
+          "role_confidence": 1.0,
+          "role_indicators": {
+            "backend_developer": 1
+          },
+          "contribution_stats": {
+            "prs": 1,
+            "commits": 0,
+            "files_modified": 1
+          }
+        },
+        "TacoMarco": {
+          "primary_role": "backend_developer",
+          "role_confidence": 1.0,
+          "role_indicators": {
+            "backend_developer": 1
+          },
+          "contribution_stats": {
+            "prs": 1,
+            "commits": 0,
+            "files_modified": 1
+          }
+        },
+        "KSH-code": {
+          "primary_role": "backend_developer",
+          "role_confidence": 1.0,
+          "role_indicators": {
+            "backend_developer": 1
+          },
+          "contribution_stats": {
+            "prs": 1,
+            "commits": 0,
+            "files_modified": 1
+          }
+        },
+        "ramlaxman": {
+          "primary_role": "contributor",
+          "role_confidence": 0.0,
+          "role_indicators": {},
+          "contribution_stats": {
+            "prs": 1,
+            "commits": 0,
+            "files_modified": 1
+          }
+        },
+        "lalitkishor": {
+          "primary_role": "contributor",
+          "role_confidence": 0.0,
+          "role_indicators": {},
+          "contribution_stats": {
+            "prs": 1,
+            "commits": 0,
+            "files_modified": 1
+          }
+        },
+        "Christopher Diaz Riveros": {
+          "primary_role": "contributor",
+          "role_confidence": 0.0,
+          "role_indicators": {},
+          "contribution_stats": {
+            "prs": 0,
+            "commits": 1,
+            "files_modified": 0
+          }
+        },
+        "Linus Torvalds": {
+          "primary_role": "contributor",
+          "role_confidence": 0.0,
+          "role_indicators": {},
+          "contribution_stats": {
+            "prs": 0,
+            "commits": 10,
+            "files_modified": 0
+          }
+        }
+      },
+      "role_distribution": {
+        "backend_developer": 7,
+        "contributor": 6
+      },
+      "total_contributors_analyzed": 13
+    },
+    "ai_confidence_scoring": {
+      "confidence_scores": {
+        "role_naseridev": {
+          "decision": "backend_developer",
+          "confidence": 1.0,
+          "explanation": "Based on 1 files modified"
+        },
+        "role_melihxz": {
+          "decision": "backend_developer",
+          "confidence": 0.25,
+          "explanation": "Based on 4 files modified"
+        },
+        "role_omsandippatil": {
+          "decision": "backend_developer",
+          "confidence": 1.0,
+          "explanation": "Based on 1 files modified"
+        },
+        "role_coderGtm": {
+          "decision": "contributor",
+          "confidence": 0.0,
+          "explanation": "Based on 1 files modified"
+        },
+        "role_Mahdi-Hazrati": {
+          "decision": "backend_developer",
+          "confidence": 1.0,
+          "explanation": "Based on 1 files modified"
+        },
+        "role_PIYUSH-MISHRA-00": {
+          "decision": "contributor",
+          "confidence": 0.0,
+          "explanation": "Based on 3 files modified"
+        },
+        "role_Privanom": {
+          "decision": "backend_developer",
+          "confidence": 1.0,
+          "explanation": "Based on 1 files modified"
+        },
+        "role_TacoMarco": {
+          "decision": "backend_developer",
+          "confidence": 1.0,
+          "explanation": "Based on 1 files modified"
+        },
+        "role_KSH-code": {
+          "decision": "backend_developer",
+          "confidence": 1.0,
+          "explanation": "Based on 1 files modified"
+        },
+        "role_ramlaxman": {
+          "decision": "contributor",
+          "confidence": 0.0,
+          "explanation": "Based on 1 files modified"
+        },
+        "role_lalitkishor": {
+          "decision": "contributor",
+          "confidence": 0.0,
+          "explanation": "Based on 1 files modified"
+        },
+        "role_Christopher Diaz Riveros": {
+          "decision": "contributor",
+          "confidence": 0.0,
+          "explanation": "Based on 0 files modified"
+        },
+        "role_Linus Torvalds": {
+          "decision": "contributor",
+          "confidence": 0.0,
+          "explanation": "Based on 0 files modified"
+        },
+        "knowledge_unit_root": {
+          "decision": "features: root",
+          "confidence": 0.5,
+          "explanation": "Identified based on 0 files"
+        },
+        "cluster_bugfix": {
+          "decision": "PR cluster: bugfix",
+          "confidence": 0.8,
+          "explanation": "Based on 4 PRs"
+        },
+        "cluster_feature": {
+          "decision": "PR cluster: feature",
+          "confidence": 0.6,
+          "explanation": "Based on 3 PRs"
+        },
+        "cluster_refactor": {
+          "decision": "PR cluster: refactor",
+          "confidence": 0.8,
+          "explanation": "Based on 4 PRs"
+        },
+        "cluster_other": {
+          "decision": "PR cluster: other",
+          "confidence": 0.2,
+          "explanation": "Based on 1 PRs"
+        },
+        "cluster_documentation": {
+          "decision": "PR cluster: documentation",
+          "confidence": 0.2,
+          "explanation": "Based on 1 PRs"
+        }
+      },
+      "average_confidence": 0.4921052631578947,
+      "high_confidence_decisions": [
+        "role_naseridev",
+        "role_omsandippatil",
+        "role_Mahdi-Hazrati",
+        "role_Privanom",
+        "role_TacoMarco",
+        "role_KSH-code",
+        "cluster_bugfix",
+        "cluster_refactor"
+      ],
+      "low_confidence_decisions": [
+        "role_melihxz",
+        "role_coderGtm",
+        "role_PIYUSH-MISHRA-00",
+        "role_ramlaxman",
+        "role_lalitkishor",
+        "role_Christopher Diaz Riveros",
+        "role_Linus Torvalds",
+        "cluster_other",
+        "cluster_documentation"
+      ]
+    },
+    "rule_based_fallback": {
+      "fallback_rules": {
+        "role_detection": {
+          "rule": "If AI confidence < 0.5, assign role based on file extension patterns",
+          "fallback_logic": "Count file extensions, assign most common pattern role"
+        },
+        "knowledge_unit_identification": {
+          "rule": "If AI fails, use directory structure as knowledge units",
+          "fallback_logic": "Each directory with >3 files becomes a knowledge unit"
+        },
+        "pr_clustering": {
+          "rule": "If semantic clustering fails, cluster by PR labels or file patterns",
+          "fallback_logic": "Group PRs by common file paths modified"
+        },
+        "criticality_scoring": {
+          "rule": "If AI scoring unavailable, use rule-based scoring",
+          "fallback_logic": "Score = (change_frequency * 0.4) + (owner_count_inverse * 0.3) + (location_weight * 0.3)"
+        }
+      },
+      "fallback_applied": false,
+      "rule_coverage": "All AI decisions have rule-based fallbacks"
+    },
+    "explainability": {
+      "explanations": {
+        "role_naseridev": {
+          "output": "backend_developer",
+          "explanation": "Detected as backend_developer because: 1 PRs, 0 commits, 1 files modified. Role indicators: backend_developer",
+          "confidence": 1.0,
+          "factors": [
+            "backend_developer"
+          ]
+        },
+        "role_melihxz": {
+          "output": "backend_developer",
+          "explanation": "Detected as backend_developer because: 1 PRs, 0 commits, 4 files modified. Role indicators: backend_developer",
+          "confidence": 0.25,
+          "factors": [
+            "backend_developer"
+          ]
+        },
+        "role_omsandippatil": {
+          "output": "backend_developer",
+          "explanation": "Detected as backend_developer because: 1 PRs, 0 commits, 1 files modified. Role indicators: backend_developer",
+          "confidence": 1.0,
+          "factors": [
+            "backend_developer"
+          ]
+        },
+        "role_coderGtm": {
+          "output": "contributor",
+          "explanation": "Detected as contributor because: 1 PRs, 0 commits, 1 files modified. Role indicators: ",
+          "confidence": 0.0,
+          "factors": []
+        },
+        "role_Mahdi-Hazrati": {
+          "output": "backend_developer",
+          "explanation": "Detected as backend_developer because: 1 PRs, 0 commits, 1 files modified. Role indicators: backend_developer",
+          "confidence": 1.0,
+          "factors": [
+            "backend_developer"
+          ]
+        },
+        "role_PIYUSH-MISHRA-00": {
+          "output": "contributor",
+          "explanation": "Detected as contributor because: 3 PRs, 0 commits, 3 files modified. Role indicators: ",
+          "confidence": 0.0,
+          "factors": []
+        },
+        "role_Privanom": {
+          "output": "backend_developer",
+          "explanation": "Detected as backend_developer because: 1 PRs, 0 commits, 1 files modified. Role indicators: backend_developer",
+          "confidence": 1.0,
+          "factors": [
+            "backend_developer"
+          ]
+        },
+        "role_TacoMarco": {
+          "output": "backend_developer",
+          "explanation": "Detected as backend_developer because: 1 PRs, 0 commits, 1 files modified. Role indicators: backend_developer",
+          "confidence": 1.0,
+          "factors": [
+            "backend_developer"
+          ]
+        },
+        "role_KSH-code": {
+          "output": "backend_developer",
+          "explanation": "Detected as backend_developer because: 1 PRs, 0 commits, 1 files modified. Role indicators: backend_developer",
+          "confidence": 1.0,
+          "factors": [
+            "backend_developer"
+          ]
+        },
+        "role_ramlaxman": {
+          "output": "contributor",
+          "explanation": "Detected as contributor because: 1 PRs, 0 commits, 1 files modified. Role indicators: ",
+          "confidence": 0.0,
+          "factors": []
+        },
+        "role_lalitkishor": {
+          "output": "contributor",
+          "explanation": "Detected as contributor because: 1 PRs, 0 commits, 1 files modified. Role indicators: ",
+          "confidence": 0.0,
+          "factors": []
+        },
+        "role_Christopher Diaz Riveros": {
+          "output": "contributor",
+          "explanation": "Detected as contributor because: 0 PRs, 1 commits, 0 files modified. Role indicators: ",
+          "confidence": 0.0,
+          "factors": []
+        },
+        "role_Linus Torvalds": {
+          "output": "contributor",
+          "explanation": "Detected as contributor because: 0 PRs, 10 commits, 0 files modified. Role indicators: ",
+          "confidence": 0.0,
+          "factors": []
+        },
+        "criticality_test-tlb.c": {
+          "output": "medium",
+          "explanation": "This file has medium criticality (35.5%) due to: High change frequency (7 changes), High dependency count (14 dependencies), Core/root location",
+          "score": 0.355,
+          "factors": [
+            "High change frequency (7 changes)",
+            "High dependency count (14 dependencies)",
+            "Core/root location"
+          ]
+        },
+        "criticality_README": {
+          "output": "low",
+          "explanation": "This file has low criticality (14.5%) due to: High change frequency (3 changes), Core/root location",
+          "score": 0.145,
+          "factors": [
+            "High change frequency (3 changes)",
+            "Core/root location"
+          ]
+        },
+        "criticality_Makefile": {
+          "output": "medium",
+          "explanation": "This file has medium criticality (36.5%) due to: High change frequency (1 changes), Single owner (high risk), Core/root location",
+          "score": 0.365,
+          "factors": [
+            "High change frequency (1 changes)",
+            "Single owner (high risk)",
+            "Core/root location"
+          ]
+        },
+        "criticality_github.sh": {
+          "output": "medium",
+          "explanation": "This file has medium criticality (36.5%) due to: High change frequency (1 changes), Single owner (high risk), Core/root location",
+          "score": 0.365,
+          "factors": [
+            "High change frequency (1 changes)",
+            "Single owner (high risk)",
+            "Core/root location"
+          ]
+        },
+        "criticality_README.md": {
+          "output": "low",
+          "explanation": "This file has low criticality (17.5%) due to: High change frequency (5 changes), Core/root location",
+          "score": 0.175,
+          "factors": [
+            "High change frequency (5 changes)",
+            "Core/root location"
+          ]
+        },
+        "knowledge_unit_root": {
+          "output": "features: root",
+          "explanation": "Identified as features with 0 files. Based on directory structure and file organization patterns.",
+          "file_count": 0
+        }
+      },
+      "total_explanations": 19,
+      "explanation_coverage": "All AI outputs include explanations"
+    },
+    "prompt_versioning": {
+      "current_version": "1.0.0",
+      "version_history": [
+        {
+          "version": "1.0.0",
+          "date": "2024-01-01",
+          "changes": "Initial version with rule-based implementations",
+          "prompt_hash": "2888cd10"
+        }
+      ],
+      "audit_trail": [
+        {
+          "timestamp": "2024-01-01T00:00:00Z",
+          "action": "prompt_created",
+          "version": "1.0.0",
+          "details": "Initial prompt versioning system"
+        }
+      ]
+    },
+    "llm_output_validation": {
+      "validation_results": {
+        "role_naseridev": {
+          "output": "backend_developer",
+          "validation_status": "valid",
+          "validation_rules": [
+            "Role must be one of: backend_developer, frontend_developer, devops_engineer, fullstack_developer, maintainer, contributor",
+            "Confidence must be > 0.3",
+            "Must have at least 1 file modified"
+          ],
+          "rules_passed": [
+            true,
+            true,
+            true
+          ]
+        },
+        "role_melihxz": {
+          "output": "backend_developer",
+          "validation_status": "low_confidence",
+          "validation_rules": [
+            "Role must be one of: backend_developer, frontend_developer, devops_engineer, fullstack_developer, maintainer, contributor",
+            "Confidence must be > 0.3",
+            "Must have at least 1 file modified"
+          ],
+          "rules_passed": [
+            true,
+            false,
+            true
+          ]
+        },
+        "role_omsandippatil": {
+          "output": "backend_developer",
+          "validation_status": "valid",
+          "validation_rules": [
+            "Role must be one of: backend_developer, frontend_developer, devops_engineer, fullstack_developer, maintainer, contributor",
+            "Confidence must be > 0.3",
+            "Must have at least 1 file modified"
+          ],
+          "rules_passed": [
+            true,
+            true,
+            true
+          ]
+        },
+        "role_coderGtm": {
+          "output": "contributor",
+          "validation_status": "low_confidence",
+          "validation_rules": [
+            "Role must be one of: backend_developer, frontend_developer, devops_engineer, fullstack_developer, maintainer, contributor",
+            "Confidence must be > 0.3",
+            "Must have at least 1 file modified"
+          ],
+          "rules_passed": [
+            true,
+            false,
+            true
+          ]
+        },
+        "role_Mahdi-Hazrati": {
+          "output": "backend_developer",
+          "validation_status": "valid",
+          "validation_rules": [
+            "Role must be one of: backend_developer, frontend_developer, devops_engineer, fullstack_developer, maintainer, contributor",
+            "Confidence must be > 0.3",
+            "Must have at least 1 file modified"
+          ],
+          "rules_passed": [
+            true,
+            true,
+            true
+          ]
+        },
+        "role_PIYUSH-MISHRA-00": {
+          "output": "contributor",
+          "validation_status": "low_confidence",
+          "validation_rules": [
+            "Role must be one of: backend_developer, frontend_developer, devops_engineer, fullstack_developer, maintainer, contributor",
+            "Confidence must be > 0.3",
+            "Must have at least 1 file modified"
+          ],
+          "rules_passed": [
+            true,
+            false,
+            true
+          ]
+        },
+        "role_Privanom": {
+          "output": "backend_developer",
+          "validation_status": "valid",
+          "validation_rules": [
+            "Role must be one of: backend_developer, frontend_developer, devops_engineer, fullstack_developer, maintainer, contributor",
+            "Confidence must be > 0.3",
+            "Must have at least 1 file modified"
+          ],
+          "rules_passed": [
+            true,
+            true,
+            true
+          ]
+        },
+        "role_TacoMarco": {
+          "output": "backend_developer",
+          "validation_status": "valid",
+          "validation_rules": [
+            "Role must be one of: backend_developer, frontend_developer, devops_engineer, fullstack_developer, maintainer, contributor",
+            "Confidence must be > 0.3",
+            "Must have at least 1 file modified"
+          ],
+          "rules_passed": [
+            true,
+            true,
+            true
+          ]
+        },
+        "role_KSH-code": {
+          "output": "backend_developer",
+          "validation_status": "valid",
+          "validation_rules": [
+            "Role must be one of: backend_developer, frontend_developer, devops_engineer, fullstack_developer, maintainer, contributor",
+            "Confidence must be > 0.3",
+            "Must have at least 1 file modified"
+          ],
+          "rules_passed": [
+            true,
+            true,
+            true
+          ]
+        },
+        "role_ramlaxman": {
+          "output": "contributor",
+          "validation_status": "low_confidence",
+          "validation_rules": [
+            "Role must be one of: backend_developer, frontend_developer, devops_engineer, fullstack_developer, maintainer, contributor",
+            "Confidence must be > 0.3",
+            "Must have at least 1 file modified"
+          ],
+          "rules_passed": [
+            true,
+            false,
+            true
+          ]
+        },
+        "role_lalitkishor": {
+          "output": "contributor",
+          "validation_status": "low_confidence",
+          "validation_rules": [
+            "Role must be one of: backend_developer, frontend_developer, devops_engineer, fullstack_developer, maintainer, contributor",
+            "Confidence must be > 0.3",
+            "Must have at least 1 file modified"
+          ],
+          "rules_passed": [
+            true,
+            false,
+            true
+          ]
+        },
+        "role_Christopher Diaz Riveros": {
+          "output": "contributor",
+          "validation_status": "low_confidence",
+          "validation_rules": [
+            "Role must be one of: backend_developer, frontend_developer, devops_engineer, fullstack_developer, maintainer, contributor",
+            "Confidence must be > 0.3",
+            "Must have at least 1 file modified"
+          ],
+          "rules_passed": [
+            true,
+            false,
+            false
+          ]
+        },
+        "role_Linus Torvalds": {
+          "output": "contributor",
+          "validation_status": "low_confidence",
+          "validation_rules": [
+            "Role must be one of: backend_developer, frontend_developer, devops_engineer, fullstack_developer, maintainer, contributor",
+            "Confidence must be > 0.3",
+            "Must have at least 1 file modified"
+          ],
+          "rules_passed": [
+            true,
+            false,
+            false
+          ]
+        },
+        "knowledge_unit_root": {
+          "output": "features: root",
+          "validation_status": "invalid",
+          "validation_rules": [
+            "Must have at least 1 file",
+            "Name must be non-empty",
+            "Type must be: system, module, or feature"
+          ],
+          "rules_passed": [
+            false,
+            true,
+            true
+          ]
+        }
+      },
+      "total_validated": 14,
+      "valid_count": 6,
+      "invalid_count": 1
+    },
+    "knowledge_similarity": {
+      "duplicate_file_names": {},
+      "similar_ownership_patterns": {},
+      "total_duplicates": 0,
+      "total_similar_patterns": 0
+    },
+    "knowledge_gap_detection": {
+      "knowledge_gaps": [
+        {
+          "type": "single_owner",
+          "file": "Makefile",
+          "severity": "high",
+          "description": "File has only one owner (melihxz), creating knowledge risk",
+          "recommendation": "Identify backup owner or document knowledge"
+        },
+        {
+          "type": "single_owner",
+          "file": "github.sh",
+          "severity": "high",
+          "description": "File has only one owner (PIYUSH-MISHRA-00), creating knowledge risk",
+          "recommendation": "Identify backup owner or document knowledge"
+        },
+        {
+          "type": "knowledge_decay",
+          "file": "test-tlb.c",
+          "severity": "medium",
+          "description": "File has not been modified in 503 days",
+          "recommendation": "Review and update documentation"
+        },
+        {
+          "type": "knowledge_decay",
+          "file": "Makefile",
+          "severity": "medium",
+          "description": "File has not been modified in 513 days",
+          "recommendation": "Review and update documentation"
+        },
+        {
+          "type": "knowledge_decay",
+          "file": "README",
+          "severity": "medium",
+          "description": "File has not been modified in 513 days",
+          "recommendation": "Review and update documentation"
+        },
+        {
+          "type": "knowledge_decay",
+          "file": "README.md",
+          "severity": "medium",
+          "description": "File has not been modified in 513 days",
+          "recommendation": "Review and update documentation"
+        },
+        {
+          "type": "knowledge_decay",
+          "file": "github.sh",
+          "severity": "medium",
+          "description": "File has not been modified in 1234 days",
+          "recommendation": "Review and update documentation"
+        }
+      ],
+      "gap_summary": {
+        "high_severity": 2,
+        "medium_severity": 5,
+        "low_severity": 0
+      },
+      "total_gaps": 7
+    }
+  },
+  "summary": {
+    "data_collection_summary": {
+      "total_prs": 13,
+      "total_commits": 11,
+      "total_files": 1,
+      "total_contributors": 13,
+      "critical_subsystems": 1
+    },
+    "risk_analysis_summary": {
+      "high_risk_files": 2,
+      "single_owner_files": 2,
+      "average_bus_factor": 2.0,
+      "knowledge_hotspots": 5,
+      "critical_files": 0
+    },
+    "ai_intelligence_summary": {
+      "pr_clusters": 5,
+      "knowledge_units": {
+        "systems": 0,
+        "modules": 0,
+        "features": 1
+      },
+      "roles_detected": 13,
+      "knowledge_gaps": 7
+    }
+  }
+}

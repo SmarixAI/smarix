@@ -1,0 +1,225 @@
+{
+  "metadata": {
+    "employee": "Linus Torvalds",
+    "generated_at": "2026-01-06T01:34:44.914610",
+    "format_version": "2.0",
+    "ai_enabled": true
+  },
+  "knowledge_transfer_summary": {
+    "what_they_know_that_others_dont": {
+      "unique_knowledge_items": [
+        "File ownership and context"
+      ],
+      "undocumented_decisions": [],
+      "implicit_context": [
+        "AI analysis unavailable - manual review required",
+        "AI analysis unavailable - manual review required"
+      ],
+      "summary": "Employee has unique knowledge in 2 high-risk areas. Key undocumented decisions: 0. Implicit context exists that may not be captured in code."
+    },
+    "what_could_break_after_they_leave": {
+      "systems_at_risk": [
+        "Knowledge loss risk identified",
+        "System using this file"
+      ],
+      "failure_scenarios": [],
+      "impact_severity": "medium",
+      "summary": "2 systems at risk. 0 potential failure scenarios identified. Impact severity: medium."
+    },
+    "what_manager_must_ask_before_day0": {
+      "critical_questions": [
+        "What could break if this knowledge is lost?"
+      ],
+      "high_priority_questions": [
+        "What is the purpose and functionality of Known Failure Scenarios & Workarounds?",
+        "What are the key dependencies and integration points?",
+        "What are the most common issues or gotchas?",
+        "What are the known failure scenarios and their root causes?",
+        "What workarounds exist and when should they be used?"
+      ],
+      "total_critical": 1,
+      "total_high_priority": 5,
+      "summary": "Manager must ask 1 critical questions and 5 high-priority questions before Day-0. Focus on: Known Failure Scenarios & Workarounds."
+    }
+  },
+  "detailed_analysis": {
+    "high_risk_files": [
+      {
+        "file": "Makefile",
+        "risk_score": 0.6000000000000001,
+        "what_they_know": {
+          "unique_knowledge": [
+            "File ownership and context"
+          ],
+          "undocumented_decisions": [],
+          "implicit_context": "AI analysis unavailable - manual review required"
+        },
+        "what_could_break": {
+          "systems_at_risk": [
+            "System using this file"
+          ],
+          "failure_scenarios": [],
+          "impact_severity": "medium"
+        },
+        "must_ask_before_day0": {
+          "critical_questions": [
+            "What is the purpose of this file?",
+            "Who else understands this?"
+          ],
+          "knowledge_to_transfer": [
+            "File context and usage"
+          ],
+          "urgency": "high"
+        },
+        "summary": "Manual review required - AI analysis unavailable"
+      },
+      {
+        "file": "github.sh",
+        "risk_score": 0.6000000000000001,
+        "what_they_know": {
+          "unique_knowledge": [
+            "File ownership and context"
+          ],
+          "undocumented_decisions": [],
+          "implicit_context": "AI analysis unavailable - manual review required"
+        },
+        "what_could_break": {
+          "systems_at_risk": [
+            "System using this file"
+          ],
+          "failure_scenarios": [],
+          "impact_severity": "medium"
+        },
+        "must_ask_before_day0": {
+          "critical_questions": [
+            "What is the purpose of this file?",
+            "Who else understands this?"
+          ],
+          "knowledge_to_transfer": [
+            "File context and usage"
+          ],
+          "urgency": "high"
+        },
+        "summary": "Manual review required - AI analysis unavailable"
+      }
+    ],
+    "topic_extractions": [
+      {
+        "topic": "Known Failure Scenarios & Workarounds",
+        "topic_id": "failure_scenarios",
+        "priority": "high",
+        "decision_extraction": {
+          "undocumented_decisions": [
+            "Analysis requires AI"
+          ],
+          "architectural_choices": [],
+          "design_rationale": "AI analysis unavailable"
+        },
+        "risk_extraction": {
+          "what_could_break": [
+            "Knowledge loss risk identified"
+          ],
+          "failure_scenarios": [],
+          "impact_assessment": "High risk due to single owner"
+        },
+        "dependency_extraction": {
+          "tightly_coupled_systems": [],
+          "people_dependencies": [],
+          "external_dependencies": []
+        },
+        "knowledge_gap_detection": {
+          "what_new_engineer_would_struggle_with": [
+            "System understanding"
+          ],
+          "implicit_knowledge": [],
+          "missing_documentation": []
+        }
+      }
+    ],
+    "extraction_questions": [
+      {
+        "question": "What is the purpose and functionality of Known Failure Scenarios & Workarounds?",
+        "category": "knowledge_gap",
+        "priority": "high",
+        "what_it_reveals": "Basic understanding of the topic",
+        "topic": "Known Failure Scenarios & Workarounds"
+      },
+      {
+        "question": "What could break if this knowledge is lost?",
+        "category": "risk_extraction",
+        "priority": "critical",
+        "what_it_reveals": "Critical dependencies and risks",
+        "topic": "Known Failure Scenarios & Workarounds"
+      },
+      {
+        "question": "What are the key dependencies and integration points?",
+        "category": "dependencies",
+        "priority": "high",
+        "what_it_reveals": "",
+        "topic": "Known Failure Scenarios & Workarounds"
+      },
+      {
+        "question": "What are the most common issues or gotchas?",
+        "category": "troubleshooting",
+        "priority": "high",
+        "what_it_reveals": "",
+        "topic": "Known Failure Scenarios & Workarounds"
+      },
+      {
+        "question": "What are the known failure scenarios and their root causes?",
+        "category": "failure_analysis",
+        "priority": "high",
+        "what_it_reveals": "",
+        "topic": "Known Failure Scenarios & Workarounds"
+      },
+      {
+        "question": "What workarounds exist and when should they be used?",
+        "category": "workarounds",
+        "priority": "high",
+        "what_it_reveals": "",
+        "topic": "Known Failure Scenarios & Workarounds"
+      },
+      {
+        "question": "Is there anything else important about this topic that should be documented?",
+        "category": "follow_up",
+        "priority": "medium",
+        "what_it_reveals": "",
+        "topic": "Known Failure Scenarios & Workarounds"
+      }
+    ]
+  },
+  "action_items": {
+    "immediate_actions": [
+      {
+        "action": "Document high-risk files",
+        "priority": "high",
+        "reason": "2 high-risk files need documentation",
+        "deadline": "Within 1 week"
+      },
+      {
+        "action": "Identify and assign successors",
+        "priority": "critical",
+        "reason": "Knowledge transfer requires backup owners",
+        "deadline": "Before Day-0"
+      }
+    ],
+    "final_call_topics": [
+      {
+        "topic": "Known Failure Scenarios & Workarounds",
+        "priority": "high",
+        "risk_score": 0.85,
+        "estimated_time": {
+          "topic_id": "failure_scenarios",
+          "title": "Known Failure Scenarios & Workarounds",
+          "estimated_minutes": 20,
+          "estimated_hours": 0.3,
+          "factors": [
+            "Priority level: high",
+            "Operational topics typically require more detailed explanation",
+            "High risk score indicates need for thorough discussion"
+          ]
+        }
+      }
+    ]
+  }
+}

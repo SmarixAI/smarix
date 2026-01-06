@@ -1,0 +1,936 @@
+{
+  "metadata": {
+    "employee_username": "Linus Torvalds",
+    "processed_at": "2026-01-06T01:34:40.283568",
+    "processor_version": "1.0.0",
+    "features_implemented": [
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52
+    ]
+  },
+  "topic_identification": {
+    "final_call_topics": {
+      "topics": [
+        {
+          "topic_id": "failure_scenarios",
+          "title": "Known Failure Scenarios & Workarounds",
+          "category": "operational",
+          "priority": "high",
+          "description": "2 failure scenarios identified",
+          "related_scenarios": [
+            {
+              "pr_number": 33,
+              "title": "Improved memory access test with better error handling and signal man…",
+              "author": "naseridev",
+              "created_at": "2024-08-19T21:13:35Z",
+              "type": "fix",
+              "description": "Failure scenario addressed in PR #33: Improved memory access test with better error handling and signal man…",
+              "priority": "medium"
+            },
+            {
+              "pr_number": 11,
+              "title": "Fix - element size of rnd is not enough",
+              "author": "KSH-code",
+              "created_at": "2020-04-26T11:51:55Z",
+              "type": "fix",
+              "description": "Failure scenario addressed in PR #11: Fix - element size of rnd is not enough",
+              "priority": "medium"
+            }
+          ],
+          "risk_score": 0.85
+        }
+      ],
+      "total_topics": 1,
+      "critical_topics": [],
+      "high_priority_topics": [
+        {
+          "topic_id": "failure_scenarios",
+          "title": "Known Failure Scenarios & Workarounds",
+          "category": "operational",
+          "priority": "high",
+          "description": "2 failure scenarios identified",
+          "related_scenarios": [
+            {
+              "pr_number": 33,
+              "title": "Improved memory access test with better error handling and signal man…",
+              "author": "naseridev",
+              "created_at": "2024-08-19T21:13:35Z",
+              "type": "fix",
+              "description": "Failure scenario addressed in PR #33: Improved memory access test with better error handling and signal man…",
+              "priority": "medium"
+            },
+            {
+              "pr_number": 11,
+              "title": "Fix - element size of rnd is not enough",
+              "author": "KSH-code",
+              "created_at": "2020-04-26T11:51:55Z",
+              "type": "fix",
+              "description": "Failure scenario addressed in PR #11: Fix - element size of rnd is not enough",
+              "priority": "medium"
+            }
+          ],
+          "risk_score": 0.85
+        }
+      ]
+    },
+    "high_risk_prioritization": {
+      "prioritized_files": [],
+      "critical_risk_files": [],
+      "high_risk_files": [],
+      "medium_risk_files": [],
+      "total_high_risk": 0,
+      "priority_order": []
+    },
+    "knowledge_units_requiring_explanation": {
+      "knowledge_units": [],
+      "total_units_needing_explanation": 0,
+      "high_priority_units": []
+    },
+    "implicit_knowledge": {
+      "implicit_knowledge_items": [],
+      "total_implicit_knowledge": 0,
+      "critical_items": [],
+      "high_priority_items": []
+    },
+    "architecture_decisions": {
+      "decisions": [],
+      "total_decisions": 0,
+      "pr_based_decisions": [],
+      "subsystem_decisions": []
+    },
+    "failure_scenarios": {
+      "scenarios": [
+        {
+          "pr_number": 33,
+          "title": "Improved memory access test with better error handling and signal man…",
+          "author": "naseridev",
+          "created_at": "2024-08-19T21:13:35Z",
+          "type": "fix",
+          "description": "Failure scenario addressed in PR #33: Improved memory access test with better error handling and signal man…",
+          "priority": "medium"
+        },
+        {
+          "pr_number": 11,
+          "title": "Fix - element size of rnd is not enough",
+          "author": "KSH-code",
+          "created_at": "2020-04-26T11:51:55Z",
+          "type": "fix",
+          "description": "Failure scenario addressed in PR #11: Fix - element size of rnd is not enough",
+          "priority": "medium"
+        }
+      ],
+      "total_scenarios": 2,
+      "workarounds": [],
+      "fixes": [
+        {
+          "pr_number": 33,
+          "title": "Improved memory access test with better error handling and signal man…",
+          "author": "naseridev",
+          "created_at": "2024-08-19T21:13:35Z",
+          "type": "fix",
+          "description": "Failure scenario addressed in PR #33: Improved memory access test with better error handling and signal man…",
+          "priority": "medium"
+        },
+        {
+          "pr_number": 11,
+          "title": "Fix - element size of rnd is not enough",
+          "author": "KSH-code",
+          "created_at": "2020-04-26T11:51:55Z",
+          "type": "fix",
+          "description": "Failure scenario addressed in PR #11: Fix - element size of rnd is not enough",
+          "priority": "medium"
+        }
+      ],
+      "high_priority_scenarios": []
+    },
+    "business_logic_explanations": {
+      "business_logic_files": [],
+      "total_files": 0,
+      "high_priority_files": [],
+      "single_owner_logic": []
+    },
+    "operational_flow_explanations": {
+      "operational_flows": [],
+      "total_flows": 0,
+      "critical_flows": [],
+      "flow_types": []
+    }
+  },
+  "ai_guided_discussion": {
+    "final_call_agenda": {
+      "agenda_items": [
+        {
+          "topic_id": "failure_scenarios",
+          "title": "Known Failure Scenarios & Workarounds",
+          "category": "operational",
+          "priority": "high",
+          "description": "2 failure scenarios identified",
+          "estimated_time_minutes": 20,
+          "order": 1,
+          "related_files": [],
+          "discussion_points": [
+            "Review known failure scenarios and their causes",
+            "Discuss workarounds and temporary fixes",
+            "Explain recovery procedures",
+            "Document lessons learned from past incidents"
+          ]
+        }
+      ],
+      "total_items": 1,
+      "total_estimated_time_minutes": 20,
+      "total_estimated_time_hours": 0.3,
+      "critical_items": [],
+      "agenda_summary": {
+        "by_category": {
+          "operational": 1
+        },
+        "by_priority": {
+          "high": 1
+        }
+      }
+    },
+    "questions_per_topic": {
+      "questions_by_topic": {
+        "failure_scenarios": {
+          "topic_title": "Known Failure Scenarios & Workarounds",
+          "questions": [
+            {
+              "question": "What is the purpose and functionality of Known Failure Scenarios & Workarounds?",
+              "type": "knowledge_gap",
+              "category": "knowledge_gap",
+              "priority": "high",
+              "what_it_reveals": "Basic understanding of the topic",
+              "follow_up_if": "Answer is unclear",
+              "expected_answer_type": "explanation"
+            },
+            {
+              "question": "What could break if this knowledge is lost?",
+              "type": "risk_extraction",
+              "category": "risk_extraction",
+              "priority": "critical",
+              "what_it_reveals": "Critical dependencies and risks",
+              "follow_up_if": "High risk identified",
+              "expected_answer_type": "explanation"
+            },
+            {
+              "question": "What are the key dependencies and integration points?",
+              "type": "dependencies",
+              "priority": "high",
+              "expected_answer_type": "list"
+            },
+            {
+              "question": "What are the most common issues or gotchas?",
+              "type": "troubleshooting",
+              "priority": "high",
+              "expected_answer_type": "list"
+            },
+            {
+              "question": "What are the known failure scenarios and their root causes?",
+              "type": "failure_analysis",
+              "priority": "high",
+              "expected_answer_type": "list"
+            },
+            {
+              "question": "What workarounds exist and when should they be used?",
+              "type": "workarounds",
+              "priority": "high",
+              "expected_answer_type": "list"
+            },
+            {
+              "question": "Is there anything else important about this topic that should be documented?",
+              "type": "follow_up",
+              "priority": "medium",
+              "expected_answer_type": "open_ended"
+            }
+          ],
+          "total_questions": 7,
+          "critical_questions": [
+            {
+              "question": "What could break if this knowledge is lost?",
+              "type": "risk_extraction",
+              "category": "risk_extraction",
+              "priority": "critical",
+              "what_it_reveals": "Critical dependencies and risks",
+              "follow_up_if": "High risk identified",
+              "expected_answer_type": "explanation"
+            }
+          ],
+          "follow_up_questions": [
+            {
+              "question": "Is there anything else important about this topic that should be documented?",
+              "type": "follow_up",
+              "priority": "medium",
+              "expected_answer_type": "open_ended"
+            }
+          ],
+          "extraction_questions": [
+            {
+              "question": "What could break if this knowledge is lost?",
+              "type": "risk_extraction",
+              "category": "risk_extraction",
+              "priority": "critical",
+              "what_it_reveals": "Critical dependencies and risks",
+              "follow_up_if": "High risk identified",
+              "expected_answer_type": "explanation"
+            }
+          ]
+        }
+      },
+      "total_questions": 7,
+      "question_summary": {
+        "failure_scenarios": 7
+      }
+    },
+    "suggested_discussion_order": {
+      "discussion_order": [
+        {
+          "order": 1,
+          "topic_id": "failure_scenarios",
+          "title": "Known Failure Scenarios & Workarounds",
+          "priority": "high",
+          "risk_score": 0.85,
+          "estimated_time_minutes": 20,
+          "rationale": "First topic due to high priority and high risk score"
+        }
+      ],
+      "total_topics": 1,
+      "estimated_total_time_minutes": 20,
+      "order_rationale": "Topics ordered by priority (critical > high > medium > low) and risk score"
+    },
+    "time_estimation": {
+      "time_estimates": [
+        {
+          "topic_id": "failure_scenarios",
+          "title": "Known Failure Scenarios & Workarounds",
+          "estimated_minutes": 20,
+          "estimated_hours": 0.3,
+          "factors": [
+            "Priority level: high",
+            "Operational topics typically require more detailed explanation",
+            "High risk score indicates need for thorough discussion"
+          ]
+        }
+      ],
+      "total_estimated_minutes": 20,
+      "total_estimated_hours": 0.3,
+      "breakdown": {
+        "critical_topics": 0,
+        "high_priority_topics": 20,
+        "medium_priority_topics": 0
+      }
+    },
+    "stakeholder_suggestions": {
+      "stakeholders_by_topic": {
+        "failure_scenarios": {
+          "topic_title": "Known Failure Scenarios & Workarounds",
+          "stakeholders": [
+            {
+              "username": "devops_team",
+              "contribution_type": "role_based",
+              "relevance": "critical",
+              "note": "Required for operational topics"
+            }
+          ],
+          "required_attendees": [
+            {
+              "username": "devops_team",
+              "contribution_type": "role_based",
+              "relevance": "critical",
+              "note": "Required for operational topics"
+            }
+          ],
+          "optional_attendees": []
+        }
+      },
+      "overall_stakeholders": {},
+      "required_attendees": [],
+      "total_unique_stakeholders": 0
+    },
+    "risk_justification": {
+      "risk_justifications": {
+        "failure_scenarios": {
+          "topic_id": "failure_scenarios",
+          "topic_title": "Known Failure Scenarios & Workarounds",
+          "risk_score": 0.85,
+          "priority": "high",
+          "justification": "This topic has high priority with a risk score of 0.85. This topic requires discussion to ensure knowledge continuity.",
+          "risk_factors": [
+            "Risk score: 0.85",
+            "Priority: high"
+          ],
+          "impact_if_missed": "High impact: Significant knowledge gaps may develop, requiring extensive time to recover understanding.",
+          "recommendation": "Strongly recommended for Final Call discussion. Document all key points."
+        }
+      },
+      "high_risk_topics": [
+        {
+          "topic_id": "failure_scenarios",
+          "topic_title": "Known Failure Scenarios & Workarounds",
+          "risk_score": 0.85,
+          "priority": "high",
+          "justification": "This topic has high priority with a risk score of 0.85. This topic requires discussion to ensure knowledge continuity.",
+          "risk_factors": [
+            "Risk score: 0.85",
+            "Priority: high"
+          ],
+          "impact_if_missed": "High impact: Significant knowledge gaps may develop, requiring extensive time to recover understanding.",
+          "recommendation": "Strongly recommended for Final Call discussion. Document all key points."
+        }
+      ],
+      "critical_priority_topics": []
+    },
+    "ai_confidence_indicators": {
+      "confidence_by_topic": {
+        "failure_scenarios": {
+          "topic_id": "failure_scenarios",
+          "questions": [
+            {
+              "question": "What is the purpose and functionality of Known Failure Scenarios & Workarounds?",
+              "confidence_score": 0.6,
+              "confidence_level": "medium",
+              "confidence_factors": [
+                "Prerequisite data available to inform question"
+              ],
+              "recommendation": "Medium confidence - question should be answerable with available context"
+            },
+            {
+              "question": "What could break if this knowledge is lost?",
+              "confidence_score": 0.7,
+              "confidence_level": "medium",
+              "confidence_factors": [
+                "Prerequisite data available to inform question",
+                "Critical priority indicates high likelihood of answerability"
+              ],
+              "recommendation": "Medium confidence - question should be answerable with available context"
+            },
+            {
+              "question": "What are the key dependencies and integration points?",
+              "confidence_score": 0.6,
+              "confidence_level": "medium",
+              "confidence_factors": [
+                "Prerequisite data available to inform question"
+              ],
+              "recommendation": "Medium confidence - question should be answerable with available context"
+            },
+            {
+              "question": "What are the most common issues or gotchas?",
+              "confidence_score": 0.6,
+              "confidence_level": "medium",
+              "confidence_factors": [
+                "Prerequisite data available to inform question"
+              ],
+              "recommendation": "Medium confidence - question should be answerable with available context"
+            },
+            {
+              "question": "What are the known failure scenarios and their root causes?",
+              "confidence_score": 0.6,
+              "confidence_level": "medium",
+              "confidence_factors": [
+                "Prerequisite data available to inform question"
+              ],
+              "recommendation": "Medium confidence - question should be answerable with available context"
+            },
+            {
+              "question": "What workarounds exist and when should they be used?",
+              "confidence_score": 0.6,
+              "confidence_level": "medium",
+              "confidence_factors": [
+                "Prerequisite data available to inform question"
+              ],
+              "recommendation": "Medium confidence - question should be answerable with available context"
+            },
+            {
+              "question": "Is there anything else important about this topic that should be documented?",
+              "confidence_score": 0.5,
+              "confidence_level": "low",
+              "confidence_factors": [
+                "Prerequisite data available to inform question"
+              ],
+              "recommendation": "Low confidence - consider rephrasing or providing more context"
+            }
+          ],
+          "average_confidence": 0.6
+        }
+      },
+      "overall_average_confidence": 0.6,
+      "high_confidence_questions": 0,
+      "low_confidence_questions": 0
+    }
+  },
+  "execution_tracking": {
+    "task_grouping": {
+      "tasks_by_knowledge_unit": {
+        "operational": [
+          {
+            "task_id": "task_failure_scenarios",
+            "topic_id": "failure_scenarios",
+            "title": "Known Failure Scenarios & Workarounds",
+            "category": "operational",
+            "priority": "high",
+            "knowledge_unit": "operational",
+            "related_files": [],
+            "estimated_time": 20,
+            "discussion_points": [
+              "Review known failure scenarios and their causes",
+              "Discuss workarounds and temporary fixes",
+              "Explain recovery procedures",
+              "Document lessons learned from past incidents"
+            ],
+            "status": "pending",
+            "assigned_to": null,
+            "due_date": null
+          }
+        ]
+      },
+      "unit_summary": {
+        "operational": {
+          "task_count": 1,
+          "total_estimated_time": 20,
+          "critical_tasks": [],
+          "high_priority_tasks": [
+            {
+              "task_id": "task_failure_scenarios",
+              "topic_id": "failure_scenarios",
+              "title": "Known Failure Scenarios & Workarounds",
+              "category": "operational",
+              "priority": "high",
+              "knowledge_unit": "operational",
+              "related_files": [],
+              "estimated_time": 20,
+              "discussion_points": [
+                "Review known failure scenarios and their causes",
+                "Discuss workarounds and temporary fixes",
+                "Explain recovery procedures",
+                "Document lessons learned from past incidents"
+              ],
+              "status": "pending",
+              "assigned_to": null,
+              "due_date": null
+            }
+          ]
+        }
+      },
+      "total_tasks": 1,
+      "tasks_by_priority": {
+        "critical": [],
+        "high": [
+          {
+            "task_id": "task_failure_scenarios",
+            "topic_id": "failure_scenarios",
+            "title": "Known Failure Scenarios & Workarounds",
+            "category": "operational",
+            "priority": "high",
+            "knowledge_unit": "operational",
+            "related_files": [],
+            "estimated_time": 20,
+            "discussion_points": [
+              "Review known failure scenarios and their causes",
+              "Discuss workarounds and temporary fixes",
+              "Explain recovery procedures",
+              "Document lessons learned from past incidents"
+            ],
+            "status": "pending",
+            "assigned_to": null,
+            "due_date": null
+          }
+        ],
+        "medium": [],
+        "low": []
+      }
+    },
+    "completion_checklists": {
+      "checklists_by_topic": {
+        "failure_scenarios": {
+          "topic_id": "failure_scenarios",
+          "topic_title": "Known Failure Scenarios & Workarounds",
+          "checklist_items": [
+            {
+              "item_id": "failure_scenarios_discussed",
+              "description": "Topic 'Known Failure Scenarios & Workarounds' has been discussed",
+              "type": "discussion",
+              "required": true,
+              "status": "pending"
+            },
+            {
+              "item_id": "failure_scenarios_question_1",
+              "description": "Question answered: What could break if this knowledge is lost?",
+              "type": "question",
+              "required": true,
+              "status": "pending",
+              "question": "What could break if this knowledge is lost?"
+            },
+            {
+              "item_id": "failure_scenarios_documentation",
+              "description": "Documentation created or updated for 'Known Failure Scenarios & Workarounds'",
+              "type": "documentation",
+              "required": true,
+              "status": "pending"
+            },
+            {
+              "item_id": "failure_scenarios_knowledge_transfer",
+              "description": "Knowledge transfer confirmed for 'Known Failure Scenarios & Workarounds'",
+              "type": "knowledge_transfer",
+              "required": true,
+              "status": "pending"
+            }
+          ],
+          "total_items": 4,
+          "required_items": [
+            {
+              "item_id": "failure_scenarios_discussed",
+              "description": "Topic 'Known Failure Scenarios & Workarounds' has been discussed",
+              "type": "discussion",
+              "required": true,
+              "status": "pending"
+            },
+            {
+              "item_id": "failure_scenarios_question_1",
+              "description": "Question answered: What could break if this knowledge is lost?",
+              "type": "question",
+              "required": true,
+              "status": "pending",
+              "question": "What could break if this knowledge is lost?"
+            },
+            {
+              "item_id": "failure_scenarios_documentation",
+              "description": "Documentation created or updated for 'Known Failure Scenarios & Workarounds'",
+              "type": "documentation",
+              "required": true,
+              "status": "pending"
+            },
+            {
+              "item_id": "failure_scenarios_knowledge_transfer",
+              "description": "Knowledge transfer confirmed for 'Known Failure Scenarios & Workarounds'",
+              "type": "knowledge_transfer",
+              "required": true,
+              "status": "pending"
+            }
+          ],
+          "completion_status": {
+            "total": 4,
+            "completed": 0,
+            "pending": 4,
+            "percentage": 0.0
+          }
+        }
+      },
+      "total_checklist_items": 4,
+      "required_items_count": 4,
+      "completion_summary": {
+        "topics_with_checklists": 1,
+        "total_items": 4,
+        "all_pending": true
+      }
+    },
+    "recording_linkage": {
+      "recording_structure": {
+        "failure_scenarios": {
+          "topic_id": "failure_scenarios",
+          "topic_title": "Known Failure Scenarios & Workarounds",
+          "recording_metadata": {
+            "recording_id": null,
+            "recording_url": null,
+            "recording_date": null,
+            "recording_duration_minutes": null,
+            "recording_format": "video",
+            "transcript_available": false,
+            "transcript_url": null,
+            "transcript_quality": null
+          },
+          "timestamps": {
+            "start_time": null,
+            "end_time": null,
+            "key_moments": []
+          },
+          "linked_resources": {
+            "related_files": [],
+            "documentation_links": [],
+            "code_references": []
+          }
+        }
+      },
+      "total_topics_to_record": 1,
+      "recording_requirements": {
+        "format": "video preferred, audio acceptable",
+        "quality": "HD video or high-quality audio",
+        "transcription": "Required for all critical and high-priority topics",
+        "storage": "Secure, accessible location"
+      }
+    },
+    "knowledge_validation_checklist": {
+      "validation_checklist": {
+        "validation_criteria": [
+          {
+            "criterion_id": "knowledge_transferred",
+            "description": "Knowledge has been successfully transferred to at least one other person",
+            "validation_method": "Confirm with knowledge recipient",
+            "required": true
+          },
+          {
+            "criterion_id": "documentation_created",
+            "description": "Key knowledge has been documented",
+            "validation_method": "Review documentation artifacts",
+            "required": true
+          },
+          {
+            "criterion_id": "questions_answered",
+            "description": "All critical questions have been answered",
+            "validation_method": "Review discussion transcript or notes",
+            "required": true
+          },
+          {
+            "criterion_id": "stakeholders_informed",
+            "description": "Relevant stakeholders have been informed",
+            "validation_method": "Confirm stakeholder attendance or access to materials",
+            "required": true
+          },
+          {
+            "criterion_id": "backup_owner_identified",
+            "description": "Backup owner has been identified for critical knowledge",
+            "validation_method": "Confirm backup owner assignment",
+            "required": false
+          }
+        ],
+        "validation_by_topic": {
+          "failure_scenarios": {
+            "topic_id": "failure_scenarios",
+            "topic_title": "Known Failure Scenarios & Workarounds",
+            "validation_items": [
+              {
+                "item_id": "failure_scenarios_question_What could break if this knowledge is lost?",
+                "description": "Question answered: What could break if this knowledge is lost?",
+                "validation_method": "Review discussion transcript",
+                "required": true
+              }
+            ],
+            "required_validations": [
+              "knowledge_transferred",
+              "documentation_created",
+              "questions_answered",
+              "stakeholders_informed"
+            ],
+            "optional_validations": []
+          }
+        }
+      },
+      "total_validation_criteria": 5,
+      "topics_with_validation": 1,
+      "validation_summary": {
+        "required_validations": 4,
+        "total_validation_items": 1
+      }
+    },
+    "manager_approval_workflow": {
+      "approval_workflow": {
+        "approval_stages": [
+          {
+            "stage": "topic_discussion",
+            "description": "All topics have been discussed",
+            "approver_role": "manager",
+            "required": true
+          },
+          {
+            "stage": "knowledge_transfer",
+            "description": "Knowledge transfer has been completed",
+            "approver_role": "manager",
+            "required": true
+          },
+          {
+            "stage": "documentation",
+            "description": "Documentation has been created/updated",
+            "approver_role": "manager",
+            "required": true
+          },
+          {
+            "stage": "validation",
+            "description": "Knowledge validation checklist completed",
+            "approver_role": "manager",
+            "required": true
+          },
+          {
+            "stage": "final_approval",
+            "description": "Final Call completion approved",
+            "approver_role": "manager",
+            "required": true
+          }
+        ],
+        "approval_by_topic": {
+          "failure_scenarios": {
+            "topic_id": "failure_scenarios",
+            "topic_title": "Known Failure Scenarios & Workarounds",
+            "priority": "high",
+            "approval_required": true,
+            "approval_status": "pending",
+            "approver": null,
+            "approval_date": null,
+            "approval_notes": null,
+            "approval_stages": [
+              {
+                "stage": "discussion_complete",
+                "status": "pending",
+                "approver": null,
+                "approved_at": null
+              },
+              {
+                "stage": "knowledge_transferred",
+                "status": "pending",
+                "approver": null,
+                "approved_at": null
+              }
+            ]
+          }
+        }
+      },
+      "total_topics_requiring_approval": 1,
+      "approval_summary": {
+        "stages": 5,
+        "topics": 1,
+        "all_pending": true
+      }
+    },
+    "partial_completion_tracking": {
+      "partial_completion_tracking": {
+        "failure_scenarios": {
+          "topic_id": "failure_scenarios",
+          "topic_title": "Known Failure Scenarios & Workarounds",
+          "completion_status": "not_started",
+          "completion_percentage": 0.0,
+          "completed_components": [],
+          "pending_components": [
+            "discussion",
+            "questions_answered",
+            "documentation",
+            "knowledge_transfer"
+          ],
+          "partial_completion_notes": [],
+          "last_updated": null,
+          "estimated_remaining_time_minutes": null
+        }
+      },
+      "completion_summary": {
+        "total_topics": 1,
+        "not_started": 1,
+        "in_progress": 0,
+        "partially_complete": 0,
+        "complete": 0,
+        "overall_completion_percentage": 0.0
+      }
+    },
+    "escalation_workflow": {
+      "escalation_workflow": {
+        "escalation_triggers": [
+          {
+            "trigger": "final_call_not_scheduled",
+            "description": "Final Call has not been scheduled within 2 weeks of departure notice",
+            "escalation_level": "manager",
+            "action": "Notify manager to schedule Final Call"
+          },
+          {
+            "trigger": "final_call_missed",
+            "description": "Scheduled Final Call was missed or cancelled",
+            "escalation_level": "manager",
+            "action": "Reschedule and escalate to manager"
+          },
+          {
+            "trigger": "critical_topic_not_discussed",
+            "description": "Critical priority topic was not discussed in Final Call",
+            "escalation_level": "manager",
+            "action": "Schedule follow-up session for critical topics"
+          },
+          {
+            "trigger": "knowledge_transfer_incomplete",
+            "description": "Knowledge transfer validation failed",
+            "escalation_level": "manager",
+            "action": "Review and complete knowledge transfer"
+          },
+          {
+            "trigger": "documentation_missing",
+            "description": "Required documentation not created",
+            "escalation_level": "tech_lead",
+            "action": "Create missing documentation"
+          }
+        ],
+        "escalation_paths": {
+          "level_1": {
+            "role": "tech_lead",
+            "description": "Technical lead reviews and addresses issue"
+          },
+          "level_2": {
+            "role": "manager",
+            "description": "Manager reviews and takes action"
+          },
+          "level_3": {
+            "role": "director",
+            "description": "Director review for critical issues"
+          }
+        },
+        "escalation_by_topic": {
+          "failure_scenarios": {
+            "topic_id": "failure_scenarios",
+            "topic_title": "Known Failure Scenarios & Workarounds",
+            "priority": "high",
+            "escalation_required_if_missed": true,
+            "escalation_level": "tech_lead",
+            "escalation_triggers": [
+              "topic_not_discussed",
+              "knowledge_transfer_incomplete",
+              "documentation_missing"
+            ],
+            "escalation_actions": [
+              "Schedule follow-up session",
+              "Assign backup owner",
+              "Create emergency documentation"
+            ]
+          }
+        }
+      },
+      "topics_with_escalation": 1,
+      "escalation_summary": {
+        "total_triggers": 5,
+        "escalation_levels": 3,
+        "critical_topics_requiring_escalation": 0
+      }
+    }
+  },
+  "summary": {
+    "topic_identification_summary": {
+      "total_topics": 1,
+      "critical_topics": 0,
+      "high_risk_files": 0,
+      "knowledge_units_needing_explanation": 0,
+      "implicit_knowledge_items": 0
+    },
+    "discussion_summary": {
+      "agenda_items": 1,
+      "estimated_time_hours": 0.3,
+      "total_questions": 7,
+      "stakeholders": 0
+    },
+    "execution_summary": {
+      "total_tasks": 1,
+      "checklists_created": 1,
+      "validation_items": 1,
+      "topics_requiring_approval": 1
+    }
+  }
+}
