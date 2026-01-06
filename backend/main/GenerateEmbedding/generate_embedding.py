@@ -25,7 +25,7 @@ if _backend_dir_str not in sys.path:
 from core.GenerateEmbedding.generator import EmbeddingGenerator
 
 STATE_FILE = Path(
-    "/Users/vishalkeshari/Desktop/smarix/backend/data/Admin/state/runtime_state.json"
+    _backend_dir / "data" / "Admin" / "state" / "runtime_state.json"
 )
 
 def load_current_repo_from_state():
