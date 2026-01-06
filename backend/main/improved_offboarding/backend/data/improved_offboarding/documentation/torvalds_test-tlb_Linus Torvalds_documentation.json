@@ -1,0 +1,276 @@
+{
+  "metadata": {
+    "employee_username": "Linus Torvalds",
+    "processed_at": "2026-01-06T01:34:40.309682",
+    "processor_version": "1.0.0",
+    "features_implemented": [
+      74,
+      75,
+      76,
+      77,
+      78,
+      79,
+      80,
+      81,
+      82,
+      83,
+      84,
+      85,
+      86,
+      87,
+      88,
+      89
+    ]
+  },
+  "documentation_detection": {
+    "documentation_gaps": {
+      "documentation_gaps": [],
+      "total_gaps": 0,
+      "gaps_by_severity": {},
+      "critical_gaps": [],
+      "high_severity_gaps": [],
+      "gaps_by_type": {}
+    },
+    "required_documentation_types": {
+      "required_types": {},
+      "type_definitions": {
+        "comprehensive": {
+          "description": "Comprehensive documentation covering all aspects",
+          "sections": [
+            "overview",
+            "architecture",
+            "usage",
+            "api",
+            "examples",
+            "troubleshooting"
+          ],
+          "format": "markdown",
+          "estimated_hours": 4
+        },
+        "detailed": {
+          "description": "Detailed documentation with examples",
+          "sections": [
+            "overview",
+            "usage",
+            "examples",
+            "troubleshooting"
+          ],
+          "format": "markdown",
+          "estimated_hours": 2
+        },
+        "architecture": {
+          "description": "Architecture and design documentation",
+          "sections": [
+            "overview",
+            "architecture",
+            "design_decisions",
+            "dependencies"
+          ],
+          "format": "markdown",
+          "estimated_hours": 3
+        },
+        "runbook": {
+          "description": "Operational runbook",
+          "sections": [
+            "overview",
+            "deployment",
+            "monitoring",
+            "troubleshooting",
+            "escalation"
+          ],
+          "format": "markdown",
+          "estimated_hours": 2
+        },
+        "knowledge_transfer": {
+          "description": "Knowledge transfer documentation",
+          "sections": [
+            "overview",
+            "key_concepts",
+            "common_issues",
+            "gotchas"
+          ],
+          "format": "markdown",
+          "estimated_hours": 2
+        },
+        "api": {
+          "description": "API documentation",
+          "sections": [
+            "overview",
+            "endpoints",
+            "authentication",
+            "examples"
+          ],
+          "format": "markdown_or_openapi",
+          "estimated_hours": 3
+        },
+        "general": {
+          "description": "General documentation",
+          "sections": [
+            "overview",
+            "usage"
+          ],
+          "format": "markdown",
+          "estimated_hours": 1
+        }
+      },
+      "total_required_docs": 0,
+      "types_summary": {}
+    },
+    "documentation_priority": {
+      "prioritized_documentation": [],
+      "total_items": 0,
+      "critical_priority": [],
+      "high_priority": [],
+      "priority_summary": {
+        "critical": 0,
+        "high": 0,
+        "medium": 0,
+        "low": 0
+      }
+    },
+    "existing_documentation": {
+      "existing_documentation": [],
+      "total_docs": 0,
+      "docs_by_type": {},
+      "documentation_coverage": {
+        "total_code_files": 0,
+        "documented_files": 0,
+        "coverage_percentage": 0,
+        "undocumented_files": 0
+      }
+    },
+    "duplicate_documentation": {
+      "duplicate_documentation": [],
+      "potential_duplicates": [],
+      "total_duplicates": 0,
+      "duplicate_summary": {
+        "exact_name_duplicates": 0,
+        "potential_content_duplicates": 0
+      }
+    }
+  },
+  "ai_assisted_creation": {
+    "documentation_outlines": {
+      "documentation_outlines": [],
+      "total_outlines": 0,
+      "outlines_by_priority": {
+        "critical": [],
+        "high": [],
+        "medium": []
+      }
+    },
+    "section_headers": {
+      "section_headers": {},
+      "total_docs_with_headers": 0,
+      "total_headers": 0
+    },
+    "content_drafting": {
+      "content_drafts": [],
+      "total_drafts": 0,
+      "draft_summary": {
+        "total_sections_drafted": 0,
+        "average_sections_per_doc": 0
+      }
+    },
+    "code_to_doc_mapping": {
+      "code_to_doc_mappings": [],
+      "total_mappings": 0,
+      "mapping_summary": {
+        "files_mapped": 0,
+        "total_code_elements": 0
+      }
+    },
+    "diagram_suggestions": {
+      "diagram_suggestions": [],
+      "total_docs_with_diagrams": 0,
+      "total_diagrams_suggested": 0,
+      "diagrams_by_type": {}
+    }
+  },
+  "management_quality": {
+    "documentation_ownership": {
+      "ownership_assignments": [],
+      "total_assignments": 0,
+      "assignments_by_owner": {},
+      "owners": [],
+      "assignment_summary": {}
+    },
+    "documentation_status_tracking": {
+      "status_tracking": [],
+      "total_items": 0,
+      "status_summary": {
+        "not_started": 0,
+        "outline_created": 0,
+        "draft_in_progress": 0,
+        "draft_complete": 0
+      },
+      "overall_progress": 0
+    },
+    "freshness_scoring": {
+      "freshness_scores": [],
+      "total_docs_scored": 0,
+      "freshness_summary": {
+        "fresh": 0,
+        "moderate": 0,
+        "stale": 0,
+        "very_stale": 0
+      },
+      "docs_needing_update": []
+    },
+    "review_approval_workflow": {
+      "review_workflows": [],
+      "total_workflows": 0,
+      "workflows_by_priority": {
+        "critical": [],
+        "high": [],
+        "medium": []
+      },
+      "workflows_by_stage": {
+        "draft_review": 0,
+        "content_review": 0,
+        "stakeholder_review": 0,
+        "final_approval": 0
+      }
+    },
+    "validation_against_checklist": {
+      "validation_results": [],
+      "total_validated": 0,
+      "validation_summary": {
+        "pass": 0,
+        "partial": 0,
+        "fail": 0
+      },
+      "average_validation_score": 0
+    },
+    "ai_followup_suggestions": {
+      "followup_suggestions": [],
+      "total_files_with_suggestions": 0,
+      "total_suggestions": 0,
+      "suggestions_by_type": {
+        "action": 0,
+        "maintenance": 0,
+        "priority": 0
+      }
+    }
+  },
+  "summary": {
+    "detection_summary": {
+      "total_gaps": 0,
+      "critical_gaps": 0,
+      "existing_docs": 0,
+      "duplicate_docs": 0
+    },
+    "creation_summary": {
+      "outlines_created": 0,
+      "content_drafts": 0,
+      "diagrams_suggested": 0,
+      "code_mappings": 0
+    },
+    "management_summary": {
+      "ownership_assignments": 0,
+      "status_tracking_items": 0,
+      "review_workflows": 0,
+      "followup_suggestions": 0
+    }
+  }
+}
