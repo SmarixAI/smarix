@@ -38,9 +38,25 @@ function UnifiedLoginContent() {
     if (isAuthenticated && user) {
       hasRedirected.current = true;
       setCheckingAuth(false);
-      if (user.role === "admin") router.replace("/admin");
-      else if (user.role === "manager") router.replace("/manager/tasks");
-      else router.replace("/employee/tasks");
+      if (user.role === "admin") {
+        router.replace("/admin");
+      } else if (user.role === "manager") {
+        router.replace("/manager/dashboard");
+      } else if (user.role === "employee") {
+        // Redirect based on employee status
+        const status = (user.status || "general").toLowerCase();
+        if (status === "onboard") {
+          router.replace("/employee/onboarding");
+        } else if (status === "offboard") {
+          router.replace("/employee/offboarding");
+        } else {
+          // general or any other status
+          router.replace("/chat");
+        }
+      } else {
+        // Fallback for any other role
+        router.replace("/chat");
+      }
     } else {
       setCheckingAuth(false);
     }
