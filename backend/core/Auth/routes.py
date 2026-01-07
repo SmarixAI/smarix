@@ -90,12 +90,6 @@ def sync_users_from_json(db: Session):
             
             # Check if user already exists
             existing_user = db.query(models.User).filter(models.User.username == username).first()
-            if existing_user:
-                skipped_count += 1
-                continue
-            
-            # Create new user
-            hashed_pwd = utils.get_password_hash(user_data.get('password', username))
             
             # Parse lastDay if it exists
             last_day = None
@@ -106,20 +100,34 @@ def sync_users_from_json(db: Session):
                 except:
                     pass
             
-            new_user = models.User(
-                username=username,
-                password_hash=hashed_pwd,
-                role=user_data.get('role', 'employee'),
-                status=user_data.get('status', 'general'),
-                name=user_data.get('name'),
-                designation=user_data.get('designation'),
-                employee_id=user_data.get('employeeId') or user_data.get('employee_id'),
-                last_day=last_day,
-                managers=user_data.get('managers', []) if isinstance(user_data.get('managers'), list) else []
-            )
-            
-            db.add(new_user)
-            synced_count += 1
+            if existing_user:
+                # Update existing user with data from JSON file
+                existing_user.role = user_data.get('role', existing_user.role)
+                existing_user.status = user_data.get('status', existing_user.status)
+                existing_user.name = user_data.get('name', existing_user.name)
+                existing_user.designation = user_data.get('designation', existing_user.designation)
+                existing_user.employee_id = user_data.get('employeeId') or user_data.get('employee_id') or existing_user.employee_id
+                existing_user.last_day = last_day if last_day else existing_user.last_day
+                existing_user.managers = user_data.get('managers', []) if isinstance(user_data.get('managers'), list) else []
+                skipped_count += 1
+            else:
+                # Create new user
+                hashed_pwd = utils.get_password_hash(user_data.get('password', username))
+                
+                new_user = models.User(
+                    username=username,
+                    password_hash=hashed_pwd,
+                    role=user_data.get('role', 'employee'),
+                    status=user_data.get('status', 'general'),
+                    name=user_data.get('name'),
+                    designation=user_data.get('designation'),
+                    employee_id=user_data.get('employeeId') or user_data.get('employee_id'),
+                    last_day=last_day,
+                    managers=user_data.get('managers', []) if isinstance(user_data.get('managers'), list) else []
+                )
+                
+                db.add(new_user)
+                synced_count += 1
         
         db.commit()
         print(f"✓ Synced {synced_count} user(s) from users.json to database")
@@ -136,15 +144,15 @@ try:
     models.Base.metadata.create_all(bind=engine)
     print("✓ Database tables created/verified")
     
-    # Sync users from users.json to database if database is empty
+    # Sync users from users.json to database (always sync to keep data in sync)
     db = SessionLocal()
     try:
         user_count = db.query(models.User).count()
         if user_count == 0:
             print("📥 Database is empty, syncing users from users.json...")
-            sync_users_from_json(db)
         else:
-            print(f"✓ Database has {user_count} user(s)")
+            print(f"✓ Database has {user_count} user(s), syncing/updating from users.json...")
+        sync_users_from_json(db)
     finally:
         db.close()
 except Exception as e:

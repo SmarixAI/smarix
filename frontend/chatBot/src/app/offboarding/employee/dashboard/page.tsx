@@ -15,9 +15,18 @@ function EmployeeDashboardContent() {
   const [mousePosition, setMousePosition] = useState({ x: 50, y: 50 });
 
   useEffect(() => {
-    // Redirect to tasks page immediately
-    router.replace('/employee/tasks');
-  }, [router]);
+    // Redirect based on employee status
+    if (user) {
+      const status = (user.status || "general").toLowerCase();
+      if (status === "onboard") {
+        router.replace("/employee/onboarding");
+      } else if (status === "offboard") {
+        router.replace("/employee/offboarding");
+      } else {
+        router.replace("/chat");
+      }
+    }
+  }, [router, user]);
 
   useEffect(() => {
     if (darkMode) {

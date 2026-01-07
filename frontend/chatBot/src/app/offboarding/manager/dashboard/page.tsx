@@ -16,8 +16,8 @@ function ManagerDashboardContent() {
   const [mousePosition, setMousePosition] = useState({ x: 50, y: 50 });
 
   useEffect(() => {
-    // Redirect to tasks page immediately
-    router.replace('/manager/tasks');
+    // Redirect to unified dashboard
+    router.replace('/manager/dashboard');
   }, [router]);
 
   useEffect(() => {
@@ -36,12 +36,10 @@ function ManagerDashboardContent() {
   };
 
   const handleOptionClick = (option: string) => {
-    if (option === 'onboarding') {
-      router.push('/manager/onboarding');
-    } else if (option === 'offboarding') {
-      router.push('/manager/offboarding');
+    if (option === 'onboarding' || option === 'offboarding') {
+      router.push('/manager/dashboard');
     } else if (option === 'day-to-day') {
-      router.push('/manager/tasks');
+      router.push('/manager/dashboard');
     } else if (option === 'chatbot') {
       router.push('/chat');
     }
