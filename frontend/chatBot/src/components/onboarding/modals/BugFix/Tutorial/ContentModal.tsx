@@ -6,16 +6,15 @@ import TutorialCard from '../../../cards/BugFix/Tutorial/ModuleCard';
 import TutorialContent from '../../../cards/BugFix/Tutorial/ModuleContent';
 
 interface TutorialSectionProps {
-  darkMode: boolean;
   data: PRTutorialsResponse;
 }
 
-export default function TutorialSection({ darkMode, data }: TutorialSectionProps) {
+export default function TutorialSection({ data }: TutorialSectionProps) {
   const [selectedTutorial, setSelectedTutorial] = useState<PRTutorial | null>(null);
 
   return (
     <div>
-      <h3 className={`text-lg font-bold mb-4 ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+      <h3 className="text-lg font-semibold mb-4 text-gray-900">
         Select a Tutorial:
       </h3>
       
@@ -27,13 +26,12 @@ export default function TutorialSection({ darkMode, data }: TutorialSectionProps
             index={idx}
             isSelected={selectedTutorial?.tutorial_number === tutorial.tutorial_number}
             onSelect={() => setSelectedTutorial(tutorial)}
-            darkMode={darkMode}
           />
         ))}
       </div>
 
       {selectedTutorial && (
-        <TutorialContent darkMode={darkMode} tutorial={selectedTutorial} />
+        <TutorialContent tutorial={selectedTutorial} />
       )}
     </div>
   );

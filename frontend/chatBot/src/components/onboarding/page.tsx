@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import ThreeJsBackground from "@/components/onboarding/ThreeJsBackground";
 import Header from "@/components/onboarding/Header";
 import Sidebar from "@/components/onboarding/Sidebar";
 import ReadingOverview from "@/components/onboarding/tabs/ReadingOverview";
@@ -10,10 +9,7 @@ import BugFixing from "@/components/onboarding/tabs/BugFixing";
 import Chatbot from "@/components/onboarding/Chatbot";
 
 export default function OnboardingPage() {
-  const [darkMode, setDarkMode] = useState(true);
   const [activeTab, setActiveTab] = useState("reading");
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-  const [scrollProgress, setScrollProgress] = useState(0);
   const [practiceTasks, setPracticeTasks] = useState<any[]>([]);
   const [selectedPracticeTask, setSelectedPracticeTask] = useState<number | null>(null);
   const [employeeId, setEmployeeId] = useState<string | null>(null);
@@ -122,12 +118,6 @@ export default function OnboardingPage() {
       setSelectedPracticeTask(practiceTasks[0].question_number);
     }
   }, [activeTab, practiceTasks, selectedPracticeTask]);
-  const handleMouseMove = (e: React.MouseEvent) => {
-    setMousePosition({
-      x: (e.clientX / window.innerWidth) * 100,
-      y: (e.clientY / window.innerHeight) * 100,
-    });
-  };
 
   // Function to update progress
   const updateProgress = async (section: string, itemId: string, updates: any) => {
@@ -185,8 +175,6 @@ export default function OnboardingPage() {
       case "reading":
         return (
           <ReadingOverview 
-            darkMode={darkMode} 
-            mousePosition={mousePosition}
             employeeId={employeeId}
             activeRepos={activeRepos}
             onboardingData={onboardingData}
@@ -197,7 +185,6 @@ export default function OnboardingPage() {
         return (
           <PracticeTasks
             activeRepos={activeRepos}
-            darkMode={darkMode}
             tasks={practiceTasks}
             openTask={selectedPracticeTask}
             onSelectTask={(n: number | null) => setSelectedPracticeTask(n)}
@@ -208,7 +195,6 @@ export default function OnboardingPage() {
       case "bugfix":
         return <BugFixing
           activeRepos={activeRepos}
-          darkMode={darkMode}
           employeeId={employeeId}
           onboardingData={onboardingData}
           onUpdateProgress={updateProgress}
@@ -216,8 +202,6 @@ export default function OnboardingPage() {
       default:
         return (
           <ReadingOverview 
-            darkMode={darkMode} 
-            mousePosition={mousePosition}
             employeeId={employeeId}
             activeRepos={activeRepos}
             onboardingData={onboardingData}
@@ -228,177 +212,9 @@ export default function OnboardingPage() {
   };
 
   return (
-    <div
-      className={`min-h-screen transition-colors duration-700 relative overflow-hidden ${
-        darkMode
-          ? "bg-gray-900 text-gray-100"
-          : "bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 text-slate-900"
-      }`}
-      onMouseMove={handleMouseMove}
-    >
-      <style jsx global>{`
-        @keyframes ripple {
-          from {
-            transform: scale(0);
-            opacity: 0.6;
-          }
-          to {
-            transform: scale(4);
-            opacity: 0;
-          }
-        }
-
-        .ripple {
-          position: absolute;
-          border-radius: 50%;
-          background: ${darkMode
-            ? "rgba(99, 102, 241, 0.5)"
-            : "rgba(99, 102, 241, 0.4)"};
-          pointer-events: none;
-          animation: ripple 0.6s ease-out;
-        }
-
-        @keyframes slideInLeft {
-          from {
-            opacity: 0;
-            transform: translateX(-100px);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(0);
-          }
-        }
-
-        @keyframes slideInRight {
-          from {
-            opacity: 0;
-            transform: translateX(100px);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(0);
-          }
-        }
-
-        @keyframes slideInUp {
-          from {
-            opacity: 0;
-            transform: translateY(100px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        @keyframes scaleIn {
-          from {
-            opacity: 0;
-            transform: scale(0.8);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
-
-        @keyframes glow {
-          0%,
-          100% {
-            box-shadow: 0 0 20px rgba(99, 102, 241, 0.5);
-          }
-          50% {
-            box-shadow: 0 0 40px rgba(99, 102, 241, 0.8);
-          }
-        }
-
-        @keyframes shimmer {
-          0% {
-            background-position: -200% center;
-          }
-          100% {
-            background-position: 200% center;
-          }
-        }
-
-        .animate-slide-in-left {
-          animation: slideInLeft 0.6s ease-out forwards;
-        }
-        .animate-slide-in-right {
-          animation: slideInRight 0.6s ease-out forwards;
-        }
-        .animate-slide-in-up {
-          animation: slideInUp 0.6s ease-out forwards;
-        }
-        .animate-scale-in {
-          animation: scaleIn 0.6s ease-out forwards;
-        }
-        .animate-glow {
-          animation: glow 2s ease-in-out infinite;
-        }
-
-        .glass-card {
-          backdrop-filter: blur(16px) saturate(180%);
-          -webkit-backdrop-filter: blur(16px) saturate(180%);
-          border: 1px solid rgba(255, 255, 255, 0.125);
-        }
-
-        .glass-card-light {
-          backdrop-filter: blur(20px) saturate(200%);
-          -webkit-backdrop-filter: blur(20px) saturate(200%);
-          background: rgba(255, 255, 255, 0.7);
-          border: 1px solid rgba(255, 255, 255, 0.5);
-        }
-
-        .glass-card-dark {
-          backdrop-filter: blur(16px) saturate(180%);
-          -webkit-backdrop-filter: blur(16px) saturate(180%);
-          background: rgba(17, 24, 39, 0.7);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .shimmer-effect {
-          background: linear-gradient(
-            90deg,
-            transparent,
-            rgba(255, 255, 255, 0.3),
-            transparent
-          );
-          background-size: 200% 100%;
-          animation: shimmer 3s infinite;
-        }
-      `}</style>
-
-      <div
-        className="fixed top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 via-cyan-500 to-teal-500 z-50 origin-left transition-transform"
-        style={{ transform: `scaleX(${scrollProgress / 100})` }}
-      />
-
-      <ThreeJsBackground darkMode={darkMode} />
-
-      <div
-        className="fixed inset-0 pointer-events-none z-0 transition-all duration-300"
-        style={{
-          background: darkMode
-            ? `radial-gradient(circle at ${mousePosition.x}% ${
-                mousePosition.y
-              }%, rgba(99, 102, 241, 0.2) 0%, transparent 50%),
-               radial-gradient(circle at ${100 - mousePosition.x}% ${
-                100 - mousePosition.y
-              }%, rgba(139, 92, 246, 0.2) 0%, transparent 50%)`
-            : `radial-gradient(circle at ${mousePosition.x}% ${
-                mousePosition.y
-              }%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
-               radial-gradient(circle at ${100 - mousePosition.x}% ${
-                100 - mousePosition.y
-              }%, rgba(6, 182, 212, 0.15) 0%, transparent 50%)`,
-        }}
-      />
-
+    <div className="min-h-screen bg-gray-50 text-gray-900">
       <div className="relative z-10">
         <Header
-          darkMode={darkMode}
-          setDarkMode={setDarkMode}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
         />
@@ -407,7 +223,6 @@ export default function OnboardingPage() {
           <div className="grid grid-cols-12 gap-4">
             {activeTab !== "bugfix" && activeTab !== "reading" && (
               <Sidebar
-                darkMode={darkMode}
                 completedModules={completedModules}
                 totalModules={totalModules}
                 activeTab={activeTab}
@@ -425,7 +240,7 @@ export default function OnboardingPage() {
       </div>
 
       {/* Chatbot */}
-      <Chatbot darkMode={darkMode} role="onboarding" />
+      <Chatbot role="onboarding" />
     </div>
   );
 }

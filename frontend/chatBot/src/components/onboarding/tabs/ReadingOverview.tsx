@@ -8,15 +8,13 @@ import { useModuleContent } from '../hooks/ReadingOverview/useModuleContent';
 import type { Module } from '../../../../types/onboarding';
 
 interface ReadingOverviewProps {
-  darkMode: boolean;
-  mousePosition: { x: number; y: number };
   employeeId?: string | null;
   activeRepos?: string[];
   onboardingData?: any;
   onUpdateProgress?: (section: string, itemId: string, updates: any) => void;
 }
 
-export default function ReadingOverview({ darkMode, mousePosition, employeeId, activeRepos = [], onboardingData, onUpdateProgress }: ReadingOverviewProps) {
+export default function ReadingOverview({ employeeId, activeRepos = [], onboardingData, onUpdateProgress }: ReadingOverviewProps) {
   // Initialize all modules as visible to prevent disappearing
   const [visibleModules, setVisibleModules] = useState<Set<string>>(
     new Set(modules.map(m => `module-${m.id}`))
@@ -77,17 +75,11 @@ export default function ReadingOverview({ darkMode, mousePosition, employeeId, a
 
   return (
     <>
-      <div className="mb-6 animate-slide-in-right">
-        <h2
-          className={`text-4xl font-bold mb-2 ${
-            darkMode
-              ? 'bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent'
-              : 'bg-gradient-to-r from-indigo-600 via-cyan-600 to-teal-600 bg-clip-text text-transparent'
-          }`}
-        >
+      <div className="mb-6">
+        <h2 className="text-4xl font-semibold mb-2 text-gray-900">
           Reading & Overview
         </h2>
-        <p className={`text-base ${darkMode ? 'text-gray-400' : 'text-slate-600'}`}>
+        <p className="text-base text-gray-600">
           Start your journey with these essential topics. Get familiar with the basics before diving deeper.
         </p>
       </div>
@@ -98,8 +90,6 @@ export default function ReadingOverview({ darkMode, mousePosition, employeeId, a
             key={module.id}
             module={module}
             index={index}
-            darkMode={darkMode}
-            mousePosition={mousePosition}
             isVisible={visibleModules.has(`module-${module.id}`)}
             onCardClick={handleCardClick}
             ref={(el) => {
@@ -112,12 +102,8 @@ export default function ReadingOverview({ darkMode, mousePosition, employeeId, a
       </div>
 
       {error && (
-        <div className="fixed bottom-4 right-4 z-50 animate-slide-in-up">
-          <div
-            className={`px-6 py-3 rounded-xl shadow-lg ${
-              darkMode ? 'bg-red-900/90 text-red-200' : 'bg-red-100 text-red-900'
-            }`}
-          >
+        <div className="fixed bottom-4 right-4 z-50">
+          <div className="px-6 py-3 rounded-lg shadow-lg bg-red-100 text-red-900 border border-red-200">
             {error}
           </div>
         </div>
@@ -127,7 +113,6 @@ export default function ReadingOverview({ darkMode, mousePosition, employeeId, a
         <OverviewModal
           isOpen={isModalOpen}
           onClose={handleModalClose}
-          darkMode={darkMode}
           title={selectedModule.title}
           moduleId={selectedModule.id}
           activeRepos={activeRepos}

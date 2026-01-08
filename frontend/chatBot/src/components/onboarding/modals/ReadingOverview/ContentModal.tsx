@@ -26,7 +26,6 @@ import type { ModuleContent, QuestionData } from "../../../../../types/onboardin
 interface ContentModalProps {
   isOpen: boolean;
   onClose: () => void;
-  darkMode: boolean;
   title: string;
   moduleId: string;
   activeRepos?: string[];
@@ -55,7 +54,6 @@ const MODULE_ID_TO_QA_ID: { [key: string]: string } = {
 export default function OverviewModal({
   isOpen,
   onClose,
-  darkMode,
   title,
   moduleId,
   activeRepos = [],
@@ -74,6 +72,7 @@ export default function OverviewModal({
   const [showQnA, setShowQnA] = useState(false);
   const [qaData, setQaData] = useState<{ questions: QuestionData[]; moduleTitle: string } | null>(null);
   const [isLoadingQnA, setIsLoadingQnA] = useState(false);
+  const [hasQnA, setHasQnA] = useState(false);
   
   const scrollTimeoutRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -82,7 +81,7 @@ export default function OverviewModal({
   useEffect(() => {
     if (isOpen && moduleId) {
       setIsLoading(true);
-      MermaidRenderer.initialize(darkMode);
+      MermaidRenderer.initialize(false);
       document.body.style.overflow = "hidden";
 
       const fetchModuleContent = async () => {
@@ -109,7 +108,16 @@ export default function OverviewModal({
             });
           }
 
-          // QnA will be fetched separately when "Start QnA" button is clicked
+          // Check if QnA is available for this module
+          const qaModuleId = MODULE_ID_TO_QA_ID[moduleId];
+          if (qaModuleId) {
+            try {
+              const qaResponse = await QAService.fetchQAModule(qaModuleId, repo);
+              setHasQnA(qaResponse && qaResponse.questions && qaResponse.questions.length > 0);
+            } catch (qaError) {
+              setHasQnA(false);
+            }
+          }
 
           // Set content immediately to show it, don't wait for mermaid
           setModuleContent(content);
@@ -133,6 +141,7 @@ export default function OverviewModal({
       setIsSubmitted(false);
       setShowQnA(false);
       setQaData(null);
+      setHasQnA(false);
     }
 
     return () => {
@@ -144,7 +153,7 @@ export default function OverviewModal({
         cancelAnimationFrame(rafRef.current);
       }
     };
-  }, [isOpen, moduleId, darkMode, activeRepos]);
+  }, [isOpen, moduleId, activeRepos]);
 
   useEffect(() => {
     if (isOpen && moduleContent.length > 0) {
@@ -327,11 +336,6 @@ export default function OverviewModal({
           100% { background-position: 200% center; }
         }
 
-        @keyframes float {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-10px); }
-        }
-
         @keyframes fadeIn {
           from {
             opacity: 0;
@@ -352,18 +356,7 @@ export default function OverviewModal({
         }
 
         .modal-content {
-          animation: modalSlideUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-          will-change: transform, opacity;
-        }
-
-        .shimmer-background {
-          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
-          background-size: 200% 100%;
-          animation: shimmer 3s infinite;
-        }
-
-        .floating-icon {
-          animation: float 3s ease-in-out infinite;
+          animation: modalSlideUp 0.3s ease-out;
         }
 
         .custom-scrollbar {
@@ -376,106 +369,65 @@ export default function OverviewModal({
         }
 
         .custom-scrollbar::-webkit-scrollbar-track {
-          background: ${darkMode ? "#1f2937" : "#f1f5f9"};
+          background: #f1f5f9;
           border-radius: 10px;
           margin: 8px 0;
         }
 
         .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: ${darkMode
-            ? "linear-gradient(180deg, #60a5fa 0%, #a78bfa 50%, #f472b6 100%)"
-            : "linear-gradient(180deg, #6366f1 0%, #06b6d4 50%, #14b8a6 100%)"};
+          background: #cbd5e1;
           border-radius: 10px;
-          border: 2px solid ${darkMode ? "#1f2937" : "#f1f5f9"};
+          border: 2px solid #f1f5f9;
         }
 
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: ${darkMode
-            ? "linear-gradient(180deg, #3b82f6 0%, #8b5cf6 50%, #ec4899 100%)"
-            : "linear-gradient(180deg, #4f46e5 0%, #0891b2 50%, #0d9488 100%)"};
+          background: #94a3b8;
         }
       `}</style>
 
       <div
-        className={`absolute inset-0 modal-backdrop ${
-          darkMode
-            ? "bg-gradient-to-br from-gray-900/95 via-blue-900/90 to-purple-900/95"
-            : "bg-gradient-to-br from-slate-900/60 via-indigo-900/50 to-cyan-900/60"
-        } backdrop-blur-xl`}
+        className="absolute inset-0 modal-backdrop bg-gray-900/50 backdrop-blur-sm"
       />
 
       <div
-        className={`relative w-full h-full overflow-hidden modal-content ${
-          darkMode ? "glass-card-dark" : "glass-card-light"
-        }`}
+        className="relative w-full h-full overflow-hidden modal-content bg-white"
         style={{
-          boxShadow: darkMode
-            ? "0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1)"
-            : "0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.5)",
+          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="absolute top-0 left-0 right-0 h-1 z-20 bg-gray-700/30">
+        <div className="absolute top-0 left-0 right-0 h-1 z-20 bg-gray-200">
           <div
-            className={`h-full transition-all duration-300 ${
-              darkMode
-                ? "bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500"
-                : "bg-gradient-to-r from-indigo-500 via-cyan-500 to-teal-500"
-            }`}
+            className="h-full transition-all duration-300 bg-gray-400"
             style={{ width: `${scrollProgress}%` }}
           />
         </div>
 
         <div
-          className={`sticky top-0 z-10 px-16 py-5 border-b backdrop-blur-2xl ${
-            darkMode
-              ? "bg-gray-800/98 border-gray-700/50"
-              : "bg-white/98 border-indigo-100/50"
-          }`}
+          className="sticky top-0 z-10 px-16 py-5 border-b bg-white border-gray-200"
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-6 flex-1">
-              <div
-                className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-2xl floating-icon relative overflow-hidden ${
-                  darkMode
-                    ? "bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600"
-                    : "bg-gradient-to-br from-indigo-500 via-cyan-500 to-teal-500"
-                }`}
-              >
-                <div className="absolute inset-0 shimmer-background" />
-                <BookOpen className="w-6 h-6 text-white relative z-10" />
+              <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-gray-100 border border-gray-200">
+                <BookOpen className="w-6 h-6 text-gray-700" />
               </div>
 
               <div className="flex items-center space-x-6">
-                <h2
-                  className={`text-3xl font-bold ${
-                    darkMode
-                      ? "bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent"
-                      : "bg-gradient-to-r from-indigo-600 via-cyan-600 to-teal-600 bg-clip-text text-transparent"
-                  }`}
-                >
+                <h2 className="text-3xl font-semibold text-gray-900">
                   {title}
                 </h2>
 
                 <div className="flex items-center space-x-4">
-                  <div className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg ${
-                    darkMode ? "bg-blue-500/10" : "bg-indigo-50"
-                  }`}>
-                    <Clock className={`w-4 h-4 ${darkMode ? "text-blue-400" : "text-indigo-500"}`} />
-                    <span className={`text-xs font-medium ${
-                      darkMode ? "text-blue-300" : "text-indigo-700"
-                    }`}>
+                  <div className="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-gray-100">
+                    <Clock className="w-4 h-4 text-gray-600" />
+                    <span className="text-xs font-medium text-gray-700">
                       {stats.estimatedReadTime} min read
                     </span>
                   </div>
 
-                  <div className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg ${
-                    darkMode ? "bg-purple-500/10" : "bg-purple-50"
-                  }`}>
-                    <FileText className={`w-4 h-4 ${darkMode ? "text-purple-400" : "text-purple-500"}`} />
-                    <span className={`text-xs font-medium ${
-                      darkMode ? "text-purple-300" : "text-purple-700"
-                    }`}>
+                  <div className="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-gray-100">
+                    <FileText className="w-4 h-4 text-gray-600" />
+                    <span className="text-xs font-medium text-gray-700">
                       Section {currentSectionIndex + 1} of {moduleContent.length}
                     </span>
                   </div>
@@ -485,18 +437,10 @@ export default function OverviewModal({
 
             <button
               onClick={onClose}
-              className={`p-3 rounded-xl transition-all duration-300 hover:rotate-90 hover:scale-110 group ${
-                darkMode ? "hover:bg-gray-700" : "hover:bg-indigo-50"
-              }`}
+              className="p-3 rounded-lg transition-all hover:bg-gray-100"
               aria-label="Close modal"
             >
-              <X
-                className={`w-6 h-6 transition-colors ${
-                  darkMode
-                    ? "text-gray-400 group-hover:text-white"
-                    : "text-slate-500 group-hover:text-slate-900"
-                }`}
-              />
+              <X className="w-6 h-6 transition-colors text-gray-600 hover:text-gray-900" />
             </button>
           </div>
         </div>
@@ -512,21 +456,15 @@ export default function OverviewModal({
           {isLoading && moduleContent.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-32">
               <div className="relative">
-                <Loader2 className={`w-16 h-16 animate-spin ${
-                  darkMode ? "text-blue-400" : "text-indigo-600"
-                }`} />
+                <Loader2 className="w-16 h-16 animate-spin text-gray-600" />
               </div>
-              <p className={`mt-4 text-sm font-medium ${
-                darkMode ? "text-gray-400" : "text-slate-600"
-              }`}>
+              <p className="mt-4 text-sm font-medium text-gray-600">
                 Loading module...
               </p>
             </div>
           ) : moduleContent.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-32">
-              <p className={`text-lg font-medium ${
-                darkMode ? "text-gray-400" : "text-slate-600"
-              }`}>
+              <p className="text-lg font-medium text-gray-600">
                 No content found
               </p>
             </div>
@@ -534,39 +472,25 @@ export default function OverviewModal({
             /* Exam-Style QnA View */
             <div className="flex flex-col h-full">
               {/* Exam Header */}
-              <div className={`mb-6 p-6 rounded-2xl border-2 ${
-                darkMode
-                  ? "bg-gray-800/80 border-purple-500/50"
-                  : "bg-white border-purple-300"
-              }`}>
+              <div className="mb-6 p-6 rounded-lg border bg-white border-gray-200">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h2 className={`text-2xl font-bold mb-2 ${
-                      darkMode ? "text-white" : "text-slate-900"
-                    }`}>
-                      📝 Knowledge Assessment
+                    <h2 className="text-2xl font-semibold mb-2 text-gray-900">
+                      Knowledge Assessment
                     </h2>
-                    <p className={`text-sm ${
-                      darkMode ? "text-gray-400" : "text-slate-600"
-                    }`}>
+                    <p className="text-sm text-gray-600">
                       {qaData.moduleTitle} - Test your understanding
                     </p>
                   </div>
-                  <div className={`px-4 py-2 rounded-lg ${
-                    darkMode ? "bg-purple-500/20" : "bg-purple-100"
-                  }`}>
-                    <span className={`text-sm font-semibold ${
-                      darkMode ? "text-purple-300" : "text-purple-700"
-                    }`}>
+                  <div className="px-4 py-2 rounded-lg bg-gray-100">
+                    <span className="text-sm font-medium text-gray-700">
                       {qaData.questions.length} Questions
                     </span>
                   </div>
                 </div>
                 
                 {!isSubmitted && (
-                  <div className={`flex items-center gap-2 text-sm ${
-                    darkMode ? "text-yellow-400" : "text-amber-600"
-                  }`}>
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
                     <Clock className="w-4 h-4" />
                     <span>Take your time to answer all questions</span>
                   </div>
@@ -584,21 +508,13 @@ export default function OverviewModal({
                   return (
                     <div
                       key={question.question_number}
-                      className={`p-6 rounded-xl border-2 ${
-                        darkMode
-                          ? "bg-gray-800/50 border-gray-700"
-                          : "bg-white border-slate-200"
-                      }`}
+                      className="p-6 rounded-lg border-2 bg-white border-gray-200"
                     >
                       <div className="flex items-start gap-4 mb-4">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold flex-shrink-0 ${
-                          darkMode ? "bg-purple-600 text-white" : "bg-purple-500 text-white"
-                        }`}>
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center font-semibold flex-shrink-0 bg-gray-200 text-gray-800">
                           {question.question_number}
                         </div>
-                        <p className={`font-semibold text-lg flex-1 ${
-                          darkMode ? "text-white" : "text-slate-900"
-                        }`}>
+                        <p className="font-semibold text-lg flex-1 text-gray-900">
                           {question.question}
                         </p>
                       </div>
@@ -617,20 +533,12 @@ export default function OverviewModal({
                               disabled={isSubmitted}
                               className={`w-full text-left px-5 py-4 rounded-lg border-2 text-sm transition-all ${
                                 showCorrect
-                                  ? darkMode
-                                    ? "bg-green-600/30 border-green-400 text-green-200"
-                                    : "bg-green-100 border-green-500 text-green-900"
+                                  ? "bg-green-100 border-green-500 text-green-900"
                                   : showWrong
-                                  ? darkMode
-                                    ? "bg-red-600/30 border-red-400 text-red-200"
-                                    : "bg-red-100 border-red-500 text-red-900"
+                                  ? "bg-red-100 border-red-500 text-red-900"
                                   : isSelected
-                                  ? darkMode
-                                    ? "bg-blue-600/40 border-blue-400 text-white"
-                                    : "bg-blue-100 border-blue-500 text-slate-900"
-                                  : darkMode
-                                  ? "bg-gray-700/50 border-gray-600 text-gray-200 hover:bg-gray-700/70"
-                                  : "bg-slate-50 border-slate-300 text-slate-700 hover:bg-blue-50"
+                                  ? "bg-blue-100 border-blue-500 text-gray-900"
+                                  : "bg-gray-50 border-gray-300 text-gray-700 hover:bg-blue-50"
                               } ${isSubmitted ? "cursor-not-allowed" : "cursor-pointer"}`}
                             >
                               <div className="flex items-center justify-between">
@@ -646,18 +554,11 @@ export default function OverviewModal({
                       </div>
 
                       {isSubmitted && (
-                        <div className={`mt-4 ml-12 p-4 rounded-lg border ${
-                          darkMode
-                            ? "bg-gray-900/50 text-gray-200 border-gray-700"
-                            : "bg-slate-50 text-slate-800 border-slate-200"
-                        }`}
-                        >
-                          <p className={`font-semibold mb-2 ${
-                            darkMode ? "text-green-300" : "text-green-700"
-                          }`}>
+                        <div className="mt-4 ml-12 p-4 rounded-lg border bg-gray-50 text-gray-800 border-gray-200">
+                          <p className="font-semibold mb-2 text-green-700">
                             Correct Answer: <strong>{question.correct_answer}</strong>
                           </p>
-                          <p className="text-sm leading-relaxed">{question.explanation}</p>
+                          <p className="text-sm leading-relaxed text-gray-600">{question.explanation}</p>
                         </div>
                       )}
                     </div>
@@ -671,14 +572,10 @@ export default function OverviewModal({
                   <button
                     onClick={handleSubmitQnA}
                     disabled={Object.keys(selectedAnswers).length === 0}
-                    className={`px-8 py-4 rounded-xl font-bold text-lg transition-all transform hover:scale-105 active:scale-95 shadow-2xl flex items-center space-x-3 ${
+                    className={`px-8 py-4 rounded-lg font-medium text-lg transition-all flex items-center space-x-3 ${
                       Object.keys(selectedAnswers).length === 0
-                        ? darkMode
-                          ? "bg-gray-700/50 text-gray-500 cursor-not-allowed"
-                          : "bg-slate-200 text-slate-400 cursor-not-allowed"
-                        : darkMode
-                        ? "bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 hover:from-purple-500 hover:via-pink-500 hover:to-red-500 text-white"
-                        : "bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 hover:from-purple-600 hover:via-pink-600 hover:to-red-600 text-white"
+                        ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                        : "bg-gray-900 text-white hover:bg-gray-800"
                     }`}
                   >
                     <Send className="w-6 h-6" />
@@ -691,11 +588,7 @@ export default function OverviewModal({
               <div className="mt-4 flex justify-center">
                 <button
                   onClick={handleBackToContent}
-                  className={`px-6 py-3 rounded-lg font-semibold transition-all ${
-                    darkMode
-                      ? "bg-gray-700 text-gray-200 hover:bg-gray-600"
-                      : "bg-slate-200 text-slate-700 hover:bg-slate-300"
-                  }`}
+                  className="px-6 py-3 rounded-lg font-semibold transition-all bg-gray-200 text-gray-700 hover:bg-gray-300"
                 >
                   ← Back to Content
                 </button>
@@ -709,153 +602,90 @@ export default function OverviewModal({
                   const moduleData = moduleContent[currentSectionIndex];
                   const isLastSection = currentSectionIndex === moduleContent.length - 1;
                   return (
-                    <div
-                      key={moduleData.moduleId}
-                      id={`module-section-${moduleData.moduleId}`}
-                      className={`rounded-2xl overflow-hidden transition-all animate-fade-in ${
-                        darkMode
-                          ? "bg-gray-800/50 ring-1 ring-gray-700"
-                          : "bg-white/50 ring-1 ring-slate-200"
-                      }`}
-                    >
-                      <div
-                        className={`px-8 py-5 border-b ${
-                          darkMode
-                            ? "bg-gray-800/80 border-gray-700"
-                            : "bg-slate-50/80 border-slate-200"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-3">
-                            <span
-                              className={`text-2xl font-bold ${
-                                darkMode ? "text-blue-400" : "text-indigo-600"
-                              }`}
-                            >
+                <div
+                  key={moduleData.moduleId}
+                  id={`module-section-${moduleData.moduleId}`}
+                      className="rounded-lg overflow-hidden transition-all animate-fade-in bg-white border border-gray-200"
+                >
+                  <div
+                    className="px-8 py-5 border-b bg-gray-50 border-gray-200"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <span className="text-2xl font-semibold text-gray-700">
                               {currentSectionIndex + 1}.
-                            </span>
-                            <h3
-                              className={`text-xl font-bold ${
-                                darkMode ? "text-gray-100" : "text-slate-900"
-                              }`}
-                            >
-                              {moduleData.moduleTitle}
-                            </h3>
-                          </div>
-
-                          {!moduleData.isQnASection && moduleData.content?.quality && (
-                            <div
-                              className={`flex items-center space-x-1 px-3 py-1 rounded-lg ${
-                                darkMode ? "bg-yellow-500/10" : "bg-amber-50"
-                              }`}
-                            >
-                              <Award
-                                className={`w-3 h-3 ${
-                                  darkMode ? "text-yellow-400" : "text-amber-500"
-                                }`}
-                              />
-                              <span
-                                className={`text-xs font-semibold ${
-                                  darkMode ? "text-yellow-300" : "text-amber-700"
-                                }`}
-                              >
-                                {(moduleData.content.quality * 5).toFixed(1)}
-                              </span>
-                            </div>
-                          )}
-
-                          {moduleData.isQnASection && moduleData.questions && (
-                            <div
-                              className={`flex items-center space-x-1 px-3 py-1 rounded-lg ${
-                                darkMode ? "bg-purple-500/10" : "bg-purple-50"
-                              }`}
-                            >
-                              <MessageSquare
-                                className={`w-3 h-3 ${
-                                  darkMode ? "text-purple-400" : "text-purple-500"
-                                }`}
-                              />
-                              <span
-                                className={`text-xs font-semibold ${
-                                  darkMode ? "text-purple-300" : "text-purple-700"
-                                }`}
-                              >
-                                {moduleData.questions.length} Questions
-                              </span>
-                            </div>
-                          )}
-                        </div>
-
-                        {moduleData.content?.question && (
-                          <div className="mt-3">
-                            <button
-                              onClick={() => toggleModuleExpanded(moduleData.moduleId)}
-                              className={`w-full text-left text-sm ${
-                                darkMode ? "text-gray-400" : "text-slate-600"
-                              } hover:${
-                                darkMode ? "text-gray-300" : "text-slate-700"
-                              } transition-colors flex items-center space-x-2`}
-                            >
-                              <ChevronDown
-                                className={`w-4 h-4 transition-transform ${
-                                  expandedModules.has(moduleData.moduleId) ? "rotate-180" : ""
-                                }`}
-                              />
-                              <span className="font-medium">Learning Objective</span>
-                            </button>
-
-                            {expandedModules.has(moduleData.moduleId) && (
-                              <p
-                                className={`mt-2 text-sm leading-relaxed ${
-                                  darkMode ? "text-gray-400" : "text-slate-600"
-                                }`}
-                              >
-                                {moduleData.content.question}
-                              </p>
-                            )}
-                          </div>
-                        )}
+                        </span>
+                        <h3 className="text-xl font-semibold text-gray-900">
+                          {moduleData.moduleTitle}
+                        </h3>
                       </div>
 
-                      <div className="px-8 py-8">
-                        <ContentRenderer
-                          sections={moduleData.sections}
-                          darkMode={darkMode}
-                          renderedMermaid={renderedMermaid[moduleData.moduleId] || {}}
-                        />
+                          {!moduleData.isQnASection && moduleData.content?.quality && (
+                        <div className="flex items-center space-x-1 px-3 py-1 rounded-lg bg-amber-50">
+                          <Award className="w-3 h-3 text-amber-500" />
+                          <span className="text-xs font-semibold text-amber-700">
+                            {(moduleData.content.quality * 5).toFixed(1)}
+                          </span>
+                        </div>
+                      )}
+
+                          {moduleData.isQnASection && moduleData.questions && (
+                            <div className="flex items-center space-x-1 px-3 py-1 rounded-lg bg-gray-100">
+                              <MessageSquare className="w-3 h-3 text-gray-600" />
+                              <span className="text-xs font-semibold text-gray-700">
+                                {moduleData.questions.length} Questions
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {moduleData.content?.question && (
+                      <div className="mt-3">
+                        <button
+                          onClick={() => toggleModuleExpanded(moduleData.moduleId)}
+                          className="w-full text-left text-sm text-gray-600 hover:text-gray-700 transition-colors flex items-center space-x-2"
+                        >
+                          <ChevronDown
+                            className={`w-4 h-4 transition-transform ${
+                              expandedModules.has(moduleData.moduleId) ? "rotate-180" : ""
+                            }`}
+                          />
+                          <span className="font-medium">Learning Objective</span>
+                        </button>
+
+                        {expandedModules.has(moduleData.moduleId) && (
+                          <p className="mt-2 text-sm leading-relaxed text-gray-600">
+                            {moduleData.content.question}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="px-8 py-8">
+                    <ContentRenderer
+                      sections={moduleData.sections}
+                      renderedMermaid={renderedMermaid[moduleData.moduleId] || {}}
+                    />
                         
                         {/* Show Start QnA button after last section */}
                         {isLastSection && (
-                          <div className="mt-12 pt-8 border-t border-gray-700">
-                            <div className={`p-8 rounded-2xl border-2 text-center ${
-                              darkMode
-                                ? "bg-gradient-to-br from-purple-900/30 to-pink-900/30 border-purple-500/50"
-                                : "bg-gradient-to-br from-purple-50 to-pink-50 border-purple-300"
-                            }`}>
-                              <MessageSquare className={`w-16 h-16 mx-auto mb-4 ${
-                                darkMode ? "text-purple-400" : "text-purple-600"
-                              }`} />
-                              <h3 className={`text-2xl font-bold mb-2 ${
-                                darkMode ? "text-white" : "text-slate-900"
-                              }`}>
+                          <div className="mt-12 pt-8 border-t border-gray-200">
+                            <div className="p-8 rounded-lg border text-center bg-gray-50 border-gray-200">
+                              <MessageSquare className="w-12 h-12 mx-auto mb-4 text-gray-600" />
+                              <h3 className="text-xl font-semibold mb-2 text-gray-900">
                                 Ready for Assessment?
                               </h3>
-                              <p className={`text-sm mb-6 ${
-                                darkMode ? "text-gray-400" : "text-slate-600"
-                              }`}>
+                              <p className="text-sm mb-6 text-gray-600">
                                 Test your understanding with a knowledge check quiz
                               </p>
                               <button
                                 onClick={handleStartQnA}
                                 disabled={isLoadingQnA}
-                                className={`px-8 py-4 rounded-xl font-bold text-lg transition-all transform hover:scale-105 active:scale-95 shadow-2xl flex items-center space-x-3 mx-auto ${
+                                className={`px-8 py-4 rounded-lg font-medium text-lg transition-all flex items-center space-x-3 mx-auto ${
                                   isLoadingQnA
-                                    ? darkMode
-                                      ? "bg-gray-700/50 text-gray-500 cursor-not-allowed"
-                                      : "bg-slate-200 text-slate-400 cursor-not-allowed"
-                                    : darkMode
-                                    ? "bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 hover:from-purple-500 hover:via-pink-500 hover:to-red-500 text-white"
-                                    : "bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 hover:from-purple-600 hover:via-pink-600 hover:to-red-600 text-white"
+                                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                                    : "bg-gray-900 text-white hover:bg-gray-800"
                                 }`}
                               >
                                 {isLoadingQnA ? (
@@ -870,30 +700,24 @@ export default function OverviewModal({
                                   </>
                                 )}
                               </button>
-                            </div>
-                          </div>
-                        )}
+                  </div>
+            </div>
+          )}
                       </div>
                     </div>
                   );
                 })()}
-              </div>
+                  </div>
 
               {/* Navigation Buttons */}
-              <div className={`mt-8 flex items-center justify-between pt-6 border-t ${
-                darkMode ? "border-gray-700" : "border-slate-200"
-              }`}>
+              <div className="mt-8 flex items-center justify-between pt-6 border-t border-gray-200">
                 <button
                   onClick={handlePreviousSection}
                   disabled={currentSectionIndex === 0}
-                  className={`flex items-center space-x-2 px-6 py-3 rounded-xl font-semibold transition-all duration-300 ${
+                  className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition-all duration-300 ${
                     currentSectionIndex === 0
-                      ? darkMode
-                        ? "bg-gray-700/50 text-gray-500 cursor-not-allowed"
-                        : "bg-slate-200 text-slate-400 cursor-not-allowed"
-                      : darkMode
-                      ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-500 hover:to-purple-500 hover:shadow-lg"
-                      : "bg-gradient-to-r from-indigo-500 to-cyan-500 text-white hover:from-indigo-600 hover:to-cyan-600 hover:shadow-lg"
+                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                      : "bg-gray-900 text-white hover:bg-gray-800"
                   }`}
                 >
                   <ChevronLeft className="w-5 h-5" />
@@ -908,29 +732,36 @@ export default function OverviewModal({
                       onClick={() => setCurrentSectionIndex(index)}
                       className={`w-2 h-2 rounded-full transition-all duration-300 ${
                         index === currentSectionIndex
-                          ? darkMode
-                            ? "bg-blue-400 w-8"
-                            : "bg-indigo-600 w-8"
-                          : darkMode
-                          ? "bg-gray-600 hover:bg-gray-500"
-                          : "bg-slate-300 hover:bg-slate-400"
+                          ? "bg-gray-700 w-8"
+                          : "bg-gray-300 hover:bg-gray-400"
                       }`}
                       aria-label={`Go to section ${index + 1}`}
                     />
                   ))}
+                  {hasQnA && (
+                    <button
+                      onClick={handleStartQnA}
+                      disabled={isLoadingQnA}
+                      className={`w-3 h-3 rounded-sm transition-all duration-300 flex items-center justify-center ${
+                        showQnA
+                          ? "bg-gray-700"
+                          : "bg-gray-300 hover:bg-gray-400 border border-gray-400"
+                      }`}
+                      aria-label="Start QnA Assessment"
+                      title="QnA Assessment"
+                    >
+                      <MessageSquare className={`w-2 h-2 ${showQnA ? "text-white" : "text-gray-600"}`} />
+                    </button>
+                  )}
                 </div>
 
                 <button
                   onClick={handleNextSection}
                   disabled={currentSectionIndex === moduleContent.length - 1}
-                  className={`flex items-center space-x-2 px-6 py-3 rounded-xl font-semibold transition-all duration-300 ${
+                  className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition-all duration-300 ${
                     currentSectionIndex === moduleContent.length - 1
-                      ? darkMode
-                        ? "bg-gray-700/50 text-gray-500 cursor-not-allowed"
-                        : "bg-slate-200 text-slate-400 cursor-not-allowed"
-                      : darkMode
-                      ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-500 hover:to-pink-500 hover:shadow-lg"
-                      : "bg-gradient-to-r from-cyan-500 to-teal-500 text-white hover:from-cyan-600 hover:to-teal-600 hover:shadow-lg"
+                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                      : "bg-gray-900 text-white hover:bg-gray-800"
                   }`}
                 >
                   <span>Next</span>

@@ -6,17 +6,16 @@ import ChallengeCard from '../../../cards/BugFix/Challenge/ModuleCard';
 import ChallengeContent from '../../../cards/BugFix/Challenge/ModuleContent';
 
 interface ChallengeSectionProps {
-  darkMode: boolean;
   data: CodingQuestionsResponse;
   activeRepos?: string[];
 }
 
-export default function ChallengeSection({ darkMode, data, activeRepos = [] }: ChallengeSectionProps) {
+export default function ChallengeSection({ data, activeRepos = [] }: ChallengeSectionProps) {
   const [selectedChallenge, setSelectedChallenge] = useState<CodingQuestion | null>(null);
 
   return (
     <div>
-      <h3 className={`text-lg font-bold mb-4 ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+      <h3 className="text-lg font-semibold mb-4 text-gray-900">
         Select a Challenge:
       </h3>
       
@@ -29,7 +28,6 @@ export default function ChallengeSection({ darkMode, data, activeRepos = [] }: C
                 index={idx}
                 isSelected={selectedChallenge?.question_number === question.question_number}
                 onSelect={() => setSelectedChallenge(question)}
-                darkMode={darkMode}
               />
             </div>
           ))}
@@ -37,7 +35,7 @@ export default function ChallengeSection({ darkMode, data, activeRepos = [] }: C
       </div>
 
       {selectedChallenge && (
-        <ChallengeContent darkMode={darkMode} challenge={selectedChallenge} activeRepos={activeRepos} />
+        <ChallengeContent challenge={selectedChallenge} activeRepos={activeRepos} />
       )}
     </div>
   );

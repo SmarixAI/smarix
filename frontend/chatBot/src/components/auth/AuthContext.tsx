@@ -63,6 +63,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
+    // Check if logout was just performed - if so, don't restore user state
+    const logoutInProgress = sessionStorage.getItem("logout_in_progress");
+    if (logoutInProgress === "true") {
+      // Clear any stale tokens
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("user");
+      setToken(null);
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+    
     const storedToken = localStorage.getItem("access_token");
 
     if (storedToken) {
@@ -148,13 +160,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
+    // Set a flag to indicate logout is in progress
+    sessionStorage.setItem("logout_in_progress", "true");
+    
+    // Clear localStorage first
     localStorage.removeItem("access_token");
     localStorage.removeItem("user");
 
+    // Clear state immediately
     setUser(null);
     setToken(null);
 
-    window.location.href = "/login";
+    // Use window.location.replace to prevent back navigation
+    // Force immediate redirect
+    window.location.replace("/login");
   };
 
   return (

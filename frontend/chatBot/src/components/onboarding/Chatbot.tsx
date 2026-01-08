@@ -12,11 +12,10 @@ interface Message {
 }
 
 interface ChatbotProps {
-  darkMode: boolean;
   role?: 'onboarding' | 'offboarding' | 'general'; // Role for context-aware responses
 }
 
-export default function Chatbot({ darkMode, role = 'onboarding' }: ChatbotProps) {
+export default function Chatbot({ role = 'onboarding' }: ChatbotProps) {
   const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -132,7 +131,15 @@ export default function Chatbot({ darkMode, role = 'onboarding' }: ChatbotProps)
       });
 
       if (!response.ok) {
-        throw new Error('Failed to get response');
+        let errorMessage = 'Failed to get response';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.detail || errorData.message || errorMessage;
+        } catch (e) {
+          // If response is not JSON, use status text
+          errorMessage = response.statusText || errorMessage;
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
@@ -151,10 +158,22 @@ export default function Chatbot({ darkMode, role = 'onboarding' }: ChatbotProps)
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
       console.error('Error:', error);
+      let errorContent = 'Sorry, I encountered an error. Please make sure the backend is running and try again.';
+      
+      // Show the actual error message from the backend if available
+      if (error instanceof Error) {
+        const errorMsg = error.message;
+        if (errorMsg.includes('Chatbot not initialized')) {
+          errorContent = `Chatbot Error: ${errorMsg}. Please check the backend logs or contact an administrator.`;
+        } else if (errorMsg && errorMsg !== 'Failed to get response') {
+          errorContent = `Error: ${errorMsg}`;
+        }
+      }
+      
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: 'Sorry, I encountered an error. Please make sure the backend is running and try again.',
+        content: errorContent,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);
@@ -174,11 +193,7 @@ export default function Chatbot({ darkMode, role = 'onboarding' }: ChatbotProps)
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className={`fixed bottom-6 right-6 z-50 p-4 rounded-full shadow-2xl transition-all hover:scale-110 ${
-          darkMode
-            ? 'bg-gradient-to-br from-blue-600 to-purple-600 text-white hover:from-blue-500 hover:to-purple-500'
-            : 'bg-gradient-to-br from-indigo-600 to-cyan-600 text-white hover:from-indigo-500 hover:to-cyan-500'
-        }`}
+        className="fixed bottom-6 right-6 z-50 p-4 rounded-full bg-gray-800 text-white shadow-2xl transition-all hover:scale-110 hover:bg-gray-700"
         aria-label="Open chatbot"
       >
         <Bot className="w-6 h-6" />
@@ -199,15 +214,15 @@ export default function Chatbot({ darkMode, role = 'onboarding' }: ChatbotProps)
           width: 6px;
         }
         .chatbot-messages::-webkit-scrollbar-track {
-          background: ${darkMode ? '#1f2937' : '#f1f5f9'};
+          background: #f1f5f9;
           border-radius: 10px;
         }
         .chatbot-messages::-webkit-scrollbar-thumb {
-          background: ${darkMode ? '#4b5563' : '#cbd5e1'};
+          background: #cbd5e1;
           border-radius: 10px;
         }
         .chatbot-messages::-webkit-scrollbar-thumb:hover {
-          background: ${darkMode ? '#6b7280' : '#94a3b8'};
+          background: #94a3b8;
         }
         .line-clamp-2 {
           display: -webkit-box;
@@ -219,64 +234,44 @@ export default function Chatbot({ darkMode, role = 'onboarding' }: ChatbotProps)
       <div
         className={`transition-all duration-300 ${
           isFullscreen
-            ? 'fixed inset-0 z-[100] rounded-none'
-            : 'fixed bottom-6 right-6 z-50 w-96 h-[600px] rounded-2xl'
-        } ${darkMode ? 'glass-card-dark' : 'glass-card-light'} shadow-2xl border ${
-          darkMode ? 'border-gray-700' : 'border-slate-200'
-        } flex flex-row overflow-hidden`}
+            ? 'fixed inset-0 z-[100] rounded-none bg-white'
+            : 'fixed bottom-6 right-6 z-50 w-96 h-[600px] rounded-2xl bg-white'
+        } shadow-2xl border border-gray-200 flex flex-row overflow-hidden`}
       >
         {/* Chat History Sidebar - Only in fullscreen */}
         {isFullscreen && (
-          <div
-            className={`w-80 border-r flex flex-col flex-shrink-0 ${
-              darkMode ? 'border-gray-700 bg-gray-800/80' : 'border-slate-200 bg-slate-100/80'
-            }`}
-          >
-            <div
-              className={`px-4 py-3 border-b ${
-                darkMode ? 'border-gray-700 bg-gray-800' : 'border-slate-200 bg-slate-200'
-              }`}
-            >
-              <h4 className={`font-semibold text-sm ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+          <div className="w-80 border-r border-gray-100 flex flex-col flex-shrink-0 bg-white">
+            <div className="px-4 py-3 border-b border-gray-100 bg-white">
+              <h4 className="font-semibold text-sm text-gray-900">
                 Chat History
               </h4>
-              <p className={`text-xs mt-1 ${darkMode ? 'text-gray-400' : 'text-slate-500'}`}>
+              <p className="text-xs mt-1 text-gray-500">
                 {messages.length} {messages.length === 1 ? 'message' : 'messages'}
               </p>
             </div>
             <div
-              className={`flex-1 overflow-y-auto ${
-                darkMode ? 'bg-gray-900/50' : 'bg-slate-50/50'
-              }`}
+              className="flex-1 overflow-y-auto bg-white"
               style={{
                 scrollbarWidth: 'thin',
-                scrollbarColor: darkMode ? '#4b5563 #1f2937' : '#cbd5e1 #f1f5f9',
+                scrollbarColor: '#cbd5e1 #f1f5f9',
               }}
             >
               {messages.map((message, index) => (
                 <button
                   key={message.id}
                   onClick={() => scrollToMessage(message.id)}
-                  className={`w-full text-left px-4 py-3 border-b transition-colors ${
+                  className={`w-full text-left px-4 py-3 border-b border-gray-200 transition-colors ${
                     selectedMessageId === message.id
-                      ? darkMode
-                        ? 'bg-blue-600/20 border-blue-500'
-                        : 'bg-indigo-100 border-indigo-300'
-                      : darkMode
-                      ? 'border-gray-700 hover:bg-gray-800/50'
-                      : 'border-slate-200 hover:bg-slate-100'
+                      ? 'bg-blue-50 border-blue-300'
+                      : 'hover:bg-gray-50'
                   }`}
                 >
                   <div className="flex items-start space-x-2">
                     <div
                       className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
                         message.role === 'user'
-                          ? darkMode
-                            ? 'bg-blue-600'
-                            : 'bg-indigo-600'
-                          : darkMode
-                          ? 'bg-gradient-to-br from-blue-600 to-purple-600'
-                          : 'bg-gradient-to-br from-indigo-600 to-cyan-600'
+                          ? 'bg-gray-700'
+                          : 'bg-gray-600'
                       }`}
                     >
                       {message.role === 'user' ? (
@@ -290,32 +285,20 @@ export default function Chatbot({ darkMode, role = 'onboarding' }: ChatbotProps)
                         <span
                           className={`text-xs font-medium ${
                             message.role === 'user'
-                              ? darkMode
-                                ? 'text-blue-400'
-                                : 'text-indigo-600'
-                              : darkMode
-                              ? 'text-purple-400'
-                              : 'text-cyan-600'
+                              ? 'text-gray-700'
+                              : 'text-gray-600'
                           }`}
                         >
                           {message.role === 'user' ? 'You' : 'Assistant'}
                         </span>
-                        <span
-                          className={`text-xs ${
-                            darkMode ? 'text-gray-500' : 'text-slate-500'
-                          }`}
-                        >
+                        <span className="text-xs text-gray-500">
                           {message.timestamp.toLocaleTimeString([], {
                             hour: '2-digit',
                             minute: '2-digit',
                           })}
                         </span>
                       </div>
-                      <p
-                        className={`text-xs line-clamp-2 ${
-                          darkMode ? 'text-gray-300' : 'text-slate-700'
-                        }`}
-                      >
+                      <p className="text-xs line-clamp-2 text-gray-700">
                         {getMessagePreview(message.content)}
                       </p>
                     </div>
@@ -329,30 +312,20 @@ export default function Chatbot({ darkMode, role = 'onboarding' }: ChatbotProps)
         {/* Main Chat Area */}
         <div className="flex flex-col flex-1 min-w-0">
       {/* Header */}
-      <div
-        className={`px-4 py-3 border-b flex items-center justify-between flex-shrink-0 ${
-          darkMode ? 'border-gray-700 bg-gray-800/50' : 'border-slate-200 bg-slate-50/50'
-        }`}
-      >
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between flex-shrink-0 bg-white">
         <div className="flex items-center space-x-3">
-          <div
-            className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-              darkMode
-                ? 'bg-gradient-to-br from-blue-600 to-purple-600'
-                : 'bg-gradient-to-br from-indigo-600 to-cyan-600'
-            }`}
-          >
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-gray-800">
             <Bot className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h3 className={`font-semibold ${isFullscreen ? 'text-base' : 'text-sm'} ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+            <h3 className={`font-semibold ${isFullscreen ? 'text-base' : 'text-sm'} text-gray-900`}>
               {role === 'onboarding' 
                 ? 'Onboarding Assistant'
                 : role === 'offboarding'
                 ? 'Offboarding Assistant'
                 : 'AI Assistant'}
             </h3>
-            <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-slate-500'}`}>
+            <p className="text-xs text-gray-500">
               Always here to help
             </p>
           </div>
@@ -360,16 +333,14 @@ export default function Chatbot({ darkMode, role = 'onboarding' }: ChatbotProps)
         <div className="flex items-center space-x-2">
           <button
             onClick={() => setIsFullscreen(!isFullscreen)}
-            className={`p-2 rounded-lg transition-colors ${
-              darkMode ? 'hover:bg-gray-700' : 'hover:bg-slate-200'
-            }`}
+            className="p-2 rounded-lg transition-colors hover:bg-gray-100 text-gray-700"
             aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
             title={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
           >
             {isFullscreen ? (
-              <Minimize2 className={`w-5 h-5 ${darkMode ? 'text-gray-300' : 'text-slate-700'}`} />
+              <Minimize2 className="w-5 h-5" />
             ) : (
-              <Maximize2 className={`w-5 h-5 ${darkMode ? 'text-gray-300' : 'text-slate-700'}`} />
+              <Maximize2 className="w-5 h-5" />
             )}
           </button>
           <button
@@ -377,9 +348,7 @@ export default function Chatbot({ darkMode, role = 'onboarding' }: ChatbotProps)
               setIsOpen(false);
               setIsFullscreen(false);
             }}
-            className={`p-2 rounded-lg transition-colors ${
-              darkMode ? 'hover:bg-red-600/20 hover:text-red-400' : 'hover:bg-red-100 hover:text-red-600'
-            } ${darkMode ? 'text-gray-300' : 'text-slate-700'}`}
+            className="p-2 rounded-lg transition-colors hover:bg-red-100 hover:text-red-600 text-gray-700"
             aria-label="Close chatbot"
             title="Close chatbot"
           >
@@ -390,12 +359,10 @@ export default function Chatbot({ darkMode, role = 'onboarding' }: ChatbotProps)
 
       {/* Messages */}
       <div
-        className={`flex-1 overflow-y-auto ${isFullscreen ? 'px-6 py-6' : 'px-4 py-4'} space-y-4 chatbot-messages ${
-          darkMode ? 'bg-gray-900/50' : 'bg-slate-50/50'
-        } ${isFullscreen ? 'max-w-4xl mx-auto' : ''}`}
+        className={`flex-1 overflow-y-auto ${isFullscreen ? 'px-8 py-6' : 'px-4 py-4'} space-y-4 chatbot-messages bg-white`}
         style={{
           scrollbarWidth: 'thin',
-          scrollbarColor: darkMode ? '#4b5563 #1f2937' : '#cbd5e1 #f1f5f9',
+          scrollbarColor: '#cbd5e1 #f1f5f9',
         }}
       >
             {messages.map((message) => (
@@ -405,29 +372,21 @@ export default function Chatbot({ darkMode, role = 'onboarding' }: ChatbotProps)
                   messageRefs.current[message.id] = el;
                 }}
                 className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} transition-all duration-300 ${
-                  isFullscreen ? 'max-w-4xl mx-auto' : ''
-                } ${
                   selectedMessageId === message.id
-                    ? darkMode
-                      ? 'bg-blue-600/10 rounded-lg px-2 py-1 -mx-2 -my-1'
-                      : 'bg-indigo-100 rounded-lg px-2 py-1 -mx-2 -my-1'
+                    ? 'bg-blue-50 rounded-lg px-2 py-1 -mx-2 -my-1'
                     : ''
                 }`}
               >
                 <div
-                  className={`flex items-start space-x-2 ${isFullscreen ? 'max-w-[85%]' : 'max-w-[80%]'} ${
+                  className={`flex items-start space-x-2 ${isFullscreen ? 'max-w-[75%]' : 'max-w-[80%]'} ${
                     message.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''
                   }`}
                 >
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                       message.role === 'user'
-                        ? darkMode
-                          ? 'bg-blue-600'
-                          : 'bg-indigo-600'
-                        : darkMode
-                        ? 'bg-gradient-to-br from-blue-600 to-purple-600'
-                        : 'bg-gradient-to-br from-indigo-600 to-cyan-600'
+                        ? 'bg-gray-700'
+                        : 'bg-gray-600'
                     }`}
                   >
                     {message.role === 'user' ? (
@@ -439,22 +398,16 @@ export default function Chatbot({ darkMode, role = 'onboarding' }: ChatbotProps)
                   <div
                     className={`rounded-2xl ${isFullscreen ? 'px-5 py-3' : 'px-4 py-2.5'} ${
                       message.role === 'user'
-                        ? darkMode
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-indigo-600 text-white'
-                        : darkMode
-                        ? 'bg-gray-800 text-gray-100 border border-gray-700'
-                        : 'bg-white text-slate-900 border border-slate-200'
+                        ? 'bg-gray-700 text-white'
+                        : 'bg-gray-50 text-gray-900 border border-gray-200'
                     }`}
                   >
                     <p className={`${isFullscreen ? 'text-base' : 'text-sm'} whitespace-pre-wrap break-words leading-relaxed`}>{message.content}</p>
                     <p
                       className={`text-xs mt-1.5 ${
                         message.role === 'user'
-                          ? 'text-blue-100'
-                          : darkMode
-                          ? 'text-gray-500'
-                          : 'text-slate-500'
+                          ? 'text-gray-300'
+                          : 'text-gray-500'
                       }`}
                     >
                       {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -466,40 +419,22 @@ export default function Chatbot({ darkMode, role = 'onboarding' }: ChatbotProps)
 
             {isTyping && (
               <div className="flex justify-start">
-                <div className="flex items-start space-x-2 max-w-[80%]">
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                      darkMode
-                        ? 'bg-gradient-to-br from-blue-600 to-purple-600'
-                        : 'bg-gradient-to-br from-indigo-600 to-cyan-600'
-                    }`}
-                  >
+                <div className={`flex items-start space-x-2 ${isFullscreen ? 'max-w-[75%]' : 'max-w-[80%]'}`}>
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 bg-gray-600">
                     <Bot className="w-4 h-4 text-white" />
                   </div>
-                  <div
-                    className={`rounded-2xl px-4 py-2.5 ${
-                      darkMode
-                        ? 'bg-gray-800 text-gray-100 border border-gray-700'
-                        : 'bg-white text-slate-900 border border-slate-200'
-                    }`}
-                  >
+                  <div className="rounded-2xl px-4 py-2.5 bg-gray-50 text-gray-900 border border-gray-200">
                     <div className="flex space-x-1.5">
                       <div
-                        className={`w-2 h-2 rounded-full animate-bounce ${
-                          darkMode ? 'bg-gray-400' : 'bg-slate-400'
-                        }`}
+                        className="w-2 h-2 rounded-full animate-bounce bg-gray-400"
                         style={{ animationDelay: '0ms' }}
                       />
                       <div
-                        className={`w-2 h-2 rounded-full animate-bounce ${
-                          darkMode ? 'bg-gray-400' : 'bg-slate-400'
-                        }`}
+                        className="w-2 h-2 rounded-full animate-bounce bg-gray-400"
                         style={{ animationDelay: '150ms' }}
                       />
                       <div
-                        className={`w-2 h-2 rounded-full animate-bounce ${
-                          darkMode ? 'bg-gray-400' : 'bg-slate-400'
-                        }`}
+                        className="w-2 h-2 rounded-full animate-bounce bg-gray-400"
                         style={{ animationDelay: '300ms' }}
                       />
                     </div>
@@ -513,9 +448,7 @@ export default function Chatbot({ darkMode, role = 'onboarding' }: ChatbotProps)
 
       {/* Input */}
       <div
-        className={`${isFullscreen ? 'px-6 py-4' : 'px-4 py-3'} border-t flex items-center space-x-2 flex-shrink-0 ${
-          darkMode ? 'border-gray-700 bg-gray-800/50' : 'border-slate-200 bg-slate-50/50'
-        } ${isFullscreen ? 'max-w-4xl mx-auto w-full' : ''}`}
+        className={`${isFullscreen ? 'px-8 py-4' : 'px-4 py-3'} border-t border-gray-100 flex items-center space-x-2 flex-shrink-0 bg-white`}
       >
         <input
           ref={inputRef}
@@ -524,11 +457,7 @@ export default function Chatbot({ darkMode, role = 'onboarding' }: ChatbotProps)
           onChange={(e) => setInputValue(e.target.value)}
           onKeyPress={handleKeyPress}
           placeholder={isFullscreen ? "Ask me anything about onboarding... (Press Enter to send)" : "Ask me anything about onboarding..."}
-          className={`flex-1 ${isFullscreen ? 'px-4 py-3 text-base' : 'px-3 py-2 text-sm'} rounded-lg outline-none transition-colors ${
-            darkMode
-              ? 'bg-gray-700 text-gray-100 placeholder-gray-500 border border-gray-600 focus:border-blue-500'
-              : 'bg-white text-slate-900 placeholder-slate-500 border border-slate-300 focus:border-indigo-500'
-          }`}
+          className={`flex-1 ${isFullscreen ? 'px-4 py-3 text-base' : 'px-3 py-2 text-sm'} rounded-lg outline-none transition-colors bg-white text-gray-900 placeholder-gray-500 border border-gray-300 focus:border-gray-500 focus:ring-1 focus:ring-gray-500`}
           disabled={isTyping}
         />
         <button
@@ -536,12 +465,8 @@ export default function Chatbot({ darkMode, role = 'onboarding' }: ChatbotProps)
           disabled={!inputValue.trim() || isTyping}
           className={`${isFullscreen ? 'p-3' : 'p-2'} rounded-lg transition-all ${
             !inputValue.trim() || isTyping
-              ? darkMode
-                ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-              : darkMode
-              ? 'bg-blue-600 hover:bg-blue-700 text-white'
-              : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+              ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+              : 'bg-gray-800 hover:bg-gray-700 text-white'
           }`}
           aria-label="Send message"
         >

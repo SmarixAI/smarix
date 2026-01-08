@@ -35,7 +35,41 @@ function UnifiedLoginContent() {
   const { login, signup, isAuthenticated, user } = useAuth();
 
   useEffect(() => {
-    if (isAuthenticated && user) {
+    // Check if logout was just performed - if so, don't auto-redirect
+    const logoutInProgress = sessionStorage.getItem("logout_in_progress");
+    if (logoutInProgress === "true") {
+      // Clear the logout flag
+      sessionStorage.removeItem("logout_in_progress");
+      setCheckingAuth(false);
+      return; // Don't redirect if we just logged out
+    }
+    
+    // Check if there's a token in localStorage first
+    const token = localStorage.getItem("access_token");
+    
+    // Only redirect if authenticated AND token exists AND token is valid
+    if (isAuthenticated && user && token) {
+      // Verify token is not expired
+      try {
+        const decoded = JSON.parse(atob(token.split('.')[1]));
+        const isExpired = decoded.exp * 1000 < Date.now();
+        
+        if (isExpired) {
+          // Token expired, clear it and don't redirect
+          localStorage.removeItem("access_token");
+          localStorage.removeItem("user");
+          setCheckingAuth(false);
+          return;
+        }
+      } catch (e) {
+        // Invalid token, clear it and don't redirect
+        localStorage.removeItem("access_token");
+        localStorage.removeItem("user");
+        setCheckingAuth(false);
+        return;
+      }
+      
+      // Token is valid, proceed with redirect
       hasRedirected.current = true;
       setCheckingAuth(false);
       if (user.role === "admin") {

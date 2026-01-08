@@ -202,16 +202,16 @@ export default function EmployeeHandoverSection({ employeeId, darkMode = false }
 
       {/* ================= HANDOVER TASK LIST ================= */}
       <div className={`rounded-2xl border shadow-sm transition-colors duration-300 ${
-        darkMode
-          ? "border-gray-700 bg-gray-800"
-          : "border-slate-200 bg-white"
+              darkMode
+                ? "border-gray-700 bg-gray-800"
+                : "border-slate-200 bg-white"
       }`}>
         <div className={`px-5 py-4 border-b ${
           darkMode ? "border-gray-700" : ""
         }`}>
           <h3 className={`font-semibold ${
-            darkMode ? "text-gray-100" : "text-slate-900"
-          }`}>
+                  darkMode ? "text-gray-100" : "text-slate-900"
+                }`}>
             Handover Sessions
           </h3>
         </div>
@@ -276,8 +276,8 @@ export default function EmployeeHandoverSection({ employeeId, darkMode = false }
                             darkMode ? "text-gray-500" : "text-slate-500"
                           }`}>•</span>
                           <span className={`flex items-center gap-1 text-xs ${
-                            darkMode ? "text-gray-400" : "text-slate-600"
-                          }`}>
+                  darkMode ? "text-gray-400" : "text-slate-600"
+                }`}>
                             <Clock className="w-3 h-3" />
                             ~{task.estimated_time_minutes} min
                           </span>
@@ -293,23 +293,23 @@ export default function EmployeeHandoverSection({ employeeId, darkMode = false }
                           }`}>
                             <User className="w-3 h-3" />
                             To: {task.suggested_recipient}
-                          </span>
+                  </span>
                         </>
                       )}
                     </div>
-                  </div>
+              </div>
 
                   {/* RIGHT */}
                   <div className="flex items-center gap-3 flex-shrink-0">
                     {/* PRIORITY */}
-                    <span
+              <span
                       className={`
                         px-3 py-1.5 rounded-lg text-xs font-semibold border
                         ${getPriorityStyles(task.priority, darkMode)}
                       `}
-                    >
+              >
                       {task.priority}
-                    </span>
+              </span>
 
                     {/* EXPAND BUTTON */}
                     {hasDetails && (
@@ -326,12 +326,12 @@ export default function EmployeeHandoverSection({ employeeId, darkMode = false }
                         ) : (
                           <ChevronDown className="w-4 h-4" />
                         )}
-                      </div>
+            </div>
                     )}
 
                     {/* ACTION */}
                     {isDone ? (
-                      <span 
+                <span
                         className={`flex items-center gap-1.5 text-xs font-semibold ${
                           darkMode ? "text-green-400" : "text-green-700"
                         }`}
@@ -339,7 +339,7 @@ export default function EmployeeHandoverSection({ employeeId, darkMode = false }
                       >
                         <CheckCircle className="w-4 h-4" />
                         Completed
-                      </span>
+                </span>
                     ) : (
                       <button
                         onClick={(e) => {
@@ -358,7 +358,7 @@ export default function EmployeeHandoverSection({ employeeId, darkMode = false }
                       </button>
                     )}
                   </div>
-                </div>
+              </div>
 
                 {/* EXPANDED DETAILS */}
                 {isExpanded && hasDetails && (
@@ -368,7 +368,7 @@ export default function EmployeeHandoverSection({ employeeId, darkMode = false }
                     <div className="pt-4 space-y-4">
                       {/* FULL DESCRIPTION (in expanded view) */}
                       {task.description && (
-                        <div>
+              <div>
                           <div className="flex items-center gap-2 mb-2">
                             <FileText className={`w-4 h-4 ${
                               darkMode ? "text-gray-400" : "text-slate-600"
@@ -384,7 +384,7 @@ export default function EmployeeHandoverSection({ employeeId, darkMode = false }
                           }`}>
                             {task.description.replace(/\*\*/g, '').replace(/#{1,6}\s*/g, '')}
                           </div>
-                        </div>
+              </div>
                       )}
 
                       {/* SUGGESTED RECIPIENT (highlighted for handover) */}
@@ -413,8 +413,8 @@ export default function EmployeeHandoverSection({ employeeId, darkMode = false }
                                 ({task.suggested_recipient_reason})
                               </span>
                             )}
-                          </div>
-                        </div>
+              </div>
+            </div>
                       )}
 
                       {/* QUESTIONS */}
@@ -455,7 +455,7 @@ export default function EmployeeHandoverSection({ employeeId, darkMode = false }
                             }`}>
                               Related Files
                             </h4>
-                          </div>
+            </div>
                           <div className={`text-xs ${
                             darkMode ? "text-gray-400" : "text-slate-600"
                           } ml-6`}>
@@ -463,8 +463,8 @@ export default function EmployeeHandoverSection({ employeeId, darkMode = false }
                               <div key={idx} className="flex items-center gap-1 mb-1">
                                 <ExternalLink className="w-3 h-3" />
                                 <span className="font-mono">{ref.trim()}</span>
-                              </div>
-                            ))}
+          </div>
+        ))}
                           </div>
                         </div>
                       )}
