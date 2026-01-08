@@ -7,14 +7,13 @@ import TutorialSection from '../modals/BugFix/Tutorial/ContentModal';
 import ChallengeSection from '../modals/BugFix/Challenge/ContentModal';
 
 interface BugFixingProps {
-  darkMode: boolean;
   employeeId?: string | null;
   onboardingData?: any;
   activeRepos?: string[];
   onUpdateProgress?: (section: string, itemId: string, updates: any) => void;
 }
 
-export default function BugFixing({ darkMode, employeeId, onboardingData, activeRepos = [], onUpdateProgress }: BugFixingProps) {
+export default function BugFixing({ employeeId, onboardingData, activeRepos = [], onUpdateProgress }: BugFixingProps) {
   const [tutorials, setTutorials] = useState<PRTutorialsResponse | null>(null);
   const [challenges, setChallenges] = useState<CodingQuestionsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -55,7 +54,7 @@ export default function BugFixing({ darkMode, employeeId, onboardingData, active
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-32">
-        <Loader2 className={`w-16 h-16 animate-spin ${darkMode ? 'text-blue-400' : 'text-indigo-600'}`} />
+        <Loader2 className="w-16 h-16 animate-spin text-gray-600" />
       </div>
     );
   }
@@ -65,12 +64,12 @@ export default function BugFixing({ darkMode, employeeId, onboardingData, active
       {/* Compact Header with Tabs in Same Row */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center space-x-3">
-          <Bug className={`w-6 h-6 ${darkMode ? 'text-green-400' : 'text-green-600'}`} />
+          <Bug className="w-6 h-6 text-gray-700" />
           <div>
-            <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+            <h2 className="text-xl font-semibold text-gray-900">
               Bug Fix Training
             </h2>
-            <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-slate-600'}`}>
+            <p className="text-xs text-gray-600">
               Master debugging with hands-on tutorials and real-world challenges!
             </p>
           </div>
@@ -80,22 +79,17 @@ export default function BugFixing({ darkMode, employeeId, onboardingData, active
         <div className="flex items-center gap-2">
           <button
             onClick={() => setActiveTab('tutorials')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               activeTab === 'tutorials'
-                ? darkMode
-                  ? 'bg-purple-600 text-white shadow-lg'
-                  : 'bg-purple-500 text-white shadow-lg'
-                : darkMode
-                ? 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700'
-                : 'bg-white text-slate-700 hover:bg-purple-50 border border-purple-200'
+                ? 'bg-gray-900 text-white'
+                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
             }`}
           >
-            <span className="text-lg">🎓</span>
             <span>Tutorial Bugs</span>
             <span className={`text-xs px-1.5 py-0.5 rounded ${
               activeTab === 'tutorials'
                 ? 'bg-white/20'
-                : darkMode ? 'bg-gray-700' : 'bg-purple-100'
+                : 'bg-gray-100'
             }`}>
               {tutorials?.tutorials.length || 0}
             </span>
@@ -103,22 +97,17 @@ export default function BugFixing({ darkMode, employeeId, onboardingData, active
           
           <button
             onClick={() => setActiveTab('challenges')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               activeTab === 'challenges'
-                ? darkMode
-                  ? 'bg-green-600 text-white shadow-lg'
-                  : 'bg-green-500 text-white shadow-lg'
-                : darkMode
-                ? 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700'
-                : 'bg-white text-slate-700 hover:bg-green-50 border border-green-200'
+                ? 'bg-gray-900 text-white'
+                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
             }`}
           >
-            <span className="text-lg">🎯</span>
             <span>Challenge Bugs</span>
             <span className={`text-xs px-1.5 py-0.5 rounded ${
               activeTab === 'challenges'
                 ? 'bg-white/20'
-                : darkMode ? 'bg-gray-700' : 'bg-green-100'
+                : 'bg-gray-100'
             }`}>
               {challenges?.questions.length || 0}
             </span>
@@ -128,11 +117,11 @@ export default function BugFixing({ darkMode, employeeId, onboardingData, active
 
       {/* Content */}
       {activeTab === 'tutorials' && tutorials && (
-        <TutorialSection darkMode={darkMode} data={tutorials} />
+        <TutorialSection data={tutorials} />
       )}
       
       {activeTab === 'challenges' && challenges && (
-        <ChallengeSection darkMode={darkMode} data={challenges} activeRepos={activeRepos} />
+        <ChallengeSection data={challenges} activeRepos={activeRepos} />
       )}
     </div>
   );

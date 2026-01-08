@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Briefcase, Moon, Sun, User, LogOut } from "lucide-react";
+import { Briefcase, User, LogOut } from "lucide-react";
 import Sidebar from "./Sidebar";
 import EmployeeFinalCallSection from "./employeeViewSections/FinalCallSection";
 import EmployeeHandoverSection from "./employeeViewSections/HandoverSection";
@@ -25,15 +25,9 @@ type Employee = {
   lastDay: string | null;
 };
 
-type OffboardingEmployeeLayoutProps = {
-  darkMode?: boolean;
-  setDarkMode?: (value: boolean) => void;
-};
+type OffboardingEmployeeLayoutProps = {};
 
-export default function OffboardingEmployeeLayout({
-  darkMode = false,
-  setDarkMode,
-}: OffboardingEmployeeLayoutProps = {}) {
+export default function OffboardingEmployeeLayout({}: OffboardingEmployeeLayoutProps = {}) {
   const { user, logout, token } = useAuth();
   const [activeSection, setActiveSection] = useState<SectionType>("finalcall");
   const [employee, setEmployee] = useState<Employee | null>(null);
@@ -105,7 +99,7 @@ export default function OffboardingEmployeeLayout({
   if (loading) {
     return (
       <Loader
-        darkMode={darkMode}
+        darkMode={false}
         message="Loading your offboarding data..."
         fullScreen
       />
@@ -115,23 +109,13 @@ export default function OffboardingEmployeeLayout({
   if (!employee) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div
-          className={`text-center p-8 rounded-xl border ${
-            darkMode
-              ? "border-gray-700 bg-gray-800"
-              : "border-slate-200 bg-white"
-          }`}
-        >
-          <p
-            className={`text-lg font-semibold ${
-              darkMode ? "text-gray-300" : "text-slate-700"
-            }`}
-          >
+        <div className="text-center p-8 rounded-xl border border-gray-200 bg-white">
+          <p className="text-lg font-semibold text-gray-700">
             Unable to load profile data.
           </p>
           <button
             onClick={logout}
-            className="mt-4 text-indigo-500 hover:underline"
+            className="mt-4 text-gray-700 hover:underline"
           >
             Return to Login
           </button>
@@ -142,61 +126,27 @@ export default function OffboardingEmployeeLayout({
 
   return (
     <div className="min-h-screen pt-0">
-      <header
-        className={`border-b shadow-sm transition-colors duration-300 ${
-          darkMode
-            ? "glass-card-dark border-gray-700"
-            : "glass-card-light border-slate-200"
-        }`}
-      >
+      <header className="border-b shadow-sm bg-white border-gray-200">
         <div className="max-w-screen-2xl mx-auto px-6 py-4 flex items-center gap-6">
           <div className="flex-1 flex items-start gap-3">
-            <div className="mt-1 p-2 rounded-xl bg-indigo-200 text-indigo-700">
+            <div className="mt-1 p-2 rounded-lg bg-gray-100 text-gray-700">
               <Briefcase className="w-5 h-5" />
             </div>
             <div>
-              <h1
-                className={`text-2xl font-extrabold tracking-tight ${
-                  darkMode ? "text-gray-100" : "text-slate-900"
-                }`}
-              >
+              <h1 className="text-2xl font-semibold tracking-tight text-gray-900">
                 Offboarding – Employee View
               </h1>
-              <p
-                className={`text-sm font-medium ${
-                  darkMode ? "text-gray-400" : "text-slate-600"
-                }`}
-              >
+              <p className="text-sm font-medium text-gray-600">
                 Track your tasks, handovers, and documentation
               </p>
             </div>
           </div>
           <div className="flex items-center gap-5">
-            {setDarkMode && (
-              <button
-                onClick={() => setDarkMode(!darkMode)}
-                className={`p-2 rounded-lg transition ${
-                  darkMode
-                    ? "hover:bg-gray-800 text-yellow-400"
-                    : "hover:bg-indigo-50 text-indigo-600"
-                }`}
-              >
-                {darkMode ? (
-                  <Sun className="w-5 h-5" />
-                ) : (
-                  <Moon className="w-5 h-5" />
-                )}
-              </button>
-            )}
             {user && (
               <div className="relative">
                 <button
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
-                  className={`p-2 rounded-full transition ${
-                    darkMode
-                      ? "hover:bg-gray-800 text-gray-300"
-                      : "hover:bg-indigo-50 text-slate-700"
-                  }`}
+                  className="p-2 rounded-full transition hover:bg-gray-100 text-gray-700"
                 >
                   <User className="w-5 h-5" />
                 </button>
@@ -206,26 +156,12 @@ export default function OffboardingEmployeeLayout({
                       className="fixed inset-0 z-10"
                       onClick={() => setUserMenuOpen(false)}
                     />
-                    <div
-                      className={`absolute right-0 mt-2 w-52 rounded-xl border shadow-xl z-20 ${
-                        darkMode
-                          ? "glass-card-dark border-gray-700"
-                          : "glass-card-light border-slate-200"
-                      }`}
-                    >
-                      <div className="px-4 py-3 border-b dark:border-gray-700">
-                        <p
-                          className={`text-sm font-medium ${
-                            darkMode ? "text-white" : "text-slate-900"
-                          }`}
-                        >
+                    <div className="absolute right-0 mt-2 w-52 rounded-lg border shadow-xl z-20 bg-white border-gray-200">
+                      <div className="px-4 py-3 border-b border-gray-200">
+                        <p className="text-sm font-medium text-gray-900">
                           {employee.name}
                         </p>
-                        <p
-                          className={`text-xs ${
-                            darkMode ? "text-gray-400" : "text-slate-500"
-                          }`}
-                        >
+                        <p className="text-xs text-gray-600">
                           {employee.role}
                         </p>
                       </div>
@@ -235,11 +171,7 @@ export default function OffboardingEmployeeLayout({
                             logout();
                             setUserMenuOpen(false);
                           }}
-                          className={`w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm transition ${
-                            darkMode
-                              ? "hover:bg-gray-800 text-gray-300"
-                              : "hover:bg-indigo-50 text-slate-700"
-                          }`}
+                          className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm transition hover:bg-gray-100 text-gray-700"
                         >
                           <LogOut className="w-4 h-4" /> Logout
                         </button>
@@ -260,17 +192,11 @@ export default function OffboardingEmployeeLayout({
               activeSection={activeSection}
               onChangeSection={setActiveSection}
               selectedEmployee={employee}
-              darkMode={darkMode}
+              darkMode={false}
             />
           </aside>
           <main className="col-span-9 space-y-6">
-            <div
-              className={`border rounded-2xl shadow-sm p-2 transition-colors duration-300 ${
-                darkMode
-                  ? "glass-card-dark border-gray-700"
-                  : "glass-card-light border-slate-200"
-              }`}
-            >
+            <div className="border rounded-lg shadow-sm p-2 bg-white border-gray-200">
               <div className="grid grid-cols-3 gap-2">
                 {[
                   { key: "finalcall", label: "Final Call" },
@@ -280,14 +206,10 @@ export default function OffboardingEmployeeLayout({
                   <button
                     key={tab.key}
                     onClick={() => setActiveSection(tab.key as SectionType)}
-                    className={`py-3 rounded-xl text-sm font-semibold transition ${
+                    className={`py-3 rounded-lg text-sm font-semibold transition ${
                       activeSection === tab.key
-                        ? darkMode
-                          ? "bg-indigo-600 text-white shadow"
-                          : "bg-indigo-700 text-white shadow"
-                        : darkMode
-                        ? "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                        : "bg-slate-100 text-slate-900 hover:bg-slate-200"
+                        ? "bg-gray-900 text-white shadow"
+                        : "bg-gray-100 text-gray-900 hover:bg-gray-200"
                     }`}
                   >
                     {tab.label}
@@ -295,36 +217,30 @@ export default function OffboardingEmployeeLayout({
                 ))}
               </div>
             </div>
-            <div
-              className={`rounded-2xl shadow border p-6 transition-colors duration-300 ${
-                darkMode
-                  ? "glass-card-dark border-gray-700"
-                  : "glass-card-light border-slate-200"
-              }`}
-            >
+            <div className="rounded-lg shadow border p-6 bg-white border-gray-200">
               {activeSection === "finalcall" && employee.employeeId && (
                 <EmployeeFinalCallSection
                   employeeId={employee.employeeId}
-                  darkMode={darkMode}
+                  darkMode={false}
                 />
               )}
               {activeSection === "handover" && employee.employeeId && (
                 <EmployeeHandoverSection
                   employeeId={employee.employeeId}
-                  darkMode={darkMode}
+                  darkMode={false}
                 />
               )}
               {activeSection === "documentation" && employee.employeeId && (
                 <EmployeeDocumentationSection
                   employeeId={employee.employeeId}
-                  darkMode={darkMode}
+                  darkMode={false}
                 />
               )}
             </div>
           </main>
         </div>
       </div>
-      <Chatbot darkMode={darkMode} role="offboarding" />
+      <Chatbot role="offboarding" />
     </div>
   );
 }

@@ -5,7 +5,6 @@ import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import {
   oneLight,
-  vscDarkPlus,
 } from "react-syntax-highlighter/dist/esm/styles/prism";
 import type { CodingQuestion } from "../../../../../../types/onboarding";
 import React from "react";
@@ -22,7 +21,6 @@ import {
 import EvaluationModal from "../../../utils/BugFix/EvaluationModal";
 
 interface ChallengeContentProps {
-  darkMode: boolean;
   challenge: CodingQuestion;
   activeRepos?: string[];
 }
@@ -33,7 +31,6 @@ interface PullRequest {
 }
 
 export default function ChallengeContent({
-  darkMode,
   challenge,
   activeRepos = [],
 }: ChallengeContentProps) {
@@ -105,30 +102,16 @@ export default function ChallengeContent({
   const time = timeMatch?.[1] || "30-60 min";
 
   const getDifficultyColor = (diff: string) => {
-    if (darkMode) {
-      switch (diff) {
-        case "Easy":
-          return "text-green-400 bg-green-900/20 border-green-700";
-        case "Medium":
-        case "Intermediate":
-          return "text-yellow-400 bg-yellow-900/20 border-yellow-700";
-        case "Hard":
-          return "text-red-400 bg-red-900/20 border-red-700";
-        default:
-          return "text-gray-400 bg-gray-800 border-gray-700";
-      }
-    } else {
-      switch (diff) {
-        case "Easy":
-          return "text-green-600 bg-green-50 border-green-200";
-        case "Medium":
-        case "Intermediate":
-          return "text-yellow-600 bg-yellow-50 border-yellow-200";
-        case "Hard":
-          return "text-red-600 bg-red-50 border-red-200";
-        default:
-          return "text-gray-600 bg-gray-50 border-gray-200";
-      }
+    switch (diff) {
+      case "Easy":
+        return "text-green-700 bg-green-50 border-green-200";
+      case "Medium":
+      case "Intermediate":
+        return "text-yellow-700 bg-yellow-50 border-yellow-200";
+      case "Hard":
+        return "text-red-700 bg-red-50 border-red-200";
+      default:
+        return "text-gray-700 bg-gray-50 border-gray-200";
     }
   };
 
@@ -184,28 +167,12 @@ export default function ChallengeContent({
           className={`${isFullscreen ? "hidden" : ""} flex flex-col relative`}
           style={{ width: `${leftPanelWidth}%` }}
         >
-          <div
-            className={`rounded-xl border overflow-hidden shadow-lg h-full flex flex-col ${
-              darkMode
-                ? "border-gray-700 bg-gray-800"
-                : "border-slate-200 bg-white"
-            }`}
-          >
+          <div className="rounded-lg border border-gray-200 overflow-hidden shadow-sm h-full flex flex-col bg-white">
             {/* Header */}
-            <div
-              className={`px-6 py-4 border-b flex-shrink-0 ${
-                darkMode
-                  ? "bg-gray-800 border-gray-700"
-                  : "bg-white border-slate-200"
-              }`}
-            >
+            <div className="px-6 py-4 border-b flex-shrink-0 bg-white border-gray-200">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center space-x-3">
-                  <h1
-                    className={`text-xl font-bold ${
-                      darkMode ? "text-white" : "text-slate-900"
-                    }`}
-                  >
+                  <h1 className="text-xl font-semibold text-gray-900">
                     Challenge {challenge.question_number}
                   </h1>
                   <span
@@ -215,19 +182,11 @@ export default function ChallengeContent({
                   >
                     {difficulty}
                   </span>
-                  <div
-                    className={`flex items-center space-x-2 text-xs ${
-                      darkMode ? "text-gray-400" : "text-slate-600"
-                    }`}
-                  >
+                  <div className="flex items-center space-x-2 text-xs text-gray-600">
                     <Clock className="w-3.5 h-3.5" />
                     <span>{time}</span>
                   </div>
-                  <div
-                    className={`flex items-center space-x-2 text-xs ${
-                      darkMode ? "text-gray-400" : "text-slate-600"
-                    }`}
-                  >
+                  <div className="flex items-center space-x-2 text-xs text-gray-600">
                     <Code2 className="w-3.5 h-3.5" />
                     <span>{challenge.category}</span>
                   </div>
@@ -240,12 +199,8 @@ export default function ChallengeContent({
                   onClick={() => setActiveTab("description")}
                   className={`px-3 py-2 rounded-lg font-medium text-sm transition-all flex items-center space-x-2 ${
                     activeTab === "description"
-                      ? darkMode
-                        ? "bg-blue-900/30 text-blue-400"
-                        : "bg-blue-50 text-blue-700"
-                      : darkMode
-                      ? "text-gray-400 hover:text-gray-300 hover:bg-gray-700/50"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                      ? "bg-gray-900 text-white"
+                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                   }`}
                 >
                   <BookOpen className="w-4 h-4" />
@@ -256,12 +211,8 @@ export default function ChallengeContent({
                   onClick={() => setActiveTab("hints")}
                   className={`px-3 py-2 rounded-lg font-medium text-sm transition-all flex items-center space-x-2 ${
                     activeTab === "hints"
-                      ? darkMode
-                        ? "bg-blue-900/30 text-blue-400"
-                        : "bg-blue-50 text-blue-700"
-                      : darkMode
-                      ? "text-gray-400 hover:text-gray-300 hover:bg-gray-700/50"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                      ? "bg-gray-900 text-white"
+                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                   }`}
                 >
                   <Lightbulb className="w-4 h-4" />
@@ -272,12 +223,8 @@ export default function ChallengeContent({
                   onClick={() => setActiveTab("solution")}
                   className={`px-3 py-2 rounded-lg font-medium text-sm transition-all flex items-center space-x-2 ${
                     activeTab === "solution"
-                      ? darkMode
-                        ? "bg-blue-900/30 text-blue-400"
-                        : "bg-blue-50 text-blue-700"
-                      : darkMode
-                      ? "text-gray-400 hover:text-gray-300 hover:bg-gray-700/50"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                      ? "bg-gray-900 text-white"
+                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                   }`}
                 >
                   <CheckCircle2 className="w-4 h-4" />
@@ -287,17 +234,9 @@ export default function ChallengeContent({
             </div>
 
             {/* Scrollable Content */}
-            <div
-              className={`flex-1 overflow-y-auto px-6 py-6 ${
-                darkMode ? "bg-gray-900" : "bg-slate-50"
-              }`}
-            >
+            <div className="flex-1 overflow-y-auto px-6 py-6 bg-gray-50">
               {activeTab === "description" && (
-                <div
-                  className={`prose prose-base max-w-none ${
-                    darkMode ? "prose-invert" : ""
-                  }`}
-                >
+                <div className="prose prose-base max-w-none">
                   <ReactMarkdown
                     components={{
                       code(props) {
@@ -305,83 +244,48 @@ export default function ChallengeContent({
                           props;
                         const match = /language-(\w+)/.exec(className || "");
                         return match ? (
-                          <div
-                            className="my-4 rounded-lg overflow-hidden border"
-                            style={{
-                              borderColor: darkMode ? "#374151" : "#e2e8f0",
-                            }}
-                          >
-                            <div
-                              className={`px-3 py-2 text-xs font-mono font-semibold flex items-center justify-between ${
-                                darkMode
-                                  ? "bg-gray-800 text-gray-400"
-                                  : "bg-slate-100 text-slate-600"
-                              }`}
-                            >
+                          <div className="my-4 rounded-lg overflow-hidden border border-gray-200">
+                            <div className="px-3 py-2 text-xs font-mono font-semibold flex items-center justify-between bg-gray-100 text-gray-700">
                               <span>{match[1]}</span>
                             </div>
                             <SyntaxHighlighter
                               PreTag="div"
                               language={match[1]}
-                              style={darkMode ? vscDarkPlus : oneLight}
+                              style={oneLight}
                               customStyle={{
                                 margin: 0,
                                 padding: "1rem",
                                 fontSize: "0.875rem",
                                 lineHeight: "1.6",
-                                background: darkMode ? "#1f2937" : "#f8fafc",
+                                background: "#f8fafc",
                               }}
                             >
                               {String(children).replace(/\n$/, "")}
                             </SyntaxHighlighter>
                           </div>
                         ) : (
-                          <code
-                            className={`px-1.5 py-0.5 rounded font-mono text-sm ${
-                              darkMode
-                                ? "bg-gray-800 text-blue-400"
-                                : "bg-slate-100 text-blue-600"
-                            }`}
-                          >
+                          <code className="px-1.5 py-0.5 rounded font-mono text-sm bg-gray-100 text-gray-800">
                             {children}
                           </code>
                         );
                       },
                       h1: ({ children }) => (
-                        <h1
-                          className={`text-xl font-bold mb-4 mt-6 pb-2 border-b ${
-                            darkMode
-                              ? "text-white border-gray-700"
-                              : "text-slate-900 border-slate-200"
-                          }`}
-                        >
+                        <h1 className="text-xl font-semibold mb-4 mt-6 pb-2 border-b text-gray-900 border-gray-200">
                           {children}
                         </h1>
                       ),
                       h2: ({ children }) => (
-                        <h2
-                          className={`text-lg font-bold mb-3 mt-5 ${
-                            darkMode ? "text-white" : "text-slate-900"
-                          }`}
-                        >
+                        <h2 className="text-lg font-semibold mb-3 mt-5 text-gray-900">
                           {children}
                         </h2>
                       ),
                       h3: ({ children }) => (
-                        <h3
-                          className={`text-base font-semibold mb-2 mt-4 ${
-                            darkMode ? "text-gray-200" : "text-slate-800"
-                          }`}
-                        >
+                        <h3 className="text-base font-semibold mb-2 mt-4 text-gray-800">
                           {children}
                         </h3>
                       ),
                       p: ({ children }) => (
-                        <p
-                          className={`mb-4 leading-relaxed text-sm ${
-                            darkMode ? "text-gray-300" : "text-slate-700"
-                          }`}
-                        >
+                        <p className="mb-4 leading-relaxed text-sm text-gray-700">
                           {children}
                         </p>
                       ),
@@ -394,38 +298,20 @@ export default function ChallengeContent({
                         </ol>
                       ),
                       li: ({ children }) => (
-                        <li
-                          className={`flex items-start text-sm leading-relaxed ${
-                            darkMode ? "text-gray-300" : "text-slate-700"
-                          }`}
-                        >
-                          <span
-                            className={`mr-2 mt-1 ${
-                              darkMode ? "text-blue-400" : "text-blue-500"
-                            }`}
-                          >
+                        <li className="flex items-start text-sm leading-relaxed text-gray-700">
+                          <span className="mr-2 mt-1 text-gray-600">
                             •
                           </span>
                           <span className="flex-1">{children}</span>
                         </li>
                       ),
                       strong: ({ children }) => (
-                        <strong
-                          className={`font-bold ${
-                            darkMode ? "text-white" : "text-slate-900"
-                          }`}
-                        >
+                        <strong className="font-semibold text-gray-900">
                           {children}
                         </strong>
                       ),
                       blockquote: ({ children }) => (
-                        <blockquote
-                          className={`border-l-4 pl-4 py-3 my-4 rounded-r italic ${
-                            darkMode
-                              ? "border-blue-500 bg-blue-900/10 text-gray-300"
-                              : "border-blue-400 bg-blue-50 text-slate-700"
-                          }`}
-                        >
+                        <blockquote className="border-l-4 pl-4 py-3 my-4 rounded-r italic border-gray-300 bg-gray-50 text-gray-700">
                           {children}
                         </blockquote>
                       ),
@@ -444,11 +330,7 @@ export default function ChallengeContent({
                         }
 
                         return (
-                          <pre
-                            className={`whitespace-pre-wrap text-sm leading-relaxed ${
-                              darkMode ? "text-gray-300" : "text-slate-700"
-                            }`}
-                          >
+                          <pre className="whitespace-pre-wrap text-sm leading-relaxed text-gray-700">
                             {children}
                           </pre>
                         );
@@ -461,40 +343,16 @@ export default function ChallengeContent({
               )}
 
               {activeTab === "hints" && (
-                <div
-                  className={`rounded-lg p-5 border ${
-                    darkMode
-                      ? "bg-yellow-900/10 border-yellow-700/50"
-                      : "bg-yellow-50 border-yellow-200"
-                  }`}
-                >
+                <div className="rounded-lg p-5 border bg-gray-50 border-gray-200">
                   <div className="flex items-start space-x-3">
-                    <Lightbulb
-                      className={`w-5 h-5 mt-0.5 ${
-                        darkMode ? "text-yellow-400" : "text-yellow-600"
-                      }`}
-                    />
+                    <Lightbulb className="w-5 h-5 mt-0.5 text-gray-700" />
                     <div>
-                      <h4
-                        className={`font-semibold mb-3 ${
-                          darkMode ? "text-yellow-400" : "text-yellow-900"
-                        }`}
-                      >
+                      <h4 className="font-semibold mb-3 text-gray-900">
                         Helpful Tips
                       </h4>
-                      <ul
-                        className={`space-y-2 text-sm ${
-                          darkMode ? "text-gray-300" : "text-slate-700"
-                        }`}
-                      >
+                      <ul className="space-y-2 text-sm text-gray-700">
                         <li className="flex items-start">
-                          <span
-                            className={
-                              darkMode
-                                ? "text-yellow-400 mr-2"
-                                : "text-yellow-600 mr-2"
-                            }
-                          >
+                          <span className="text-gray-600 mr-2">
                             →
                           </span>
                           <span>
@@ -503,13 +361,7 @@ export default function ChallengeContent({
                           </span>
                         </li>
                         <li className="flex items-start">
-                          <span
-                            className={
-                              darkMode
-                                ? "text-yellow-400 mr-2"
-                                : "text-yellow-600 mr-2"
-                            }
-                          >
+                          <span className="text-gray-600 mr-2">
                             →
                           </span>
                           <span>
@@ -518,13 +370,7 @@ export default function ChallengeContent({
                           </span>
                         </li>
                         <li className="flex items-start">
-                          <span
-                            className={
-                              darkMode
-                                ? "text-yellow-400 mr-2"
-                                : "text-yellow-600 mr-2"
-                            }
-                          >
+                          <span className="text-gray-600 mr-2">
                             →
                           </span>
                           <span>
@@ -533,13 +379,7 @@ export default function ChallengeContent({
                           </span>
                         </li>
                         <li className="flex items-start">
-                          <span
-                            className={
-                              darkMode
-                                ? "text-yellow-400 mr-2"
-                                : "text-yellow-600 mr-2"
-                            }
-                          >
+                          <span className="text-gray-600 mr-2">
                             →
                           </span>
                           <span>
@@ -554,32 +394,14 @@ export default function ChallengeContent({
               )}
 
               {activeTab === "solution" && (
-                <div
-                  className={`rounded-lg p-5 border ${
-                    darkMode
-                      ? "bg-green-900/10 border-green-700/50"
-                      : "bg-green-50 border-green-200"
-                  }`}
-                >
+                <div className="rounded-lg p-5 border bg-gray-50 border-gray-200">
                   <div className="flex items-start space-x-3">
-                    <CheckCircle2
-                      className={`w-5 h-5 mt-0.5 ${
-                        darkMode ? "text-green-400" : "text-green-600"
-                      }`}
-                    />
+                    <CheckCircle2 className="w-5 h-5 mt-0.5 text-gray-700" />
                     <div>
-                      <h4
-                        className={`font-semibold mb-3 ${
-                          darkMode ? "text-green-400" : "text-green-900"
-                        }`}
-                      >
+                      <h4 className="font-semibold mb-3 text-gray-900">
                         Solution Approach
                       </h4>
-                      <p
-                        className={`text-sm ${
-                          darkMode ? "text-gray-300" : "text-slate-700"
-                        }`}
-                      >
+                      <p className="text-sm text-gray-700">
                         Try to solve the challenge on your own first! The
                         solution will be revealed after you submit your code.
                       </p>
@@ -595,8 +417,8 @@ export default function ChallengeContent({
         {!isFullscreen && (
           <div
             onMouseDown={handleMouseDown}
-            className={`w-1 cursor-col-resize hover:bg-blue-500 transition-colors flex-shrink-0 ${
-              isResizing ? 'bg-blue-500' : darkMode ? 'bg-gray-700' : 'bg-slate-300'
+            className={`w-1 cursor-col-resize hover:bg-gray-400 transition-colors flex-shrink-0 ${
+              isResizing ? 'bg-gray-400' : 'bg-gray-300'
             }`}
             style={{ width: '4px' }}
           >
@@ -611,7 +433,6 @@ export default function ChallengeContent({
         >
           <div className="h-full">
             <CodeEditor
-              darkMode={darkMode}
               prData={prData || undefined}
               isFullscreen={isFullscreen}
               onToggleFullscreen={() => setIsFullscreen(!isFullscreen)}
@@ -622,7 +443,6 @@ export default function ChallengeContent({
       </div>
       {showEvaluationModal && (
         <EvaluationModal
-          darkMode={darkMode}
           evaluationData={evaluationData}
           onClose={() => setShowEvaluationModal(false)}
         />

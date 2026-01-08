@@ -2,65 +2,29 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Sun, Moon, BookOpen, Users, Code, Wrench, Check, Lock, User, LogOut } from 'lucide-react';
+import { BookOpen, Code, Wrench, Check, User, LogOut } from 'lucide-react';
+import { useAuth } from '@/components/auth/AuthContext';
 
 interface HeaderProps {
-  darkMode: boolean;
-  setDarkMode: (value: boolean) => void;
   activeTab: string;
   setActiveTab: (value: string) => void;
 }
 
-export default function Header({ darkMode, setDarkMode, activeTab, setActiveTab }: HeaderProps) {
+export default function Header({ activeTab, setActiveTab }: HeaderProps) {
   const router = useRouter();
+  const { user, logout } = useAuth();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [user, setUser] = useState<any>(null);
-
-  // Get user from localStorage
-  useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      try {
-        const userData = JSON.parse(storedUser);
-        setUser(userData);
-      } catch (e) {
-        console.error('Error parsing user data:', e);
-      }
-    }
-  }, []);
 
   const handleLogout = () => {
-    try {
-      // Clear user data from localStorage
-      localStorage.removeItem('user');
-      setUser(null);
-      setUserMenuOpen(false);
-      
-      // Redirect to main login page
-      router.push('/login');
-    } catch (error) {
-      console.error('Error during logout:', error);
-      // Fallback: just clear localStorage and reload
-      localStorage.removeItem('user');
-      window.location.href = '/login';
-    }
-  };
-  const handleMagneticMove = (e: React.MouseEvent<HTMLButtonElement>) => {
-    const btn = e.currentTarget;
-    const rect = btn.getBoundingClientRect();
-    const x = e.clientX - rect.left - rect.width / 2;
-    const y = e.clientY - rect.top - rect.height / 2;
-    btn.style.transform = `translate(${x * 0.3}px, ${y * 0.3}px) scale(1.05)`;
-  };
-
-  const handleMagneticLeave = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.currentTarget.style.transform = 'translate(0, 0) scale(1)';
+    setUserMenuOpen(false);
+    // Use the AuthContext logout function which properly handles token clearing and logout flag
+    logout();
   };
 
   const tabs = [
-    { id: 'reading', label: 'Reading & Overview', shortLabel: 'Reading & Overview', icon: <BookOpen className="w-4 h-4" />, step: 1 },
-    { id: 'practice', label: 'Practice Tasks', shortLabel: 'Practice Tasks', icon: <Code className="w-4 h-4" />, step: 2 },
-    { id: 'bugfix', label: 'Bug Fixing', shortLabel: 'Bug Fixing', icon: <Wrench className="w-4 h-4" />, step: 3 },
+    { id: 'reading', label: 'Reading & Overview', shortLabel: 'Reading & Overview', icon: <BookOpen className="w-4 h-4" /> },
+    { id: 'practice', label: 'Practice Tasks', shortLabel: 'Practice Tasks', icon: <Code className="w-4 h-4" /> },
+    { id: 'bugfix', label: 'Bug Fixing', shortLabel: 'Bug Fixing', icon: <Wrench className="w-4 h-4" /> },
   ];
 
   const getStepStatus = (tabId: string) => {
@@ -72,71 +36,35 @@ export default function Header({ darkMode, setDarkMode, activeTab, setActiveTab 
   };
 
   return (
-    <header
-      className={`sticky top-0 z-50 transition-all ${
-        darkMode
-          ? 'glass-card-dark border-b border-gray-700'
-          : 'glass-card-light border-b border-indigo-100'
-      }`}
-    >
+    <header className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
       {/* ===================== TOP ROW ===================== */}
       <div className="max-w-[1800px] mx-auto px-6 py-3 flex items-center justify-between">
 
         {/* LEFT — LOGO + TITLE */}
         <div className="flex items-center space-x-3 flex-shrink-0">
-          <div
-            className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-xl relative overflow-hidden ${
-              darkMode
-                ? 'bg-gradient-to-br from-blue-500 via-purple-600 to-pink-500'
-                : 'bg-gradient-to-br from-indigo-500 via-cyan-500 to-teal-500'
-            }`}
-          >
-            <div className="absolute inset-0 shimmer-effect" />
-            <BookOpen className="w-6 h-6 text-white relative z-10" />
+          <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-white border border-gray-200">
+            <BookOpen className="w-6 h-6 text-gray-700" />
           </div>
 
           <div>
-            <h1
-              className={`text-xl font-bold ${
-                darkMode
-                  ? 'bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent'
-                  : 'bg-gradient-to-r from-indigo-600 via-cyan-600 to-teal-600 bg-clip-text text-transparent'
-              }`}
-            >
+            <h1 className="text-xl font-semibold text-gray-900">
               Onboarding Hub
             </h1>
 
-            <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-slate-600'}`}>
-              Your personalized learning roadmap • Step{' '}
-              {tabs.findIndex((t) => t.id === activeTab) + 1} of {tabs.length}
+            <p className="text-xs text-gray-600">
+              Your personalized learning roadmap
             </p>
           </div>
         </div>
 
-        {/* RIGHT — DARK MODE & USER */}
+        {/* RIGHT — USER */}
         <div className="flex items-center space-x-4 flex-shrink-0">
-          {/* THEME TOGGLE */}
-          <button
-            onClick={() => setDarkMode(!darkMode)}
-            onMouseMove={handleMagneticMove}
-            onMouseLeave={handleMagneticLeave}
-            className={`p-2.5 rounded-xl transition-all shadow-md ${
-              darkMode ? 'bg-gray-700/80 hover:bg-gray-600/80' : 'bg-white/80 hover:bg-indigo-50/80'
-            }`}
-          >
-            {darkMode ? <Sun className="w-5 h-5 text-yellow-400" /> : <Moon className="w-5 h-5 text-indigo-600" />}
-          </button>
-
           {/* USER MENU */}
           {user && (
             <div className="relative">
               <button
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
-                className={`p-2 rounded-full transition ${
-                  darkMode
-                    ? 'hover:bg-gray-800 text-gray-300'
-                    : 'hover:bg-indigo-50 text-slate-700'
-                }`}
+                className="p-2 rounded-full transition hover:bg-gray-100 text-gray-700"
               >
                 <User className="w-5 h-5" />
               </button>
@@ -148,26 +76,12 @@ export default function Header({ darkMode, setDarkMode, activeTab, setActiveTab 
                     onClick={() => setUserMenuOpen(false)}
                   />
 
-                  <div
-                    className={`absolute right-0 mt-2 w-52 rounded-xl border shadow-xl z-20 ${
-                      darkMode
-                        ? 'glass-card-dark border-gray-700'
-                        : 'glass-card-light border-slate-200'
-                    }`}
-                  >
-                    <div className={`px-4 py-3 border-b ${darkMode ? 'border-gray-700' : 'border-slate-200'}`}>
-                      <p
-                        className={`text-sm font-medium ${
-                          darkMode ? 'text-white' : 'text-slate-900'
-                        }`}
-                      >
+                  <div className="absolute right-0 mt-2 w-52 rounded-lg border border-gray-200 shadow-lg bg-white z-20">
+                    <div className="px-4 py-3 border-b border-gray-200">
+                      <p className="text-sm font-medium text-gray-900">
                         {user.name || user.username}
                       </p>
-                      <p
-                        className={`text-xs ${
-                          darkMode ? 'text-gray-400' : 'text-slate-500'
-                        }`}
-                      >
+                      <p className="text-xs text-gray-500">
                         Employee
                       </p>
                     </div>
@@ -175,11 +89,7 @@ export default function Header({ darkMode, setDarkMode, activeTab, setActiveTab 
                     <div className="p-2 space-y-1">
                       <button
                         onClick={handleLogout}
-                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm transition ${
-                          darkMode
-                            ? 'hover:bg-gray-800 text-gray-300'
-                            : 'hover:bg-indigo-50 text-slate-700'
-                        }`}
+                        className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm transition hover:bg-gray-100 text-gray-700"
                       >
                         <LogOut className="w-4 h-4" />
                         Logout
@@ -194,22 +104,18 @@ export default function Header({ darkMode, setDarkMode, activeTab, setActiveTab 
       </div>
 
       {/* ===================== PROGRESS BAR SECTION ===================== */}
-      <div className="max-w-[1800px] mx-auto px-6 pb-4">
+      <div className="max-w-[1800px] mx-auto px-6 pb-4 bg-gray-50">
         <div className="relative">
 
           {/* Background bar */}
           <div
-            className={`absolute top-4 left-0 right-0 h-1 ${
-              darkMode ? 'bg-gray-700/50' : 'bg-indigo-100/50'
-            } rounded-full`}
+            className="absolute top-4 left-0 right-0 h-1 bg-gray-200 rounded-full"
             style={{ marginLeft: '2rem', marginRight: '2rem' }}
           />
 
           {/* Smooth progress line */}
           <div
-            className={`absolute top-4 left-0 h-1 rounded-full transition-all duration-1000 ease-out ${
-              darkMode ? 'bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500' : 'bg-gradient-to-r from-indigo-500 via-cyan-500 to-teal-500'
-            }`}
+            className="absolute top-4 left-0 h-1 rounded-full transition-all duration-500 ease-out bg-gray-400"
             style={{
               width: `${((tabs.findIndex((t) => t.id === activeTab)) / (tabs.length - 1)) * 100}%`,
               marginLeft: '2rem',
@@ -233,50 +139,23 @@ export default function Header({ darkMode, setDarkMode, activeTab, setActiveTab 
                 >
                   <div className="relative">
                     <div
-                      className={`w-10 h-10 rounded-full shadow-lg flex items-center justify-center transition-all ${
+                      className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${
                         active
-                          ? darkMode
-                            ? 'bg-gradient-to-br from-blue-500 to-purple-600 ring-4 ring-blue-400/30 scale-110'
-                            : 'bg-gradient-to-br from-indigo-500 to-cyan-500 ring-4 ring-indigo-400/30 scale-110'
+                          ? 'bg-gray-800 text-white ring-2 ring-gray-400'
                           : done
-                          ? 'bg-green-500 text-white'
-                          : darkMode
-                          ? 'bg-gray-700 border border-gray-600'
-                          : 'bg-slate-200 border border-slate-300'
+                          ? 'bg-gray-200 text-gray-600'
+                          : 'bg-gray-100 border border-gray-300 text-gray-500'
                       }`}
                     >
-                      {done ? <Check className="w-5 h-5 text-white" /> : tab.icon}
-                    </div>
-
-                    {/* Step number badge */}
-                    <div
-                      className={`absolute -top-1 -right-1 w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center ${
-                        active
-                          ? 'bg-pink-500 text-white'
-                          : done
-                          ? 'bg-green-500 text-white'
-                          : darkMode
-                          ? 'bg-gray-600 text-gray-300'
-                          : 'bg-slate-300 text-slate-600'
-                      }`}
-                    >
-                      {tab.step}
+                      {done ? <Check className="w-5 h-5 text-gray-700" /> : tab.icon}
                     </div>
                   </div>
 
                   <p
-                    className={`text-xs font-semibold leading-tight ${
+                    className={`text-xs font-medium leading-tight ${
                       active
-                        ? darkMode
-                          ? 'text-blue-400'
-                          : 'text-indigo-600'
-                        : done
-                        ? darkMode
-                          ? 'text-green-300'
-                          : 'text-green-600'
-                        : darkMode
-                        ? 'text-gray-500'
-                        : 'text-slate-500'
+                        ? 'text-gray-900'
+                        : 'text-gray-600'
                     }`}
                   >
                     {tab.shortLabel}

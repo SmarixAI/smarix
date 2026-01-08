@@ -23,7 +23,6 @@ interface PullRequest {
 }
 
 interface CodeEditorProps {
-  darkMode: boolean;
   prData?: PullRequest;
   isFullscreen?: boolean;
   onToggleFullscreen?: () => void;
@@ -35,7 +34,6 @@ interface FileEditorState {
 }
 
 export default function CodeEditor({ 
-  darkMode, 
   prData, 
   isFullscreen, 
   onToggleFullscreen,
@@ -263,34 +261,23 @@ export default function CodeEditor({
   };
 
   const getChangeTypeColor = (changeType: string) => {
-    if (darkMode) {
-      switch (changeType) {
-        case 'modified': return 'text-yellow-400 bg-yellow-900/30';
-        case 'added': return 'text-green-400 bg-green-900/30';
-        case 'removed': return 'text-red-400 bg-red-900/30';
-        default: return 'text-gray-400 bg-gray-900/30';
-      }
-    } else {
-      switch (changeType) {
-        case 'modified': return 'text-yellow-700 bg-yellow-100';
-        case 'added': return 'text-green-700 bg-green-100';
-        case 'removed': return 'text-red-700 bg-red-100';
-        default: return 'text-gray-700 bg-gray-100';
-      }
+    switch (changeType) {
+      case 'modified': return 'text-yellow-700 bg-yellow-50 border-yellow-200';
+      case 'added': return 'text-green-700 bg-green-50 border-green-200';
+      case 'removed': return 'text-red-700 bg-red-50 border-red-200';
+      default: return 'text-gray-700 bg-gray-50 border-gray-200';
     }
   };
 
   if (!prData || prData.file_changes.length === 0) {
     return (
-      <div className={`rounded-xl border h-full overflow-hidden shadow-lg flex items-center justify-center ${
-        darkMode ? 'border-gray-700 bg-gray-800' : 'border-slate-200 bg-white'
-      }`}>
+      <div className="rounded-lg border border-gray-200 h-full overflow-hidden shadow-sm flex items-center justify-center bg-white">
         <div className="flex flex-col items-center justify-center py-16 px-8">
-          <FileCode className={`w-16 h-16 mb-4 ${darkMode ? 'text-gray-600' : 'text-slate-400'}`} />
-          <p className={`font-medium text-center text-lg ${darkMode ? 'text-gray-300' : 'text-slate-600'}`}>
+          <FileCode className="w-16 h-16 mb-4 text-gray-400" />
+          <p className="font-medium text-center text-lg text-gray-700">
             No PR data available
           </p>
-          <p className={`text-sm text-center mt-2 ${darkMode ? 'text-gray-500' : 'text-slate-500'}`}>
+          <p className="text-sm text-center mt-2 text-gray-500">
             Select a challenge to see the code editor
           </p>
         </div>
@@ -299,22 +286,16 @@ export default function CodeEditor({
   }
 
   return (
-    <div className={`rounded-xl border overflow-hidden shadow-lg h-full flex flex-col ${
-      darkMode ? 'border-gray-700 bg-gray-800' : 'border-slate-200 bg-white'
-    }`}>
+    <div className="rounded-lg border border-gray-200 overflow-hidden shadow-sm h-full flex flex-col bg-white">
       {/* Header */}
-      <div className={`px-6 py-4 border-b flex-shrink-0 ${
-        darkMode
-          ? 'bg-gradient-to-r from-gray-900 to-gray-800 border-gray-700'
-          : 'bg-gradient-to-r from-slate-800 to-slate-900 border-slate-700'
-      }`}>
+      <div className="px-6 py-4 border-b flex-shrink-0 bg-gray-900 border-gray-700">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center">
               <FileCode className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-white">Code Editor</h3>
+              <h3 className="text-lg font-semibold text-white">Code Editor</h3>
               <p className="text-xs text-gray-400">PR #{prData.pr_number}</p>
             </div>
           </div>
@@ -323,9 +304,7 @@ export default function CodeEditor({
             {onToggleFullscreen && (
               <button
                 onClick={onToggleFullscreen}
-                className={`px-3 py-2 rounded-lg text-white text-sm font-medium transition-all flex items-center space-x-2 ${
-                  darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-slate-700 hover:bg-slate-600'
-                }`}
+                className="px-3 py-2 rounded-lg text-white text-sm font-medium transition-all flex items-center space-x-2 bg-gray-700 hover:bg-gray-600"
                 title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
               >
                 {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
@@ -338,7 +317,7 @@ export default function CodeEditor({
               className={`px-3 py-2 rounded-lg text-white text-sm font-medium transition-all flex items-center space-x-2 ${
                 isSubmitting 
                   ? 'opacity-50 cursor-not-allowed bg-gray-700'
-                  : darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-slate-700 hover:bg-slate-600'
+                  : 'bg-gray-700 hover:bg-gray-600'
               }`}
               title="Reset Code"
             >
@@ -351,7 +330,7 @@ export default function CodeEditor({
               disabled={!selectedFile || isSubmitting}
               className={`px-3 py-2 rounded-lg text-white text-sm font-medium transition-all flex items-center space-x-2 ${
                 !selectedFile || isSubmitting ? 'opacity-50 cursor-not-allowed bg-gray-700' :
-                darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-slate-700 hover:bg-slate-600'
+                'bg-gray-700 hover:bg-gray-600'
               }`}
               title="Download File"
             >
@@ -366,32 +345,26 @@ export default function CodeEditor({
       <div className="flex flex-1 min-h-0 code-editor-container">
         {/* File Sidebar */}
         <div 
-          className={`${showFileList ? '' : 'w-12'} border-r overflow-hidden flex-shrink-0 transition-all duration-300 ${
-            darkMode ? 'border-gray-700 bg-gray-900' : 'border-slate-200 bg-slate-50'
-          }`}
+          className={`${showFileList ? '' : 'w-12'} border-r overflow-hidden flex-shrink-0 transition-all duration-300 border-gray-200 bg-gray-50`}
           style={showFileList ? { width: `${filesWidth}px` } : {}}
         >
           <div
-            className={`px-4 py-3 border-b cursor-pointer flex items-center justify-between sticky top-0 z-10 ${
-              darkMode ? 'border-gray-700 bg-gray-900' : 'border-slate-200 bg-slate-50'
-            }`}
+            className="px-4 py-3 border-b cursor-pointer flex items-center justify-between sticky top-0 z-10 border-gray-200 bg-gray-50"
             onClick={() => setShowFileList(!showFileList)}
           >
             <div className={`flex items-center space-x-2 ${showFileList ? '' : 'opacity-0 w-0 overflow-hidden'}`}>
-              <span className={`font-semibold text-sm ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+              <span className="font-semibold text-sm text-gray-900">
                 Files
               </span>
-              <span className={`text-xs px-2 py-0.5 rounded-full ${
-                darkMode ? 'bg-blue-900/50 text-blue-300' : 'bg-blue-100 text-blue-700'
-              }`}>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-700">
                 {prData.file_changes.length}
               </span>
             </div>
             <div className="flex-shrink-0">
               {showFileList ? (
-                <ChevronLeft className={`w-4 h-4 ${darkMode ? 'text-gray-400' : 'text-slate-600'}`} />
+                <ChevronLeft className="w-4 h-4 text-gray-600" />
               ) : (
-                <ChevronRight className={`w-4 h-4 ${darkMode ? 'text-gray-400' : 'text-slate-600'}`} />
+                <ChevronRight className="w-4 h-4 text-gray-600" />
               )}
             </div>
           </div>
@@ -404,25 +377,17 @@ export default function CodeEditor({
                   onClick={() => setSelectedFile(fileChange.file_path)}
                   className={`w-full px-4 py-3 text-left transition-all border-b ${
                     selectedFile === fileChange.file_path
-                      ? darkMode
-                        ? 'bg-blue-900/30 border-blue-700/50'
-                        : 'bg-blue-50 border-blue-200'
-                      : darkMode
-                      ? 'hover:bg-gray-800 border-gray-800'
-                      : 'hover:bg-slate-100 border-slate-100'
+                      ? 'bg-gray-100 border-gray-300'
+                      : 'hover:bg-gray-100 border-gray-100'
                   }`}
                 >
                   <div className="flex items-start space-x-2">
                     <span className="text-lg mt-0.5">{getFileIcon(fileChange.file_path)}</span>
                     <div className="flex-1 min-w-0">
-                      <p className={`font-semibold truncate text-sm mb-1 ${
-                        darkMode ? 'text-white' : 'text-slate-900'
-                      }`}>
+                      <p className="font-semibold truncate text-sm mb-1 text-gray-900">
                         {fileChange.file_path.split('/').pop()}
                       </p>
-                      <p className={`text-xs truncate mb-1.5 ${
-                        darkMode ? 'text-gray-400' : 'text-slate-500'
-                      }`}>
+                      <p className="text-xs truncate mb-1.5 text-gray-600">
                         {fileChange.file_path}
                       </p>
                       <div className="flex items-center space-x-2">
@@ -451,8 +416,8 @@ export default function CodeEditor({
               e.preventDefault();
               setIsResizingFiles(true);
             }}
-            className={`w-1 cursor-col-resize hover:bg-blue-500 transition-colors flex-shrink-0 ${
-              isResizingFiles ? 'bg-blue-500' : darkMode ? 'bg-gray-700' : 'bg-slate-300'
+            className={`w-1 cursor-col-resize hover:bg-gray-400 transition-colors flex-shrink-0 ${
+              isResizingFiles ? 'bg-gray-400' : 'bg-gray-300'
             }`}
             style={{ width: '4px' }}
           >
@@ -464,17 +429,13 @@ export default function CodeEditor({
         <div className="flex-1 flex flex-col min-w-0">
           {selectedFile ? (
             <>
-              <div className={`px-4 py-2.5 border-b flex items-center justify-between flex-shrink-0 ${
-                darkMode ? 'bg-gray-800 border-gray-700' : 'bg-slate-50 border-slate-200'
-              }`}>
+              <div className="px-4 py-2.5 border-b flex items-center justify-between flex-shrink-0 bg-gray-50 border-gray-200">
                 <div className="flex items-center space-x-2">
                   <span className="text-base">{getFileIcon(selectedFile)}</span>
-                  <span className={`font-medium text-sm ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+                  <span className="font-medium text-sm text-gray-900">
                     {selectedFile}
                   </span>
-                  <span className={`text-xs px-2 py-0.5 rounded ${
-                    darkMode ? 'bg-gray-700 text-gray-300' : 'bg-slate-200 text-slate-700'
-                  }`}>
+                  <span className="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-700">
                     {getLanguageFromPath(selectedFile)}
                   </span>
                 </div>
@@ -486,7 +447,7 @@ export default function CodeEditor({
                   language={getLanguageFromPath(selectedFile)}
                   value={fileContents[selectedFile] || ''}
                   onChange={(value) => handleCodeChange(selectedFile, value)}
-                  theme={darkMode ? 'vs-dark' : 'vs-light'}
+                  theme="vs-light"
                   options={{
                     minimap: { enabled: true },
                     fontSize: 14,
@@ -506,8 +467,8 @@ export default function CodeEditor({
           ) : (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center">
-                <FileCode className={`w-12 h-12 mx-auto mb-3 ${darkMode ? 'text-gray-600' : 'text-slate-400'}`} />
-                <p className={`font-medium text-sm ${darkMode ? 'text-gray-400' : 'text-slate-600'}`}>
+                <FileCode className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                <p className="font-medium text-sm text-gray-600">
                   Select a file to edit
                 </p>
               </div>
@@ -517,19 +478,15 @@ export default function CodeEditor({
       </div>
 
       {/* Submit Button and Status */}
-      <div className={`px-6 py-3 border-t flex-shrink-0 ${
-        darkMode ? 'bg-gray-800 border-gray-700' : 'bg-slate-50 border-slate-200'
-      }`}>
+      <div className="px-6 py-3 border-t flex-shrink-0 bg-gray-50 border-gray-200">
         {submissionStatus === 'idle' || submissionStatus === 'complete' ? (
           <button
             onClick={handleSubmitCode}
             disabled={isSubmitting}
-            className={`w-full px-6 py-3 rounded-lg font-bold flex items-center justify-center space-x-2 transition-all ${
+            className={`w-full px-6 py-3 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-all ${
               isSubmitting
-                ? darkMode
-                  ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                  : 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                : 'bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:from-green-700 hover:to-emerald-700 shadow-lg hover:shadow-xl'
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-gray-900 text-white hover:bg-gray-800'
             }`}
           >
             <CheckCircle className="w-5 h-5" />
@@ -538,24 +495,20 @@ export default function CodeEditor({
         ) : (
           <div className={`w-full px-6 py-3 rounded-lg border flex items-center justify-center space-x-3 ${
             submissionStatus === 'submitting'
-              ? darkMode
-                ? 'bg-blue-900/20 border-blue-700'
-                : 'bg-blue-50 border-blue-200'
-              : darkMode
-              ? 'bg-purple-900/20 border-purple-700'
-              : 'bg-purple-50 border-purple-200'
+              ? 'bg-blue-50 border-blue-200'
+              : 'bg-gray-50 border-gray-200'
           }`}>
             {submissionStatus === 'submitting' ? (
               <>
-                <Loader2 className={`w-5 h-5 animate-spin ${darkMode ? 'text-blue-400' : 'text-blue-600'}`} />
-                <span className={`font-medium ${darkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                <span className="font-medium text-blue-600">
                   Submitting your code...
                 </span>
               </>
             ) : (
               <>
-                <Sparkles className={`w-5 h-5 animate-pulse ${darkMode ? 'text-purple-400' : 'text-purple-600'}`} />
-                <span className={`font-medium ${darkMode ? 'text-purple-400' : 'text-purple-600'}`}>
+                <Sparkles className="w-5 h-5 animate-pulse text-gray-600" />
+                <span className="font-medium text-gray-600">
                   Evaluating your submission...
                 </span>
               </>

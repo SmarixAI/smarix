@@ -527,7 +527,20 @@ async def initialize_chatbot(config: InitRequest):
 async def chat(request: ChatRequest):
     """Main chat endpoint - retrieves from GitHub first, then supplements with Gmail if needed"""
     if chatbot_instance is None:
-        raise HTTPException(status_code=503, detail="Chatbot not initialized")
+        # Provide more detailed error message
+        error_detail = "Chatbot not initialized"
+        if chatbot_config:
+            config_status = chatbot_config.get("status", "unknown")
+            config_error = chatbot_config.get("error")
+            if config_error:
+                error_detail = f"Chatbot not initialized: {config_error}"
+            elif config_status == "waiting":
+                error_detail = "Chatbot not initialized: No API keys configured. Please set OPENAI_API_KEY or ANTHROPIC_API_KEY in .env file"
+            elif config_status == "error":
+                error_detail = f"Chatbot not initialized: {config_error or 'Unknown error during initialization'}"
+            else:
+                error_detail = f"Chatbot not initialized: Status = {config_status}"
+        raise HTTPException(status_code=503, detail=error_detail)
 
     try:
         # Determine which repo to use based on username

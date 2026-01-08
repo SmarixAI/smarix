@@ -7,11 +7,10 @@ import ContentSection from '../../../utils/BugFix/ContentSection';
 import StepByStepSection from '../../../utils/BugFix/StepByStepSection';
 
 interface TutorialContentProps {
-  darkMode: boolean;
   tutorial: PRTutorial;
 }
 
-export default function TutorialContent({ darkMode, tutorial }: TutorialContentProps) {
+export default function TutorialContent({ tutorial }: TutorialContentProps) {
   const [parsedContent, setParsedContent] = useState<any>(null);
 
   useEffect(() => {
@@ -26,65 +25,53 @@ export default function TutorialContent({ darkMode, tutorial }: TutorialContentP
       {/* Overview */}
       {parsedContent.overview && (
         <ContentSection
-          title="📚 Overview" 
+          title="Overview" 
           content={parsedContent.overview}
-          color="blue"
-          darkMode={darkMode}
         />
       )}
 
       {/* Problem Context */}
       {parsedContent.problemContext && (
         <ContentSection 
-          title="🔍 Problem Context" 
+          title="Problem Context" 
           content={parsedContent.problemContext}
-          color="purple"
-          darkMode={darkMode}
         />
       )}
 
       {/* Step-by-Step Implementation */}
       {parsedContent.steps.length > 0 && (
-        <StepByStepSection steps={parsedContent.steps} darkMode={darkMode} />
+        <StepByStepSection steps={parsedContent.steps} />
       )}
 
       {/* Code Explanation */}
       {parsedContent.codeExplanation && (
         <ContentSection 
-          title="💡 Code Explanation" 
+          title="Code Explanation" 
           content={parsedContent.codeExplanation}
-          color="green"
-          darkMode={darkMode}
         />
       )}
 
       {/* Testing */}
       {parsedContent.testing && (
         <ContentSection 
-          title="🧪 Testing" 
+          title="Testing" 
           content={parsedContent.testing}
-          color="orange"
-          darkMode={darkMode}
         />
       )}
 
       {/* Key Takeaways */}
       {parsedContent.keyTakeaways && (
         <ContentSection 
-          title="⭐ Key Takeaways" 
+          title="Key Takeaways" 
           content={parsedContent.keyTakeaways}
-          color="pink"
-          darkMode={darkMode}
         />
       )}
 
       {/* Practice Exercises */}
       {parsedContent.practiceExercises && (
         <ContentSection 
-          title="💪 Practice Exercises" 
+          title="Practice Exercises" 
           content={parsedContent.practiceExercises}
-          color="indigo"
-          darkMode={darkMode}
         />
       )}
     </div>

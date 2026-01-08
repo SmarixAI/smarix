@@ -1,4 +1,22 @@
+'use client';
+
+import { AuthProvider } from '@/components/auth/AuthContext';
+import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import OnboardingPage from '@/components/onboarding/page';
 
-export default OnboardingPage;
+function OnboardingPageContent() {
+  return (
+    <ProtectedRoute>
+      <OnboardingPage />
+    </ProtectedRoute>
+  );
+}
+
+export default function OnboardingEmployeePage() {
+  return (
+    <AuthProvider>
+      <OnboardingPageContent />
+    </AuthProvider>
+  );
+}
 
