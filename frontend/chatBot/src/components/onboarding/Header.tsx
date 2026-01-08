@@ -59,9 +59,8 @@ export default function Header({ darkMode, setDarkMode, activeTab, setActiveTab 
 
   const tabs = [
     { id: 'reading', label: 'Reading & Overview', shortLabel: 'Reading & Overview', icon: <BookOpen className="w-4 h-4" />, step: 1 },
-    { id: 'qa', label: 'Q&A Session', shortLabel: 'Q&A Session', icon: <Users className="w-4 h-4" />, step: 2 },
-    { id: 'practice', label: 'Practice Tasks', shortLabel: 'Practice Tasks', icon: <Code className="w-4 h-4" />, step: 3 },
-    { id: 'bugfix', label: 'Bug Fixing', shortLabel: 'Bug Fixing', icon: <Wrench className="w-4 h-4" />, step: 4 },
+    { id: 'practice', label: 'Practice Tasks', shortLabel: 'Practice Tasks', icon: <Code className="w-4 h-4" />, step: 2 },
+    { id: 'bugfix', label: 'Bug Fixing', shortLabel: 'Bug Fixing', icon: <Wrench className="w-4 h-4" />, step: 3 },
   ];
 
   const getStepStatus = (tabId: string) => {

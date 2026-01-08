@@ -130,6 +130,7 @@ export default function ReadingOverview({ darkMode, mousePosition, employeeId, a
           darkMode={darkMode}
           title={selectedModule.title}
           moduleId={selectedModule.id}
+          activeRepos={activeRepos}
         />
       )}
     </>

@@ -5,7 +5,6 @@ import ThreeJsBackground from "@/components/onboarding/ThreeJsBackground";
 import Header from "@/components/onboarding/Header";
 import Sidebar from "@/components/onboarding/Sidebar";
 import ReadingOverview from "@/components/onboarding/tabs/ReadingOverview";
-import QASession from "@/components/onboarding/tabs/QASession";
 import PracticeTasks from "@/components/onboarding/tabs/PracticeTasks";
 import BugFixing from "@/components/onboarding/tabs/BugFixing";
 import Chatbot from "@/components/onboarding/Chatbot";
@@ -15,10 +14,6 @@ export default function OnboardingPage() {
   const [activeTab, setActiveTab] = useState("reading");
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [scrollProgress, setScrollProgress] = useState(0);
-  const [qnaSections, setQnaSections] = useState<any[]>([]);
-  const [selectedQnaSection, setSelectedQnaSection] = useState<string | null>(
-    null
-  );
   const [practiceTasks, setPracticeTasks] = useState<any[]>([]);
   const [selectedPracticeTask, setSelectedPracticeTask] = useState<number | null>(null);
   const [employeeId, setEmployeeId] = useState<string | null>(null);
@@ -73,13 +68,12 @@ export default function OnboardingPage() {
               
               // Calculate progress - if no data exists, show 0%
               const reading = data.onboarding?.reading?.modules || [];
-              const qa = data.onboarding?.qa?.modules || [];
-              const practice = data.onboarding?.practice?.tasks || [];
-              const bugfixTutorials = data.onboarding?.bugfix?.tutorials || [];
-              const bugfixChallenges = data.onboarding?.bugfix?.challenges || [];
-              const bugfixQuestions = data.onboarding?.bugfix?.coding_questions || [];
-              
-              const allItems = [...reading, ...qa, ...practice, ...bugfixTutorials, ...bugfixChallenges, ...bugfixQuestions];
+          const practice = data.onboarding?.practice?.tasks || [];
+          const bugfixTutorials = data.onboarding?.bugfix?.tutorials || [];
+          const bugfixChallenges = data.onboarding?.bugfix?.challenges || [];
+          const bugfixQuestions = data.onboarding?.bugfix?.coding_questions || [];
+          
+          const allItems = [...reading, ...practice, ...bugfixTutorials, ...bugfixChallenges, ...bugfixQuestions];
               const total = allItems.length;
               const completed = allItems.filter((item: any) => item.status === 'completed').length;
               
@@ -103,7 +97,6 @@ export default function OnboardingPage() {
                 employee: { employeeId: id },
                 onboarding: {
                   reading: { modules: [] },
-                  qa: { modules: [] },
                   practice: { tasks: [] },
                   bugfix: { tutorials: [], challenges: [], coding_questions: [] }
                 }
@@ -122,17 +115,6 @@ export default function OnboardingPage() {
     fetchEmployeeData();
   }, []);
 
-  // Update Q&A sections when onboarding data changes
-  useEffect(() => {
-    if (onboardingData?.onboarding?.qa?.modules) {
-      const modules = onboardingData.onboarding.qa.modules;
-      setQnaSections(modules);
-      // Auto-select first section if none selected
-      if (!selectedQnaSection && modules.length > 0) {
-        setSelectedQnaSection(modules[0].id);
-      }
-    }
-  }, [onboardingData, selectedQnaSection]);
 
   // Auto-select first task when practice tab becomes active and tasks are loaded
   useEffect(() => {
@@ -175,13 +157,12 @@ export default function OnboardingPage() {
           
           // Recalculate progress
           const reading = updatedData.onboarding?.reading?.modules || [];
-          const qa = updatedData.onboarding?.qa?.modules || [];
           const practice = updatedData.onboarding?.practice?.tasks || [];
           const bugfixTutorials = updatedData.onboarding?.bugfix?.tutorials || [];
           const bugfixChallenges = updatedData.onboarding?.bugfix?.challenges || [];
           const bugfixQuestions = updatedData.onboarding?.bugfix?.coding_questions || [];
           
-          const allItems = [...reading, ...qa, ...practice, ...bugfixTutorials, ...bugfixChallenges, ...bugfixQuestions];
+          const allItems = [...reading, ...practice, ...bugfixTutorials, ...bugfixChallenges, ...bugfixQuestions];
           const total = allItems.length;
           const completed = allItems.filter((item: any) => item.status === 'completed').length;
           
@@ -212,15 +193,6 @@ export default function OnboardingPage() {
             onUpdateProgress={updateProgress}
           />
         );
-      case "qa":
-        return <QASession
-          activeRepos={activeRepos}
-          darkMode={darkMode} 
-          selectedSection={selectedQnaSection} 
-          employeeId={employeeId}
-          onboardingData={onboardingData}
-          onUpdateProgress={updateProgress}
-        />;
       case "practice":
         return (
           <PracticeTasks
@@ -433,21 +405,19 @@ export default function OnboardingPage() {
 
         <div className="max-w-[1800px] mx-auto px-6 py-6">
           <div className="grid grid-cols-12 gap-4">
-            {activeTab !== "bugfix" && (
+            {activeTab !== "bugfix" && activeTab !== "reading" && (
               <Sidebar
                 darkMode={darkMode}
                 completedModules={completedModules}
                 totalModules={totalModules}
                 activeTab={activeTab}
-                qnaSections={qnaSections}
-                onSelectQnASection={(key) => setSelectedQnaSection(key)}
                 practiceTasks={practiceTasks}
                 selectedPracticeTask={selectedPracticeTask}
                 onSelectPracticeTask={(n: number | null) => setSelectedPracticeTask(n)}
               />
             )}
 
-            <main className={activeTab === "bugfix" ? "col-span-12" : "col-span-9"}>
+            <main className={activeTab === "bugfix" || activeTab === "reading" ? "col-span-12" : "col-span-9"}>
               {renderTabContent()}
             </main>
           </div>
