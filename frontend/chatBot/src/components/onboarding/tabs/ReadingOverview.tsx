@@ -76,10 +76,10 @@ export default function ReadingOverview({ employeeId, activeRepos = [], onboardi
   return (
     <>
       <div className="mb-6">
-        <h2 className="text-4xl font-semibold mb-2 text-gray-900">
+        <h2 className="text-xl font-bold tracking-tight mb-2 text-[#0E1B2E]">
           Reading & Overview
         </h2>
-        <p className="text-base text-gray-600">
+        <p className="text-sm text-[#0E1B2E]/60">
           Start your journey with these essential topics. Get familiar with the basics before diving deeper.
         </p>
       </div>

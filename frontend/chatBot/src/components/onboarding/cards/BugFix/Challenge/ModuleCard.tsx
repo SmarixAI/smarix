@@ -16,36 +16,82 @@ export default function ChallengeCard({ challenge, index, isSelected, onSelect }
   const difficulty = difficultyMatch?.[1] || 'Medium';
   const time = timeMatch?.[1] || '30-60 min';
 
+  const getDifficultyColor = (difficulty: string) => {
+    const lower = difficulty.toLowerCase();
+    if (lower.includes('easy')) return 'bg-green-100 text-green-700 border-green-200';
+    if (lower.includes('hard')) return 'bg-red-100 text-red-700 border-red-200';
+    return 'bg-amber-100 text-amber-700 border-amber-200';
+  };
+
+  const getCategoryColor = (category: string) => {
+    // Using landing page colors
+    const colors = ['#3B82F6', '#6366F1', '#10B981', '#06B6D4', '#8B5CF6'];
+    const color = colors[index % colors.length];
+    return color;
+  };
+
+  const categoryColor = getCategoryColor(challenge.category);
+
   return (
     <button
       onClick={onSelect}
-      className={`w-full rounded-lg border px-4 py-2.5 text-left transition-all hover:shadow-sm ${
+      className={`w-full rounded-lg border px-5 py-4 text-left transition-all group relative overflow-hidden ${
         isSelected
-          ? 'border-gray-800 bg-gray-100'
-          : 'border-gray-200 bg-white hover:border-gray-300'
+          ? 'border-[#10B981] bg-[#10B981]/5 shadow-md'
+          : 'border-gray-200 bg-white hover:border-[#10B981]/40 hover:shadow-md'
       }`}
     >
-      <div className="flex items-center justify-between mb-1.5">
-        <h4 className="font-semibold text-sm text-gray-900">
-          Challenge {challenge.question_number}
-        </h4>
-        <span className="px-2 py-0.5 rounded text-[10px] font-semibold border border-gray-300 bg-gray-50 text-gray-700">
-          {difficulty}
-        </span>
-      </div>
+      {/* Subtle accent background on hover */}
+      {!isSelected && (
+        <div className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-5 transition-opacity duration-200 pointer-events-none bg-[#10B981]" />
+      )}
       
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-700">
-            {challenge.category}
-          </span>
-          <span className="text-[10px] flex items-center text-gray-600">
-            ⏱️ {time}
+      <div className="relative z-10">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+              isSelected ? 'bg-[#10B981]' : 'bg-[#10B981]/10'
+            }`}>
+              <span className={`text-sm font-bold ${
+                isSelected ? 'text-white' : 'text-[#10B981]'
+              }`}>
+                {challenge.question_number}
+              </span>
+            </div>
+            <h4 className={`font-bold text-sm ${
+              isSelected ? 'text-[#0E1B2E]' : 'text-[#0E1B2E]'
+            }`}>
+              Challenge {challenge.question_number}
+            </h4>
+          </div>
+          <span className={`px-2.5 py-1 rounded-md text-xs font-semibold border ${getDifficultyColor(difficulty)}`}>
+            {difficulty}
           </span>
         </div>
-        <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-700">
-          Solve
-        </span>
+        
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <span 
+              className="px-2.5 py-1 rounded-md text-xs font-medium border"
+              style={{
+                backgroundColor: `${categoryColor}15`,
+                color: categoryColor,
+                borderColor: `${categoryColor}30`
+              }}
+            >
+              {challenge.category}
+            </span>
+            <span className="text-xs flex items-center text-[#0E1B2E]/60">
+              ⏱️ {time}
+            </span>
+          </div>
+        </div>
+        
+        <div className="mt-3 pt-3 border-t border-gray-100">
+          <span className="text-xs font-semibold text-[#0E1B2E]/70">
+            Start Challenge →
+          </span>
+        </div>
       </div>
     </button>
   );

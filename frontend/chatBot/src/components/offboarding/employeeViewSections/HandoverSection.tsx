@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import { CheckCircle, ChevronDown, ChevronUp, FileText, Clock, Brain, HelpCircle, ExternalLink, User } from 'lucide-react';
+import { CheckCircle, ChevronDown, ChevronUp, FileText, Clock, Brain, HelpCircle, ExternalLink, User, Filter } from 'lucide-react';
 import Loader from '../Loader';
 
 /* ================= TYPES ================= */
@@ -52,6 +52,21 @@ export default function EmployeeHandoverSection({ employeeId, darkMode = false }
   const [loading, setLoading] = useState(true);
   const [expandedTaskIds, setExpandedTaskIds] = useState<Set<string>>(new Set());
   const [completedTaskIds, setCompletedTaskIds] = useState<Set<string>>(new Set());
+
+  // Filter state
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'high' | 'medium' | 'low' | 'ai' | 'manager'>('all');
+
+  // Filter tasks based on active filter
+  const filteredTasks = tasks.filter(task => {
+    if (activeFilter === 'all') return true;
+    if (activeFilter === 'high') return task.priority === 'High';
+    if (activeFilter === 'medium') return task.priority === 'Medium';
+    if (activeFilter === 'low') return task.priority === 'Low';
+    if (activeFilter === 'ai') return task.source === 'AI';
+    if (activeFilter === 'manager') return task.source === 'Manager';
+    return true;
+  });
 
   /* ================= LOAD HANDOVER TASKS ================= */
 
@@ -166,58 +181,84 @@ export default function EmployeeHandoverSection({ employeeId, darkMode = false }
   /* ================= UI ================= */
 
   if (loading) {
-    return <Loader darkMode={darkMode} message="Loading handovers..." size="md" />;
+    return <Loader darkMode={false} message="Loading handovers..." size="md" />;
   }
 
   return (
-    <div className="space-y-8">
+    <div className="h-full flex flex-col">
+      {/* ================= HANDOVER TASK LIST (Scrollable) ================= */}
+      <div className="flex-1 rounded-lg border border-gray-200 shadow-sm bg-white flex flex-col overflow-hidden">
+        {/* Enhanced Header with Filter */}
+        <div className="px-5 py-4 border-b border-gray-200 bg-gradient-to-r from-[#0E1B2E]/5 to-[#0E1B2E]/10">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1">
+              <h2 className="text-lg font-bold text-[#0E1B2E]">Handover Tasks</h2>
+              <p className="text-xs text-[#0E1B2E]/60 mt-1">
+                Items you must transfer before your last working day
+              </p>
+            </div>
+            
+            {/* Filter Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setFilterOpen(!filterOpen)}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white hover:bg-[#0E1B2E]/5 transition-colors text-sm font-medium text-[#0E1B2E]"
+              >
+                <Filter className="w-4 h-4" />
+                <span>
+                  {activeFilter === 'all' && 'All'}
+                  {activeFilter === 'high' && 'High Priority'}
+                  {activeFilter === 'medium' && 'Medium Priority'}
+                  {activeFilter === 'low' && 'Low Priority'}
+                  {activeFilter === 'ai' && 'AI Tasks'}
+                  {activeFilter === 'manager' && 'Manager Tasks'}
+                </span>
+                <ChevronDown className={`w-4 h-4 transition-transform ${filterOpen ? 'rotate-180' : ''}`} />
+              </button>
 
-      {/* ================= SUMMARY ================= */}
-      <div className={`rounded-2xl border shadow-sm transition-colors duration-300 ${
-        darkMode
-          ? "border-gray-700 bg-gray-800"
-          : "border-slate-200 bg-white"
-      }`}>
-        <div className={`px-5 py-4 border-b ${
-          darkMode ? "border-gray-700" : ""
-        }`}>
-          <h3 className={`font-semibold ${
-            darkMode ? "text-gray-100" : "text-slate-900"
-          }`}>
-            Your Handover Responsibilities
-          </h3>
-          <p className={`text-xs mt-1 ${
-            darkMode ? "text-gray-400" : "text-slate-600"
-          }`}>
-            Items you must transfer before your last working day
-          </p>
+              {/* Dropdown Menu */}
+              {filterOpen && (
+                <div className="absolute right-0 top-full mt-2 w-48 rounded-lg border border-gray-200 bg-white shadow-lg z-10">
+                  <div className="py-1">
+                    {[
+                      { value: 'all', label: 'All Tasks' },
+                      { value: 'high', label: 'High Priority' },
+                      { value: 'medium', label: 'Medium Priority' },
+                      { value: 'low', label: 'Low Priority' },
+                      { value: 'ai', label: 'AI Tasks' },
+                      { value: 'manager', label: 'Manager Tasks' },
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        onClick={() => {
+                          setActiveFilter(option.value as any);
+                          setFilterOpen(false);
+                        }}
+                        className={`w-full text-left px-4 py-2 text-sm transition-colors ${
+                          activeFilter === option.value
+                            ? 'bg-[#0E1B2E] text-white'
+                            : 'text-[#0E1B2E] hover:bg-[#0E1B2E]/5'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-4 px-5 py-4">
-          <SummaryCard label="Total Items" value={summary.total} darkMode={darkMode} />
-          <SummaryCard label="Completed" value={summary.completed} tone="green" darkMode={darkMode} />
-          <SummaryCard label="Pending" value={summary.pending} tone="yellow" darkMode={darkMode} />
-        </div>
-      </div>
-
-      {/* ================= HANDOVER TASK LIST ================= */}
-      <div className={`rounded-2xl border shadow-sm transition-colors duration-300 ${
-              darkMode
-                ? "border-gray-700 bg-gray-800"
-                : "border-slate-200 bg-white"
-      }`}>
-        <div className={`px-5 py-4 border-b ${
-          darkMode ? "border-gray-700" : ""
-        }`}>
-          <h3 className={`font-semibold ${
-                  darkMode ? "text-gray-100" : "text-slate-900"
-                }`}>
-            Handover Sessions
-          </h3>
-        </div>
-
-        <div className={darkMode ? "divide-y divide-gray-700" : "divide-y"}>
-          {tasks.map(task => {
+        <div className="flex-1 overflow-y-auto divide-y divide-gray-200">
+          {filteredTasks.length === 0 ? (
+            <div className="flex items-center justify-center h-full p-8">
+              <p className="text-[#0E1B2E]/60">
+                {tasks.length === 0 ? 'No tasks available' : 'No tasks match the selected filter'}
+              </p>
+            </div>
+          ) : (
+            filteredTasks.map(task => {
             const isDone = completedTaskIds.has(task.id);
             const isExpanded = expandedTaskIds.has(task.id);
             const hasDetails = task.description || task.questions?.length || task.reference || task.estimated_time_minutes || task.knowledge_capture_method || task.suggested_recipient;
@@ -233,24 +274,18 @@ export default function EmployeeHandoverSection({ employeeId, darkMode = false }
                 {/* MAIN TASK ROW */}
                 <div 
                   className={`px-5 py-4 flex justify-between items-start gap-4 ${
-                    hasDetails ? 'cursor-pointer hover:bg-opacity-50 transition-colors' : ''
-                  } ${darkMode ? hasDetails ? 'hover:bg-gray-700/30' : '' : hasDetails ? 'hover:bg-slate-50' : ''}`}
+                    hasDetails ? 'cursor-pointer hover:bg-[#0E1B2E]/5 transition-colors' : ''
+                  }`}
                   onClick={() => hasDetails && toggleTaskDetails(task.id)}
                 >
                   {/* LEFT */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start gap-2">
-                      <h4 className={`font-bold text-base flex-1 ${
-                        darkMode ? "text-gray-50" : "text-slate-900"
-                      }`}>
+                      <h4 className="font-bold text-base flex-1 text-[#0E1B2E]">
                         {getTaskTitle(task)}
                       </h4>
                       {task.ai_analyzed && (
-                        <span className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold ${
-                          darkMode 
-                            ? "bg-indigo-900/30 text-indigo-300 border border-indigo-700"
-                            : "bg-indigo-50 text-indigo-700 border border-indigo-300"
-                        }`}>
+                        <span className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-[#0E1B2E]/5 text-[#0E1B2E] border border-[#0E1B2E]/20">
                           <Brain className="w-3 h-3" />
                           AI Analyzed
                         </span>
@@ -289,7 +324,7 @@ export default function EmployeeHandoverSection({ employeeId, darkMode = false }
                             darkMode ? "text-gray-500" : "text-slate-500"
                           }`}>•</span>
                           <span className={`flex items-center gap-1 text-xs ${
-                            darkMode ? "text-indigo-400" : "text-indigo-600"
+                            darkMode ? "text-[#0E1B2E]/60" : "text-[#0E1B2E]"
                           }`}>
                             <User className="w-3 h-3" />
                             To: {task.suggested_recipient}
@@ -349,8 +384,8 @@ export default function EmployeeHandoverSection({ employeeId, darkMode = false }
                         className={`
                           px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition
                           ${darkMode
-                            ? "bg-indigo-600 hover:bg-indigo-700"
-                            : "bg-indigo-600 hover:bg-indigo-700"
+                            ? "bg-[#0E1B2E] hover:bg-[#1a2f4d]"
+                            : "bg-[#0E1B2E] hover:bg-[#1a2f4d]"
                           }
                         `}
                       >
@@ -390,25 +425,25 @@ export default function EmployeeHandoverSection({ employeeId, darkMode = false }
                       {/* SUGGESTED RECIPIENT (highlighted for handover) */}
                       {task.suggested_recipient && (
                         <div className={`p-3 rounded-lg ${
-                          darkMode ? "bg-indigo-900/20 border border-indigo-700" : "bg-indigo-50 border border-indigo-200"
+                          darkMode ? "bg-[#0E1B2E]/20 border border-[#0E1B2E]/70" : "bg-[#0E1B2E]/5 border border-[#0E1B2E]/20"
                         }`}>
                           <div className="flex items-center gap-2 mb-1">
                             <User className={`w-4 h-4 ${
-                              darkMode ? "text-indigo-400" : "text-indigo-600"
+                              darkMode ? "text-[#0E1B2E]/60" : "text-[#0E1B2E]"
                             }`} />
                             <h4 className={`text-sm font-semibold ${
-                              darkMode ? "text-indigo-200" : "text-indigo-900"
+                              darkMode ? "text-[#0E1B2E]/80" : "text-[#0E1B2E]"
                             }`}>
                               Suggested Handover Recipient
                             </h4>
                           </div>
                           <div className={`text-sm ml-6 ${
-                            darkMode ? "text-indigo-300" : "text-indigo-700"
+                            darkMode ? "text-[#0E1B2E]/70" : "text-[#0E1B2E]/90"
                           }`}>
                             <span className="font-semibold">{task.suggested_recipient}</span>
                             {task.suggested_recipient_reason && (
                               <span className={`ml-2 text-xs ${
-                                darkMode ? "text-indigo-400" : "text-indigo-600"
+                                darkMode ? "text-[#0E1B2E]/60" : "text-[#0E1B2E]"
                               }`}>
                                 ({task.suggested_recipient_reason})
                               </span>
@@ -422,7 +457,7 @@ export default function EmployeeHandoverSection({ employeeId, darkMode = false }
                         <div>
                           <div className="flex items-center gap-2 mb-2">
                             <HelpCircle className={`w-4 h-4 ${
-                              darkMode ? "text-indigo-400" : "text-indigo-600"
+                              darkMode ? "text-[#0E1B2E]/60" : "text-[#0E1B2E]"
                             }`} />
                             <h4 className={`text-sm font-semibold ${
                               darkMode ? "text-gray-200" : "text-slate-800"
@@ -494,16 +529,9 @@ export default function EmployeeHandoverSection({ employeeId, darkMode = false }
                 )}
               </div>
             );
-          })}
+          })
+          )}
         </div>
-
-        {tasks.length === 0 && (
-          <div className={`px-5 py-8 text-sm italic text-center ${
-            darkMode ? "text-gray-400" : "text-slate-500"
-          }`}>
-            No handover tasks assigned to you.
-          </div>
-        )}
       </div>
     </div>
   );

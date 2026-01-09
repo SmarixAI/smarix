@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Briefcase, User, LogOut } from "lucide-react";
+import { Phone, RefreshCw, FileText, LogOut } from "lucide-react";
+import Image from "next/image";
 import Sidebar from "./Sidebar";
 import EmployeeFinalCallSection from "./employeeViewSections/FinalCallSection";
 import EmployeeHandoverSection from "./employeeViewSections/HandoverSection";
@@ -32,7 +33,8 @@ export default function OffboardingEmployeeLayout({}: OffboardingEmployeeLayoutP
   const [activeSection, setActiveSection] = useState<SectionType>("finalcall");
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [loading, setLoading] = useState(true);
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [effectiveWorkdays, setEffectiveWorkdays] = useState<number | null>(null);
+  const [highRiskTasksPending, setHighRiskTasksPending] = useState<number>(0);
 
   useEffect(() => {
     const fetchEmployeeData = async () => {
@@ -96,6 +98,78 @@ export default function OffboardingEmployeeLayout({}: OffboardingEmployeeLayoutP
     fetchEmployeeData();
   }, [user, token]);
 
+  // Calculate effective workdays remaining
+  useEffect(() => {
+    if (!employee?.lastDay) {
+      setEffectiveWorkdays(null);
+      return;
+    }
+
+    try {
+      const lastDay = new Date(employee.lastDay);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      lastDay.setHours(0, 0, 0, 0);
+
+      const diffTime = lastDay.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays <= 0) {
+        setEffectiveWorkdays(0);
+        return;
+      }
+
+      const effectiveDays = Math.round(diffDays * 0.6);
+      setEffectiveWorkdays(effectiveDays);
+    } catch (error) {
+      console.error('Error calculating workdays:', error);
+      setEffectiveWorkdays(null);
+    }
+  }, [employee?.lastDay]);
+
+  // Fetch and count high-risk tasks
+  useEffect(() => {
+    if (!employee?.employeeId) {
+      setHighRiskTasksPending(0);
+      return;
+    }
+
+    const fetchTasks = async () => {
+      try {
+        const response = await fetch('/api/offboarding/tasks');
+        if (!response.ok) {
+          console.error('Failed to fetch tasks data');
+          return;
+        }
+        const data = await response.json();
+        
+        if (!data?.employees?.length) return;
+
+        const foundEmployee = data.employees.find(
+          (e: any) => e.employeeId === employee.employeeId
+        );
+
+        if (!foundEmployee) return;
+
+        const aiTasks = foundEmployee.tasks?.ai ?? [];
+        const managerTasks = foundEmployee.tasks?.manager ?? [];
+        const allTasks = [...aiTasks, ...managerTasks];
+
+        const highRiskCount = allTasks.filter(
+          (task: any) => 
+            task.priority === 'High' && 
+            task.status !== 'not_needed'
+        ).length;
+
+        setHighRiskTasksPending(highRiskCount);
+      } catch (error) {
+        console.error('Error fetching tasks:', error);
+      }
+    };
+
+    fetchTasks();
+  }, [employee?.employeeId]);
+
   if (loading) {
     return (
       <Loader
@@ -108,14 +182,14 @@ export default function OffboardingEmployeeLayout({}: OffboardingEmployeeLayoutP
 
   if (!employee) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center p-8 rounded-xl border border-gray-200 bg-white">
-          <p className="text-lg font-semibold text-gray-700">
+      <div className="min-h-screen flex items-center justify-center bg-[#FAFAFA]">
+        <div className="text-center p-8 rounded-xl border border-gray-200 bg-white shadow-sm">
+          <p className="text-lg font-semibold text-[#0E1B2E]">
             Unable to load profile data.
           </p>
           <button
             onClick={logout}
-            className="mt-4 text-gray-700 hover:underline"
+            className="mt-4 text-[#0E1B2E] hover:underline"
           >
             Return to Login
           </button>
@@ -125,120 +199,149 @@ export default function OffboardingEmployeeLayout({}: OffboardingEmployeeLayoutP
   }
 
   return (
-    <div className="min-h-screen pt-0">
-      <header className="border-b shadow-sm bg-white border-gray-200">
-        <div className="max-w-screen-2xl mx-auto px-6 py-4 flex items-center gap-6">
-          <div className="flex-1 flex items-start gap-3">
-            <div className="mt-1 p-2 rounded-lg bg-gray-100 text-gray-700">
-              <Briefcase className="w-5 h-5" />
+    <div className="min-h-screen bg-[#FAFAFA]">
+      <div className="h-screen relative flex">
+        {/* Grid Pattern Background - matching landing page */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#0E1B2E05_1px,transparent_1px),linear-gradient(to_bottom,#0E1B2E05_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
+        
+        {/* Sidebar with Navigation */}
+        <aside className="w-80 flex-shrink-0 border-r border-gray-200 bg-white relative z-10 flex flex-col">
+          {/* Sidebar Header */}
+          <div className="p-4 border-b border-gray-200">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-8 h-8 bg-[#0E1B2E] rounded-lg flex items-center justify-center overflow-hidden">
+                <Image
+                  src="/logo.png"
+                  alt="Smarix Logo"
+                  width={24}
+                  height={24}
+                  className="w-6 h-6 object-contain"
+                />
+              </div>
+              <h2 className="text-xl font-bold tracking-tight text-[#0E1B2E]">
+                Smarix
+              </h2>
             </div>
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight text-gray-900">
-                Offboarding – Employee View
-              </h1>
-              <p className="text-sm font-medium text-gray-600">
-                Track your tasks, handovers, and documentation
-              </p>
-            </div>
+            <p className="text-sm text-[#0E1B2E]/60 ml-11">
+              Offboarding Dashboard
+            </p>
           </div>
-          <div className="flex items-center gap-5">
-            {user && (
-              <div className="relative">
-                <button
-                  onClick={() => setUserMenuOpen(!userMenuOpen)}
-                  className="p-2 rounded-full transition hover:bg-gray-100 text-gray-700"
-                >
-                  <User className="w-5 h-5" />
-                </button>
-                {userMenuOpen && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-10"
-                      onClick={() => setUserMenuOpen(false)}
-                    />
-                    <div className="absolute right-0 mt-2 w-52 rounded-lg border shadow-xl z-20 bg-white border-gray-200">
-                      <div className="px-4 py-3 border-b border-gray-200">
-                        <p className="text-sm font-medium text-gray-900">
-                          {employee.name}
-                        </p>
-                        <p className="text-xs text-gray-600">
-                          {employee.role}
-                        </p>
-                      </div>
-                      <div className="p-2 space-y-1">
-                        <button
-                          onClick={() => {
-                            logout();
-                            setUserMenuOpen(false);
-                          }}
-                          className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm transition hover:bg-gray-100 text-gray-700"
-                        >
-                          <LogOut className="w-4 h-4" /> Logout
-                        </button>
-                      </div>
+
+          {/* Profile & Logout */}
+          <div className="p-4 border-b border-gray-200">
+            <div className="flex items-center justify-between mb-4">
+              {employee && (
+                <>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-[#0E1B2E] truncate">
+                      {employee.name}
                     </div>
-                  </>
-                )}
+                    <div className="text-xs text-[#0E1B2E]/60 capitalize truncate">
+                      {employee.designation || employee.role}
+                    </div>
+                  </div>
+                  <button
+                    onClick={logout}
+                    className="ml-2 p-2 rounded-lg hover:bg-red-50 transition-colors text-red-600"
+                    title="Logout"
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </button>
+                </>
+              )}
+            </div>
+
+            {/* Employee Info */}
+            {employee && (
+              <div className="space-y-2">
+                <div className="p-2.5 rounded-lg bg-[#0E1B2E]/5">
+                  <p className="text-[10px] text-[#0E1B2E]/60 mb-0.5">
+                    Last Working Day
+                  </p>
+                  <p className="text-xs font-semibold text-[#0E1B2E]">
+                    {employee.lastDay || 'Not set'}
+                  </p>
+                </div>
+                <div className="p-2.5 rounded-lg bg-[#0E1B2E]/5">
+                  <p className="text-[10px] text-[#0E1B2E]/60 mb-0.5">
+                    Effective Workdays
+                  </p>
+                  <p className="text-xs font-semibold text-[#0E1B2E]">
+                    {effectiveWorkdays !== null 
+                      ? `${effectiveWorkdays} ${effectiveWorkdays === 1 ? 'Day' : 'Days'}`
+                      : 'N/A'}
+                  </p>
+                </div>
+                <div className="p-2.5 rounded-lg bg-[#0E1B2E]/5">
+                  <p className="text-[10px] text-[#0E1B2E]/60 mb-0.5">
+                    High-Risk Tasks
+                  </p>
+                  <p className="text-xs font-semibold text-[#0E1B2E]">
+                    {highRiskTasksPending} {highRiskTasksPending === 1 ? 'Task' : 'Tasks'}
+                  </p>
+                </div>
               </div>
             )}
           </div>
-        </div>
-      </header>
 
-      <div className="p-6 max-w-screen-2xl mx-auto">
-        <div className="grid grid-cols-12 gap-6">
-          <aside className="col-span-3 space-y-6">
-            <Sidebar
-              activeSection={activeSection}
-              onChangeSection={setActiveSection}
-              selectedEmployee={employee}
-              darkMode={false}
-            />
-          </aside>
-          <main className="col-span-9 space-y-6">
-            <div className="border rounded-lg shadow-sm p-2 bg-white border-gray-200">
-              <div className="grid grid-cols-3 gap-2">
+          <nav className="flex-1 overflow-y-auto">
+
+            {/* Sections Navigation */}
+            <div className="border-t border-gray-200 p-4">
+              <div className="space-y-1">
                 {[
-                  { key: "finalcall", label: "Final Call" },
-                  { key: "handover", label: "Handover" },
-                  { key: "documentation", label: "Documentation" },
-                ].map((tab) => (
+                  { key: "finalcall", label: "Final Call", icon: Phone },
+                  { key: "handover", label: "Handover", icon: RefreshCw },
+                  { key: "documentation", label: "Documentation", icon: FileText },
+                ].map((item) => (
                   <button
-                    key={tab.key}
-                    onClick={() => setActiveSection(tab.key as SectionType)}
-                    className={`py-3 rounded-lg text-sm font-semibold transition ${
-                      activeSection === tab.key
-                        ? "bg-gray-900 text-white shadow"
-                        : "bg-gray-100 text-gray-900 hover:bg-gray-200"
+                    key={item.key}
+                    onClick={() => setActiveSection(item.key as SectionType)}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-semibold transition ${
+                      activeSection === item.key
+                        ? "bg-[#0E1B2E] text-white"
+                        : "text-[#0E1B2E] hover:bg-[#0E1B2E]/5"
                     }`}
                   >
-                    {tab.label}
+                    <item.icon className="w-5 h-5" />
+                    {item.label}
                   </button>
                 ))}
               </div>
             </div>
-            <div className="rounded-lg shadow border p-6 bg-white border-gray-200">
-              {activeSection === "finalcall" && employee.employeeId && (
-                <EmployeeFinalCallSection
-                  employeeId={employee.employeeId}
-                  darkMode={false}
-                />
-              )}
-              {activeSection === "handover" && employee.employeeId && (
-                <EmployeeHandoverSection
-                  employeeId={employee.employeeId}
-                  darkMode={false}
-                />
-              )}
-              {activeSection === "documentation" && employee.employeeId && (
-                <EmployeeDocumentationSection
-                  employeeId={employee.employeeId}
-                  darkMode={false}
-                />
-              )}
+          </nav>
+        </aside>
+
+        {/* Main Content */}
+        <main className="flex-1 relative z-10 flex flex-col overflow-hidden">
+          {/* Section Content */}
+          {activeSection === "finalcall" && employee.employeeId && (
+            <div className="flex-1 px-6 pb-6 flex flex-col overflow-hidden">
+              <EmployeeFinalCallSection
+                employeeId={employee.employeeId}
+                darkMode={false}
+              />
             </div>
-          </main>
-        </div>
+          )}
+
+          {activeSection === "handover" && employee.employeeId && (
+            <div className="flex-1 px-6 pb-6 flex flex-col overflow-hidden">
+              <EmployeeHandoverSection
+                employeeId={employee.employeeId}
+                darkMode={false}
+              />
+            </div>
+          )}
+
+          {activeSection === "documentation" && employee.employeeId && (
+            <div className="flex-1 px-6 pb-6 flex flex-col overflow-hidden">
+              <EmployeeDocumentationSection
+                employeeId={employee.employeeId}
+                darkMode={false}
+              />
+            </div>
+          )}
+        </main>
       </div>
       <Chatbot role="offboarding" />
     </div>

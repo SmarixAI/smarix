@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { BookOpen, Code, Wrench, Check, User, LogOut } from 'lucide-react';
+import { BookOpen, Code, Wrench, Check, LogOut } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthContext';
+import Image from 'next/image';
 
 interface HeaderProps {
   activeTab: string;
@@ -13,18 +14,11 @@ interface HeaderProps {
 export default function Header({ activeTab, setActiveTab }: HeaderProps) {
   const router = useRouter();
   const { user, logout } = useAuth();
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
-
-  const handleLogout = () => {
-    setUserMenuOpen(false);
-    // Use the AuthContext logout function which properly handles token clearing and logout flag
-    logout();
-  };
 
   const tabs = [
-    { id: 'reading', label: 'Reading & Overview', shortLabel: 'Reading & Overview', icon: <BookOpen className="w-4 h-4" /> },
-    { id: 'practice', label: 'Practice Tasks', shortLabel: 'Practice Tasks', icon: <Code className="w-4 h-4" /> },
-    { id: 'bugfix', label: 'Bug Fixing', shortLabel: 'Bug Fixing', icon: <Wrench className="w-4 h-4" /> },
+    { id: 'reading', label: 'Reading & Overview', shortLabel: 'Overview', icon: <BookOpen className="w-4 h-4" /> },
+    { id: 'practice', label: 'Practice Tasks', shortLabel: 'Practice', icon: <Code className="w-4 h-4" /> },
+    { id: 'bugfix', label: 'Bug Fixing', shortLabel: 'Bug Fix', icon: <Wrench className="w-4 h-4" /> },
   ];
 
   const getStepStatus = (tabId: string) => {
@@ -37,94 +31,32 @@ export default function Header({ activeTab, setActiveTab }: HeaderProps) {
 
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
-      {/* ===================== TOP ROW ===================== */}
-      <div className="max-w-[1800px] mx-auto px-6 py-3 flex items-center justify-between">
-
-        {/* LEFT — LOGO + TITLE */}
-        <div className="flex items-center space-x-3 flex-shrink-0">
-          <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-white border border-gray-200">
-            <BookOpen className="w-6 h-6 text-gray-700" />
-          </div>
-
-          <div>
-            <h1 className="text-xl font-semibold text-gray-900">
-              Onboarding Hub
-            </h1>
-
-            <p className="text-xs text-gray-600">
-              Your personalized learning roadmap
-            </p>
-          </div>
-        </div>
-
-        {/* RIGHT — USER */}
-        <div className="flex items-center space-x-4 flex-shrink-0">
-          {/* USER MENU */}
-          {user && (
-            <div className="relative">
-              <button
-                onClick={() => setUserMenuOpen(!userMenuOpen)}
-                className="p-2 rounded-full transition hover:bg-gray-100 text-gray-700"
-              >
-                <User className="w-5 h-5" />
-              </button>
-
-              {userMenuOpen && (
-                <>
-                  <div
-                    className="fixed inset-0 z-10"
-                    onClick={() => setUserMenuOpen(false)}
-                  />
-
-                  <div className="absolute right-0 mt-2 w-52 rounded-lg border border-gray-200 shadow-lg bg-white z-20">
-                    <div className="px-4 py-3 border-b border-gray-200">
-                      <p className="text-sm font-medium text-gray-900">
-                        {user.name || user.username}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        Employee
-                      </p>
-                    </div>
-
-                    <div className="p-2 space-y-1">
-                      <button
-                        onClick={handleLogout}
-                        className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm transition hover:bg-gray-100 text-gray-700"
-                      >
-                        <LogOut className="w-4 h-4" />
-                        Logout
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
+      <div className="max-w-[1800px] mx-auto px-6">
+        {/* ===================== TOP ROW ===================== */}
+        <div className="py-4 flex items-center justify-between">
+          {/* LEFT — LOGO */}
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <div className="w-8 h-8 bg-[#0E1B2E] rounded-lg flex items-center justify-center overflow-hidden">
+              <Image
+                src="/logo.png"
+                alt="Smarix Logo"
+                width={24}
+                height={24}
+                className="w-6 h-6 object-contain"
+              />
             </div>
-          )}
-        </div>
-      </div>
+            <div>
+              <h1 className="text-xl font-bold tracking-tight text-[#0E1B2E]">
+                Smarix
+              </h1>
+              <p className="text-xs text-[#0E1B2E]/60">
+                Onboarding Dashboard
+              </p>
+            </div>
+          </div>
 
-      {/* ===================== PROGRESS BAR SECTION ===================== */}
-      <div className="max-w-[1800px] mx-auto px-6 pb-4 bg-gray-50">
-        <div className="relative">
-
-          {/* Background bar */}
-          <div
-            className="absolute top-4 left-0 right-0 h-1 bg-gray-200 rounded-full"
-            style={{ marginLeft: '2rem', marginRight: '2rem' }}
-          />
-
-          {/* Smooth progress line */}
-          <div
-            className="absolute top-4 left-0 h-1 rounded-full transition-all duration-500 ease-out bg-gray-400"
-            style={{
-              width: `${((tabs.findIndex((t) => t.id === activeTab)) / (tabs.length - 1)) * 100}%`,
-              marginLeft: '2rem',
-              marginRight: '2rem'
-            }}
-          />
-
-          {/* Step indicators */}
-          <div className="relative flex justify-between items-start mt-8">
+          {/* CENTER — TABS NAVIGATION */}
+          <div className="flex items-center gap-1 absolute left-1/2 -translate-x-1/2">
             {tabs.map((tab, i) => {
               const status = getStepStatus(tab.id);
               const active = activeTab === tab.id;
@@ -134,36 +66,84 @@ export default function Header({ activeTab, setActiveTab }: HeaderProps) {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className="flex flex-col items-center space-y-2 cursor-pointer transition-all"
-                  style={{ flex: 1 }}
+                  className="relative flex items-center gap-2 px-4 py-2 rounded-lg transition-all group"
                 >
-                  <div className="relative">
+                  {/* Progress indicator line */}
+                  {i > 0 && (
+                    <div className="absolute left-0 top-1/2 -translate-x-1/2 w-8 h-0.5 -translate-y-1/2">
+                      <div className={`h-full transition-all duration-300 ${
+                        done || active
+                          ? 'bg-[#0E1B2E]'
+                          : 'bg-[#0E1B2E]/20'
+                      }`} />
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2">
                     <div
-                      className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${
+                      className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${
                         active
-                          ? 'bg-gray-800 text-white ring-2 ring-gray-400'
+                          ? 'bg-[#0E1B2E] text-white'
                           : done
-                          ? 'bg-gray-200 text-gray-600'
-                          : 'bg-gray-100 border border-gray-300 text-gray-500'
+                          ? 'bg-[#0E1B2E]/10 text-[#0E1B2E]'
+                          : 'bg-white border border-gray-200 text-[#0E1B2E]/40 group-hover:bg-[#0E1B2E]/5 group-hover:text-[#0E1B2E]/60'
                       }`}
                     >
-                      {done ? <Check className="w-5 h-5 text-gray-700" /> : tab.icon}
+                      {done ? (
+                        <Check className="w-4 h-4 text-[#0E1B2E]" />
+                      ) : (
+                        <div className={`${active ? 'text-white' : ''}`}>
+                          {tab.icon}
+                        </div>
+                      )}
                     </div>
+                    <span
+                      className={`text-sm font-medium transition-colors ${
+                        active
+                          ? 'text-[#0E1B2E]'
+                          : done
+                          ? 'text-[#0E1B2E]/80'
+                          : 'text-[#0E1B2E]/60 group-hover:text-[#0E1B2E]/80'
+                      }`}
+                    >
+                      {tab.shortLabel}
+                    </span>
                   </div>
-
-                  <p
-                    className={`text-xs font-medium leading-tight ${
-                      active
-                        ? 'text-gray-900'
-                        : 'text-gray-600'
-                    }`}
-                  >
-                    {tab.shortLabel}
-                  </p>
                 </button>
               );
             })}
           </div>
+
+          {/* RIGHT — PROFILE */}
+          {user && (
+            <div className="flex items-center gap-3 flex-shrink-0 ml-auto">
+              <div className="text-right">
+                <div className="text-sm font-semibold text-[#0E1B2E] truncate">
+                  {user.name || user.username}
+                </div>
+                <div className="text-xs text-[#0E1B2E]/60 capitalize truncate">
+                  {user.role || 'Employee'}
+                </div>
+              </div>
+              <button
+                onClick={logout}
+                className="p-2 rounded-lg hover:bg-red-50 transition-colors text-red-600"
+                title="Logout"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Progress Indicator Bar */}
+        <div className="relative h-1 bg-[#0E1B2E]/5 rounded-full mb-4">
+          <div
+            className="absolute top-0 left-0 h-full bg-[#0E1B2E] rounded-full transition-all duration-500 ease-out"
+            style={{
+              width: `${((tabs.findIndex((t) => t.id === activeTab) + 1) / tabs.length) * 100}%`,
+            }}
+          />
         </div>
       </div>
     </header>

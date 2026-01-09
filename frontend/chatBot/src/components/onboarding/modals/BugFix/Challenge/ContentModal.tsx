@@ -15,14 +15,19 @@ export default function ChallengeSection({ data, activeRepos = [] }: ChallengeSe
 
   return (
     <div>
-      <h3 className="text-lg font-semibold mb-4 text-gray-900">
-        Select a Challenge:
-      </h3>
+      <div className="mb-6">
+        <h3 className="text-lg font-bold tracking-tight mb-2 text-[#0E1B2E]">
+          Challenge Bugs
+        </h3>
+        <p className="text-sm text-[#0E1B2E]/60">
+          Test your skills with real-world debugging challenges
+        </p>
+      </div>
       
       <div className="mb-6 overflow-x-auto">
-        <div className="flex gap-3 pb-2" style={{ minWidth: 'min-content' }}>
+        <div className="flex gap-4 pb-2" style={{ minWidth: 'min-content' }}>
           {data.questions.map((question, idx) => (
-            <div key={question.question_number} className="flex-shrink-0" style={{ width: '280px' }}>
+            <div key={question.question_number} className="flex-shrink-0" style={{ width: '300px' }}>
               <ChallengeCard
                 challenge={question}
                 index={idx}

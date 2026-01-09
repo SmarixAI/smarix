@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: 'Smarix AI',
   description: 'AI based data retention and knowledge transfer',
   icons: {
-    icon: '/logo.png', 
+    icon: '/favicon.svg',
   },
 };
 
