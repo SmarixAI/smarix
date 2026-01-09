@@ -54,64 +54,68 @@ export default function BugFixing({ employeeId, onboardingData, activeRepos = []
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-32">
-        <Loader2 className="w-16 h-16 animate-spin text-gray-600" />
+        <Loader2 className="w-16 h-16 animate-spin text-[#0E1B2E]/60" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      {/* Compact Header with Tabs in Same Row */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center space-x-3">
-          <Bug className="w-6 h-6 text-gray-700" />
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900">
-              Bug Fix Training
-            </h2>
-            <p className="text-xs text-gray-600">
-              Master debugging with hands-on tutorials and real-world challenges!
-            </p>
+    <div className="space-y-6">
+      {/* Header Section */}
+      <div className="bg-gradient-to-r from-[#0E1B2E]/5 to-[#0E1B2E]/10 rounded-lg p-6 border border-gray-200">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-lg bg-[#8B5CF6] flex items-center justify-center">
+              <Bug className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold tracking-tight text-[#0E1B2E] mb-1">
+                Bug Fix Training
+              </h2>
+              <p className="text-sm text-[#0E1B2E]/60">
+                Master debugging with hands-on tutorials and real-world challenges
+              </p>
+            </div>
           </div>
-        </div>
 
-        {/* Compact Tutorial/Challenge Tabs */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setActiveTab('tutorials')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeTab === 'tutorials'
-                ? 'bg-gray-900 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
-            }`}
-          >
-            <span>Tutorial Bugs</span>
-            <span className={`text-xs px-1.5 py-0.5 rounded ${
-              activeTab === 'tutorials'
-                ? 'bg-white/20'
-                : 'bg-gray-100'
-            }`}>
-              {tutorials?.tutorials.length || 0}
-            </span>
-          </button>
-          
-          <button
-            onClick={() => setActiveTab('challenges')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeTab === 'challenges'
-                ? 'bg-gray-900 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
-            }`}
-          >
-            <span>Challenge Bugs</span>
-            <span className={`text-xs px-1.5 py-0.5 rounded ${
-              activeTab === 'challenges'
-                ? 'bg-white/20'
-                : 'bg-gray-100'
-            }`}>
-              {challenges?.questions.length || 0}
-            </span>
-          </button>
+          {/* Tabs */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setActiveTab('tutorials')}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                activeTab === 'tutorials'
+                  ? 'bg-[#0E1B2E] text-white shadow-sm'
+                  : 'bg-white text-[#0E1B2E]/70 hover:bg-[#0E1B2E]/5 border border-gray-200'
+              }`}
+            >
+              <span>Tutorial Bugs</span>
+              <span className={`text-xs px-2 py-0.5 rounded ${
+                activeTab === 'tutorials'
+                  ? 'bg-white/20 text-white'
+                  : 'bg-[#0E1B2E]/5 text-[#0E1B2E]/70'
+              }`}>
+                {tutorials?.tutorials.length || 0}
+              </span>
+            </button>
+            
+            <button
+              onClick={() => setActiveTab('challenges')}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                activeTab === 'challenges'
+                  ? 'bg-[#0E1B2E] text-white shadow-sm'
+                  : 'bg-white text-[#0E1B2E]/70 hover:bg-[#0E1B2E]/5 border border-gray-200'
+              }`}
+            >
+              <span>Challenge Bugs</span>
+              <span className={`text-xs px-2 py-0.5 rounded ${
+                activeTab === 'challenges'
+                  ? 'bg-white/20 text-white'
+                  : 'bg-[#0E1B2E]/5 text-[#0E1B2E]/70'
+              }`}>
+                {challenges?.questions.length || 0}
+              </span>
+            </button>
+          </div>
         </div>
       </div>
 

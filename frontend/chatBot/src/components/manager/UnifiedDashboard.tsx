@@ -2,12 +2,13 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { 
-  Users, Moon, Sun, User, LogOut, Search, ChevronDown, ChevronUp,
-  Clock, CheckCircle, TrendingUp, MessageSquare
+  Users, User, LogOut, Search, ChevronDown, ChevronUp,
+  Clock, CheckCircle, TrendingUp
 } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthContext';
 import { PieChart, Pie, Cell, ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Line } from 'recharts';
 import Loader from '../offboarding/Loader';
+import Image from 'next/image';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -42,14 +43,13 @@ type EmployeeProgress = {
   timeSpentData: { section: string; expected: number; spent: number }[];
 };
 
-export default function UnifiedDashboard({ darkMode = false, setDarkMode }: { darkMode?: boolean; setDarkMode?: (value: boolean) => void }) {
+export default function UnifiedDashboard() {
   const { user, logout, token } = useAuth();
   const [onboardingEmployees, setOnboardingEmployees] = useState<Employee[]>([]);
   const [offboardingEmployees, setOffboardingEmployees] = useState<Employee[]>([]);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [employeeProgress, setEmployeeProgress] = useState<EmployeeProgress | null>(null);
   const [loading, setLoading] = useState(true);
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [onboardingExpanded, setOnboardingExpanded] = useState(true);
   const [offboardingExpanded, setOffboardingExpanded] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -282,14 +282,14 @@ export default function UnifiedDashboard({ darkMode = false, setDarkMode }: { da
     // Generate dummy progress data
     const isOnboarding = selectedEmployee.status === 'onboard';
     const sections = isOnboarding
-      ? ['Overview', 'Q&A', 'Practice', 'Bug Fixing', 'Handover']
+      ? ['Overview', 'Q&A', 'Practice', 'Bug Fixing']
       : ['Final Call', 'Handover', 'Documentation'];
 
     const dummySections: SectionProgress[] = sections.map((section, idx) => {
-      const expected = [5, 4, 3.5, 5.5, 4.5][idx] || 4;
-      const spent = idx === 0 ? 4.3 : idx === 1 ? null : idx === 2 ? 2.8 : idx === 3 ? 8.2 : 4.5;
+      const expected = [5, 4, 3.5, 5.5][idx] || 4;
+      const spent = idx === 0 ? 4.3 : idx === 1 ? 3.2 : idx === 2 ? 2.8 : idx === 3 ? 4.1 : 0;
       const completion = spent ? Math.round((spent / expected) * 100) : 0;
-      const status = idx < 2 ? 'Pending' : 'Completed';
+      const status = idx < 2 ? 'Pending' : idx === 3 ? 'Pending' : 'Completed';
       
       return {
         section,
@@ -350,12 +350,12 @@ export default function UnifiedDashboard({ darkMode = false, setDarkMode }: { da
 
   // Chart colors
   const COLORS = {
-    pending: darkMode ? '#f97316' : '#fb923c',
-    completed: darkMode ? '#10b981' : '#34d399',
-    efficiency: darkMode ? '#8b5cf6' : '#a78bfa',
+    pending: '#fb923c',
+    completed: '#34d399',
+    efficiency: '#a78bfa',
     donut: {
-      pending: darkMode ? '#f97316' : '#fb923c',
-      completed: darkMode ? '#10b981' : '#34d399',
+      pending: '#fb923c',
+      completed: '#34d399',
     },
   };
 
@@ -371,7 +371,7 @@ export default function UnifiedDashboard({ darkMode = false, setDarkMode }: { da
 
   if (loading) {
     console.log('⏳ Showing loader...');
-    return <Loader darkMode={darkMode} message="Loading dashboard..." fullScreen />;
+    return <Loader darkMode={false} message="Loading dashboard..." fullScreen />;
   }
 
   console.log('✅ Rendering dashboard content');
@@ -385,77 +385,90 @@ export default function UnifiedDashboard({ darkMode = false, setDarkMode }: { da
     : [];
 
   return (
-    <div className={`min-h-screen flex transition-colors duration-300 ${
-      darkMode ? 'bg-gray-900' : 'bg-gray-50'
-    }`}>
+    <div className="min-h-screen flex bg-[#FAFAFA]">
       {/* SIDEBAR */}
-      <div className={`w-80 border-r transition-colors duration-300 ${
-        darkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'
-      }`}>
-        <div className="p-4 border-b" style={{ borderColor: darkMode ? '#374151' : '#e5e7eb' }}>
-          <div className="flex items-center gap-3 mb-4">
-            <div className={`p-2 rounded-lg ${
-              darkMode ? 'bg-indigo-900/30' : 'bg-indigo-100'
-            }`}>
-              <span className={`text-lg font-bold ${
-                darkMode ? 'text-indigo-400' : 'text-indigo-600'
-              }`}>
-                S
-              </span>
+      <div className="w-80 flex-shrink-0 border-r border-gray-200 bg-white flex flex-col h-screen">
+        {/* Sidebar Header */}
+        <div className="p-4 border-b border-gray-200">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-8 h-8 bg-[#0E1B2E] rounded-lg flex items-center justify-center overflow-hidden">
+              <Image
+                src="/logo.png"
+                alt="Smarix Logo"
+                width={24}
+                height={24}
+                className="w-6 h-6 object-contain"
+              />
             </div>
-            <h2 className={`text-lg font-bold ${
-              darkMode ? 'text-white' : 'text-gray-900'
-            }`}>
+            <h2 className="text-xl font-bold tracking-tight text-[#0E1B2E]">
               Smarix
             </h2>
           </div>
-          
-          {/* Search */}
+          <p className="text-sm text-[#0E1B2E]/60 ml-11">
+            Manager Dashboard
+          </p>
+        </div>
+
+        {/* Profile & Logout */}
+        <div className="p-4 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            {user && (
+              <>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-[#0E1B2E] truncate">
+                    {user.name || user.username}
+                  </div>
+                  <div className="text-xs text-[#0E1B2E]/60 capitalize truncate">
+                    {user.role || 'Manager'}
+                  </div>
+                </div>
+                <button
+                  onClick={logout}
+                  className="ml-2 p-2 rounded-lg hover:bg-red-50 transition-colors text-red-600"
+                  title="Logout"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Search */}
+        <div className="p-4 border-b border-gray-200">
           <div className="relative">
-            <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 ${
-              darkMode ? 'text-gray-400' : 'text-gray-500'
-            }`} />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-[#0E1B2E]/40" />
             <input
               type="text"
-              placeholder="Q Search..."
+              placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className={`w-full pl-10 pr-4 py-2 rounded-lg border transition-colors ${
-                darkMode
-                  ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
-                  : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
-              }`}
+              className="w-full pl-10 pr-4 py-2 rounded-lg border bg-white border-gray-300 text-[#0E1B2E] placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#0E1B2E]/20 focus:border-[#0E1B2E]"
             />
           </div>
         </div>
 
-        <div className="overflow-y-auto" style={{ height: 'calc(100vh - 120px)' }}>
+        <div className="flex-1 overflow-y-auto">
           {/* Onboarding Section */}
           <div>
             <button
               onClick={() => setOnboardingExpanded(!onboardingExpanded)}
-              className={`w-full px-4 py-3 flex items-center justify-between hover:bg-opacity-50 transition-colors ${
-                darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
-              }`}
+              className="w-full px-4 py-3 flex items-center justify-between hover:bg-[#0E1B2E]/5 transition-colors"
             >
-              <span className={`font-semibold ${
-                darkMode ? 'text-white' : 'text-gray-900'
-              }`}>
+              <span className="font-semibold text-[#0E1B2E]">
                 Onboarding
               </span>
               {onboardingExpanded ? (
-                <ChevronUp className={`w-4 h-4 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`} />
+                <ChevronUp className="w-4 h-4 text-[#0E1B2E]/60" />
               ) : (
-                <ChevronDown className={`w-4 h-4 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`} />
+                <ChevronDown className="w-4 h-4 text-[#0E1B2E]/60" />
               )}
             </button>
             
             {onboardingExpanded && (
               <div>
                 {filteredOnboarding.length === 0 ? (
-                  <div className={`px-4 py-8 text-center ${
-                    darkMode ? 'text-gray-400' : 'text-gray-500'
-                  }`}>
+                  <div className="px-4 py-8 text-center text-[#0E1B2E]/60">
                     No onboarding employees found
                   </div>
                 ) : (
@@ -465,32 +478,22 @@ export default function UnifiedDashboard({ darkMode = false, setDarkMode }: { da
                       onClick={() => setSelectedEmployee(emp)}
                       className={`px-4 py-3 flex items-center gap-3 cursor-pointer transition-colors ${
                         selectedEmployee?.id === emp.id
-                          ? darkMode
-                            ? 'bg-indigo-900/30 border-l-4 border-indigo-500'
-                            : 'bg-indigo-50 border-l-4 border-indigo-500'
-                          : darkMode
-                          ? 'hover:bg-gray-700'
-                          : 'hover:bg-gray-100'
+                          ? 'bg-[#0E1B2E]/5 border-l-4 border-[#0E1B2E]'
+                          : 'hover:bg-[#0E1B2E]/5'
                       }`}
                     >
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                        darkMode ? 'bg-gray-700' : 'bg-gray-200'
-                      }`}>
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-200">
                         {emp.profilePicture ? (
                           <img src={emp.profilePicture} alt={emp.name} className="w-full h-full rounded-full" />
                         ) : (
-                          <User className={`w-5 h-5 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`} />
+                          <User className="w-5 h-5 text-[#0E1B2E]/60" />
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className={`font-medium truncate ${
-                          darkMode ? 'text-white' : 'text-gray-900'
-                        }`}>
+                        <div className="font-medium truncate text-[#0E1B2E]">
                           {emp.name}
                         </div>
-                        <div className={`text-xs truncate ${
-                          darkMode ? 'text-gray-400' : 'text-gray-500'
-                        }`}>
+                        <div className="text-xs truncate text-[#0E1B2E]/60">
                           {emp.role}
                         </div>
                       </div>
@@ -502,31 +505,25 @@ export default function UnifiedDashboard({ darkMode = false, setDarkMode }: { da
           </div>
 
           {/* Offboarding Section */}
-          <div className="border-t" style={{ borderColor: darkMode ? '#374151' : '#e5e7eb' }}>
+          <div className="border-t border-gray-200">
             <button
               onClick={() => setOffboardingExpanded(!offboardingExpanded)}
-              className={`w-full px-4 py-3 flex items-center justify-between hover:bg-opacity-50 transition-colors ${
-                darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
-              }`}
+              className="w-full px-4 py-3 flex items-center justify-between hover:bg-[#0E1B2E]/5 transition-colors"
             >
-              <span className={`font-semibold ${
-                darkMode ? 'text-white' : 'text-gray-900'
-              }`}>
+              <span className="font-semibold text-[#0E1B2E]">
                 Offboarding
               </span>
               {offboardingExpanded ? (
-                <ChevronUp className={`w-4 h-4 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`} />
+                <ChevronUp className="w-4 h-4 text-[#0E1B2E]/60" />
               ) : (
-                <ChevronDown className={`w-4 h-4 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`} />
+                <ChevronDown className="w-4 h-4 text-[#0E1B2E]/60" />
               )}
             </button>
             
             {offboardingExpanded && (
               <div>
                 {filteredOffboarding.length === 0 ? (
-                  <div className={`px-4 py-8 text-center ${
-                    darkMode ? 'text-gray-400' : 'text-gray-500'
-                  }`}>
+                  <div className="px-4 py-8 text-center text-[#0E1B2E]/60">
                     No offboarding employees found
                   </div>
                 ) : (
@@ -536,32 +533,22 @@ export default function UnifiedDashboard({ darkMode = false, setDarkMode }: { da
                       onClick={() => setSelectedEmployee(emp)}
                       className={`px-4 py-3 flex items-center gap-3 cursor-pointer transition-colors ${
                         selectedEmployee?.id === emp.id
-                          ? darkMode
-                            ? 'bg-indigo-900/30 border-l-4 border-indigo-500'
-                            : 'bg-indigo-50 border-l-4 border-indigo-500'
-                          : darkMode
-                          ? 'hover:bg-gray-700'
-                          : 'hover:bg-gray-100'
+                          ? 'bg-[#0E1B2E]/5 border-l-4 border-[#0E1B2E]'
+                          : 'hover:bg-[#0E1B2E]/5'
                       }`}
                     >
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                        darkMode ? 'bg-gray-700' : 'bg-gray-200'
-                      }`}>
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-200">
                         {emp.profilePicture ? (
                           <img src={emp.profilePicture} alt={emp.name} className="w-full h-full rounded-full" />
                         ) : (
-                          <User className={`w-5 h-5 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`} />
+                          <User className="w-5 h-5 text-[#0E1B2E]/60" />
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className={`font-medium truncate ${
-                          darkMode ? 'text-white' : 'text-gray-900'
-                        }`}>
+                        <div className="font-medium truncate text-[#0E1B2E]">
                           {emp.name}
                         </div>
-                        <div className={`text-xs truncate ${
-                          darkMode ? 'text-gray-400' : 'text-gray-500'
-                        }`}>
+                        <div className="text-xs truncate text-[#0E1B2E]/60">
                           {emp.role}
                         </div>
                       </div>
@@ -575,161 +562,100 @@ export default function UnifiedDashboard({ darkMode = false, setDarkMode }: { da
       </div>
 
       {/* MAIN CONTENT */}
-      <div className="flex-1 flex flex-col">
-        {/* HEADER */}
-        <header className={`border-b transition-colors duration-300 ${
-          darkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'
-        }`}>
-          <div className="px-6 py-4 flex items-center justify-between">
-            <div>
-              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                Welcome back
-              </p>
-              <h1 className={`text-2xl font-bold ${
-                darkMode ? 'text-white' : 'text-gray-900'
-              }`}>
-                Onboarding / Offboarding Dashboard
-              </h1>
-            </div>
-            
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setDarkMode?.(!darkMode)}
-                className={`p-2 rounded-lg transition-colors ${
-                  darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'
-                }`}
-              >
-                {darkMode ? <Sun className="w-5 h-5 text-yellow-400" /> : <Moon className="w-5 h-5 text-gray-600" />}
-              </button>
-              
-              {user && (
-                <div className="relative">
-                  <button
-                    onClick={() => setUserMenuOpen(!userMenuOpen)}
-                    className="flex items-center gap-2"
-                  >
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                      darkMode ? 'bg-indigo-600' : 'bg-indigo-100'
-                    }`}>
-                      <User className={`w-4 h-4 ${darkMode ? 'text-white' : 'text-indigo-600'}`} />
-                    </div>
-                  </button>
-                  
-                  {userMenuOpen && (
-                    <div className={`absolute right-0 mt-2 w-48 rounded-lg shadow-lg border z-50 ${
-                      darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-                    }`}>
-                      <button
-                        onClick={logout}
-                        className={`w-full px-4 py-2 text-left flex items-center gap-2 rounded-lg transition-colors ${
-                          darkMode ? 'hover:bg-gray-700 text-red-400' : 'hover:bg-gray-100 text-red-600'
-                        }`}
-                      >
-                        <LogOut className="w-4 h-4" />
-                        Logout
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </header>
-
+      <div className="flex-1 flex flex-col h-screen overflow-hidden">
         {/* DASHBOARD CONTENT */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-6 relative">
+          {/* Grid Pattern Background - matching landing page */}
+          <div className="absolute inset-0 bg-[linear-gradient(to_right,#0E1B2E05_1px,transparent_1px),linear-gradient(to_bottom,#0E1B2E05_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
+          
           {!selectedEmployee ? (
-            <div className={`text-center py-20 rounded-2xl ${
-              darkMode ? 'bg-gray-800' : 'bg-white'
-            }`}>
-              <Users className={`w-16 h-16 mx-auto mb-4 ${
-                darkMode ? 'text-gray-600' : 'text-gray-400'
-              }`} />
-              <h3 className={`text-xl font-semibold mb-2 ${
-                darkMode ? 'text-gray-300' : 'text-gray-700'
-              }`}>
+            <div className="text-center py-20 rounded-xl relative z-10 bg-white border border-gray-200">
+              <Users className="w-16 h-16 mx-auto mb-4 text-[#0E1B2E]/20" />
+              <h3 className="text-xl font-semibold mb-2 text-[#0E1B2E]">
                 Select an employee to view progress
               </h3>
-              <p className={`${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+              <p className="text-[#0E1B2E]/60">
                 Choose an employee from the sidebar to see their onboarding or offboarding progress
               </p>
             </div>
           ) : employeeProgress ? (
-            <div className="space-y-6">
-              {/* Summary Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className={`p-6 rounded-2xl border ${
-                  darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-                }`}>
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className={`p-3 rounded-lg ${
-                      darkMode ? 'bg-orange-900/30' : 'bg-orange-100'
-                    }`}>
-                      <Clock className={`w-6 h-6 ${
-                        darkMode ? 'text-orange-400' : 'text-orange-600'
-                      }`} />
+            <div className="space-y-3 relative z-10">
+              {/* Employee Info Section */}
+              {selectedEmployee?.status === 'offboard' && (
+                <div className="p-4 rounded-lg border bg-white border-gray-200 shadow-sm">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-xs text-[#0E1B2E]/60 mb-1">
+                        Last Working Day
+                      </p>
+                      <p className="text-sm font-semibold text-[#0E1B2E]">
+                        2026-01-26
+                      </p>
                     </div>
                     <div>
-                      <p className={`text-sm ${
-                        darkMode ? 'text-gray-400' : 'text-gray-600'
-                      }`}>
+                      <p className="text-xs text-[#0E1B2E]/60 mb-1">
+                        Effective Workdays
+                      </p>
+                      <p className="text-sm font-semibold text-[#0E1B2E]">
+                        10 Days
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-[#0E1B2E]/60 mb-1">
+                        High-Risk Tasks
+                      </p>
+                      <p className="text-sm font-semibold text-[#0E1B2E]">
+                        0 Tasks
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Summary Cards - Compact */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="p-4 rounded-lg border bg-white border-gray-200 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-orange-100">
+                      <Clock className="w-5 h-5 text-orange-600" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-[#0E1B2E]/60">
                         Pending
                       </p>
-                      <p className={`text-2xl font-bold ${
-                        darkMode ? 'text-white' : 'text-gray-900'
-                      }`}>
+                      <p className="text-xl font-bold text-[#0E1B2E]">
                         {employeeProgress.pendingSections} sections
                       </p>
                     </div>
                   </div>
                 </div>
 
-                <div className={`p-6 rounded-2xl border ${
-                  darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-                }`}>
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className={`p-3 rounded-lg ${
-                      darkMode ? 'bg-green-900/30' : 'bg-green-100'
-                    }`}>
-                      <CheckCircle className={`w-6 h-6 ${
-                        darkMode ? 'text-green-400' : 'text-green-600'
-                      }`} />
+                <div className="p-4 rounded-lg border bg-white border-gray-200 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-green-100">
+                      <CheckCircle className="w-5 h-5 text-green-600" />
                     </div>
                     <div>
-                      <p className={`text-sm ${
-                        darkMode ? 'text-gray-400' : 'text-gray-600'
-                      }`}>
+                      <p className="text-xs text-[#0E1B2E]/60">
                         Completed
                       </p>
-                      <p className={`text-2xl font-bold ${
-                        darkMode ? 'text-white' : 'text-gray-900'
-                      }`}>
+                      <p className="text-xl font-bold text-[#0E1B2E]">
                         {employeeProgress.completedSections} sections
                       </p>
                     </div>
                   </div>
                 </div>
 
-                <div className={`p-6 rounded-2xl border ${
-                  darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-                }`}>
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className={`p-3 rounded-lg ${
-                      darkMode ? 'bg-purple-900/30' : 'bg-purple-100'
-                    }`}>
-                      <TrendingUp className={`w-6 h-6 ${
-                        darkMode ? 'text-purple-400' : 'text-purple-600'
-                      }`} />
+                <div className="p-4 rounded-lg border bg-white border-gray-200 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-purple-100">
+                      <TrendingUp className="w-5 h-5 text-purple-600" />
                     </div>
                     <div>
-                      <p className={`text-sm ${
-                        darkMode ? 'text-gray-400' : 'text-gray-600'
-                      }`}>
+                      <p className="text-xs text-[#0E1B2E]/60">
                         Efficiency
                       </p>
-                      <p className={`text-2xl font-bold ${
-                        darkMode ? 'text-white' : 'text-gray-900'
-                      }`}>
+                      <p className="text-xl font-bold text-[#0E1B2E]">
                         {employeeProgress.efficiency}%
                       </p>
                     </div>
@@ -737,145 +663,124 @@ export default function UnifiedDashboard({ darkMode = false, setDarkMode }: { da
                 </div>
               </div>
 
-              {/* Charts Row */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Charts Row - Compact */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* Donut Chart */}
-                <div className={`p-6 rounded-2xl border ${
-                  darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-                }`}>
-                  <h3 className={`text-lg font-semibold mb-4 ${
-                    darkMode ? 'text-white' : 'text-gray-900'
-                  }`}>
+                <div className="p-4 rounded-lg border bg-white border-gray-200 shadow-sm">
+                  <h3 className="text-base font-semibold mb-3 text-[#0E1B2E]">
                     {employeeProgress.employeeName} Progress
                   </h3>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie
-                        data={donutData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={100}
-                        paddingAngle={5}
-                        dataKey="value"
-                      >
-                        {donutData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.fill} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: darkMode ? '#1f2937' : '#ffffff',
-                          border: darkMode ? '1px solid #374151' : '1px solid #e5e7eb',
-                          borderRadius: '8px',
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="flex justify-center gap-6 mt-4">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-3 h-3 rounded-full ${
-                        darkMode ? 'bg-orange-400' : 'bg-orange-500'
-                      }`} />
-                      <span className={`text-sm ${
-                        darkMode ? 'text-gray-300' : 'text-gray-700'
-                      }`}>
-                        Pending: {100 - employeeProgress.overallProgress}%
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className={`w-3 h-3 rounded-full ${
-                        darkMode ? 'bg-green-400' : 'bg-green-500'
-                      }`} />
-                      <span className={`text-sm ${
-                        darkMode ? 'text-gray-300' : 'text-gray-700'
-                      }`}>
-                        Completed: {employeeProgress.overallProgress}%
-                      </span>
+                  <div className="flex items-center gap-4">
+                    <ResponsiveContainer width="60%" height={200}>
+                      <PieChart>
+                        <Pie
+                          data={donutData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={40}
+                          outerRadius={70}
+                          paddingAngle={5}
+                          dataKey="value"
+                        >
+                          {donutData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.fill} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: '#ffffff',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '8px',
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-orange-500" />
+                        <span className="text-sm text-[#0E1B2E]/70">
+                          Pending: {100 - employeeProgress.overallProgress}%
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-green-500" />
+                        <span className="text-sm text-[#0E1B2E]/70">
+                          Completed: {employeeProgress.overallProgress}%
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Time Spent vs Expected Chart */}
-                <div className={`p-6 rounded-2xl border ${
-                  darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-                }`}>
-                  <h3 className={`text-lg font-semibold mb-4 ${
-                    darkMode ? 'text-white' : 'text-gray-900'
-                  }`}>
-                    Time Spent vs. Expected
-                  </h3>
-                  <ResponsiveContainer width="100%" height={300}>
+                <div className="p-4 rounded-lg border bg-white border-gray-200 shadow-sm">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-base font-semibold text-[#0E1B2E]">
+                      Time Spent vs. Expected
+                    </h3>
+                    <div className="flex items-center gap-4 text-xs">
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 bg-[#60a5fa]"></div>
+                        <span className="text-[#0E1B2E]/70">Expected (h)</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 bg-[#34d399]"></div>
+                        <span className="text-[#0E1B2E]/70">Time spent (h)</span>
+                      </div>
+                    </div>
+                  </div>
+                  <ResponsiveContainer width="100%" height={200}>
                     <ComposedChart data={employeeProgress.timeSpentData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? '#374151' : '#e5e7eb'} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                       <XAxis
                         dataKey="section"
-                        stroke={darkMode ? '#9ca3af' : '#6b7280'}
-                        style={{ fontSize: '12px' }}
+                        stroke="#6b7280"
+                        style={{ fontSize: '10px' }}
                       />
                       <YAxis
-                        stroke={darkMode ? '#9ca3af' : '#6b7280'}
-                        style={{ fontSize: '12px' }}
+                        stroke="#6b7280"
+                        style={{ fontSize: '10px' }}
                       />
                       <Tooltip
                         contentStyle={{
-                          backgroundColor: darkMode ? '#1f2937' : '#ffffff',
-                          border: darkMode ? '1px solid #374151' : '1px solid #e5e7eb',
+                          backgroundColor: '#ffffff',
+                          border: '1px solid #e5e7eb',
                           borderRadius: '8px',
                         }}
                       />
-                      <Legend />
-                      <Bar dataKey="expected" fill={darkMode ? '#3b82f6' : '#60a5fa'} name="Expected (h)" />
-                      <Line type="monotone" dataKey="spent" stroke={darkMode ? '#10b981' : '#34d399'} strokeWidth={2} name="Time spent (h)" />
+                      <Bar dataKey="expected" fill="#60a5fa" name="Expected (h)" />
+                      <Line type="monotone" dataKey="spent" stroke="#34d399" strokeWidth={2} name="Time spent (h)" />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
               </div>
 
-              {/* Section Progress Table */}
-              <div className={`p-6 rounded-2xl border ${
-                darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
-              }`}>
-                <h3 className={`text-lg font-semibold mb-4 ${
-                  darkMode ? 'text-white' : 'text-gray-900'
-                }`}>
+              {/* Section Progress Table - Compact */}
+              <div className="p-4 rounded-lg border bg-white border-gray-200 shadow-sm">
+                <h3 className="text-base font-semibold mb-3 text-[#0E1B2E]">
                   Section Progress
                 </h3>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
-                      <tr className={`border-b ${
-                        darkMode ? 'border-gray-700' : 'border-gray-200'
-                      }`}>
-                        <th className={`text-left py-3 px-4 text-sm font-semibold ${
-                          darkMode ? 'text-gray-300' : 'text-gray-700'
-                        }`}>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left py-2 px-3 text-xs font-semibold text-[#0E1B2E]/70">
                           Section
                         </th>
-                        <th className={`text-left py-3 px-4 text-sm font-semibold ${
-                          darkMode ? 'text-gray-300' : 'text-gray-700'
-                        }`}>
+                        <th className="text-left py-2 px-3 text-xs font-semibold text-[#0E1B2E]/70">
                           Status
                         </th>
-                        <th className={`text-left py-3 px-4 text-sm font-semibold ${
-                          darkMode ? 'text-gray-300' : 'text-gray-700'
-                        }`}>
+                        <th className="text-left py-2 px-3 text-xs font-semibold text-[#0E1B2E]/70">
                           Expected (h)
                         </th>
-                        <th className={`text-left py-3 px-4 text-sm font-semibold ${
-                          darkMode ? 'text-gray-300' : 'text-gray-700'
-                        }`}>
+                        <th className="text-left py-2 px-3 text-xs font-semibold text-[#0E1B2E]/70">
                           Spent (h)
                         </th>
-                        <th className={`text-left py-3 px-4 text-sm font-semibold ${
-                          darkMode ? 'text-gray-300' : 'text-gray-700'
-                        }`}>
-                          Completion
+                        <th className="text-left py-2 px-3 text-xs font-semibold text-[#0E1B2E]/70">
+                          Progress
                         </th>
-                        <th className={`text-left py-3 px-4 text-sm font-semibold ${
-                          darkMode ? 'text-gray-300' : 'text-gray-700'
-                        }`}>
-                          Completion
+                        <th className="text-left py-2 px-3 text-xs font-semibold text-[#0E1B2E]/70">
+                          %
                         </th>
                       </tr>
                     </thead>
@@ -883,50 +788,34 @@ export default function UnifiedDashboard({ darkMode = false, setDarkMode }: { da
                       {employeeProgress.sections.map((section, idx) => (
                         <tr
                           key={idx}
-                          className={`border-b transition-colors ${
-                            darkMode ? 'border-gray-700 hover:bg-gray-700/50' : 'border-gray-200 hover:bg-gray-50'
-                          }`}
+                          className="border-b border-gray-200 hover:bg-[#0E1B2E]/5 transition-colors"
                         >
-                          <td className={`py-3 px-4 font-medium ${
-                            darkMode ? 'text-white' : 'text-gray-900'
-                          }`}>
+                          <td className="py-2 px-3 font-medium text-sm text-[#0E1B2E]">
                             {section.section}
                           </td>
-                          <td className="py-3 px-4">
-                            <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                          <td className="py-2 px-3">
+                            <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
                               section.status === 'Completed'
-                                ? darkMode
-                                  ? 'bg-green-900/30 text-green-400'
-                                  : 'bg-green-100 text-green-700'
-                                : darkMode
-                                ? 'bg-orange-900/30 text-orange-400'
+                                ? 'bg-green-100 text-green-700'
                                 : 'bg-orange-100 text-orange-700'
                             }`}>
                               {section.status}
                             </span>
                           </td>
-                          <td className={`py-3 px-4 ${
-                            darkMode ? 'text-gray-300' : 'text-gray-700'
-                          }`}>
+                          <td className="py-2 px-3 text-sm text-[#0E1B2E]/70">
                             {section.expectedHours} h
                           </td>
-                          <td className={`py-3 px-4 ${
-                            darkMode ? 'text-gray-300' : 'text-gray-700'
-                          }`}>
+                          <td className="py-2 px-3 text-sm text-[#0E1B2E]/70">
                             {section.spentHours !== null ? `${section.spentHours} h` : '-'}
                           </td>
-                          <td className="py-3 px-4">
-                            <div className="w-32 h-2 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700">
+                          <td className="py-2 px-3">
+                            <div className="w-24 h-1.5 rounded-full overflow-hidden bg-gray-200">
                               <div
                                 className={`h-full ${
                                   section.completion > 100
                                     ? 'bg-red-500'
                                     : section.status === 'Completed'
-                                    ? darkMode
-                                      ? 'bg-green-500'
-                                      : 'bg-green-400'
-                                    : darkMode
-                                    ? 'bg-blue-500'
+                                    ? 'bg-green-400'
                                     : 'bg-blue-400'
                                 }`}
                                 style={{
@@ -935,13 +824,9 @@ export default function UnifiedDashboard({ darkMode = false, setDarkMode }: { da
                               />
                             </div>
                           </td>
-                          <td className={`py-3 px-4 ${
-                            darkMode ? 'text-gray-300' : 'text-gray-700'
-                          }`}>
+                          <td className="py-2 px-3 text-sm text-[#0E1B2E]/70">
                             {section.spentHours !== null
-                              ? section.completion > 100
-                                ? `${section.completion}%`
-                                : `${section.completion}%`
+                              ? `${section.completion}%`
                               : 'Not started'}
                           </td>
                         </tr>
@@ -952,7 +837,7 @@ export default function UnifiedDashboard({ darkMode = false, setDarkMode }: { da
               </div>
             </div>
           ) : (
-            <Loader darkMode={darkMode} message="Loading progress..." />
+            <Loader darkMode={false} message="Loading progress..." />
           )}
         </div>
       </div>

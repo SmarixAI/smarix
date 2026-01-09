@@ -14,11 +14,16 @@ export default function TutorialSection({ data }: TutorialSectionProps) {
 
   return (
     <div>
-      <h3 className="text-lg font-semibold mb-4 text-gray-900">
-        Select a Tutorial:
-      </h3>
+      <div className="mb-6">
+        <h3 className="text-lg font-bold tracking-tight mb-2 text-[#0E1B2E]">
+          Tutorial Bugs
+        </h3>
+        <p className="text-sm text-[#0E1B2E]/60">
+          Learn debugging techniques through guided tutorials
+        </p>
+      </div>
       
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-3 gap-5 mb-6">
         {data.tutorials.map((tutorial, idx) => (
           <TutorialCard
             key={tutorial.tutorial_number}

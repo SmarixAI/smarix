@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { RotateCcw, Download, Loader2, CheckCircle, ChevronLeft, ChevronRight, FileCode, Maximize2, Minimize2, Sparkles } from 'lucide-react';
+import { RotateCcw, Download, Loader2, CheckCircle, ChevronLeft, ChevronRight, FileCode, MoveHorizontal, Minimize2, Sparkles } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 
 interface FileChange {
@@ -305,9 +305,9 @@ export default function CodeEditor({
               <button
                 onClick={onToggleFullscreen}
                 className="px-3 py-2 rounded-lg text-white text-sm font-medium transition-all flex items-center space-x-2 bg-gray-700 hover:bg-gray-600"
-                title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+                title={isFullscreen ? 'Collapse Width' : 'Expand Width Horizontally'}
               >
-                {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <MoveHorizontal className="w-4 h-4" />}
               </button>
             )}
             

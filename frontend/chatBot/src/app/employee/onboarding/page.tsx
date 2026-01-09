@@ -6,7 +6,7 @@ import OnboardingPage from '@/components/onboarding/page';
 
 function OnboardingPageContent() {
   return (
-    <ProtectedRoute>
+    <ProtectedRoute requiredRole="employee" requiredStatus="onboard">
       <OnboardingPage />
     </ProtectedRoute>
   );

@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   XCircle,
   Send,
+  ArrowLeft,
 } from "lucide-react";
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { ContentParser } from "../../utils/ReadingOverview/contentParser";
@@ -77,6 +78,22 @@ export default function OverviewModal({
   const scrollTimeoutRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
   const activeReposRef = useRef<string[]>([]);
+
+  // Handle Escape key to close modal
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscape);
+      return () => {
+        document.removeEventListener('keydown', handleEscape);
+      };
+    }
+  }, [isOpen, onClose]);
 
   useEffect(() => {
     if (isOpen && moduleId) {
@@ -386,7 +403,8 @@ export default function OverviewModal({
       `}</style>
 
       <div
-        className="absolute inset-0 modal-backdrop bg-gray-900/50 backdrop-blur-sm"
+        className="absolute inset-0 modal-backdrop bg-[#0E1B2E]/60 backdrop-blur-sm"
+        onClick={handleBackdropClick}
       />
 
       <div
@@ -396,38 +414,38 @@ export default function OverviewModal({
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="absolute top-0 left-0 right-0 h-1 z-20 bg-gray-200">
+        <div className="absolute top-0 left-0 right-0 h-1 z-20 bg-[#0E1B2E]/10">
           <div
-            className="h-full transition-all duration-300 bg-gray-400"
+            className="h-full transition-all duration-300 bg-[#0E1B2E]"
             style={{ width: `${scrollProgress}%` }}
           />
         </div>
 
         <div
-          className="sticky top-0 z-10 px-16 py-5 border-b bg-white border-gray-200"
+          className="sticky top-0 z-10 px-16 py-5 border-b bg-white border-gray-200 shadow-sm"
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-6 flex-1">
-              <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-gray-100 border border-gray-200">
-                <BookOpen className="w-6 h-6 text-gray-700" />
+              <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-[#0E1B2E]/5 border border-[#0E1B2E]/10">
+                <BookOpen className="w-6 h-6 text-[#0E1B2E]" />
               </div>
 
               <div className="flex items-center space-x-6">
-                <h2 className="text-3xl font-semibold text-gray-900">
+                <h2 className="text-3xl font-semibold text-[#0E1B2E] tracking-tight">
                   {title}
                 </h2>
 
                 <div className="flex items-center space-x-4">
-                  <div className="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-gray-100">
-                    <Clock className="w-4 h-4 text-gray-600" />
-                    <span className="text-xs font-medium text-gray-700">
+                  <div className="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-[#0E1B2E]/5 border border-[#0E1B2E]/10">
+                    <Clock className="w-4 h-4 text-[#0E1B2E]/60" />
+                    <span className="text-xs font-medium text-[#0E1B2E]">
                       {stats.estimatedReadTime} min read
                     </span>
                   </div>
 
-                  <div className="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-gray-100">
-                    <FileText className="w-4 h-4 text-gray-600" />
-                    <span className="text-xs font-medium text-gray-700">
+                  <div className="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-[#0E1B2E]/5 border border-[#0E1B2E]/10">
+                    <FileText className="w-4 h-4 text-[#0E1B2E]/60" />
+                    <span className="text-xs font-medium text-[#0E1B2E]">
                       Section {currentSectionIndex + 1} of {moduleContent.length}
                     </span>
                   </div>
@@ -435,24 +453,46 @@ export default function OverviewModal({
               </div>
             </div>
 
-            <button
-              onClick={onClose}
-              className="p-3 rounded-lg transition-all hover:bg-gray-100"
-              aria-label="Close modal"
-            >
-              <X className="w-6 h-6 transition-colors text-gray-600 hover:text-gray-900" />
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={onClose}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-lg transition-all bg-white border-2 border-[#0E1B2E]/20 hover:bg-[#0E1B2E] hover:border-[#0E1B2E] hover:text-white group shadow-sm"
+                aria-label="Go back"
+              >
+                <ArrowLeft className="w-5 h-5 transition-colors text-[#0E1B2E] group-hover:text-white" />
+                <span className="text-sm font-semibold text-[#0E1B2E] group-hover:text-white">Back</span>
+              </button>
+              <button
+                onClick={onClose}
+                className="flex items-center justify-center w-10 h-10 rounded-lg transition-all bg-white border-2 border-red-200 hover:bg-red-500 hover:border-red-500 group shadow-sm"
+                aria-label="Close modal"
+                title="Close (Esc)"
+              >
+                <X className="w-5 h-5 transition-colors text-red-600 group-hover:text-white" />
+              </button>
+            </div>
           </div>
         </div>
 
         <div
-          className="overflow-y-auto custom-scrollbar"
+          className="overflow-y-auto custom-scrollbar relative"
           style={{
             height: "calc(100vh - 100px)",
           }}
           onScroll={handleScroll}
         >
-          <div className="w-full px-16 py-10">
+          <div className="w-full px-16 py-6 relative">
+            {/* Floating Close Button - Always Visible */}
+            <div className="sticky top-4 z-30 flex justify-end -mt-6 mb-6">
+              <button
+                onClick={onClose}
+                className="flex items-center justify-center w-10 h-10 rounded-lg transition-all bg-white border-2 border-red-200 hover:bg-red-500 hover:border-red-500 group shadow-lg backdrop-blur-sm"
+                aria-label="Close modal"
+                title="Close (Esc)"
+              >
+                <X className="w-5 h-5 transition-colors text-red-600 group-hover:text-white" />
+              </button>
+            </div>
           {isLoading && moduleContent.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-32">
               <div className="relative">
@@ -608,21 +648,21 @@ export default function OverviewModal({
                       className="rounded-lg overflow-hidden transition-all animate-fade-in bg-white border border-gray-200"
                 >
                   <div
-                    className="px-8 py-5 border-b bg-gray-50 border-gray-200"
+                    className="px-8 py-5 border-b bg-gradient-to-r from-[#0E1B2E]/5 to-[#0E1B2E]/10 border-gray-200"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
-                        <span className="text-2xl font-semibold text-gray-700">
+                        <span className="text-2xl font-semibold text-[#0E1B2E]/80">
                               {currentSectionIndex + 1}.
                         </span>
-                        <h3 className="text-xl font-semibold text-gray-900">
+                        <h3 className="text-xl font-semibold text-[#0E1B2E]">
                           {moduleData.moduleTitle}
                         </h3>
                       </div>
 
                           {!moduleData.isQnASection && moduleData.content?.quality && (
-                        <div className="flex items-center space-x-1 px-3 py-1 rounded-lg bg-amber-50">
-                          <Award className="w-3 h-3 text-amber-500" />
+                        <div className="flex items-center space-x-1 px-3 py-1 rounded-lg bg-amber-50 border border-amber-200">
+                          <Award className="w-3 h-3 text-amber-600" />
                           <span className="text-xs font-semibold text-amber-700">
                             {(moduleData.content.quality * 5).toFixed(1)}
                           </span>
@@ -630,9 +670,9 @@ export default function OverviewModal({
                       )}
 
                           {moduleData.isQnASection && moduleData.questions && (
-                            <div className="flex items-center space-x-1 px-3 py-1 rounded-lg bg-gray-100">
-                              <MessageSquare className="w-3 h-3 text-gray-600" />
-                              <span className="text-xs font-semibold text-gray-700">
+                            <div className="flex items-center space-x-1 px-3 py-1 rounded-lg bg-[#0E1B2E]/5 border border-[#0E1B2E]/10">
+                              <MessageSquare className="w-3 h-3 text-[#0E1B2E]/60" />
+                              <span className="text-xs font-semibold text-[#0E1B2E]">
                                 {moduleData.questions.length} Questions
                           </span>
                         </div>
@@ -643,7 +683,7 @@ export default function OverviewModal({
                       <div className="mt-3">
                         <button
                           onClick={() => toggleModuleExpanded(moduleData.moduleId)}
-                          className="w-full text-left text-sm text-gray-600 hover:text-gray-700 transition-colors flex items-center space-x-2"
+                          className="w-full text-left text-sm text-[#0E1B2E]/60 hover:text-[#0E1B2E] transition-colors flex items-center space-x-2"
                         >
                           <ChevronDown
                             className={`w-4 h-4 transition-transform ${
@@ -654,7 +694,7 @@ export default function OverviewModal({
                         </button>
 
                         {expandedModules.has(moduleData.moduleId) && (
-                          <p className="mt-2 text-sm leading-relaxed text-gray-600">
+                          <p className="mt-2 text-sm leading-relaxed text-[#0E1B2E]/70">
                             {moduleData.content.question}
                           </p>
                         )}
@@ -716,8 +756,8 @@ export default function OverviewModal({
                   disabled={currentSectionIndex === 0}
                   className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition-all duration-300 ${
                     currentSectionIndex === 0
-                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                      : "bg-gray-900 text-white hover:bg-gray-800"
+                      ? "bg-[#0E1B2E]/10 text-[#0E1B2E]/40 cursor-not-allowed"
+                      : "bg-[#0E1B2E] text-white hover:bg-[#1a2f4d]"
                   }`}
                 >
                   <ChevronLeft className="w-5 h-5" />
@@ -730,10 +770,10 @@ export default function OverviewModal({
                     <button
                       key={index}
                       onClick={() => setCurrentSectionIndex(index)}
-                      className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                      className={`h-2 rounded-full transition-all duration-300 ${
                         index === currentSectionIndex
-                          ? "bg-gray-700 w-8"
-                          : "bg-gray-300 hover:bg-gray-400"
+                          ? "bg-[#0E1B2E] w-8"
+                          : "bg-[#0E1B2E]/30 hover:bg-[#0E1B2E]/50 w-2"
                       }`}
                       aria-label={`Go to section ${index + 1}`}
                     />
@@ -744,8 +784,8 @@ export default function OverviewModal({
                       disabled={isLoadingQnA}
                       className={`w-3 h-3 rounded-sm transition-all duration-300 flex items-center justify-center ${
                         showQnA
-                          ? "bg-gray-700"
-                          : "bg-gray-300 hover:bg-gray-400 border border-gray-400"
+                          ? "bg-[#0E1B2E]"
+                          : "bg-[#0E1B2E]/30 hover:bg-[#0E1B2E]/50 border border-[#0E1B2E]/40"
                       }`}
                       aria-label="Start QnA Assessment"
                       title="QnA Assessment"
@@ -760,8 +800,8 @@ export default function OverviewModal({
                   disabled={currentSectionIndex === moduleContent.length - 1}
                   className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition-all duration-300 ${
                     currentSectionIndex === moduleContent.length - 1
-                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                      : "bg-gray-900 text-white hover:bg-gray-800"
+                      ? "bg-[#0E1B2E]/10 text-[#0E1B2E]/40 cursor-not-allowed"
+                      : "bg-[#0E1B2E] text-white hover:bg-[#1a2f4d]"
                   }`}
                 >
                   <span>Next</span>

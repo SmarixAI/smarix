@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BookOpen, Users, Sparkles, ListTree, ChevronRight, Bug } from 'lucide-react';
+import { BookOpen, Users, Sparkles, ListTree, ChevronRight, Bug, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface SidebarProps {
   completedModules: number;
@@ -31,6 +31,7 @@ export default function Sidebar({
 
   // Track practice task completion status from localStorage
   const [completionMap, setCompletionMap] = useState<Record<number, boolean>>({});
+  const [tasksExpanded, setTasksExpanded] = useState<boolean>(true);
 
   useEffect(() => {
     try {
@@ -51,43 +52,62 @@ export default function Sidebar({
     const completionPercent = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
 
     return (
-      <aside className="col-span-3 space-y-4 max-h-screen overflow-y-auto pr-2">
+      <aside className="col-span-3 flex flex-col border-r border-gray-200 bg-white" style={{ height: 'calc(100vh - 180px)' }}>
 
         {/* PRACTICE HEADER CARD */}
-        <div className="rounded-lg p-4 bg-white border border-gray-200 shadow-sm sticky top-0 z-20">
-          <h3 className="font-semibold mb-1.5 flex items-center space-x-2 text-base">
-            <Sparkles className="w-4 h-4 text-gray-700" />
+        <div className="p-4 border-b border-gray-200 flex-shrink-0">
+          <h3 className="font-semibold mb-1.5 flex items-center space-x-2 text-base text-[#0E1B2E]">
+            <Sparkles className="w-4 h-4 text-[#0E1B2E]" />
             <span>Practice Tasks</span>
           </h3>
 
-          <p className="text-xs text-gray-600">
+          <p className="text-xs text-[#0E1B2E]/60">
             Master the codebase with hands-on exercises
           </p>
 
           {/* Progress Stats */}
           <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
-            <span className="text-sm font-semibold text-gray-700">
+            <span className="text-sm font-semibold text-[#0E1B2E]">
               {completedTasks}/{totalTasks} Completed
             </span>
-            <span className="text-xs text-gray-500">{Math.round(completionPercent)}%</span>
+            <span className="text-xs text-[#0E1B2E]/60">{Math.round(completionPercent)}%</span>
           </div>
 
-          <div className="h-2 rounded-full overflow-hidden mt-2 bg-gray-200">
+          <div className="h-2 rounded-full overflow-hidden mt-2 bg-[#0E1B2E]/10">
             <div
-              className="h-full bg-gray-600 transition-all duration-500"
+              className="h-full bg-[#0E1B2E] transition-all duration-500"
               style={{ width: `${completionPercent}%` }}
             />
           </div>
         </div>
 
-        {/* TASK LIST */}
-        <div className="rounded-lg p-4 bg-white border border-gray-200 shadow-sm">
-          <h3 className="font-semibold flex items-center space-x-2 text-base mb-3">
-            <ListTree className="w-4 h-4" />
-            <span>All Tasks</span>
-          </h3>
+        {/* Scrollable Content Area */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="p-4 space-y-4">
+            {/* TASK LIST */}
+            <div className="rounded-lg border border-gray-200 shadow-sm bg-white">
+              <button
+                onClick={() => setTasksExpanded(!tasksExpanded)}
+                className="w-full flex items-center justify-between p-4 hover:bg-[#0E1B2E]/5 transition-colors rounded-t-lg"
+              >
+                <div className="flex items-center space-x-2">
+                  <ListTree className="w-4 h-4 text-[#0E1B2E]" />
+                  <h3 className="font-semibold text-base text-[#0E1B2E]">
+                    Practice Tasks
+                  </h3>
+                  <span className="text-xs text-[#0E1B2E]/60 font-normal">
+                    ({totalTasks})
+                  </span>
+                </div>
+                {tasksExpanded ? (
+                  <ChevronUp className="w-4 h-4 text-[#0E1B2E]/60" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-[#0E1B2E]/60" />
+                )}
+              </button>
 
-          <nav className="space-y-2 max-h-80 overflow-y-auto w-full pr-2">
+              {tasksExpanded && (
+                <nav className="p-4 pt-0 space-y-2 border-t border-gray-200">
             {practiceTasks && practiceTasks.length > 0 ? (
               practiceTasks.map((task: any) => {
                 const isCompleted = completionMap[task.question_number];
@@ -107,32 +127,22 @@ export default function Sidebar({
                       w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm transition-colors group
                       ${
                         isSelected
-                          ? "bg-gray-800 border-2 border-gray-800 text-white"
+                          ? "bg-[#0E1B2E] border-2 border-[#0E1B2E] text-white"
                           : isCompleted
                           ? "bg-green-50 border border-green-200 text-green-700"
-                          : "hover:bg-gray-50 text-gray-700 border border-transparent"
+                          : "hover:bg-[#0E1B2E]/5 text-[#0E1B2E] border border-transparent"
                       }
                     `}
                   >
-                    {/* Difficulty Badge */}
-                    <span
-                      className={`px-2 py-0.5 rounded text-xs font-semibold ${difficultyColor}`}
-                    >
-                      {task.difficulty[0]}
-                    </span>
-
                     {/* Task Number and Title */}
                     <div className="flex-1 text-left min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold">Task #{task.question_number}</span>
-                        {isSelected && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-gray-700 text-white">
-                            Selected
-                          </span>
-                        )}
+                        <span className={`font-semibold ${isSelected ? 'text-white' : 'text-[#0E1B2E]'}`}>
+                          Task #{task.question_number}
+                        </span>
                       </div>
                       {task.steps && (
-                        <span className="text-xs ml-1 text-gray-500">
+                        <span className={`text-xs ml-1 ${isSelected ? 'text-white/80' : 'text-[#0E1B2E]/60'}`}>
                           ({task.steps.length} steps)
                         </span>
                       )}
@@ -152,73 +162,21 @@ export default function Sidebar({
 
                     {/* Hover Indicator */}
                     {!isCompleted && !isSelected && (
-                      <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-gray-600 transition-all" />
+                      <ChevronRight className="w-4 h-4 text-[#0E1B2E]/40 group-hover:text-[#0E1B2E]/60 transition-all" />
                     )}
                   </button>
                 );
               })
             ) : (
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-[#0E1B2E]/60 py-4 text-center">
                 No tasks available yet
               </p>
             )}
-          </nav>
+                </nav>
+              )}
+            </div>
+          </div>
         </div>
-
-        {/* HOW TO PRACTICE GUIDE */}
-        <div className="rounded-lg p-4 bg-white border border-gray-200 shadow-sm">
-          <h3 className="font-semibold flex items-center space-x-2 text-base mb-2">
-            <span>📖</span>
-            <span>How to Practice</span>
-          </h3>
-
-          <ol className="text-xs space-y-2 text-gray-600">
-            <li className="flex gap-2">
-              <span className="font-semibold text-gray-700 flex-shrink-0">1.</span>
-              <span>Click a task to expand it</span>
-            </li>
-            <li className="flex gap-2">
-              <span className="font-semibold text-gray-700 flex-shrink-0">2.</span>
-              <span>Read each step carefully</span>
-            </li>
-            <li className="flex gap-2">
-              <span className="font-semibold text-gray-700 flex-shrink-0">3.</span>
-              <span>Click "View Code" to see examples</span>
-            </li>
-            <li className="flex gap-2">
-              <span className="font-semibold text-gray-700 flex-shrink-0">4.</span>
-              <span>Review tips & common mistakes</span>
-            </li>
-            <li className="flex gap-2">
-              <span className="font-semibold text-gray-700 flex-shrink-0">5.</span>
-              <span>Click "Mark Complete" when done</span>
-            </li>
-          </ol>
-        </div>
-
-        {/* TIPS CARD */}
-        <div className="rounded-lg p-4 bg-white border border-gray-200 shadow-sm">
-          <h3 className="font-semibold flex items-center space-x-2 text-base mb-2">
-            <span>💡</span>
-            <span>Pro Tips</span>
-          </h3>
-
-          <ul className="text-xs space-y-2 text-gray-600">
-            <li className="flex gap-2">
-              <span>→</span>
-              <span>Copy code snippets to test locally</span>
-            </li>
-            <li className="flex gap-2">
-              <span>→</span>
-              <span>Take notes on key concepts</span>
-            </li>
-            <li className="flex gap-2">
-              <span>→</span>
-              <span>Return to review completed tasks</span>
-            </li>
-          </ul>
-        </div>
-
       </aside>
     );
   }

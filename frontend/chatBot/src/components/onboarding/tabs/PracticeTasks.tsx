@@ -157,8 +157,10 @@ export default function PracticeTasks({
   }
 
   return (
-    <div className="w-full p-2 lg:p-4 h-full overflow-hidden">
-      <div className="h-full flex flex-col max-w-none">
+    <div className="w-full p-2 lg:p-4 bg-[#FAFAFA] relative">
+      {/* Grid Pattern Background for practice section */}
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#0E1B2E05_1px,transparent_1px),linear-gradient(to_bottom,#0E1B2E05_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
+      <div className="relative z-10 space-y-3 lg:space-y-4">
         {filteredTasks.map((task: any) => {
           const isCompleted = practicedMap[task.question_number];
           const idx = activeStepMap[task.question_number] ?? 0;
@@ -167,7 +169,7 @@ export default function PracticeTasks({
           const key = `${task.question_number}-${step?.step_number || 1}`;
 
           return (
-            <div key={task.question_number} className="h-full flex flex-col space-y-3 lg:space-y-4">
+            <div key={task.question_number} className="space-y-3 lg:space-y-4">
               {/* TASK OVERVIEW */}
               <div className="rounded-lg border border-gray-200 p-4 flex-shrink-0 bg-white">
                 <div className="flex items-start justify-between mb-2">
@@ -188,9 +190,9 @@ export default function PracticeTasks({
 
               {/* STEPS CONTAINER */}
               {task.steps && task.steps.length > 0 ? (
-                <div className="flex-1 flex flex-col rounded-lg border border-gray-200 overflow-hidden bg-white">
+                <div className="rounded-lg border border-gray-200 bg-white">
                   {/* Progress Header */}
-                  <div className="px-5 py-4 border-b flex-shrink-0 bg-gray-50 border-gray-200">
+                  <div className="px-5 py-4 border-b bg-gray-50 border-gray-200">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center space-x-3">
                         <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-gray-800 text-white">
@@ -224,9 +226,8 @@ export default function PracticeTasks({
                     </div>
                   </div>
 
-                  {/* Scrollable Content */}
-                  <div className="flex-1 flex flex-col px-5 py-5 overflow-hidden">
-                    <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+                  {/* Content */}
+                  <div className="px-5 py-5 space-y-4">
                       
                       {/* What to implement */}
                       <div className="rounded-lg border border-gray-200 p-4 bg-gray-50">
@@ -319,7 +320,6 @@ export default function PracticeTasks({
                           </div>
                         </div>
                       )}
-                    </div>
                   </div>
 
                   {/* Navigation */}
@@ -385,7 +385,7 @@ export default function PracticeTasks({
                   </div>
                 </div>
               ) : (
-                <div className="flex-1 rounded-lg border border-gray-200 p-8 text-center flex flex-col items-center justify-center bg-gray-50">
+                <div className="rounded-lg border border-gray-200 p-8 text-center flex flex-col items-center justify-center bg-gray-50">
                   <Shield className="w-12 h-12 opacity-40 mb-4 text-gray-400" />
                   <p className="text-lg font-medium text-gray-600">
                     No steps available
