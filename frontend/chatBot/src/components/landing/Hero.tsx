@@ -4,6 +4,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { motion, useScroll, useTransform, useSpring } from 'framer-motion';
 import { ArrowUpRight } from 'lucide-react';
 import { Victor_Mono, Fira_Code } from 'next/font/google';
+import Link from 'next/link';
 
 const victorMono = Victor_Mono({
   weight: ["400", "500", "700"],
@@ -111,7 +112,7 @@ export const Hero = () => {
           </p>
 
           <div className="flex items-center gap-6">
-            <button className="group relative inline-flex items-center justify-center gap-3 bg-[#0E1B2E] text-white pl-6 pr-4 py-4 rounded-none hover:bg-[#1a2f4d] transition-all duration-300 shadow-xl shadow-blue-900/10">
+            <Link href="/try-our-product" className="group relative inline-flex items-center justify-center gap-3 bg-[#0E1B2E] text-white pl-6 pr-4 py-4 rounded-none hover:bg-[#1a2f4d] transition-all duration-300 shadow-xl shadow-blue-900/10">
               <span
                 className={`${firaCode.className} font-bold tracking-wide text-sm`}
               >
@@ -119,7 +120,7 @@ export const Hero = () => {
               </span>
               <span className="w-px h-5 bg-white/20" />
               <ArrowUpRight className="w-5 h-5 transition-transform duration-300 group-hover:-translate-y-1 group-hover:translate-x-1" />
-            </button>
+            </Link>
 
             <button
               className={`${firaCode.className} text-sm font-bold text-[#0E1B2E] hover:text-blue-600 transition-colors underline decoration-gray-300 underline-offset-4 hover:decoration-blue-600`}
