@@ -1,25 +1,18 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import TopNavBar from "@/components/admin/components/TopNavBar";
 import Sidebar from "@/components/admin/components/Sidebar";
 import SetupPipelineView from "@/components/admin/components/SetupPipelineView";
 import HistoryView from "@/components/admin/components/HistoryView";
-import StatisticsView from "@/components/admin/components/StatisticsView";
-import ActivityView from "@/components/admin/components/ActivityView";
 import OnboardingView from "@/components/admin/components/OnboardingView";
 import OffboardingView from "@/components/admin/components/OffboardingView";
 import UserManagementView from "@/components/admin/components/UserManagementView";
-import { Step, StepStatus, SetupStats, HistoryEntry } from "@/components/admin/components/types";
+import ChangePasswordModal from "@/components/auth/ChangePasswordModal";
+import { Step, StepStatus, HistoryEntry } from "@/components/admin/components/types";
 import { validateGitHubName } from "@/components/admin/components/validation";
-import ThreeJsBackground from "@/components/onboarding/ThreeJsBackground";
 
 export default function AdminPage() {
-  const [darkMode, setDarkMode] = useState(true);
-  const [mousePosition, setMousePosition] = useState({ x: 50, y: 50 });
-  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeView, setActiveView] = useState("setup");
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [organization, setOrganization] = useState("");
   const [repoName, setRepoName] = useState("");
   const [isRunning, setIsRunning] = useState(false);
@@ -27,29 +20,15 @@ export default function AdminPage() {
   const [wsConnection, setWsConnection] = useState<WebSocket | null>(null);
   const [canCancel, setCanCancel] = useState(false);
   const [setupHistory, setSetupHistory] = useState<HistoryEntry[]>([]);
-  const [stats, setStats] = useState<SetupStats>({
-    totalSetups: 0,
-    successfulSetups: 0,
-    failedSetups: 0,
-    lastSetup: null,
-  });
   const [onboardingStatus, setOnboardingStatus] = useState<StepStatus>("pending");
   const [onboardingMessage, setOnboardingMessage] = useState<string>("");
   const [onboardingRunning, setOnboardingRunning] = useState(false);
   const [offboardingStatus, setOffboardingStatus] = useState<StepStatus>("pending");
   const [offboardingMessage, setOffboardingMessage] = useState<string>("");
   const [offboardingRunning, setOffboardingRunning] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
 
   const baseURL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
-  // Dark mode effect
-  useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-  }, [darkMode]);
 
   // Load history from backend API
   useEffect(() => {
@@ -60,12 +39,6 @@ export default function AdminPage() {
           const data = await response.json();
           const history = data.history || [];
           setSetupHistory(history);
-          setStats({
-            totalSetups: history.length,
-            successfulSetups: history.filter((h: any) => h.status === "success").length,
-            failedSetups: history.filter((h: any) => h.status === "failed").length,
-            lastSetup: history.length > 0 ? history[0].timestamp : null,
-          });
         }
       } catch (error) {
         console.error("Error loading history:", error);
@@ -790,145 +763,80 @@ export default function AdminPage() {
     }
   };
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
-    setMousePosition({ x, y });
-  };
-
   return (
-    <div
-      className={`min-h-screen transition-colors duration-700 relative overflow-hidden ${
-        darkMode
-          ? "bg-gray-900 text-gray-100"
-          : "bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 text-slate-900"
-      }`}
-      onMouseMove={handleMouseMove}
-    >
-      <style jsx global>{`
-        .glass-card-light {
-          backdrop-filter: blur(20px) saturate(200%);
-          -webkit-backdrop-filter: blur(20px) saturate(200%);
-          background: rgba(255, 255, 255, 0.7);
-          border: 1px solid rgba(255, 255, 255, 0.5);
-        }
+    <div className="min-h-screen bg-[#FAFAFA] text-[#0E1B2E] relative overflow-hidden">
+      {/* Grid Pattern Background - matching landing page */}
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#0E1B2E05_1px,transparent_1px),linear-gradient(to_bottom,#0E1B2E05_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
 
-        .glass-card-dark {
-          backdrop-filter: blur(16px) saturate(180%);
-          -webkit-backdrop-filter: blur(16px) saturate(180%);
-          background: rgba(17, 24, 39, 0.7);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-      `}</style>
-
-      <ThreeJsBackground darkMode={darkMode} />
-
-      <div
-        className="fixed inset-0 pointer-events-none z-0 transition-all duration-300"
-        style={{
-          background: darkMode
-            ? `radial-gradient(circle at ${mousePosition.x}% ${
-                mousePosition.y
-              }%, rgba(99, 102, 241, 0.2) 0%, transparent 50%),
-               radial-gradient(circle at ${100 - mousePosition.x}% ${
-                100 - mousePosition.y
-              }%, rgba(139, 92, 246, 0.2) 0%, transparent 50%)`
-            : `radial-gradient(circle at ${mousePosition.x}% ${
-                mousePosition.y
-              }%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
-               radial-gradient(circle at ${100 - mousePosition.x}% ${
-                100 - mousePosition.y
-              }%, rgba(6, 182, 212, 0.15) 0%, transparent 50%)`,
-        }}
-      />
-
-      <div className="relative z-10">
-        <TopNavBar
-          darkMode={darkMode}
-          setDarkMode={setDarkMode}
-          userMenuOpen={userMenuOpen}
-          setUserMenuOpen={setUserMenuOpen}
-        />
-
-        <div className="flex max-w-7xl mx-auto">
+      <div className="h-screen relative flex">
+        {/* Fixed Sidebar */}
         <Sidebar
-          darkMode={darkMode}
           activeView={activeView}
           setActiveView={setActiveView}
-          stats={stats}
+          onOpenChangePassword={() => setShowChangePassword(true)}
         />
 
-        <main className={`flex-1 p-6 transition-all duration-300 ${
-          sidebarOpen ? "ml-0" : "ml-0"
-        }`}>
-          {activeView === "setup" && (
-            <SetupPipelineView
-              darkMode={darkMode}
-              organization={organization}
-              setOrganization={setOrganization}
-              repoName={repoName}
-              setRepoName={setRepoName}
-              isRunning={isRunning}
-              executionMode={executionMode}
-              setExecutionMode={setExecutionMode}
-              canCancel={canCancel}
-              steps={steps}
-              handleSetup={handleSetup}
-              handleCancel={handleCancel}
-              handleStepByStep={handleStepByStep}
-            />
-          )}
+        {/* Scrollable Main Content */}
+        <main className="flex-1 relative z-10 flex flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto px-6 py-6">
+            {activeView === "setup" && (
+              <SetupPipelineView
+                darkMode={false}
+                organization={organization}
+                setOrganization={setOrganization}
+                repoName={repoName}
+                setRepoName={setRepoName}
+                isRunning={isRunning}
+                executionMode={executionMode}
+                setExecutionMode={setExecutionMode}
+                canCancel={canCancel}
+                steps={steps}
+                handleSetup={handleSetup}
+                handleCancel={handleCancel}
+                handleStepByStep={handleStepByStep}
+              />
+            )}
 
-          {activeView === "history" && (
-            <HistoryView
-              darkMode={darkMode}
-              setupHistory={setupHistory}
-            />
-          )}
+            {activeView === "history" && (
+              <HistoryView
+                darkMode={false}
+                setupHistory={setupHistory}
+              />
+            )}
 
-          {activeView === "stats" && (
-            <StatisticsView
-              darkMode={darkMode}
-              stats={stats}
-            />
-          )}
+            {activeView === "onboarding" && (
+              <OnboardingView
+                darkMode={false}
+                onboardingStatus={onboardingStatus}
+                onboardingMessage={onboardingMessage}
+                onboardingRunning={onboardingRunning}
+                onRunOnboarding={handleOnboarding}
+              />
+            )}
 
-          {activeView === "activity" && (
-            <ActivityView
-              darkMode={darkMode}
-              isRunning={isRunning}
-              organization={organization}
-              repoName={repoName}
-            />
-          )}
+            {activeView === "offboarding" && (
+              <OffboardingView
+                darkMode={false}
+                offboardingStatus={offboardingStatus}
+                offboardingMessage={offboardingMessage}
+                offboardingRunning={offboardingRunning}
+                onRunOffboarding={handleOffboarding}
+              />
+            )}
 
-          {activeView === "onboarding" && (
-            <OnboardingView
-              darkMode={darkMode}
-              onboardingStatus={onboardingStatus}
-              onboardingMessage={onboardingMessage}
-              onboardingRunning={onboardingRunning}
-              onRunOnboarding={handleOnboarding}
-            />
-          )}
-
-          {activeView === "offboarding" && (
-            <OffboardingView
-              darkMode={darkMode}
-              offboardingStatus={offboardingStatus}
-              offboardingMessage={offboardingMessage}
-              offboardingRunning={offboardingRunning}
-              onRunOffboarding={handleOffboarding}
-            />
-          )}
-
-          {activeView === "users" && (
-            <UserManagementView darkMode={darkMode} />
-          )}
+            {activeView === "users" && (
+              <UserManagementView darkMode={false} />
+            )}
+          </div>
         </main>
       </div>
-      </div>
+
+      {/* Change Password Modal - Rendered at layout level for proper z-index */}
+      <ChangePasswordModal
+        isOpen={showChangePassword}
+        onClose={() => setShowChangePassword(false)}
+        darkMode={false}
+      />
     </div>
   );
 }

@@ -103,16 +103,16 @@ export const Process = () => {
            
            <motion.div 
              style={{ y: yLogo }}
-             className="absolute left-0 top-1/2 -translate-y-1/2 z-20 w-20 h-20 bg-white/60 backdrop-blur-xl rounded-2xl shadow-[0_20px_40px_-15px_rgba(37,99,235,0.2)] border border-white/80 flex items-center justify-center p-4"
+             className="absolute left-0 top-1/2 -translate-y-1/2 z-20 w-20 h-20 bg-white/60 backdrop-blur-xl rounded-xl shadow-[0_20px_40px_-15px_rgba(37,99,235,0.2)] border border-white/80 flex items-center justify-center p-4 overflow-hidden"
            >
               <Image 
                 src="/logo.png" 
                 alt="SmariX Core" 
                 width={48} 
                 height={48} 
-                className="object-contain"
+                className="object-contain rounded-xl"
               />
-              <div className="absolute inset-0 rounded-2xl ring-1 ring-blue-500/10" />
+              <div className="absolute inset-0 rounded-xl ring-1 ring-blue-500/10" />
            </motion.div>
 
            <svg className="w-full h-full visible overflow-visible">

@@ -74,9 +74,9 @@ export const Footer = () => {
                  repeat: Infinity,
                  ease: "easeInOut"
                }}
-               className="w-40 h-40 md:w-56 md:h-56 relative bg-white/5 rounded-3xl flex items-center justify-center border border-white/10 backdrop-blur-sm"
+               className="w-40 h-40 md:w-56 md:h-56 relative bg-white/5 rounded-[2rem] flex items-center justify-center border border-white/10 backdrop-blur-sm overflow-hidden"
              >
-                <Image src="/logo.png" alt="Smarix Logo" width={120} height={120} className="object-contain w-28 h-28 md:w-40 md:h-40" />
+                <Image src="/logo.png" alt="Smarix Logo" width={120} height={120} className="object-contain w-28 h-28 md:w-40 md:h-40 rounded-[2rem]" />
              </motion.div>
              <p className={`${jetbrainsMono.className} text-white/40 text-sm max-w-[240px] leading-relaxed text-right`}>
                Empowering engineering teams with AI-driven knowledge continuity.

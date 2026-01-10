@@ -234,9 +234,9 @@ export default function ChallengeContent({
             </div>
 
             {/* Scrollable Content */}
-            <div className="flex-1 overflow-y-auto px-6 py-6 bg-gray-50">
+            <div className="flex-1 overflow-y-auto px-6 py-4 bg-gray-50">
               {activeTab === "description" && (
-                <div className="prose prose-base max-w-none">
+                <div className="prose max-w-none">
                   <ReactMarkdown
                     components={{
                       code(props) {
@@ -270,17 +270,17 @@ export default function ChallengeContent({
                         );
                       },
                       h1: ({ children }) => (
-                        <h1 className="text-xl font-semibold mb-4 mt-6 pb-2 border-b text-gray-900 border-gray-200">
+                        <h1 className="text-base font-semibold mb-3 mt-4 pb-2 border-b text-[#0E1B2E] border-[#0E1B2E]/10">
                           {children}
                         </h1>
                       ),
                       h2: ({ children }) => (
-                        <h2 className="text-lg font-semibold mb-3 mt-5 text-gray-900">
+                        <h2 className="text-sm font-semibold mb-2 mt-4 text-[#0E1B2E]">
                           {children}
                         </h2>
                       ),
                       h3: ({ children }) => (
-                        <h3 className="text-base font-semibold mb-2 mt-4 text-gray-800">
+                        <h3 className="text-sm font-semibold mb-2 mt-3 text-[#0E1B2E]/90">
                           {children}
                         </h3>
                       ),
@@ -343,14 +343,14 @@ export default function ChallengeContent({
               )}
 
               {activeTab === "hints" && (
-                <div className="rounded-lg p-5 border bg-gray-50 border-gray-200">
+                <div className="rounded-lg p-4 border bg-gray-50 border-gray-200">
                   <div className="flex items-start space-x-3">
-                    <Lightbulb className="w-5 h-5 mt-0.5 text-gray-700" />
+                    <Lightbulb className="w-4 h-4 mt-0.5 text-[#0E1B2E]/70" />
                     <div>
-                      <h4 className="font-semibold mb-3 text-gray-900">
+                      <h4 className="text-sm font-semibold mb-2 text-[#0E1B2E]">
                         Helpful Tips
                       </h4>
-                      <ul className="space-y-2 text-sm text-gray-700">
+                      <ul className="space-y-1.5 text-xs text-[#0E1B2E]/80">
                         <li className="flex items-start">
                           <span className="text-gray-600 mr-2">
                             →
@@ -394,14 +394,14 @@ export default function ChallengeContent({
               )}
 
               {activeTab === "solution" && (
-                <div className="rounded-lg p-5 border bg-gray-50 border-gray-200">
+                <div className="rounded-lg p-4 border bg-gray-50 border-gray-200">
                   <div className="flex items-start space-x-3">
-                    <CheckCircle2 className="w-5 h-5 mt-0.5 text-gray-700" />
+                    <CheckCircle2 className="w-4 h-4 mt-0.5 text-[#0E1B2E]/70" />
                     <div>
-                      <h4 className="font-semibold mb-3 text-gray-900">
+                      <h4 className="text-sm font-semibold mb-2 text-[#0E1B2E]">
                         Solution Approach
                       </h4>
-                      <p className="text-sm text-gray-700">
+                      <p className="text-xs text-[#0E1B2E]/80">
                         Try to solve the challenge on your own first! The
                         solution will be revealed after you submit your code.
                       </p>

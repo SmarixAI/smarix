@@ -422,16 +422,16 @@ export default function OverviewModal({
         </div>
 
         <div
-          className="sticky top-0 z-10 px-16 py-5 border-b bg-white border-gray-200 shadow-sm"
+          className="sticky top-0 z-10 px-6 py-4 border-b bg-white/35 backdrop-blur-xl border-[#0E1B2E]/10 shadow-sm"
         >
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-6 flex-1">
-              <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-[#0E1B2E]/5 border border-[#0E1B2E]/10">
-                <BookOpen className="w-6 h-6 text-[#0E1B2E]" />
+            <div className="flex items-center space-x-4 flex-1">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-[#0E1B2E]/5 border border-[#0E1B2E]/10">
+                <BookOpen className="w-5 h-5 text-[#0E1B2E]" />
               </div>
 
-              <div className="flex items-center space-x-6">
-                <h2 className="text-3xl font-semibold text-[#0E1B2E] tracking-tight">
+              <div className="flex items-center space-x-4">
+                <h2 className="text-xl font-semibold text-[#0E1B2E] tracking-tight">
                   {title}
                 </h2>
 
@@ -481,16 +481,16 @@ export default function OverviewModal({
           }}
           onScroll={handleScroll}
         >
-          <div className="w-full px-16 py-6 relative">
+          <div className="w-full px-6 py-4 relative">
             {/* Floating Close Button - Always Visible */}
-            <div className="sticky top-4 z-30 flex justify-end -mt-6 mb-6">
+            <div className="sticky top-4 z-30 flex justify-end -mt-2 mb-4">
               <button
                 onClick={onClose}
-                className="flex items-center justify-center w-10 h-10 rounded-lg transition-all bg-white border-2 border-red-200 hover:bg-red-500 hover:border-red-500 group shadow-lg backdrop-blur-sm"
+                className="flex items-center justify-center w-9 h-9 rounded-lg transition-all bg-white/90 backdrop-blur-sm border-2 border-red-200 hover:bg-red-500 hover:border-red-500 group shadow-lg"
                 aria-label="Close modal"
                 title="Close (Esc)"
               >
-                <X className="w-5 h-5 transition-colors text-red-600 group-hover:text-white" />
+                <X className="w-4 h-4 transition-colors text-red-600 group-hover:text-white" />
               </button>
             </div>
           {isLoading && moduleContent.length === 0 ? (
@@ -645,17 +645,17 @@ export default function OverviewModal({
                 <div
                   key={moduleData.moduleId}
                   id={`module-section-${moduleData.moduleId}`}
-                      className="rounded-lg overflow-hidden transition-all animate-fade-in bg-white border border-gray-200"
+                      className="rounded-xl overflow-hidden transition-all animate-fade-in bg-white/35 backdrop-blur-xl border border-white/25 shadow-md shadow-black/5"
                 >
                   <div
-                    className="px-8 py-5 border-b bg-gradient-to-r from-[#0E1B2E]/5 to-[#0E1B2E]/10 border-gray-200"
+                    className="px-5 py-3 border-b border-[#0E1B2E]/10 bg-white/40 backdrop-blur-sm"
                   >
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        <span className="text-2xl font-semibold text-[#0E1B2E]/80">
+                      <div className="flex items-center space-x-2.5">
+                        <span className="text-sm font-semibold text-[#0E1B2E]/60">
                               {currentSectionIndex + 1}.
                         </span>
-                        <h3 className="text-xl font-semibold text-[#0E1B2E]">
+                        <h3 className="text-sm font-semibold text-[#0E1B2E]">
                           {moduleData.moduleTitle}
                         </h3>
                       </div>
@@ -680,13 +680,13 @@ export default function OverviewModal({
                     </div>
 
                     {moduleData.content?.question && (
-                      <div className="mt-3">
+                      <div className="mt-2.5">
                         <button
                           onClick={() => toggleModuleExpanded(moduleData.moduleId)}
-                          className="w-full text-left text-sm text-[#0E1B2E]/60 hover:text-[#0E1B2E] transition-colors flex items-center space-x-2"
+                          className="w-full text-left text-xs text-[#0E1B2E]/60 hover:text-[#0E1B2E] transition-colors flex items-center space-x-1.5"
                         >
                           <ChevronDown
-                            className={`w-4 h-4 transition-transform ${
+                            className={`w-3.5 h-3.5 transition-transform ${
                               expandedModules.has(moduleData.moduleId) ? "rotate-180" : ""
                             }`}
                           />
@@ -694,7 +694,7 @@ export default function OverviewModal({
                         </button>
 
                         {expandedModules.has(moduleData.moduleId) && (
-                          <p className="mt-2 text-sm leading-relaxed text-[#0E1B2E]/70">
+                          <p className="mt-1.5 text-xs leading-relaxed text-[#0E1B2E]/70">
                             {moduleData.content.question}
                           </p>
                         )}
@@ -702,7 +702,7 @@ export default function OverviewModal({
                     )}
                   </div>
 
-                  <div className="px-8 py-8">
+                  <div className="px-5 py-4">
                     <ContentRenderer
                       sections={moduleData.sections}
                       renderedMermaid={renderedMermaid[moduleData.moduleId] || {}}
@@ -710,32 +710,32 @@ export default function OverviewModal({
                         
                         {/* Show Start QnA button after last section */}
                         {isLastSection && (
-                          <div className="mt-12 pt-8 border-t border-gray-200">
-                            <div className="p-8 rounded-lg border text-center bg-gray-50 border-gray-200">
-                              <MessageSquare className="w-12 h-12 mx-auto mb-4 text-gray-600" />
-                              <h3 className="text-xl font-semibold mb-2 text-gray-900">
+                          <div className="mt-8 pt-6 border-t border-[#0E1B2E]/10">
+                            <div className="p-6 rounded-xl border text-center bg-white/35 backdrop-blur-xl border-white/25 shadow-md shadow-black/5">
+                              <MessageSquare className="w-10 h-10 mx-auto mb-3 text-[#0E1B2E]/60" />
+                              <h3 className="text-lg font-semibold mb-2 text-[#0E1B2E]">
                                 Ready for Assessment?
                               </h3>
-                              <p className="text-sm mb-6 text-gray-600">
+                              <p className="text-sm mb-5 text-[#0E1B2E]/70">
                                 Test your understanding with a knowledge check quiz
                               </p>
                               <button
                                 onClick={handleStartQnA}
                                 disabled={isLoadingQnA}
-                                className={`px-8 py-4 rounded-lg font-medium text-lg transition-all flex items-center space-x-3 mx-auto ${
+                                className={`px-6 py-3 rounded-lg font-medium text-sm transition-all flex items-center space-x-2 mx-auto ${
                                   isLoadingQnA
-                                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                                    : "bg-gray-900 text-white hover:bg-gray-800"
+                                    ? "bg-[#0E1B2E]/10 text-[#0E1B2E]/40 cursor-not-allowed"
+                                    : "bg-[#0E1B2E] text-white hover:bg-[#1a2f4d] shadow-md hover:shadow-lg"
                                 }`}
                               >
                                 {isLoadingQnA ? (
                                   <>
-                                    <Loader2 className="w-6 h-6 animate-spin" />
+                                    <Loader2 className="w-5 h-5 animate-spin" />
                                     <span>Loading...</span>
                                   </>
                                 ) : (
                                   <>
-                                    <MessageSquare className="w-6 h-6" />
+                                    <MessageSquare className="w-5 h-5" />
                                     <span>Start QnA Assessment</span>
                                   </>
                                 )}
@@ -750,7 +750,7 @@ export default function OverviewModal({
                   </div>
 
               {/* Navigation Buttons */}
-              <div className="mt-8 flex items-center justify-between pt-6 border-t border-gray-200">
+              <div className="mt-6 flex items-center justify-between pt-4 border-t border-[#0E1B2E]/10 px-6 pb-4">
                 <button
                   onClick={handlePreviousSection}
                   disabled={currentSectionIndex === 0}

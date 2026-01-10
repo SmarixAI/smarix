@@ -1,177 +1,143 @@
 "use client";
 
-import { Database, History, BarChart3, Activity, UserPlus, UserMinus, Users } from "lucide-react";
-import { SetupStats } from "./types";
+import { Database, History, UserPlus, UserMinus, Users, LogOut, Key } from "lucide-react";
+import { Space_Grotesk, Fira_Code } from 'next/font/google';
+import { useAuth } from "@/components/auth/AuthContext";
+import Image from 'next/image';
+
+const spaceGrotesk = Space_Grotesk({ subsets: ['latin'] });
+const firaCode = Fira_Code({ subsets: ['latin'] });
 
 interface SidebarProps {
-  darkMode: boolean;
   activeView: string;
   setActiveView: (view: string) => void;
-  stats: SetupStats;
+  onOpenChangePassword: () => void;
 }
 
 export default function Sidebar({
-  darkMode,
   activeView,
   setActiveView,
-  stats,
+  onOpenChangePassword,
 }: SidebarProps) {
+  const { user, logout } = useAuth();
+
   return (
-    <aside className={`w-64 border-r min-h-[calc(100vh-4rem)] p-4 transition-all duration-300 ${
-      darkMode 
-        ? "bg-gray-800/95 border-gray-700 backdrop-blur-sm" 
-        : "bg-white/95 border-slate-200 backdrop-blur-sm"
-    }`}>
-      <nav className="space-y-1.5">
+    <aside className="w-80 flex-shrink-0 border-r border-gray-200 bg-white relative z-10 flex flex-col">
+      {/* Sidebar Header */}
+      <div className="p-4 border-b border-gray-200">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-8 h-8 bg-[#0E1B2E] rounded-xl flex items-center justify-center overflow-hidden">
+            <Image
+              src="/logo.png"
+              alt="Smarix Logo"
+              width={24}
+              height={24}
+              className="w-6 h-6 object-contain"
+            />
+          </div>
+          <h2 className={`${spaceGrotesk.className} text-xl font-bold tracking-tight text-[#0E1B2E]`}>
+            Smarix
+          </h2>
+        </div>
+        <p className={`${firaCode.className} text-sm text-[#0E1B2E]/60 ml-11`}>
+          Admin Panel
+        </p>
+      </div>
+
+      {/* Profile & Logout */}
+      <div className="p-4 border-b border-gray-200">
+        {user && (
+          <>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex-1 min-w-0">
+                <div className={`${spaceGrotesk.className} text-sm font-semibold text-[#0E1B2E] truncate`}>
+                  {user.name || user.username}
+                </div>
+                <div className={`${firaCode.className} text-xs text-[#0E1B2E]/60 capitalize truncate`}>
+                  {user.role === 'admin' ? 'Administrator' : user.role}
+                </div>
+              </div>
+              <div className="flex items-center gap-1 ml-2">
+                <button
+                  onClick={onOpenChangePassword}
+                  className="p-2 rounded-lg hover:bg-[#0E1B2E]/5 transition-colors text-[#0E1B2E]/70 hover:text-[#0E1B2E]"
+                  title="Change Password"
+                >
+                  <Key className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={logout}
+                  className="p-2 rounded-lg hover:bg-red-50 transition-colors text-red-600"
+                  title="Logout"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 overflow-y-auto p-4 space-y-1.5">
         <button
           onClick={() => setActiveView("setup")}
           className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
             activeView === "setup"
-              ? darkMode
-                ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/20"
-                : "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/30"
-              : darkMode
-              ? "hover:bg-gray-700/50 text-gray-300 hover:translate-x-1"
-              : "hover:bg-slate-100 text-slate-700 hover:translate-x-1"
+              ? "bg-[#0E1B2E] text-white shadow-lg shadow-[#0E1B2E]/20"
+              : "hover:bg-[#0E1B2E]/5 text-[#0E1B2E] hover:translate-x-1"
           }`}
         >
           <Database className={`w-5 h-5 ${activeView === "setup" ? "scale-110" : ""} transition-transform`} />
-          <span className="font-medium">Setup Pipeline</span>
+          <span className={`${spaceGrotesk.className} font-medium`}>Setup Pipeline</span>
         </button>
         <button
           onClick={() => setActiveView("history")}
           className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
             activeView === "history"
-              ? darkMode
-                ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/20"
-                : "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/30"
-              : darkMode
-              ? "hover:bg-gray-700/50 text-gray-300 hover:translate-x-1"
-              : "hover:bg-slate-100 text-slate-700 hover:translate-x-1"
+              ? "bg-[#0E1B2E] text-white shadow-lg shadow-[#0E1B2E]/20"
+              : "hover:bg-[#0E1B2E]/5 text-[#0E1B2E] hover:translate-x-1"
           }`}
         >
           <History className={`w-5 h-5 ${activeView === "history" ? "scale-110" : ""} transition-transform`} />
-          <span className="font-medium">History</span>
+          <span className={`${spaceGrotesk.className} font-medium`}>History</span>
         </button>
-        <button
-          onClick={() => setActiveView("stats")}
-          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
-            activeView === "stats"
-              ? darkMode
-                ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/20"
-                : "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/30"
-              : darkMode
-              ? "hover:bg-gray-700/50 text-gray-300 hover:translate-x-1"
-              : "hover:bg-slate-100 text-slate-700 hover:translate-x-1"
-          }`}
-        >
-          <BarChart3 className={`w-5 h-5 ${activeView === "stats" ? "scale-110" : ""} transition-transform`} />
-          <span className="font-medium">Statistics</span>
-        </button>
-        <button
-          onClick={() => setActiveView("activity")}
-          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
-            activeView === "activity"
-              ? darkMode
-                ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/20"
-                : "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/30"
-              : darkMode
-              ? "hover:bg-gray-700/50 text-gray-300 hover:translate-x-1"
-              : "hover:bg-slate-100 text-slate-700 hover:translate-x-1"
-          }`}
-        >
-          <Activity className={`w-5 h-5 ${activeView === "activity" ? "scale-110" : ""} transition-transform`} />
-          <span className="font-medium">Activity</span>
-        </button>
-        <div className="pt-2 mt-2 border-t border-slate-200 dark:border-gray-700">
+        <div className="pt-4 mt-4 border-t border-gray-200/50">
           <button
             onClick={() => setActiveView("users")}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
               activeView === "users"
-                ? darkMode
-                  ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/20"
-                  : "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/30"
-                : darkMode
-                ? "hover:bg-gray-700/50 text-gray-300 hover:translate-x-1"
-                : "hover:bg-slate-100 text-slate-700 hover:translate-x-1"
+                ? "bg-[#0E1B2E] text-white shadow-lg shadow-[#0E1B2E]/20"
+                : "hover:bg-[#0E1B2E]/5 text-[#0E1B2E] hover:translate-x-1"
             }`}
           >
             <Users className={`w-5 h-5 ${activeView === "users" ? "scale-110" : ""} transition-transform`} />
-            <span className="font-medium">User Management</span>
+            <span className={`${spaceGrotesk.className} font-medium`}>User Management</span>
           </button>
           <button
             onClick={() => setActiveView("onboarding")}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
               activeView === "onboarding"
-                ? darkMode
-                  ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-500/20"
-                  : "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-500/30"
-                : darkMode
-                ? "hover:bg-gray-700/50 text-gray-300 hover:translate-x-1"
-                : "hover:bg-slate-100 text-slate-700 hover:translate-x-1"
+                ? "bg-[#0E1B2E] text-white shadow-lg shadow-[#0E1B2E]/20"
+                : "hover:bg-[#0E1B2E]/5 text-[#0E1B2E] hover:translate-x-1"
             }`}
           >
             <UserPlus className={`w-5 h-5 ${activeView === "onboarding" ? "scale-110" : ""} transition-transform`} />
-            <span className="font-medium">Onboarding</span>
+            <span className={`${spaceGrotesk.className} font-medium`}>Onboarding</span>
           </button>
           <button
             onClick={() => setActiveView("offboarding")}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
               activeView === "offboarding"
-                ? darkMode
-                  ? "bg-gradient-to-r from-rose-600 to-red-600 text-white shadow-lg shadow-rose-500/20"
-                  : "bg-gradient-to-r from-rose-600 to-red-600 text-white shadow-lg shadow-rose-500/30"
-                : darkMode
-                ? "hover:bg-gray-700/50 text-gray-300 hover:translate-x-1"
-                : "hover:bg-slate-100 text-slate-700 hover:translate-x-1"
+                ? "bg-[#0E1B2E] text-white shadow-lg shadow-[#0E1B2E]/20"
+                : "hover:bg-[#0E1B2E]/5 text-[#0E1B2E] hover:translate-x-1"
             }`}
           >
             <UserMinus className={`w-5 h-5 ${activeView === "offboarding" ? "scale-110" : ""} transition-transform`} />
-            <span className="font-medium">Offboarding</span>
+            <span className={`${spaceGrotesk.className} font-medium`}>Offboarding</span>
           </button>
         </div>
       </nav>
-
-      {/* Stats Card in Sidebar */}
-      <div className={`mt-6 p-4 rounded-xl border backdrop-blur-sm transition-all duration-300 ${
-        darkMode 
-          ? "bg-gray-700/50 border-gray-600 shadow-lg" 
-          : "bg-gradient-to-br from-slate-50 to-white border-slate-200 shadow-md"
-      }`}>
-        <h3 className={`text-sm font-semibold mb-3 ${
-          darkMode ? "text-gray-300" : "text-slate-700"
-        }`}>
-          Quick Stats
-        </h3>
-        <div className="space-y-2.5">
-          <div className="flex justify-between items-center text-xs">
-            <span className={darkMode ? "text-gray-400" : "text-slate-600"}>
-              Total Setups
-            </span>
-            <span className={`font-bold text-sm ${
-              darkMode ? "text-white" : "text-slate-900"
-            }`}>
-              {stats.totalSetups}
-            </span>
-          </div>
-          <div className="flex justify-between items-center text-xs">
-            <span className={darkMode ? "text-gray-400" : "text-slate-600"}>
-              Successful
-            </span>
-            <span className="font-bold text-sm text-emerald-600 dark:text-emerald-400">
-              {stats.successfulSetups}
-            </span>
-          </div>
-          <div className="flex justify-between items-center text-xs">
-            <span className={darkMode ? "text-gray-400" : "text-slate-600"}>
-              Failed
-            </span>
-            <span className="font-bold text-sm text-rose-600 dark:text-rose-400">
-              {stats.failedSetups}
-            </span>
-          </div>
-        </div>
-      </div>
     </aside>
   );
 }

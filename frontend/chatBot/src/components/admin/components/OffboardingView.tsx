@@ -1,9 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2, FileText, CheckCircle2, AlertCircle, Info, Users, FileCode, AlertTriangle, ClipboardList, FileCheck, BookOpen, Shield } from "lucide-react";
+import { Loader2, FileText, CheckCircle2, AlertCircle, Users, FileCode, AlertTriangle, ClipboardList, FileCheck, BookOpen } from "lucide-react";
 import { StepStatus } from "./types";
 import { getStepIcon } from "./StepCard";
+import { Space_Grotesk, Fira_Code } from 'next/font/google';
+import Image from 'next/image';
+
+const spaceGrotesk = Space_Grotesk({ subsets: ['latin'] });
+const firaCode = Fira_Code({ subsets: ['latin'] });
 
 interface OffboardingViewProps {
   darkMode: boolean;
@@ -109,230 +114,172 @@ export default function OffboardingView({
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       {/* MAIN CARD */}
-      <div
-        className={`rounded-xl shadow-lg p-6 ${
-          darkMode ? "bg-gray-800" : "bg-white"
-        }`}
-      >
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2
-              className={`text-2xl font-semibold mb-2 ${
-                darkMode ? "text-white" : "text-slate-900"
-              }`}
-            >
-              Offboarding Data Generation
-            </h2>
-            <p
-              className={`text-sm ${
-                darkMode ? "text-gray-400" : "text-slate-600"
-              }`}
-            >
-              Generate comprehensive offboarding documentation and handover materials
-            </p>
-          </div>
-        </div>
-
-        {/* EMPLOYEE NAME INPUT */}
-        <div className="mb-6">
-          <div className="mb-4">
-            <label
-              htmlFor="employee-name"
-              className={`block text-sm font-medium mb-2 ${
-                darkMode ? "text-gray-300" : "text-slate-700"
-              }`}
-            >
-              Employee Name <span className="text-red-500">*</span>
-            </label>
-            <p
-              className={`text-xs mb-3 ${
-                darkMode ? "text-gray-400" : "text-slate-500"
-              }`}
-            >
-              Enter the employee name to generate offboarding data. The employee must exist in the system.
-            </p>
-            <input
-              id="employee-name"
-              type="text"
-              value={employeeName}
-              onChange={(e) => setEmployeeName(e.target.value)}
-              placeholder="e.g., Mastermind-sap"
-              required
-              disabled={offboardingRunning}
-              className={`w-full px-4 py-2.5 rounded-lg border transition-all ${
-                darkMode
-                  ? employeeName.trim()
-                    ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
-                    : "bg-gray-700 border-red-600 text-white placeholder-gray-400 focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
-                  : employeeName.trim()
-                  ? "bg-white border-slate-300 text-slate-900 placeholder-slate-400 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
-                  : "bg-white border-red-400 text-slate-900 placeholder-slate-400 focus:border-red-500 focus:ring-2 focus:ring-red-500/20"
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
-            />
-            {!employeeName.trim() && (
-              <p
-                className={`mt-2 text-xs ${
-                  darkMode ? "text-red-400" : "text-red-600"
-                }`}
-              >
-                ⚠️ Employee name is required to generate offboarding data
-              </p>
-            )}
-            {employeeName.trim() && (
-              <p
-                className={`mt-2 text-xs ${
-                  darkMode ? "text-blue-400" : "text-blue-600"
-                }`}
-              >
-                ✓ Data will be generated for "{employeeName.trim()}"
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* STATUS CARD */}
-        <div
-          className={`p-6 rounded-lg border transition-all mb-6 ${
-            offboardingStatus === "completed"
-              ? darkMode
-                ? "border-green-700 bg-green-900/20"
-                : "border-emerald-200 bg-emerald-50"
-              : offboardingStatus === "running"
-              ? darkMode
-                ? "border-blue-700 bg-blue-900/20 ring-2 ring-blue-800"
-                : "border-sky-200 bg-sky-50 ring-2 ring-sky-200"
-              : offboardingStatus === "error"
-              ? darkMode
-                ? "border-red-700 bg-red-900/20"
-                : "border-rose-200 bg-rose-50"
-              : darkMode
-              ? "border-gray-700 bg-gray-800"
-              : "border-slate-200 bg-slate-50"
-          }`}
-        >
-          <div className="flex items-center justify-between mb-4">
+      <div className="relative rounded-xl shadow-lg p-6 bg-white/80 backdrop-blur-xl border border-gray-200/50">
+        {/* Grid pattern background */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#0E1B2E05_1px,transparent_1px),linear-gradient(to_bottom,#0E1B2E05_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none rounded-xl" />
+        
+        <div className="relative z-10">
+          <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-              {getStepIcon(offboardingStatus)}
+              <div className="w-10 h-10 bg-[#0E1B2E] rounded-xl flex items-center justify-center overflow-hidden">
+                <Image
+                  src="/logo.png"
+                  alt="Smarix Logo"
+                  width={24}
+                  height={24}
+                  className="w-6 h-6 object-contain"
+                />
+              </div>
               <div>
-                <h3
-                  className={`text-lg font-semibold ${
-                    darkMode ? "text-white" : "text-slate-900"
-                  }`}
-                >
-                  Offboarding Generation Status
-                </h3>
-                <p
-                  className={`text-sm ${
-                    darkMode ? "text-gray-400" : "text-slate-600"
-                  }`}
-                >
-                  {offboardingStatus === "pending" && "Ready to generate offboarding data"}
-                  {offboardingStatus === "running" && "Generating offboarding documentation..."}
-                  {offboardingStatus === "completed" && "Offboarding data generated successfully"}
-                  {offboardingStatus === "error" && "Generation failed"}
+                <h2 className={`${spaceGrotesk.className} text-2xl font-bold mb-1 text-[#0E1B2E]`}>
+                  Offboarding Data Generation
+                </h2>
+                <p className={`${firaCode.className} text-sm text-[#0E1B2E]/60`}>
+                  Generate comprehensive offboarding documentation and handover materials
                 </p>
               </div>
             </div>
-
-            <button
-              onClick={() => onRunOffboarding(selectedSteps, employeeName.trim())}
-              disabled={offboardingRunning || selectedSteps.length === 0 || !employeeName.trim()}
-              className={`px-6 py-2 rounded-lg font-medium transition-all ${
-                offboardingRunning || selectedSteps.length === 0 || !employeeName.trim()
-                  ? darkMode
-                    ? "bg-gray-600 cursor-not-allowed"
-                    : "bg-slate-200 text-slate-500 cursor-not-allowed"
-                  : "bg-rose-600 hover:bg-rose-700 text-white"
-              } shadow-md hover:shadow-lg disabled:shadow-none`}
-            >
-              {offboardingRunning ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Generating...
-                </span>
-              ) : (
-                `Generate Offboarding Data`
-              )}
-            </button>
           </div>
 
-          {/* MESSAGE */}
-          {offboardingMessage && (
-            <div
-              className={`mt-4 p-3 rounded-lg text-sm ${
-                offboardingStatus === "completed"
-                  ? darkMode
-                    ? "bg-green-900/30 text-green-300"
-                    : "bg-emerald-100 text-emerald-700"
-                  : offboardingStatus === "error"
-                  ? darkMode
-                    ? "bg-red-900/30 text-red-300"
-                    : "bg-rose-100 text-rose-700"
-                  : darkMode
-                  ? "bg-blue-900/30 text-blue-300"
-                  : "bg-sky-100 text-sky-700"
-              }`}
-            >
-              {offboardingMessage}
+          {/* EMPLOYEE NAME INPUT */}
+          <div className="mb-6">
+            <div className="mb-4">
+              <label
+                htmlFor="employee-name"
+                className={`${spaceGrotesk.className} block text-sm font-medium mb-2 text-[#0E1B2E]`}
+              >
+                Employee Name <span className="text-rose-600">*</span>
+              </label>
+              <p className={`${firaCode.className} text-xs mb-3 text-[#0E1B2E]/60`}>
+                Enter the employee name to generate offboarding data. The employee must exist in the system.
+              </p>
+              <input
+                id="employee-name"
+                type="text"
+                value={employeeName}
+                onChange={(e) => setEmployeeName(e.target.value)}
+                placeholder="e.g., Mastermind-sap"
+                required
+                disabled={offboardingRunning}
+                className={`${firaCode.className} w-full px-4 py-2.5 rounded-xl border transition-all ${
+                  employeeName.trim()
+                    ? "bg-white/80 backdrop-blur-sm border-gray-200/50 text-[#0E1B2E] placeholder-[#0E1B2E]/40 focus:border-[#0E1B2E] focus:ring-2 focus:ring-[#0E1B2E]/10"
+                    : "bg-white/80 backdrop-blur-sm border-rose-300 text-[#0E1B2E] placeholder-[#0E1B2E]/40 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/10"
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+              />
+              {!employeeName.trim() && (
+                <p className={`mt-2 text-xs ${firaCode.className} text-rose-600`}>
+                  ⚠️ Employee name is required to generate offboarding data
+                </p>
+              )}
+              {employeeName.trim() && (
+                <p className={`mt-2 text-xs ${firaCode.className} text-emerald-600`}>
+                  ✓ Data will be generated for "{employeeName.trim()}"
+                </p>
+              )}
             </div>
-          )}
-        </div>
+          </div>
 
+          {/* STATUS CARD */}
+          <div
+            className={`p-6 rounded-xl border transition-all mb-6 backdrop-blur-sm ${
+              offboardingStatus === "completed"
+                ? "border-emerald-200/50 bg-emerald-50/80"
+                : offboardingStatus === "running"
+                ? "border-sky-200/50 bg-sky-50/80 ring-2 ring-sky-200/30"
+                : offboardingStatus === "error"
+                ? "border-rose-200/50 bg-rose-50/80"
+                : "border-gray-200/50 bg-gray-50/80"
+            }`}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                {getStepIcon(offboardingStatus)}
+                <div>
+                  <h3 className={`${spaceGrotesk.className} text-lg font-semibold text-[#0E1B2E]`}>
+                    Offboarding Generation Status
+                  </h3>
+                  <p className={`${firaCode.className} text-sm text-[#0E1B2E]/60`}>
+                    {offboardingStatus === "pending" && "Ready to generate offboarding data"}
+                    {offboardingStatus === "running" && "Generating offboarding documentation..."}
+                    {offboardingStatus === "completed" && "Offboarding data generated successfully"}
+                    {offboardingStatus === "error" && "Generation failed"}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => onRunOffboarding(selectedSteps, employeeName.trim())}
+                disabled={offboardingRunning || selectedSteps.length === 0 || !employeeName.trim()}
+                className={`${spaceGrotesk.className} px-6 py-2.5 rounded-xl font-medium transition-all ${
+                  offboardingRunning || selectedSteps.length === 0 || !employeeName.trim()
+                    ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                    : "bg-[#0E1B2E] hover:bg-[#0E1B2E]/90 text-white shadow-lg shadow-[#0E1B2E]/20 hover:shadow-xl hover:shadow-[#0E1B2E]/30"
+                } disabled:shadow-none`}
+              >
+                {offboardingRunning ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Generating...
+                  </span>
+                ) : (
+                  `Generate Offboarding Data`
+                )}
+              </button>
+            </div>
+
+            {/* MESSAGE */}
+            {offboardingMessage && (
+              <div
+                className={`mt-4 p-3 rounded-lg text-sm ${firaCode.className} ${
+                  offboardingStatus === "completed"
+                    ? "bg-emerald-100/80 text-emerald-700 border border-emerald-200/50"
+                    : offboardingStatus === "error"
+                    ? "bg-rose-100/80 text-rose-700 border border-rose-200/50"
+                    : "bg-sky-100/80 text-sky-700 border border-sky-200/50"
+                }`}
+              >
+                {offboardingMessage}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* OUTPUT FILES SECTION */}
       {offboardingStatus === "completed" && (
-        <div
-          className={`rounded-xl shadow-lg p-6 ${
-            darkMode ? "bg-gray-800" : "bg-white"
-          }`}
-        >
-          <h3
-            className={`text-xl font-semibold mb-4 ${
-              darkMode ? "text-white" : "text-slate-900"
-            }`}
-          >
-            Generated Files
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {steps
-              .filter(s => selectedSteps.includes(s.id))
-              .map((step, index) => {
-                const Icon = step.icon;
-                return (
-                  <div
-                    key={step.id}
-                    className={`p-3 rounded-lg border ${
-                      darkMode
-                        ? "bg-gray-700/50 border-gray-600"
-                        : "bg-slate-50 border-slate-200"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <Icon className={`w-4 h-4 ${
-                        darkMode ? "text-gray-400" : "text-slate-600"
-                      }`} />
-                      <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
-                        darkMode
-                          ? "bg-gray-700 text-gray-300"
-                          : "bg-slate-200 text-slate-600"
-                      }`}>
-                        {index + 1}
-                      </span>
-                      <span className={`text-sm font-medium ${
-                        darkMode ? "text-white" : "text-slate-900"
-                      }`}>
-                        {step.name}
-                      </span>
+        <div className="relative rounded-xl shadow-lg p-6 bg-white/80 backdrop-blur-xl border border-gray-200/50">
+          <div className="absolute inset-0 bg-[linear-gradient(to_right,#0E1B2E05_1px,transparent_1px),linear-gradient(to_bottom,#0E1B2E05_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none rounded-xl" />
+          <div className="relative z-10">
+            <h3 className={`${spaceGrotesk.className} text-xl font-semibold mb-4 text-[#0E1B2E]`}>
+              Generated Files
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {steps
+                .filter(s => selectedSteps.includes(s.id))
+                .map((step, index) => {
+                  const Icon = step.icon;
+                  return (
+                    <div
+                      key={step.id}
+                      className="p-3 rounded-xl border border-gray-200/50 bg-white/50 backdrop-blur-sm"
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <Icon className="w-4 h-4 text-[#0E1B2E]/70" />
+                        <span className={`${firaCode.className} text-xs font-semibold px-1.5 py-0.5 rounded bg-[#0E1B2E]/10 text-[#0E1B2E]`}>
+                          {index + 1}
+                        </span>
+                        <span className={`${spaceGrotesk.className} text-sm font-medium text-[#0E1B2E]`}>
+                          {step.name}
+                        </span>
+                      </div>
+                      <p className={`${firaCode.className} text-xs text-[#0E1B2E]/60`}>
+                        {step.outputFile}
+                      </p>
                     </div>
-                    <p className={`text-xs ${
-                      darkMode ? "text-gray-400" : "text-slate-600"
-                    }`}>
-                      {step.outputFile}
-                    </p>
-                  </div>
-                );
-              })}
+                  );
+                })}
+            </div>
           </div>
         </div>
       )}

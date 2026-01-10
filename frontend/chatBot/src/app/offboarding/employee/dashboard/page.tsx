@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { AuthProvider, useAuth } from '@/components/auth/AuthContext';
+import { useAuth } from '@/components/auth/AuthContext';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import { Users, LogOut, MessageSquare, User, Moon, Sun } from 'lucide-react';
 import ThreeJsBackground from '@/components/onboarding/ThreeJsBackground';
@@ -336,11 +336,9 @@ function EmployeeDashboardContent() {
 
 export default function EmployeeDashboardPage() {
   return (
-    <AuthProvider>
-      <ProtectedRoute requiredRole="employee">
-        <EmployeeDashboardContent />
-      </ProtectedRoute>
-    </AuthProvider>
+    <ProtectedRoute requiredRole="employee">
+      <EmployeeDashboardContent />
+    </ProtectedRoute>
   );
 }
 
