@@ -5,6 +5,7 @@ import { motion, useScroll, useTransform, useSpring } from 'framer-motion';
 import { ArrowUpRight, Github, Twitter, Linkedin } from 'lucide-react';
 import { Space_Grotesk, JetBrains_Mono, Fira_Code } from 'next/font/google';
 import Image from 'next/image';
+import Link from 'next/link';
 
 const spaceGrotesk = Space_Grotesk({ subsets: ['latin'] });
 const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'] });
@@ -50,17 +51,19 @@ export const Footer = () => {
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400">Smarix</span> in your life?
             </motion.h2>
 
-            <motion.button 
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="group relative inline-flex items-center gap-5 bg-white text-[#0E1B2E] px-8 py-4 rounded-none transition-all duration-300 hover:bg-blue-50"
-            >
-              <span className={`${firaCode.className} font-bold tracking-wide text-base relative z-10`}>
-                TRY OUR PRODUCT
-              </span>
-              <span className="w-px h-6 bg-[#0E1B2E]/20 relative z-10" />
-              <ArrowUpRight className="w-6 h-6 transition-transform duration-300 group-hover:-translate-y-1 group-hover:translate-x-1 relative z-10" />
-            </motion.button>
+            <Link href="/try-our-product">
+              <motion.button 
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="group relative inline-flex items-center gap-5 bg-white text-[#0E1B2E] px-8 py-4 rounded-none transition-all duration-300 hover:bg-blue-50"
+              >
+                <span className={`${firaCode.className} font-bold tracking-wide text-base relative z-10`}>
+                  TRY OUR PRODUCT
+                </span>
+                <span className="w-px h-6 bg-[#0E1B2E]/20 relative z-10" />
+                <ArrowUpRight className="w-6 h-6 transition-transform duration-300 group-hover:-translate-y-1 group-hover:translate-x-1 relative z-10" />
+              </motion.button>
+            </Link>
           </div>
 
           <div className="flex flex-col gap-6 text-right items-end relative z-20">
@@ -88,7 +91,7 @@ export const Footer = () => {
            <div className="flex flex-col gap-6">
               <h4 className={`${jetbrainsMono.className} text-[11px] font-bold text-blue-400 uppercase tracking-widest`}>Navigation</h4>
               <ul className="flex flex-col gap-4">
-                 {['Home', 'Capabilities', 'Integration', 'Pricing'].map((item, i) => (
+                 {['Home', 'Capabilities', 'Integration'].map((item, i) => (
                     <li key={i}>
                        <a href="#" className="text-white/60 hover:text-white hover:translate-x-2 transition-all duration-200 text-base font-medium inline-block">{item}</a>
                     </li>
@@ -99,15 +102,19 @@ export const Footer = () => {
            <div className="flex flex-col gap-6">
               <h4 className={`${jetbrainsMono.className} text-[11px] font-bold text-blue-400 uppercase tracking-widest`}>Company</h4>
               <ul className="flex flex-col gap-4">
-                 {['About Us', 'Careers', 'Blog', 'Contact'].map((item, i) => (
-                    <li key={i}>
-                       <a href="#" className="text-white/60 hover:text-white hover:translate-x-2 transition-all duration-200 text-base font-medium inline-block">{item}</a>
-                    </li>
-                 ))}
+                 <li>
+                    <a href="/about" className="text-white/60 hover:text-white hover:translate-x-2 transition-all duration-200 text-base font-medium inline-block">About Us</a>
+                 </li>
+                 <li>
+                    <a href="/blog" className="text-white/60 hover:text-white hover:translate-x-2 transition-all duration-200 text-base font-medium inline-block">Blog</a>
+                 </li>
+                 <li>
+                    <a href="/contact" className="text-white/60 hover:text-white hover:translate-x-2 transition-all duration-200 text-base font-medium inline-block">Contact</a>
+                 </li>
               </ul>
            </div>
 
-           <div className="flex flex-col gap-6">
+           {/* <div className="flex flex-col gap-6">
               <h4 className={`${jetbrainsMono.className} text-[11px] font-bold text-blue-400 uppercase tracking-widest`}>Legal</h4>
               <ul className="flex flex-col gap-4">
                  {['Privacy Policy', 'Terms of Service', 'Cookie Policy'].map((item, i) => (
@@ -116,7 +123,7 @@ export const Footer = () => {
                     </li>
                  ))}
               </ul>
-           </div>
+           </div> */}
         </div>
 
         <div className="relative w-full">
