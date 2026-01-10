@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { UserPlus, XCircle } from 'lucide-react';
+import { UserPlus, XCircle, ChevronDown, ChevronUp, FileText, HelpCircle, ExternalLink, Clock } from 'lucide-react';
 import Loader from '../Loader';
 
 /* ================= TYPES ================= */
@@ -13,6 +13,11 @@ type Task = {
   tags: string[];
   source: 'AI' | 'Manager';
   status?: 'active' | 'inactive' | 'not_needed';
+  description?: string;
+  questions?: string[];
+  reference?: string;
+  estimated_time_minutes?: number;
+  knowledge_capture_method?: string;
 };
 
 type FinalCallSectionProps = {
@@ -56,6 +61,9 @@ export default function FinalCallSection({
   // Filter states
   const [priorityFilter, setPriorityFilter] = useState<'All' | 'High' | 'Medium' | 'Low'>('All');
   const [showNotNeeded, setShowNotNeeded] = useState(false);
+  
+  // Expanded task IDs
+  const [expandedTaskIds, setExpandedTaskIds] = useState<Set<string>>(new Set());
 
     /* ================= SUMMARY DERIVED DATA ================= */
 
@@ -405,26 +413,64 @@ const filteredManagerTasks = managerTasks.filter(task => {
 
   /* ================= TASK ROW ================= */
 
-  const TaskRow = ({ task }: { task: Task }) => (
-    <div className={`px-4 py-3 flex justify-between items-start gap-3 border-b last:border-b-0 transition-all duration-200 ${
-      darkMode
-        ? "border-gray-700 hover:bg-gray-800/50"
-        : "border-slate-200 hover:bg-white/50"
-    }`}>
-      {/* LEFT */}
-      <div className="flex-1">
-        <p className={`font-semibold text-sm ${
-          darkMode ? "text-gray-100" : "text-slate-900"
-        }`}>{task.title}</p>
-        <p className={`text-xs mt-1 ${
-          darkMode ? "text-gray-400" : "text-slate-600"
-        }`}>
-          Tags: <span className="font-medium">{(task.tags || ['Manual']).join(', ')}</span> • Source: <span className="font-medium">{task.source}</span>
-        </p>
-      </div>
+  const toggleExpand = (taskId: string) => {
+    setExpandedTaskIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(taskId)) {
+        newSet.delete(taskId);
+      } else {
+        newSet.add(taskId);
+      }
+      return newSet;
+    });
+  };
 
-      {/* RIGHT */}
-      <div className="flex items-center gap-2 flex-shrink-0">
+  const TaskRow = ({ task }: { task: Task }) => {
+    const isExpanded = expandedTaskIds.has(task.id);
+    const hasDetails = task.description || task.questions?.length || task.reference || task.estimated_time_minutes || task.knowledge_capture_method;
+    
+    return (
+      <div className={`border-b last:border-b-0 transition-all duration-200 border-[#0E1B2E]/10 ${
+        darkMode
+          ? "border-gray-700"
+          : ""
+      }`}>
+        {/* MAIN ROW */}
+        <div className={`px-4 py-2.5 flex justify-between items-start gap-3 transition-all duration-200 ${
+          darkMode
+            ? "hover:bg-gray-800/50"
+            : "hover:bg-white/60"
+        } ${isExpanded ? (darkMode ? "bg-gray-800/30" : "bg-white/40") : ""}`}>
+          {/* LEFT */}
+          <div 
+            className="flex-1 cursor-pointer" 
+            onClick={() => hasDetails && toggleExpand(task.id)}
+          >
+            <div className="flex items-start gap-2">
+              {hasDetails && (
+                <div className="mt-0.5">
+                  {isExpanded ? (
+                    <ChevronUp className={`w-4 h-4 ${darkMode ? "text-gray-400" : "text-[#0E1B2E]/60"}`} />
+                  ) : (
+                    <ChevronDown className={`w-4 h-4 ${darkMode ? "text-gray-400" : "text-[#0E1B2E]/60"}`} />
+                  )}
+                </div>
+              )}
+              <div className="flex-1">
+                <p className={`font-medium text-sm ${
+                  darkMode ? "text-gray-100" : "text-[#0E1B2E]"
+                }`}>{task.title}</p>
+                <p className={`text-xs mt-0.5 ${
+                  darkMode ? "text-gray-400" : "text-[#0E1B2E]/60"
+                }`}>
+                  Tags: <span className="font-medium">{(task.tags || ['Manual']).join(', ')}</span> • Source: <span className="font-medium">{task.source}</span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT */}
+          <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
         {/* PRIORITY DROPDOWN */}
         <select
           key={`${task.id}-${task.priority}-${updateCounter}`}
@@ -437,12 +483,12 @@ const filteredManagerTasks = managerTasks.filter(task => {
             )
           }
           className={`
-            px-2.5 py-1.5
+            px-2.5 py-1
             rounded-lg
-            text-xs font-semibold
-            border-2
+            text-xs font-medium
+            border
             cursor-pointer
-            focus:outline-none focus:ring-2 focus:ring-offset-1
+            focus:outline-none focus:ring-1 focus:ring-offset-0
             transition-all duration-200
             ${getPriorityStyles(task.priority, darkMode)}
           `}
@@ -455,18 +501,20 @@ const filteredManagerTasks = managerTasks.filter(task => {
         {/* ASSIGN HANDOVER */}
         <button
           onClick={() => assignHandover(task)}
-          className="
+          className={`
             flex items-center gap-1.5
-            px-3 py-1.5
+            px-2.5 py-1.5
             rounded-lg
-            text-xs font-semibold
-            bg-gradient-to-r from-indigo-500 to-purple-600 text-white
-            hover:from-indigo-600 hover:to-purple-700
-            shadow-sm hover:shadow-md
+            text-xs font-medium
+            text-white shadow-sm hover:shadow-md
             transition-all duration-200
-          "
+            ${darkMode
+              ? "bg-[#0E1B2E] hover:bg-[#1a2f4d]"
+              : "bg-[#0E1B2E] hover:bg-[#1a2f4d]"
+            }
+          `}
         >
-          <UserPlus className="w-3.5 h-3.5" />
+          <UserPlus className="w-3 h-3" />
           Assign
         </button>
 
@@ -474,24 +522,104 @@ const filteredManagerTasks = managerTasks.filter(task => {
         {task.status !== 'not_needed' && (
           <button
             onClick={() => markTaskAsNotNeeded(task.id, task.source)}
-            className="
+            className={`
               flex items-center gap-1.5
-              px-3 py-1.5
+              px-2.5 py-1.5
               rounded-lg
-              text-xs font-semibold
-              bg-gradient-to-r from-red-500 to-pink-600 text-white
-              hover:from-red-600 hover:to-pink-700
-              shadow-sm hover:shadow-md
+              text-xs font-medium
+              text-white shadow-sm hover:shadow-md
               transition-all duration-200
-            "
+              ${darkMode
+                ? "bg-[#0E1B2E]/80 hover:bg-[#0E1B2E]"
+                : "bg-[#0E1B2E]/80 hover:bg-[#0E1B2E]"
+              }
+            `}
           >
-            <XCircle className="w-3.5 h-3.5" />
+            <XCircle className="w-3 h-3" />
             Not Needed
           </button>
         )}
       </div>
     </div>
+    
+    {/* EXPANDED DETAILS */}
+    {isExpanded && hasDetails && (
+      <div className={`px-4 py-3 border-t border-[#0E1B2E]/10 ${
+        darkMode ? "bg-gray-800/30" : "bg-white/20"
+      }`}>
+        <div className="space-y-3">
+          {/* DESCRIPTION */}
+          {task.description && (
+            <div>
+              <div className="flex items-center gap-2 mb-1.5">
+                <FileText className={`w-3.5 h-3.5 ${darkMode ? "text-gray-400" : "text-[#0E1B2E]/60"}`} />
+                <h4 className={`text-xs font-medium ${darkMode ? "text-gray-300" : "text-[#0E1B2E]"}`}>
+                  Description
+                </h4>
+              </div>
+              <div className={`text-xs ml-5 whitespace-pre-wrap ${darkMode ? "text-gray-400" : "text-[#0E1B2E]/70"}`}>
+                {task.description.replace(/\*\*/g, '').replace(/#{1,6}\s*/g, '')}
+              </div>
+            </div>
+          )}
+
+          {/* QUESTIONS */}
+          {task.questions && task.questions.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-1.5">
+                <HelpCircle className={`w-3.5 h-3.5 ${darkMode ? "text-gray-400" : "text-[#0E1B2E]/60"}`} />
+                <h4 className={`text-xs font-medium ${darkMode ? "text-gray-300" : "text-[#0E1B2E]"}`}>
+                  Questions ({task.questions.length})
+                </h4>
+              </div>
+              <ul className="ml-5 space-y-1.5">
+                {task.questions.map((q, idx) => (
+                  <li key={idx} className={`text-xs flex items-start gap-2 ${darkMode ? "text-gray-400" : "text-[#0E1B2E]/70"}`}>
+                    <span className="mt-0.5">{idx + 1}.</span>
+                    <span>{q}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* REFERENCE */}
+          {task.reference && (
+            <div>
+              <div className="flex items-center gap-2 mb-1.5">
+                <ExternalLink className={`w-3.5 h-3.5 ${darkMode ? "text-gray-400" : "text-[#0E1B2E]/60"}`} />
+                <h4 className={`text-xs font-medium ${darkMode ? "text-gray-300" : "text-[#0E1B2E]"}`}>
+                  References
+                </h4>
+              </div>
+              <div className={`text-xs ml-5 ${darkMode ? "text-gray-400" : "text-[#0E1B2E]/70"}`}>
+                {task.reference.split(', ').map((ref, idx) => (
+                  <div key={idx} className="font-mono">{ref}</div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* METADATA */}
+          <div className={`flex flex-wrap gap-3 text-xs pt-2 border-t border-[#0E1B2E]/10 ${darkMode ? "text-gray-400" : "text-[#0E1B2E]/60"}`}>
+            {task.estimated_time_minutes && (
+              <div className="flex items-center gap-1.5">
+                <Clock className="w-3 h-3" />
+                <span>Est. {task.estimated_time_minutes} min</span>
+              </div>
+            )}
+            {task.knowledge_capture_method && (
+              <div>
+                <span className="font-medium">Method:</span> {task.knowledge_capture_method.replace(/_/g, ' ')}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
   );
+  };
 
   /* ================= UI ================= */
 
@@ -500,148 +628,28 @@ const filteredManagerTasks = managerTasks.filter(task => {
   }
 
   return (
-    <div className="space-y-4">
-
-      {/* ================= OVERALL SUMMARY ================= */}
-<div className={`rounded-2xl border-2 backdrop-blur-lg shadow-lg overflow-hidden transition-colors duration-300 ${
-  darkMode
-    ? "border-gray-700 bg-gray-800/80"
-    : "border-slate-200/50 bg-white/80"
-}`}>
-  <div className={`px-4 py-2.5 border-b ${
-    darkMode
-      ? "border-gray-700 bg-gradient-to-r from-indigo-900/50 to-purple-900/50"
-      : "border-slate-200 bg-gradient-to-r from-indigo-50 to-purple-50"
-  }`}>
-    <h3 className={`font-bold text-sm ${
-      darkMode
-        ? "bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent"
-        : "bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent"
-    }`}>
-      Overall Task Summary
-    </h3>
-  </div>
-
-  <div className="grid grid-cols-6 gap-2 px-4 py-3">
-    {/* TOTAL */}
-    <div className={`rounded-xl border-2 px-3 py-2 shadow-sm hover:shadow-md transition-all duration-200 ${
-      darkMode
-        ? "border-gray-700 bg-gradient-to-br from-gray-800 to-gray-900"
-        : "border-slate-200 bg-gradient-to-br from-slate-50 to-slate-100"
-    }`}>
-      <p className={`text-[10px] font-bold mb-0.5 ${
-        darkMode ? "text-gray-400" : "text-slate-600"
-      }`}>Total</p>
-      <p className={`text-xl font-extrabold ${
-        darkMode ? "text-gray-100" : "text-slate-900"
-      }`}>
-        {summary.total}
-      </p>
-    </div>
-
-    {/* HIGH */}
-    <div className={`rounded-xl border-2 px-3 py-2 shadow-sm hover:shadow-md transition-all duration-200 ${
-      darkMode
-        ? "border-red-700 bg-gradient-to-br from-red-900/30 to-red-900/50"
-        : "border-red-200 bg-gradient-to-br from-red-50 to-red-100"
-    }`}>
-      <p className={`text-[10px] font-bold mb-0.5 ${
-        darkMode ? "text-red-400" : "text-red-600"
-      }`}>High</p>
-      <p className={`text-xl font-extrabold ${
-        darkMode ? "text-red-300" : "text-red-700"
-      }`}>
-        {summary.high}
-      </p>
-    </div>
-
-    {/* MEDIUM */}
-    <div className={`rounded-xl border-2 px-3 py-2 shadow-sm hover:shadow-md transition-all duration-200 ${
-      darkMode
-        ? "border-yellow-700 bg-gradient-to-br from-yellow-900/30 to-yellow-900/50"
-        : "border-yellow-200 bg-gradient-to-br from-yellow-50 to-yellow-100"
-    }`}>
-      <p className={`text-[10px] font-bold mb-0.5 ${
-        darkMode ? "text-yellow-400" : "text-yellow-700"
-      }`}>Medium</p>
-      <p className={`text-xl font-extrabold ${
-        darkMode ? "text-yellow-300" : "text-yellow-800"
-      }`}>
-        {summary.medium}
-      </p>
-    </div>
-
-    {/* LOW */}
-    <div className={`rounded-xl border-2 px-3 py-2 shadow-sm hover:shadow-md transition-all duration-200 ${
-      darkMode
-        ? "border-green-700 bg-gradient-to-br from-green-900/30 to-green-900/50"
-        : "border-green-200 bg-gradient-to-br from-green-50 to-green-100"
-    }`}>
-      <p className={`text-[10px] font-bold mb-0.5 ${
-        darkMode ? "text-green-400" : "text-green-700"
-      }`}>Low</p>
-      <p className={`text-xl font-extrabold ${
-        darkMode ? "text-green-300" : "text-green-800"
-      }`}>
-        {summary.low}
-      </p>
-    </div>
-
-    {/* REMAINING */}
-    <div className={`rounded-xl border-2 px-3 py-2 shadow-sm hover:shadow-md transition-all duration-200 ${
-      darkMode
-        ? "border-indigo-700 bg-gradient-to-br from-indigo-900/30 to-purple-900/30"
-        : "border-indigo-200 bg-gradient-to-br from-indigo-50 to-purple-50"
-    }`}>
-      <p className={`text-[10px] font-bold mb-0.5 ${
-        darkMode ? "text-indigo-400" : "text-indigo-700"
-      }`}>Remaining</p>
-      <p className={`text-xl font-extrabold ${
-        darkMode ? "text-indigo-300" : "text-indigo-800"
-      }`}>
-        {summary.remaining}
-      </p>
-    </div>
-
-    {/* YET TO ASSIGN */}
-    <div className={`rounded-xl border-2 px-3 py-2 shadow-sm hover:shadow-md transition-all duration-200 ${
-      darkMode
-        ? "border-gray-600 bg-gradient-to-br from-gray-700 to-gray-800"
-        : "border-slate-300 bg-gradient-to-br from-slate-100 to-slate-200"
-    }`}>
-      <p className={`text-[10px] font-bold mb-0.5 ${
-        darkMode ? "text-gray-400" : "text-slate-700"
-      }`}>To Assign</p>
-      <p className={`text-xl font-extrabold ${
-        darkMode ? "text-gray-100" : "text-slate-900"
-      }`}>
-        {summary.yetToAssign}
-      </p>
-    </div>
-    </div>
-</div>
-
+    <div className="space-y-3 p-4">
       {/* ================= FILTERS ================= */}
-      <div className={`rounded-2xl border-2 backdrop-blur-lg shadow-lg p-3 transition-colors duration-300 ${
+      <div className={`rounded-xl border bg-white/35 backdrop-blur-xl border-white/25 shadow-md shadow-black/5 px-4 py-2.5 transition-colors duration-300 ${
         darkMode
-          ? "border-gray-700 bg-gray-800/80"
-          : "border-slate-200/50 bg-white/80"
+          ? "border-gray-700 bg-gray-800/50"
+          : ""
       }`}>
-        <div className="flex items-center gap-4 flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2">
-            <label className={`text-xs font-semibold ${
-              darkMode ? "text-gray-300" : "text-slate-700"
+            <label className={`text-xs font-medium ${
+              darkMode ? "text-gray-300" : "text-[#0E1B2E]/70"
             }`}>Priority:</label>
             <select
               value={priorityFilter}
               onChange={e => setPriorityFilter(e.target.value as any)}
               className={`
-                px-3 py-1.5 rounded-lg text-xs font-semibold border-2
-                focus:outline-none focus:ring-2 focus:border-indigo-500
+                px-3 py-1.5 rounded-lg text-xs font-medium border
+                focus:outline-none focus:ring-1 focus:border-[#0E1B2E]/30
                 transition-all duration-200
                 ${darkMode
-                  ? "border-gray-600 bg-gray-700 text-gray-100 focus:ring-indigo-400"
-                  : "border-slate-300 bg-white text-slate-900 focus:ring-indigo-500"
+                  ? "border-gray-600 bg-gray-700/50 text-gray-100 focus:ring-[#0E1B2E]/20"
+                  : "border-[#0E1B2E]/20 bg-white/60 text-[#0E1B2E] focus:ring-[#0E1B2E]/10"
                 }
               `}
             >
@@ -658,36 +666,36 @@ const filteredManagerTasks = managerTasks.filter(task => {
               id="showNotNeeded"
               checked={showNotNeeded}
               onChange={e => setShowNotNeeded(e.target.checked)}
-              className={`w-4 h-4 rounded focus:ring-2 cursor-pointer transition-all ${
+              className={`w-3.5 h-3.5 rounded focus:ring-1 cursor-pointer transition-all ${
                 darkMode
-                  ? "text-indigo-400 border-2 border-gray-600 focus:ring-indigo-400"
-                  : "text-indigo-600 border-2 border-slate-300 focus:ring-indigo-500"
+                  ? "text-[#0E1B2E]/40 border border-gray-600 focus:ring-[#0E1B2E]/20"
+                  : "text-[#0E1B2E] border border-[#0E1B2E]/20 focus:ring-[#0E1B2E]/10"
               }`}
             />
-            <label htmlFor="showNotNeeded" className={`text-xs font-semibold cursor-pointer ${
-              darkMode ? "text-gray-300" : "text-slate-700"
+            <label htmlFor="showNotNeeded" className={`text-xs font-medium cursor-pointer ${
+              darkMode ? "text-gray-300" : "text-[#0E1B2E]/70"
             }`}>
-              Show Not Needed <span className={darkMode ? "text-indigo-400" : "text-indigo-600"}>({summary.notNeeded})</span>
+              Show Not Needed <span className={darkMode ? "text-[#0E1B2E]/60" : "text-[#0E1B2E]/50"}>({summary.notNeeded})</span>
             </label>
           </div>
         </div>
       </div>
 
       {/* 🤖 AI TASKS */}
-      <div className={`rounded-2xl border-2 backdrop-blur-lg shadow-lg overflow-hidden transition-colors duration-300 ${
+      <div className={`rounded-xl border bg-white/35 backdrop-blur-xl border-white/25 shadow-md shadow-black/5 overflow-hidden transition-colors duration-300 ${
         darkMode
-          ? "border-indigo-700/50 bg-gradient-to-br from-indigo-900/30 to-purple-900/30"
-          : "border-indigo-200/50 bg-gradient-to-br from-indigo-50/80 to-purple-50/80"
+          ? "border-gray-700/50 bg-gray-800/50"
+          : ""
       }`}>
-        <div className={`px-4 py-2.5 border-b ${
+        <div className={`px-4 py-2.5 border-b border-[#0E1B2E]/10 bg-white/40 backdrop-blur-sm ${
           darkMode
-            ? "border-indigo-700 bg-gradient-to-r from-indigo-900/50 to-purple-900/50"
-            : "border-indigo-200 bg-gradient-to-r from-indigo-100 to-purple-100"
+            ? "border-gray-700 bg-gray-800/50"
+            : ""
         }`}>
-          <h3 className={`font-bold text-sm ${
+          <h3 className={`font-medium text-sm text-[#0E1B2E] ${
             darkMode
-              ? "bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent"
-              : "bg-gradient-to-r from-indigo-700 to-purple-700 bg-clip-text text-transparent"
+              ? "text-gray-200"
+              : ""
           }`}>🤖 AI-Suggested Tasks</h3>
         </div>
         <div className={darkMode ? "divide-y divide-gray-700" : "divide-y"}>
@@ -696,8 +704,8 @@ const filteredManagerTasks = managerTasks.filter(task => {
               <TaskRow key={`ai-${task.id}`} task={task} />
             ))
           ) : (
-            <div className={`px-5 py-4 text-sm italic ${
-              darkMode ? "text-gray-400" : "text-slate-500"
+            <div className={`px-4 py-3 text-xs italic ${
+              darkMode ? "text-gray-400" : "text-[#0E1B2E]/50"
             }`}>
               No tasks match the current filters.
             </div>
@@ -706,20 +714,20 @@ const filteredManagerTasks = managerTasks.filter(task => {
       </div>
 
       {/* 👤 MANAGER TASKS */}
-      <div className={`rounded-2xl border-2 backdrop-blur-lg shadow-lg overflow-hidden transition-colors duration-300 ${
+      <div className={`rounded-xl border bg-white/35 backdrop-blur-xl border-white/25 shadow-md shadow-black/5 overflow-hidden transition-colors duration-300 ${
         darkMode
-          ? "border-amber-700/50 bg-gradient-to-br from-amber-900/30 to-orange-900/30"
-          : "border-amber-200/50 bg-gradient-to-br from-amber-50/80 to-orange-50/80"
+          ? "border-gray-700/50 bg-gray-800/50"
+          : ""
       }`}>
-        <div className={`px-4 py-2.5 border-b ${
+        <div className={`px-4 py-2.5 border-b border-[#0E1B2E]/10 bg-white/40 backdrop-blur-sm ${
           darkMode
-            ? "border-amber-700 bg-gradient-to-r from-amber-900/50 to-orange-900/50"
-            : "border-amber-200 bg-gradient-to-r from-amber-100 to-orange-100"
+            ? "border-gray-700 bg-gray-800/50"
+            : ""
         }`}>
-          <h3 className={`font-bold text-sm ${
+          <h3 className={`font-medium text-sm text-[#0E1B2E] ${
             darkMode
-              ? "bg-gradient-to-r from-amber-400 to-orange-400 bg-clip-text text-transparent"
-              : "bg-gradient-to-r from-amber-700 to-orange-700 bg-clip-text text-transparent"
+              ? "text-gray-200"
+              : ""
           }`}>👤 Manager-Added Tasks</h3>
         </div>
 
@@ -729,8 +737,8 @@ const filteredManagerTasks = managerTasks.filter(task => {
               <TaskRow key={`manager-${task.id}`} task={task} />
             ))
           ) : (
-            <div className={`px-5 py-4 text-sm italic ${
-              darkMode ? "text-gray-400" : "text-slate-500"
+            <div className={`px-4 py-3 text-xs italic ${
+              darkMode ? "text-gray-400" : "text-[#0E1B2E]/50"
             }`}>
               No tasks match the current filters.
             </div>

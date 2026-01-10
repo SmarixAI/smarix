@@ -39,31 +39,31 @@ export const Navbar = () => {
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
         className={`fixed top-4 left-0 right-0 mx-auto z-50 transition-all duration-500 ease-out
-          flex items-center justify-between px-6 py-3 rounded-full
+          flex items-center justify-between px-4 py-2 rounded-full
           ${
             isScrolled
-              ? "w-[88%] md:w-[75%] lg:w-[900px] bg-white/20 backdrop-blur-2xl shadow-lg shadow-black/5 border border-white/25 ring-1 ring-black/5"
-              : "w-[92%] md:w-[85%] lg:w-[1000px] bg-white/35 backdrop-blur-xl shadow-md shadow-black/5 border border-white/30"
+              ? "w-[85%] md:w-[70%] lg:w-[800px] bg-white/20 backdrop-blur-2xl shadow-lg shadow-black/5 border border-white/25 ring-1 ring-black/5"
+              : "w-[88%] md:w-[78%] lg:w-[850px] bg-white/35 backdrop-blur-xl shadow-md shadow-black/5 border border-white/30"
           }`}
       >
         {/* Logo */}
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="w-8 h-8 bg-[#0E1B2E] rounded-lg flex items-center justify-center overflow-hidden">
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="w-7 h-7 bg-[#0E1B2E] rounded-lg flex items-center justify-center overflow-hidden">
             <Image
               src="/logo.png"
               alt="Logo"
-              width={24}
-              height={24}
-              className="w-6 h-6 object-contain"
+              width={20}
+              height={20}
+              className="w-5 h-5 object-contain"
             />
           </div>
-          <span className="text-[#0E1B2E] font-bold text-xl tracking-tight whitespace-nowrap">
+          <span className="text-[#0E1B2E] font-bold text-lg tracking-tight whitespace-nowrap">
             Smarix
           </span>
         </div>
 
         {/* Desktop Nav */}
-        <div className="hidden md:flex items-center gap-5 ml-14 mr-10 whitespace-nowrap">
+        <div className="hidden md:flex items-center gap-4 ml-10 mr-8 whitespace-nowrap">
           {navLinks.map((link) => (
             <div key={link.name} className="whitespace-nowrap">
               <TypewriterLink text={link.name} href={link.href} />
@@ -73,12 +73,12 @@ export const Navbar = () => {
 
         {/* CTA */}
         <div className="hidden md:flex items-center shrink-0">
-          <button className="group relative overflow-hidden rounded-full bg-[#0E1B2E] px-6 py-2.5 text-white transition-all hover:bg-[#1a2f4d] hover:shadow-lg hover:shadow-[#0E1B2E]/20">
+          <button className="group relative overflow-hidden rounded-full bg-[#0E1B2E] px-5 py-2 text-white transition-all hover:bg-[#1a2f4d] hover:shadow-lg hover:shadow-[#0E1B2E]/20">
             <div className="flex items-center gap-2 whitespace-nowrap">
-              <span className="text-sm font-tahoma font-semibold tracking-wide">
+              <span className="text-xs font-tahoma font-semibold tracking-wide">
                 Request demo
               </span>
-              <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
+              <ArrowRight className="w-3.5 h-3.5 transition-transform duration-300 group-hover:translate-x-1" />
             </div>
           </button>
         </div>
@@ -99,7 +99,7 @@ export const Navbar = () => {
             initial={{ opacity: 0, scale: 0.95, y: -20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -20 }}
-            className="fixed inset-x-4 top-24 z-40 rounded-3xl bg-white/75 backdrop-blur-2xl p-6 shadow-2xl shadow-black/10 border border-white/25 md:hidden"
+            className="fixed inset-x-4 top-20 z-40 rounded-3xl bg-white/75 backdrop-blur-2xl p-6 shadow-2xl shadow-black/10 border border-white/25 md:hidden"
           >
             <div className="flex flex-col gap-4">
               {navLinks.map((link) => (

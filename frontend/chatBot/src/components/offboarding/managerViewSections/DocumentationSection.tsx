@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
+import { ChevronDown, ChevronUp, FileText, HelpCircle, ExternalLink } from 'lucide-react';
 import Loader from '../Loader';
 
 /* ================= TYPES ================= */
@@ -16,6 +17,9 @@ type DocumentItem = {
   owner: string;
   aiFollowUp: boolean;
   lastUpdated: string;
+  description?: string;
+  questions?: string[];
+  reference?: string;
 };
 
 type DocumentationSectionProps = {
@@ -66,6 +70,9 @@ export default function DocumentationSection({
   const [statusFilter, setStatusFilter] = useState<'All' | DocStatus>('All');
   const [priorityFilter, setPriorityFilter] = useState<'All' | DocPriority>('All');
   const [loading, setLoading] = useState(true);
+  
+  // Expanded document IDs
+  const [expandedDocIds, setExpandedDocIds] = useState<Set<string>>(new Set());
 
   /* ================= LOAD DATA ================= */
 
@@ -99,7 +106,9 @@ export default function DocumentationSection({
           e.employeeId === employeeId || 
           e.employee_id === employeeId ||
           String(e.employeeId) === String(employeeId) ||
-          String(e.employee_id) === String(employeeId)
+          String(e.employee_id) === String(employeeId) ||
+          e.name === employeeId ||
+          e.employee_name === employeeId
         );
 
         if (!employee) {
@@ -237,148 +246,31 @@ export default function DocumentationSection({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 p-4">
 
-      {/* ================= SUMMARY SECTION ================= */}
-      <div className={`rounded-2xl border-2 backdrop-blur-lg shadow-lg transition-colors duration-300 ${
-        darkMode
-          ? "border-gray-700 bg-gray-800/80"
-          : "border-slate-200/50 bg-white/80"
-      }`}>
-        <div className={`px-4 py-2.5 border-b ${
-          darkMode
-            ? "border-gray-700 bg-gradient-to-r from-indigo-900/50 to-purple-900/50"
-            : "border-slate-200 bg-gradient-to-r from-indigo-50 to-purple-50"
-        }`}>
-          <h3 className={`font-bold text-sm ${
-            darkMode
-              ? "bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent"
-              : "bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent"
-          }`}>
-            Documentation Summary
-          </h3>
-        </div>
-
-        <div className="grid grid-cols-6 gap-2 px-4 py-3">
-          <div className={`rounded-xl border-2 px-3 py-2 shadow-sm transition-colors duration-300 ${
-            darkMode
-              ? "border-gray-700 bg-gradient-to-br from-gray-800 to-gray-900"
-              : "border-slate-200 bg-gradient-to-br from-slate-50 to-slate-100"
-          }`}>
-            <p className={`text-[10px] font-bold mb-0.5 ${
-              darkMode ? "text-gray-400" : "text-slate-600"
-            }`}>Total</p>
-            <p className={`text-xl font-extrabold ${
-              darkMode ? "text-gray-100" : "text-slate-900"
-            }`}>
-              {summary.total}
-            </p>
-          </div>
-
-          <div className={`rounded-xl border-2 px-3 py-2 shadow-sm transition-colors duration-300 ${
-            darkMode
-              ? "border-red-700 bg-gradient-to-br from-red-900/30 to-red-900/50"
-              : "border-red-200 bg-gradient-to-br from-red-50 to-red-100"
-          }`}>
-            <p className={`text-[10px] font-bold mb-0.5 ${
-              darkMode ? "text-red-400" : "text-red-700"
-            }`}>Missing</p>
-            <p className={`text-xl font-extrabold ${
-              darkMode ? "text-red-300" : "text-red-800"
-            }`}>
-              {summary.missing}
-            </p>
-          </div>
-
-          <div className={`rounded-xl border-2 px-3 py-2 shadow-sm transition-colors duration-300 ${
-            darkMode
-              ? "border-yellow-700 bg-gradient-to-br from-yellow-900/30 to-yellow-900/50"
-              : "border-yellow-200 bg-gradient-to-br from-yellow-50 to-yellow-100"
-          }`}>
-            <p className={`text-[10px] font-bold mb-0.5 ${
-              darkMode ? "text-yellow-400" : "text-yellow-700"
-            }`}>Partial</p>
-            <p className={`text-xl font-extrabold ${
-              darkMode ? "text-yellow-300" : "text-yellow-800"
-            }`}>
-              {summary.partial}
-            </p>
-          </div>
-
-          <div className={`rounded-xl border-2 px-3 py-2 shadow-sm transition-colors duration-300 ${
-            darkMode
-              ? "border-green-700 bg-gradient-to-br from-green-900/30 to-green-900/50"
-              : "border-green-200 bg-gradient-to-br from-green-50 to-green-100"
-          }`}>
-            <p className={`text-[10px] font-bold mb-0.5 ${
-              darkMode ? "text-green-400" : "text-green-700"
-            }`}>Complete</p>
-            <p className={`text-xl font-extrabold ${
-              darkMode ? "text-green-300" : "text-green-800"
-            }`}>
-              {summary.complete}
-            </p>
-          </div>
-
-          <div className={`rounded-xl border-2 px-3 py-2 shadow-sm transition-colors duration-300 ${
-            darkMode
-              ? "border-indigo-700 bg-gradient-to-br from-indigo-900/30 to-purple-900/30"
-              : "border-indigo-200 bg-gradient-to-br from-indigo-50 to-purple-50"
-          }`}>
-            <p className={`text-[10px] font-bold mb-0.5 ${
-              darkMode ? "text-indigo-400" : "text-indigo-700"
-            }`}>AI Follow-ups</p>
-            <p className={`text-xl font-extrabold ${
-              darkMode ? "text-indigo-300" : "text-indigo-800"
-            }`}>
-              {summary.aiFollowUps}
-            </p>
-          </div>
-
-          <div className={`rounded-xl border-2 px-3 py-2 shadow-sm transition-colors duration-300 ${
-            darkMode
-              ? "border-gray-600 bg-gradient-to-br from-gray-700 to-gray-800"
-              : "border-slate-300 bg-gradient-to-br from-slate-100 to-slate-200"
-          }`}>
-            <p className={`text-[10px] font-bold mb-0.5 ${
-              darkMode ? "text-gray-400" : "text-slate-700"
-            }`}>Quality</p>
-            <p
-              className={`text-xl font-extrabold ${
-                summary.quality >= 80
-                  ? darkMode ? 'text-green-300' : 'text-green-700'
-                  : summary.quality >= 50
-                  ? darkMode ? 'text-yellow-300' : 'text-yellow-700'
-                  : darkMode ? 'text-red-300' : 'text-red-700'
-              }`}
-            >
-              {summary.quality}%
-            </p>
-          </div>
-        </div>
-      </div>
+      {/* ================= SUMMARY SECTION - REMOVED ================= */}
 
       {/* ================= FILTERS ================= */}
-      <div className={`rounded-2xl border-2 backdrop-blur-lg shadow-lg p-3 transition-colors duration-300 ${
+      <div className={`rounded-xl border bg-white/35 backdrop-blur-xl border-white/25 shadow-md shadow-black/5 px-4 py-3 transition-colors duration-300 ${
         darkMode
-          ? "border-gray-700 bg-gray-800/80"
-          : "border-slate-200/50 bg-white/80"
+          ? "border-gray-700 bg-gray-800/50"
+          : ""
       }`}>
         <div className="flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-2">
-            <label className={`text-xs font-semibold ${
-              darkMode ? "text-gray-300" : "text-slate-700"
+            <label className={`text-xs font-medium ${
+              darkMode ? "text-gray-300" : "text-[#0E1B2E]/70"
             }`}>Status:</label>
             <select
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value as any)}
               className={`
-                px-3 py-1.5 rounded-lg text-xs font-semibold border-2
-                focus:outline-none focus:ring-2 focus:border-indigo-500
+                px-3 py-1.5 rounded-lg text-xs font-medium border
+                focus:outline-none focus:ring-1 focus:border-[#0E1B2E]/30
                 transition-all duration-200
                 ${darkMode
-                  ? "border-gray-600 bg-gray-700 text-gray-100 focus:ring-indigo-400"
-                  : "border-slate-300 bg-white text-slate-900 focus:ring-indigo-500"
+                  ? "border-gray-600 bg-gray-700/50 text-gray-100 focus:ring-[#0E1B2E]/20"
+                  : "border-[#0E1B2E]/20 bg-white/60 text-[#0E1B2E] focus:ring-[#0E1B2E]/10"
                 }
               `}
             >
@@ -390,19 +282,19 @@ export default function DocumentationSection({
           </div>
 
           <div className="flex items-center gap-2">
-            <label className={`text-xs font-semibold ${
-              darkMode ? "text-gray-300" : "text-slate-700"
+            <label className={`text-xs font-medium ${
+              darkMode ? "text-gray-300" : "text-[#0E1B2E]/70"
             }`}>Priority:</label>
             <select
               value={priorityFilter}
               onChange={e => setPriorityFilter(e.target.value as any)}
               className={`
-                px-3 py-1.5 rounded-lg text-xs font-semibold border-2
-                focus:outline-none focus:ring-2 focus:border-indigo-500
+                px-3 py-1.5 rounded-lg text-xs font-medium border
+                focus:outline-none focus:ring-1 focus:border-[#0E1B2E]/30
                 transition-all duration-200
                 ${darkMode
-                  ? "border-gray-600 bg-gray-700 text-gray-100 focus:ring-indigo-400"
-                  : "border-slate-300 bg-white text-slate-900 focus:ring-indigo-500"
+                  ? "border-gray-600 bg-gray-700/50 text-gray-100 focus:ring-[#0E1B2E]/20"
+                  : "border-[#0E1B2E]/20 bg-white/60 text-[#0E1B2E] focus:ring-[#0E1B2E]/10"
                 }
               `}
             >
@@ -416,34 +308,61 @@ export default function DocumentationSection({
       </div>
 
       {/* ================= SECTION TITLE ================= */}
-      <h2 className={`text-sm font-bold uppercase tracking-wide ${
-        darkMode ? "text-gray-300" : "text-slate-700"
+      <h2 className={`text-base font-semibold uppercase tracking-wide mb-4 text-[#0E1B2E] ${
+        darkMode ? "text-gray-300" : ""
       }`}>
         Mandatory Documents
       </h2>
 
       {/* ================= DOCUMENT LIST ================= */}
-      <div className="space-y-4">
+      <div className="space-y-3">
         {filteredDocs.length > 0 ? (
-          filteredDocs.map(d => (
-          <div
-            key={d.id}
-            className={`rounded-2xl border shadow-sm p-5 space-y-4 transition-colors duration-300 ${
-              darkMode
-                ? "border-gray-700 bg-gray-800"
-                : "border-slate-200 bg-white"
-            }`}
-          >
-            {/* TOP ROW */}
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className={`text-base font-semibold ${
-                  darkMode ? "text-gray-100" : "text-slate-900"
-                }`}>
-                  {d.name}
-                </p>
-                <p className={`text-sm mt-1 ${
-                  darkMode ? "text-gray-400" : "text-slate-600"
+          filteredDocs.map(d => {
+            const isExpanded = expandedDocIds.has(d.id);
+            const hasDetails = d.description || d.questions?.length || d.reference;
+            
+            return (
+            <div
+              key={d.id}
+              className={`rounded-xl border bg-white/35 backdrop-blur-xl border-white/25 shadow-md shadow-black/5 overflow-hidden transition-colors duration-300 ${
+                darkMode
+                  ? "border-gray-700 bg-gray-800/50"
+                  : ""
+              }`}
+            >
+              {/* TOP ROW */}
+              <div 
+                className={`flex items-start justify-between gap-4 p-4 cursor-pointer transition-colors ${
+                  hasDetails ? (darkMode ? "hover:bg-gray-800/70" : "hover:bg-white/50") : ""
+                } ${isExpanded ? (darkMode ? "bg-gray-800/30" : "bg-white/40") : ""}`}
+                onClick={() => hasDetails && setExpandedDocIds(prev => {
+                  const newSet = new Set(prev);
+                  if (newSet.has(d.id)) {
+                    newSet.delete(d.id);
+                  } else {
+                    newSet.add(d.id);
+                  }
+                  return newSet;
+                })}
+              >
+                <div className="flex-1 flex items-start gap-2">
+                  {hasDetails && (
+                    <div className="mt-0.5">
+                      {isExpanded ? (
+                        <ChevronUp className={`w-4 h-4 ${darkMode ? "text-gray-400" : "text-[#0E1B2E]/60"}`} />
+                      ) : (
+                        <ChevronDown className={`w-4 h-4 ${darkMode ? "text-gray-400" : "text-[#0E1B2E]/60"}`} />
+                      )}
+                    </div>
+                  )}
+                  <div>
+                    <p className={`text-sm font-medium ${
+                      darkMode ? "text-gray-100" : "text-[#0E1B2E]"
+                    }`}>
+                      {d.name}
+                    </p>
+                <p className={`text-xs mt-0.5 ${
+                  darkMode ? "text-gray-400" : "text-[#0E1B2E]/60"
                 }`}>
                   Owner:{' '}
                   <span className={`font-semibold ${
@@ -462,8 +381,8 @@ export default function DocumentationSection({
             </div>
 
             {/* META INFO */}
-            <div className={`flex flex-wrap gap-4 text-xs ${
-              darkMode ? "text-gray-400" : "text-slate-700"
+            <div className={`flex flex-wrap gap-3 text-xs ${
+              darkMode ? "text-gray-400" : "text-[#0E1B2E]/60"
             }`}>
               <div>
                 <span className="font-semibold">Priority:</span>{' '}
@@ -485,14 +404,76 @@ export default function DocumentationSection({
                 </div>
               )}
             </div>
+              </div>
+
+            {/* EXPANDED DETAILS */}
+            {isExpanded && hasDetails && (
+              <div className={`px-4 pb-3 border-t border-[#0E1B2E]/10 ${
+                darkMode ? "bg-gray-800/30" : "bg-white/20"
+              }`}>
+                <div className="space-y-3 pt-3">
+                  {/* DESCRIPTION */}
+                  {d.description && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <FileText className={`w-3.5 h-3.5 ${darkMode ? "text-gray-400" : "text-[#0E1B2E]/60"}`} />
+                        <h4 className={`text-xs font-medium ${darkMode ? "text-gray-300" : "text-[#0E1B2E]"}`}>
+                          Description
+                        </h4>
+                      </div>
+                      <div className={`text-xs ml-5 whitespace-pre-wrap ${darkMode ? "text-gray-400" : "text-[#0E1B2E]/70"}`}>
+                        {d.description.replace(/\*\*/g, '').replace(/#{1,6}\s*/g, '')}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* QUESTIONS */}
+                  {d.questions && d.questions.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <HelpCircle className={`w-3.5 h-3.5 ${darkMode ? "text-gray-400" : "text-[#0E1B2E]/60"}`} />
+                        <h4 className={`text-xs font-medium ${darkMode ? "text-gray-300" : "text-[#0E1B2E]"}`}>
+                          Questions ({d.questions.length})
+                        </h4>
+                      </div>
+                      <ul className="ml-5 space-y-1.5">
+                        {d.questions.map((q, idx) => (
+                          <li key={idx} className={`text-xs flex items-start gap-2 ${darkMode ? "text-gray-400" : "text-[#0E1B2E]/70"}`}>
+                            <span className="mt-0.5">{idx + 1}.</span>
+                            <span>{q}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* REFERENCE */}
+                  {d.reference && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <ExternalLink className={`w-3.5 h-3.5 ${darkMode ? "text-gray-400" : "text-[#0E1B2E]/60"}`} />
+                        <h4 className={`text-xs font-medium ${darkMode ? "text-gray-300" : "text-[#0E1B2E]"}`}>
+                          References
+                        </h4>
+                      </div>
+                      <div className={`text-xs ml-5 ${darkMode ? "text-gray-400" : "text-[#0E1B2E]/70"}`}>
+                        {d.reference.split(', ').map((ref, idx) => (
+                          <div key={idx} className="font-mono">{ref}</div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* ================= ACTION ROW ================= */}
-            <div className={`pt-4 border-t rounded-b-xl -mx-5 px-5 pb-1 transition-colors duration-300 ${
+            <div className={`pt-3 border-t rounded-b-xl -mx-4 px-4 pb-1 transition-colors duration-300 border-[#0E1B2E]/10 ${
               darkMode
                 ? "border-gray-700 bg-gray-900/50"
-                : "border-slate-200 bg-slate-50"
+                : "bg-[#0E1B2E]/5"
             }`}>
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2">
 
                 {/* STATUS */}
                 <select
@@ -504,10 +485,9 @@ export default function DocumentationSection({
                     })
                   }
                   className={`
-                    px-3 py-1.5 rounded-lg text-xs font-bold border-2 shadow-sm
-                    focus:outline-none focus:ring-2 focus:ring-offset-1
+                    px-2.5 py-1 rounded-lg text-xs font-medium border shadow-sm
+                    focus:outline-none focus:ring-1 focus:ring-offset-0
                     ${getStatusStyles(d.status, darkMode)}
-                    ${darkMode ? 'focus:ring-offset-gray-800' : 'focus:ring-offset-1'}
                   `}
                 >
                   <option value="Missing">Missing</option>
@@ -525,11 +505,11 @@ export default function DocumentationSection({
                     })
                   }
                   className={`
-                    px-3 py-1.5 rounded-lg text-xs font-semibold border-2 shadow-sm
-                    focus:outline-none focus:ring-2
+                    px-2.5 py-1 rounded-lg text-xs font-medium border shadow-sm
+                    focus:outline-none focus:ring-1
                     ${darkMode
-                      ? "border-gray-600 bg-gray-700 text-gray-100 focus:ring-indigo-400"
-                      : "border-slate-400 bg-white text-slate-900 focus:ring-indigo-500"
+                      ? "border-gray-600 bg-gray-700/50 text-gray-100 focus:ring-[#0E1B2E]/20"
+                      : "border-[#0E1B2E]/20 bg-white/60 text-[#0E1B2E] focus:ring-[#0E1B2E]/10"
                     }
                   `}
                 >
@@ -545,20 +525,19 @@ export default function DocumentationSection({
                   disabled={d.status === 'Complete'}
                   className={`
                     ml-auto
-                    px-4 py-2
+                    px-3 py-1.5
                     rounded-lg
-                    text-xs font-bold
-                    tracking-wide
-                    shadow-md
+                    text-xs font-medium
+                    shadow-sm hover:shadow-md
                     transition
                     ${
                       d.status === 'Complete'
                         ? darkMode
                           ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                          : 'bg-slate-300 text-slate-600 cursor-not-allowed'
+                          : 'bg-[#0E1B2E]/20 text-[#0E1B2E]/40 cursor-not-allowed'
                         : darkMode
-                          ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                          : 'bg-indigo-700 hover:bg-indigo-800 text-white'
+                          ? 'bg-[#0E1B2E] hover:bg-[#1a2f4d] text-white'
+                          : 'bg-[#0E1B2E] hover:bg-[#1a2f4d] text-white'
                     }
                   `}
                 >
@@ -567,10 +546,11 @@ export default function DocumentationSection({
               </div>
             </div>
           </div>
-        ))
+        );
+          })
         ) : (
-          <div className={`text-sm italic ${
-            darkMode ? "text-gray-400" : "text-slate-500"
+          <div className={`text-xs italic px-4 py-3 ${
+            darkMode ? "text-gray-400" : "text-[#0E1B2E]/50"
           }`}>
             {docs.length === 0 
               ? 'No documentation items for this employee.'
