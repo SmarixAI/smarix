@@ -5,17 +5,22 @@ import path from 'path';
 export async function GET() {
   try {
     const possiblePaths = [
+      path.join(process.cwd(), '..', '..', 'backend', 'data', 'Offboarding', 'handover_tasks.json'),
+      path.join(process.cwd(), '..', 'backend', 'data', 'Offboarding', 'handover_tasks.json'),
+      path.join(process.cwd(), 'backend', 'data', 'Offboarding', 'handover_tasks.json'),
       path.join(process.cwd(), '..', '..', 'backend', 'data', 'Offboarding', '5employee_handovers.json'),
       path.join(process.cwd(), '..', 'backend', 'data', 'Offboarding', '5employee_handovers.json'),
       path.join(process.cwd(), 'backend', 'data', 'Offboarding', '5employee_handovers.json'),
     ];
 
     let fileContent: string | null = null;
+    let filePath: string | null = null;
 
-    for (const filePath of possiblePaths) {
+    for (const p of possiblePaths) {
       try {
-        await fs.access(filePath);
-        fileContent = await fs.readFile(filePath, 'utf-8');
+        await fs.access(p);
+        fileContent = await fs.readFile(p, 'utf-8');
+        filePath = p;
         break;
       } catch {
         continue;
@@ -30,6 +35,77 @@ export async function GET() {
     }
 
     const jsonData = JSON.parse(fileContent);
+
+    // Transform data structure to match frontend expectations
+    // If file is handover_tasks.json, transform it
+    if (filePath && filePath.includes('handover_tasks.json')) {
+      // Try to load users.json to map names to employeeIds
+      let usersMap: Record<string, string> = {};
+      try {
+        const usersPaths = [
+          path.join(process.cwd(), '..', '..', 'backend', 'data', 'Admin', 'users.json'),
+          path.join(process.cwd(), '..', 'backend', 'data', 'Admin', 'users.json'),
+          path.join(process.cwd(), 'backend', 'data', 'Admin', 'users.json'),
+        ];
+        for (const usersPath of usersPaths) {
+          try {
+            const usersContent = await fs.readFile(usersPath, 'utf-8');
+            const usersData = JSON.parse(usersContent);
+            usersData.users?.forEach((user: any) => {
+              if (user.employeeId && user.name) {
+                usersMap[user.name.toLowerCase()] = user.employeeId;
+              }
+              if (user.employeeId && user.username) {
+                usersMap[user.username.toLowerCase()] = user.employeeId;
+              }
+            });
+            break;
+          } catch {
+            continue;
+          }
+        }
+      } catch (e) {
+        console.log('Could not load users.json for mapping:', e);
+      }
+
+      const transformed = {
+        employees: jsonData.employees.map((emp: any) => {
+          const tasks = emp.handover_tasks?.tasks || [];
+          const employeeName = emp.employee_name || emp.name || '';
+          // Try to find employeeId from users.json by name or username
+          const employeeId = emp.employeeId || 
+                            emp.employee_id || 
+                            usersMap[employeeName.toLowerCase()] || 
+                            employeeName;
+          
+          return {
+            employeeId: employeeId,
+            employee_id: employeeId,
+            name: employeeName,
+            handovers: tasks.map((task: any, idx: number) => ({
+              id: task.taskId || `HO${idx + 1}`,
+              item: task.title || '',
+              currentOwner: employeeName,
+              newOwner: task.suggested_recipient || '',
+              priority: (task.priority || 'Medium').charAt(0).toUpperCase() + (task.priority || 'Medium').slice(1).toLowerCase(),
+              status: 'Pending',
+              ktType: task.knowledge_type || [],
+              lastUpdated: new Date().toISOString().split('T')[0],
+              description: task.description,
+              questions: task.questions,
+              reference: task.reference,
+              suggested_recipient: task.suggested_recipient,
+              suggested_recipient_reason: task.suggested_recipient_reason,
+            })),
+          };
+        }),
+      };
+      return NextResponse.json(transformed, {
+        headers: {
+          'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
+        },
+      });
+    }
 
     return NextResponse.json(jsonData, {
       headers: {
@@ -58,6 +134,9 @@ export async function POST(request: NextRequest) {
 
     // Find the file
     const possiblePaths = [
+      path.join(process.cwd(), '..', '..', 'backend', 'data', 'Offboarding', 'handover_tasks.json'),
+      path.join(process.cwd(), '..', 'backend', 'data', 'Offboarding', 'handover_tasks.json'),
+      path.join(process.cwd(), 'backend', 'data', 'Offboarding', 'handover_tasks.json'),
       path.join(process.cwd(), '..', '..', 'backend', 'data', 'Offboarding', '5employee_handovers.json'),
       path.join(process.cwd(), '..', 'backend', 'data', 'Offboarding', '5employee_handovers.json'),
       path.join(process.cwd(), 'backend', 'data', 'Offboarding', '5employee_handovers.json'),

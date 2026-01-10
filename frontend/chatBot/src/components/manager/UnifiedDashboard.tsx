@@ -3,12 +3,15 @@
 import { useState, useEffect, useMemo } from 'react';
 import { 
   Users, User, LogOut, Search, ChevronDown, ChevronUp,
-  Clock, CheckCircle, TrendingUp
+  Clock, CheckCircle, TrendingUp, Settings
 } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthContext';
 import { PieChart, Pie, Cell, ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Line, Area } from 'recharts';
 import Loader from '../offboarding/Loader';
 import Image from 'next/image';
+import FinalCallSection from '../offboarding/managerViewSections/FinalCallSection';
+import HandoverSection from '../offboarding/managerViewSections/HandoverSection';
+import DocumentationSection from '../offboarding/managerViewSections/DocumentationSection';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -60,6 +63,8 @@ export default function UnifiedDashboard() {
   const [onboardingExpanded, setOnboardingExpanded] = useState(true);
   const [offboardingExpanded, setOffboardingExpanded] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [manageOffboardingMode, setManageOffboardingMode] = useState(false);
+  const [activeOffboardingSection, setActiveOffboardingSection] = useState<'finalcall' | 'handover' | 'documentation'>('finalcall');
 
   // Initial render log
   useEffect(() => {
@@ -67,6 +72,12 @@ export default function UnifiedDashboard() {
     console.log('Initial user:', user);
     console.log('Initial token:', token ? 'exists' : 'missing');
   }, []);
+
+  // Reset manage offboarding mode when employee changes
+  useEffect(() => {
+    setManageOffboardingMode(false);
+    setActiveOffboardingSection('finalcall');
+  }, [selectedEmployee]);
 
   // Fetch employees
   useEffect(() => {
@@ -687,17 +698,95 @@ export default function UnifiedDashboard() {
                     </div>
                   )}
                   
-                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/40 backdrop-blur-sm border border-white/30">
-                    <div className={`w-1.5 h-1.5 rounded-full ${
-                      employeeProgress.type === 'onboarding' ? 'bg-blue-500' : 'bg-orange-500'
-                    }`} />
-                    <span className="text-xs font-medium text-[#0E1B2E] capitalize">
-                      {employeeProgress.type}
-                    </span>
+                  <div className="flex items-center gap-3">
+                    {/* Manage Offboarding Button - Only for offboarding employees */}
+                    {employeeProgress.type === 'offboarding' && (
+                      <button
+                        onClick={() => setManageOffboardingMode(!manageOffboardingMode)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                          manageOffboardingMode
+                            ? 'bg-[#0E1B2E] text-white shadow-md'
+                            : 'bg-white/40 backdrop-blur-sm border border-white/30 text-[#0E1B2E] hover:bg-white/60'
+                        }`}
+                      >
+                        <Settings className="w-4 h-4" />
+                        <span>{manageOffboardingMode ? 'Back to Overview' : 'Manage Offboarding'}</span>
+                      </button>
+                    )}
+                    
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/40 backdrop-blur-sm border border-white/30">
+                      <div className={`w-1.5 h-1.5 rounded-full ${
+                        employeeProgress.type === 'onboarding' ? 'bg-blue-500' : 'bg-orange-500'
+                      }`} />
+                      <span className="text-xs font-medium text-[#0E1B2E] capitalize">
+                        {employeeProgress.type}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
 
+              {/* Manage Offboarding View */}
+              {manageOffboardingMode && employeeProgress.type === 'offboarding' ? (
+                <div className="space-y-4">
+                  {/* Section Tabs */}
+                  <div className="flex items-center gap-3 p-2 rounded-xl border bg-white/35 backdrop-blur-xl border-white/25 shadow-md shadow-black/5">
+                    <button
+                      onClick={() => setActiveOffboardingSection('finalcall')}
+                      className={`flex-1 px-4 py-3 rounded-lg text-sm font-semibold transition-all ${
+                        activeOffboardingSection === 'finalcall'
+                          ? 'bg-[#0E1B2E] text-white shadow-md'
+                          : 'bg-white/40 backdrop-blur-sm border border-white/30 text-[#0E1B2E] hover:bg-white/60'
+                      }`}
+                    >
+                      Final Call
+                    </button>
+                    <button
+                      onClick={() => setActiveOffboardingSection('handover')}
+                      className={`flex-1 px-4 py-3 rounded-lg text-sm font-semibold transition-all ${
+                        activeOffboardingSection === 'handover'
+                          ? 'bg-[#0E1B2E] text-white shadow-md'
+                          : 'bg-white/40 backdrop-blur-sm border border-white/30 text-[#0E1B2E] hover:bg-white/60'
+                      }`}
+                    >
+                      Handover
+                    </button>
+                    <button
+                      onClick={() => setActiveOffboardingSection('documentation')}
+                      className={`flex-1 px-4 py-3 rounded-lg text-sm font-semibold transition-all ${
+                        activeOffboardingSection === 'documentation'
+                          ? 'bg-[#0E1B2E] text-white shadow-md'
+                          : 'bg-white/40 backdrop-blur-sm border border-white/30 text-[#0E1B2E] hover:bg-white/60'
+                      }`}
+                    >
+                      Documentation
+                    </button>
+                  </div>
+
+                  {/* Section Content */}
+                  <div className="rounded-xl border bg-white/35 backdrop-blur-xl border-white/25 shadow-md shadow-black/5 overflow-hidden">
+                    {activeOffboardingSection === 'finalcall' && (
+                      <FinalCallSection
+                        employeeId={selectedEmployee.employeeId || selectedEmployee.id || ''}
+                        darkMode={false}
+                      />
+                    )}
+                    {activeOffboardingSection === 'handover' && (
+                      <HandoverSection
+                        employeeId={selectedEmployee.employeeId || selectedEmployee.id || ''}
+                        darkMode={false}
+                      />
+                    )}
+                    {activeOffboardingSection === 'documentation' && (
+                      <DocumentationSection
+                        employeeId={selectedEmployee.employeeId || selectedEmployee.id || ''}
+                        darkMode={false}
+                      />
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <>
               {/* Summary Cards - With Q&A Score */}
               <div className={`grid ${employeeProgress.type === 'onboarding' ? 'grid-cols-1 md:grid-cols-4' : 'grid-cols-1 md:grid-cols-3'} gap-4`}>
                 <div className="p-4 rounded-xl border bg-white/35 backdrop-blur-xl border-white/25 shadow-md shadow-black/5">
@@ -1009,6 +1098,8 @@ export default function UnifiedDashboard() {
                   </table>
                 </div>
               </div>
+                </>
+              )}
             </div>
           ) : (
             <Loader darkMode={false} message="Loading progress..." />
