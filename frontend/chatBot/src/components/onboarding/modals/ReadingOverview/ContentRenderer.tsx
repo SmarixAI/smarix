@@ -79,74 +79,74 @@ export default function ContentRenderer({ sections, renderedMermaid }: ContentRe
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       {sections.map((section, idx) => {
         return (
           <div key={idx}>
             {section.type === 'text' && (
-              <div className="prose prose-lg max-w-none">
+              <div className="prose max-w-none">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{
                     h1: ({ children }) => (
-                      <h1 className="text-3xl font-extrabold mb-6 mt-8 pb-3 border-b-2 text-gray-900 border-gray-200">
+                      <h1 className="text-base font-bold mb-3 mt-4 pb-2 border-b border-[#0E1B2E]/10 text-[#0E1B2E]">
                         {children}
                       </h1>
                     ),
                     h2: ({ children }) => (
-                      <h2 className="text-2xl font-bold mb-5 mt-8 pb-2 border-b text-gray-800 border-gray-200">
+                      <h2 className="text-sm font-semibold mb-2 mt-4 pb-1.5 border-b border-[#0E1B2E]/10 text-[#0E1B2E]">
                         {children}
                       </h2>
                     ),
                     h3: ({ children }) => (
-                      <h3 className="text-xl font-bold mb-4 mt-6 flex items-center text-gray-800">
-                        <span className="w-1.5 h-6 mr-3 rounded-full bg-gray-600" />
+                      <h3 className="text-sm font-semibold mb-2 mt-3 flex items-center text-[#0E1B2E]">
+                        <span className="w-1 h-4 mr-2 rounded-full bg-[#0E1B2E]/30" />
                         {children}
                       </h3>
                     ),
                     h4: ({ children }) => (
-                      <h4 className="text-lg font-semibold mb-3 mt-5 text-gray-700">
+                      <h4 className="text-xs font-semibold mb-1.5 mt-3 text-[#0E1B2E]/90">
                         {children}
                       </h4>
                     ),
                     p: ({ children }) => (
-                      <p className="mb-5 leading-loose text-base text-gray-700">
+                      <p className="mb-3 leading-relaxed text-sm text-[#0E1B2E]/80">
                         {children}
                       </p>
                     ),
                     ul: ({ children }) => (
-                      <ul className="list-none mb-6 space-y-3 text-gray-700">
+                      <ul className="list-none mb-3 space-y-1.5 text-[#0E1B2E]/80">
                         {children}
                       </ul>
                     ),
                     ol: ({ children }) => (
-                      <ol className="list-decimal list-inside mb-6 space-y-3 ml-2 text-gray-700">
+                      <ol className="list-decimal list-inside mb-3 space-y-1.5 ml-2 text-[#0E1B2E]/80">
                         {children}
                       </ol>
                     ),
                     li: ({ children }) => (
-                      <li className="flex items-start">
-                        <span className="inline-block w-2 h-2 rounded-full mt-2 mr-3 flex-shrink-0 bg-gray-600" />
+                      <li className="flex items-start text-sm">
+                        <span className="inline-block w-1.5 h-1.5 rounded-full mt-2 mr-2 flex-shrink-0 bg-[#0E1B2E]/40" />
                         <span className="flex-1">{children}</span>
                       </li>
                     ),
                     strong: ({ children }) => (
-                      <strong className="font-bold text-gray-900">
+                      <strong className="font-semibold text-[#0E1B2E]">
                         {children}
                       </strong>
                     ),
                     em: ({ children }) => (
-                      <em className="italic text-gray-700">
+                      <em className="italic text-[#0E1B2E]/80">
                         {children}
                       </em>
                     ),
                     code: ({ children }) => (
-                      <code className="px-2 py-1 rounded-lg text-sm font-mono bg-gray-100 text-gray-800">
+                      <code className="px-1.5 py-0.5 rounded text-xs font-mono bg-[#0E1B2E]/5 text-[#0E1B2E] border border-[#0E1B2E]/10">
                         {children}
                       </code>
                     ),
                     blockquote: ({ children }) => (
-                      <blockquote className="border-l-4 pl-6 py-3 my-6 italic rounded-r-lg border-gray-400 bg-gray-50 text-gray-700">
+                      <blockquote className="border-l-3 pl-3 py-1.5 my-3 italic rounded-r border-[#0E1B2E]/20 bg-[#0E1B2E]/5 text-[#0E1B2E]/80 text-xs">
                         {children}
                       </blockquote>
                     ),
@@ -155,33 +155,33 @@ export default function ContentRenderer({ sections, renderedMermaid }: ContentRe
                         href={href}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="font-medium underline decoration-2 underline-offset-2 transition-colors text-gray-900 hover:text-gray-700"
+                        className="font-medium underline decoration-1 underline-offset-2 transition-colors text-[#0E1B2E] hover:text-[#0E1B2E]/70 text-xs"
                       >
                         {children}
                       </a>
                     ),
                     hr: () => (
-                      <hr className="my-8 border-t-2 border-gray-200" />
+                      <hr className="my-4 border-t border-[#0E1B2E]/10" />
                     ),
                     table: ({ children }) => (
-                      <div className="overflow-x-auto my-6">
-                        <table className="min-w-full divide-y divide-gray-200">
+                      <div className="overflow-x-auto my-4">
+                        <table className="min-w-full divide-y divide-[#0E1B2E]/10">
                           {children}
                         </table>
                       </div>
                     ),
                     thead: ({ children }) => (
-                      <thead className="bg-gray-50">
+                      <thead className="bg-[#0E1B2E]/5">
                         {children}
                       </thead>
                     ),
                     th: ({ children }) => (
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-700">
+                      <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-[#0E1B2E]">
                         {children}
                       </th>
                     ),
                     td: ({ children }) => (
-                      <td className="px-4 py-3 text-sm text-gray-600">
+                      <td className="px-3 py-2 text-xs text-[#0E1B2E]/80">
                         {children}
                       </td>
                     ),
@@ -193,19 +193,19 @@ export default function ContentRenderer({ sections, renderedMermaid }: ContentRe
             )}
 
             {section.type === 'code' && (
-              <div className="rounded-lg overflow-hidden shadow-sm bg-gray-50 border border-gray-200">
-                <div className="flex items-center justify-between px-6 py-4 border-b bg-gray-100 border-gray-200">
-                  <div className="flex items-center space-x-3">
-                    <div className="text-gray-700">
+              <div className="rounded-lg overflow-hidden shadow-sm bg-gray-50 border border-[#0E1B2E]/10">
+                <div className="flex items-center justify-between px-4 py-2.5 border-b bg-[#0E1B2E]/5 border-[#0E1B2E]/10">
+                  <div className="flex items-center space-x-2">
+                    <div className="text-[#0E1B2E]/70">
                       {getLanguageIcon(section.language)}
                     </div>
-                    <span className="text-sm font-bold uppercase tracking-wider text-gray-700">
+                    <span className="text-xs font-bold uppercase tracking-wider text-[#0E1B2E]">
                       {getLanguageLabel(section.language)}
                     </span>
                   </div>
                   <button
                     onClick={() => copyToClipboard(section.content)}
-                    className="text-xs px-4 py-2 rounded-lg font-medium transition-all hover:bg-gray-200 text-gray-600 hover:text-gray-900"
+                    className="text-xs px-3 py-1.5 rounded-lg font-medium transition-all hover:bg-[#0E1B2E]/10 text-[#0E1B2E]/70 hover:text-[#0E1B2E]"
                   >
                     Copy Code
                   </button>
@@ -216,10 +216,10 @@ export default function ContentRenderer({ sections, renderedMermaid }: ContentRe
                     style={vs}
                     customStyle={{
                       margin: 0,
-                      padding: '1.5rem',
+                      padding: '1rem',
                       background: 'transparent',
-                      fontSize: '0.9rem',
-                      lineHeight: '1.7',
+                      fontSize: '0.8rem',
+                      lineHeight: '1.6',
                     }}
                     showLineNumbers
                     wrapLines
@@ -231,7 +231,7 @@ export default function ContentRenderer({ sections, renderedMermaid }: ContentRe
             )}
 
             {section.type === 'mermaid' && (
-              <div className="my-6">
+              <div className="my-4">
                 {section.index !== undefined && renderedMermaid[section.index] ? (
                   <div
                     className="rounded-lg overflow-hidden border border-gray-200 bg-white"

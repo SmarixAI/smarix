@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { AuthProvider, useAuth } from '@/components/auth/AuthContext';
+import { useAuth } from '@/components/auth/AuthContext';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import { Users, LogOut, FileText, Calendar, User, Moon, Sun, MessageSquare } from 'lucide-react';
 import Loader from '@/components/offboarding/Loader';
@@ -354,11 +354,9 @@ function ManagerDashboardContent() {
 
 export default function ManagerDashboardPage() {
   return (
-    <AuthProvider>
-      <ProtectedRoute requiredRole="manager">
-        <ManagerDashboardContent />
-      </ProtectedRoute>
-    </AuthProvider>
+    <ProtectedRoute requiredRole="manager">
+      <ManagerDashboardContent />
+    </ProtectedRoute>
   );
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2, Play, Square, CheckCircle2, AlertCircle } from "lucide-react";
+import { Loader2, Play, Square, CheckCircle2, AlertCircle, XCircle } from "lucide-react";
 import { Step } from "./types";
 import StepCard from "./StepCard";
 import { validateGitHubName, validateRepositoryInput } from "./validation";
@@ -370,55 +370,157 @@ export default function SetupPipelineView({
 
       {/* PROGRESS */}
       <div
-        className={`rounded-xl shadow-lg border p-6 ${
+        className={`relative rounded-xl shadow-lg border p-6 ${
           darkMode
             ? "bg-gray-800 border-gray-700"
-            : "bg-white border-slate-200"
+            : "bg-white/80 backdrop-blur-xl border-gray-200/50"
         }`}
       >
-        <h2
-          className={`text-2xl font-semibold mb-6 ${
-            darkMode ? "text-white" : "text-slate-900"
-          }`}
-        >
-          Setup Progress
-        </h2>
+        {/* Grid pattern background */}
+        {!darkMode && (
+          <div className="absolute inset-0 bg-[linear-gradient(to_right,#0E1B2E05_1px,transparent_1px),linear-gradient(to_bottom,#0E1B2E05_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none rounded-xl" />
+        )}
+        
+        <div className="relative z-10">
+          <h2
+            className={`text-2xl font-semibold mb-6 ${
+              darkMode ? "text-white" : "text-[#0E1B2E]"
+            }`}
+          >
+            Setup Progress
+          </h2>
 
-        <div className="space-y-4">
-          {steps.map((step, index) => (
-            <StepCard
-              key={step.id}
-              step={step}
-              index={index}
-              totalSteps={steps.length}
-              darkMode={darkMode}
-              executionMode={executionMode}
-              isRunning={isRunning}
-              organization={organization}
-              repoName={repoName}
-              onRunStep={handleStepByStep}
-            />
-          ))}
+          {/* Horizontal Progress Bar */}
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-4">
+              {steps.map((step, index) => {
+                const currentStepIndex = steps.findIndex(s => s.status === "running");
+                const completedCount = steps.filter(s => s.status === "completed").length;
+                const isActive = currentStepIndex === index || (currentStepIndex === -1 && index === completedCount);
+                const isCompleted = step.status === "completed";
+                const isError = step.status === "error";
+                
+                return (
+                  <div key={step.id} className="flex-1 flex items-center">
+                    {/* Step Circle */}
+                    <div className="flex flex-col items-center flex-1">
+                      <div
+                        className={`w-12 h-12 rounded-full flex items-center justify-center border-2 transition-all ${
+                          isCompleted
+                            ? "bg-emerald-500 border-emerald-600 text-white"
+                            : isError
+                            ? "bg-rose-500 border-rose-600 text-white"
+                            : isActive && step.status === "running"
+                            ? "bg-[#0E1B2E] border-[#0E1B2E] text-white ring-4 ring-[#0E1B2E]/20 animate-pulse"
+                            : isActive
+                            ? "bg-[#0E1B2E] border-[#0E1B2E] text-white"
+                            : "bg-white border-gray-300 text-gray-400"
+                        }`}
+                      >
+                        {isCompleted ? (
+                          <CheckCircle2 className="w-6 h-6" />
+                        ) : isError ? (
+                          <XCircle className="w-6 h-6" />
+                        ) : step.status === "running" ? (
+                          <Loader2 className="w-6 h-6 animate-spin" />
+                        ) : (
+                          <span className="text-sm font-semibold">{index + 1}</span>
+                        )}
+                      </div>
+                      {/* Step Label */}
+                      <div className="mt-2 text-center max-w-[120px]">
+                        <p className={`text-xs font-medium ${
+                          isActive || isCompleted
+                            ? darkMode ? "text-white" : "text-[#0E1B2E]"
+                            : "text-gray-400"
+                        }`}>
+                          {step.name}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* Connector Line */}
+                    {index < steps.length - 1 && (
+                      <div className="flex-1 h-0.5 mx-2 -mt-6 relative">
+                        <div className={`absolute inset-0 transition-all ${
+                          isCompleted
+                            ? "bg-emerald-500"
+                            : completedCount > index
+                            ? "bg-emerald-500"
+                            : "bg-gray-200"
+                        }`} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            
+            {/* Current Step Info */}
+            {steps.some(s => s.status === "running") && (() => {
+              const currentStep = steps.find(s => s.status === "running");
+              const currentIndex = steps.findIndex(s => s.status === "running");
+              if (!currentStep) return null;
+              
+              return (
+                <div className="mt-6 p-4 rounded-xl bg-[#0E1B2E]/5 border border-[#0E1B2E]/10">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-[#0E1B2E] flex items-center justify-center">
+                      <span className="text-white font-bold text-sm">Step {currentIndex + 1}</span>
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-[#0E1B2E]">{currentStep.name}</p>
+                      <p className="text-sm text-[#0E1B2E]/60">{currentStep.description}</p>
+                      {currentStep.message && (
+                        <p className="text-xs text-[#0E1B2E]/70 mt-1">{currentStep.message}</p>
+                      )}
+                    </div>
+                    <Loader2 className="w-5 h-5 animate-spin text-[#0E1B2E]" />
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Step Details (for step-by-step mode) */}
+          {executionMode === "step-by-step" && (
+            <div className="space-y-3">
+              {steps.map((step, index) => (
+                <StepCard
+                  key={step.id}
+                  step={step}
+                  index={index}
+                  totalSteps={steps.length}
+                  darkMode={darkMode}
+                  executionMode={executionMode}
+                  isRunning={isRunning}
+                  organization={organization}
+                  repoName={repoName}
+                  onRunStep={handleStepByStep}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* SUMMARY */}
+          {steps.every((s) => s.status === "completed") && (
+            <div className="mt-6 p-4 rounded-xl border bg-emerald-50/80 border-emerald-200/50 text-emerald-700 backdrop-blur-sm">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5" />
+                Setup completed successfully!
+              </div>
+            </div>
+          )}
+
+          {steps.some((s) => s.status === "error") && (
+            <div className="mt-6 p-4 rounded-xl border bg-rose-50/80 border-rose-200/50 text-rose-700 backdrop-blur-sm">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5" />
+                Setup encountered an error. Please retry.
+              </div>
+            </div>
+          )}
         </div>
-
-        {/* SUMMARY */}
-        {steps.every((s) => s.status === "completed") && (
-          <div className="mt-6 p-4 rounded-lg border bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-green-900/20 dark:border-green-800 dark:text-green-300">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5" />
-              Setup completed successfully!
-            </div>
-          </div>
-        )}
-
-        {steps.some((s) => s.status === "error") && (
-          <div className="mt-6 p-4 rounded-lg border bg-rose-50 border-rose-200 text-rose-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-300">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-5 h-5" />
-              Setup encountered an error. Please retry.
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

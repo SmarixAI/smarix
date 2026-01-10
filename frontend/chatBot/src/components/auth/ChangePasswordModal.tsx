@@ -80,11 +80,12 @@ export default function ChangePasswordModal({ isOpen, onClose, darkMode = false 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4" style={{ zIndex: 99999 }}>
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
+        style={{ zIndex: 99998 }}
       />
 
       {/* Modal */}
@@ -94,6 +95,8 @@ export default function ChangePasswordModal({ isOpen, onClose, darkMode = false 
             ? 'bg-gray-900 border-gray-700'
             : 'bg-white border-slate-200'
         }`}
+        style={{ zIndex: 99999 }}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className={`flex items-center justify-between p-6 border-b ${

@@ -1,105 +1,102 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
-  LogIn,
   Lock,
   User as UserIcon,
   AlertCircle,
-  UserPlus,
-  Briefcase,
-  Badge,
 } from "lucide-react";
 import Loader from "@/components/offboarding/Loader";
 import { useAuth } from "@/components/auth/AuthContext";
 import Image from "next/image";
 
 function UnifiedLoginContent() {
-  const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
-  const [designation, setDesignation] = useState("");
-  const [employeeId, setEmployeeId] = useState("");
-  const [selectedRole, setSelectedRole] = useState("employee");
   const [error, setError] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
   const [loading, setLoading] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [shouldRedirect, setShouldRedirect] = useState(false);
+  const hasRedirectedRef = useRef(false);
 
   const router = useRouter();
-  const { login, signup, isAuthenticated, user } = useAuth();
+  const { login, isAuthenticated, user, loading: authLoading } = useAuth();
 
-  useEffect(() => {
-    // Only check for existing authentication on initial load
-    const token = localStorage.getItem("access_token");
-    if (token && isAuthenticated && user) {
-      // User is already authenticated, redirect immediately
-      if (user.role === "admin") router.replace("/admin");
-      else if (user.role === "manager") router.replace("/manager/dashboard");
-      else router.replace("/chat");
+  const redirectBasedOnUser = useCallback((userData: typeof user) => {
+    if (!userData || hasRedirectedRef.current) return;
+    
+    hasRedirectedRef.current = true;
+    
+    if (userData.role === "admin") {
+      router.replace("/admin");
+    } else if (userData.role === "manager") {
+      router.replace("/manager/dashboard");
+    } else if (userData.role === "employee") {
+      // Check employee status and redirect accordingly
+      const status = (userData.status || "general").toLowerCase();
+      if (status === "onboard") {
+        router.replace("/employee/onboarding");
+      } else if (status === "offboard") {
+        router.replace("/employee/offboarding");
+      } else {
+        router.replace("/chat");
+      }
     } else {
-      setCheckingAuth(false);
+      router.replace("/chat");
     }
-  }, []); // Only run once on mount
+  }, [router]);
+
+  // Reset redirect ref when component mounts
+  useEffect(() => {
+    hasRedirectedRef.current = false;
+  }, []);
+
+  // Check for existing authentication on initial load
+  useEffect(() => {
+    if (!authLoading) {
+      const token = localStorage.getItem("access_token");
+      if (token && isAuthenticated && user) {
+        redirectBasedOnUser(user);
+      } else {
+        setCheckingAuth(false);
+      }
+    }
+  }, [authLoading, isAuthenticated, user, redirectBasedOnUser]);
+
+  // Handle redirect after successful login - wait for user state to update
+  useEffect(() => {
+    if (shouldRedirect && user && isAuthenticated && !authLoading) {
+      // Verify token exists before redirecting
+      const token = localStorage.getItem("access_token");
+      if (token) {
+        redirectBasedOnUser(user);
+        setShouldRedirect(false);
+      } else {
+        // Token not found, reset and show error
+        setError("Authentication failed. Please try again.");
+        setShouldRedirect(false);
+        setLoading(false);
+      }
+    }
+  }, [shouldRedirect, user, isAuthenticated, authLoading, redirectBasedOnUser]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    setSuccessMsg("");
     setLoading(true);
 
     try {
-      if (isLogin) {
-        const res = await login(username, password);
-        if (res.success) {
-          // Get user data from token and redirect immediately
-          const token = localStorage.getItem("access_token");
-          if (token) {
-            try {
-              const decoded = JSON.parse(atob(token.split('.')[1]));
-              const userRole = decoded.role;
-              
-              if (userRole === "admin") {
-                router.replace("/admin");
-              } else if (userRole === "manager") {
-                router.replace("/manager/dashboard");
-              } else {
-                router.replace("/chat");
-              }
-            } catch (error) {
-              console.error("Error parsing token:", error);
-              setError("Login successful but failed to redirect. Please refresh the page.");
-            }
-          } else {
-            setError("Login successful but no token found. Please try again.");
-          }
-        } else {
-          setError(res.error || "Login failed");
-        }
+      const res = await login(username, password);
+      if (res.success) {
+        // Set flag to trigger redirect after auth state updates
+        setShouldRedirect(true);
       } else {
-        const res = await signup({
-          username,
-          password,
-          role: selectedRole,
-          name,
-          designation,
-          employee_id: employeeId || null,
-          managers: [],
-          status: "general",
-        });
-
-        if (res.success) {
-          setSuccessMsg("Account created. Please login.");
-          setIsLogin(true);
-        } else {
-          setError(res.error || "Signup failed");
-        }
+        setError(res.error || "Login failed");
+        setLoading(false);
       }
     } catch {
       setError("Unexpected error occurred");
-    } finally {
       setLoading(false);
     }
   };
@@ -126,7 +123,7 @@ function UnifiedLoginContent() {
         </div>
 
         <h1 className="text-2xl font-bold tracking-tight text-black text-center mb-1">
-          {isLogin ? "Sign in with email" : "Create your account"}
+          Sign in with email
         </h1>
 
         <p className="text-center text-sm text-gray-500 mb-6">
@@ -137,12 +134,6 @@ function UnifiedLoginContent() {
           <div className="mb-4 flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
             <AlertCircle size={16} />
             {error}
-          </div>
-        )}
-
-        {successMsg && (
-          <div className="mb-4 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-            {successMsg}
           </div>
         )}
 
@@ -162,60 +153,14 @@ function UnifiedLoginContent() {
             onChange={(e) => setPassword(e.target.value)}
           />
 
-          {!isLogin && (
-            <>
-              <Input
-                icon={<UserIcon size={18} />}
-                placeholder="Full name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-
-              <div className="grid grid-cols-2 gap-3">
-                <Input
-                  icon={<Badge size={18} />}
-                  placeholder="Employee ID"
-                  value={employeeId}
-                  onChange={(e) => setEmployeeId(e.target.value)}
-                />
-                <select
-                  className="rounded-xl px-3 py-3 bg-gray-100 outline-none"
-                  value={selectedRole}
-                  onChange={(e) => setSelectedRole(e.target.value)}
-                >
-                  <option value="employee">Employee</option>
-                  <option value="manager">Manager</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-
-              <Input
-                icon={<Briefcase size={18} />}
-                placeholder="Designation"
-                value={designation}
-                onChange={(e) => setDesignation(e.target.value)}
-              />
-            </>
-          )}
-
           <button
             type="submit"
             disabled={loading}
             className="w-full mt-4 bg-black text-white rounded-xl py-3 font-medium hover:bg-black/90 transition"
           >
-            {loading ? "Please wait..." : isLogin ? "Get Started" : "Create Account"}
+            {loading ? "Please wait..." : "Get Started"}
           </button>
         </form>
-
-        <p className="text-center text-sm text-gray-500 mt-6">
-          {isLogin ? "Don’t have an account?" : "Already have an account?"}
-          <button
-            onClick={() => setIsLogin(!isLogin)}
-            className="ml-1 font-medium text-black"
-          >
-            {isLogin ? "Sign up" : "Login"}
-          </button>
-        </p>
       </div>
 
       {/* Simple Footer */}

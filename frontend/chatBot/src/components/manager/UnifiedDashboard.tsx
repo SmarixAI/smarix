@@ -6,7 +6,7 @@ import {
   Clock, CheckCircle, TrendingUp
 } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthContext';
-import { PieChart, Pie, Cell, ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Line } from 'recharts';
+import { PieChart, Pie, Cell, ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Line, Area } from 'recharts';
 import Loader from '../offboarding/Loader';
 import Image from 'next/image';
 
@@ -20,6 +20,8 @@ type Employee = {
   username: string;
   status: 'onboard' | 'offboard';
   profilePicture?: string;
+  active_repos?: string[];
+  designation?: string;
 };
 
 type SectionProgress = {
@@ -34,6 +36,7 @@ type SectionProgress = {
 type EmployeeProgress = {
   employeeId: string;
   employeeName: string;
+  employeeRole?: string;
   type: 'onboarding' | 'offboarding';
   pendingSections: number;
   completedSections: number;
@@ -41,6 +44,10 @@ type EmployeeProgress = {
   overallProgress: number;
   sections: SectionProgress[];
   timeSpentData: { section: string; expected: number; spent: number }[];
+  qnaScore?: number;
+  qnaTotalQuestions?: number;
+  activeRepos?: string[];
+  timeToProductivity?: { day: number; productivity: number }[];
 };
 
 export default function UnifiedDashboard() {
@@ -195,6 +202,8 @@ export default function UnifiedDashboard() {
               username: u.username,
               status: 'onboard' as const,
               profilePicture: u.profilePicture,
+              active_repos: u.active_repos || [],
+              designation: u.designation,
             };
           });
 
@@ -272,60 +281,116 @@ export default function UnifiedDashboard() {
     }
   }, [user, token]);
 
-  // Generate dummy progress data when employee is selected
+  // Fetch progress data when employee is selected
   useEffect(() => {
-    if (!selectedEmployee) {
+    if (!selectedEmployee || !token) {
       setEmployeeProgress(null);
       return;
     }
 
-    // Generate dummy progress data
-    const isOnboarding = selectedEmployee.status === 'onboard';
-    const sections = isOnboarding
-      ? ['Overview', 'Q&A', 'Practice', 'Bug Fixing']
-      : ['Final Call', 'Handover', 'Documentation'];
+    const fetchEmployeeProgress = async () => {
+      try {
+        const isOnboarding = selectedEmployee.status === 'onboard';
+        const employeeId = selectedEmployee.employeeId;
 
-    const dummySections: SectionProgress[] = sections.map((section, idx) => {
-      const expected = [5, 4, 3.5, 5.5][idx] || 4;
-      const spent = idx === 0 ? 4.3 : idx === 1 ? 3.2 : idx === 2 ? 2.8 : idx === 3 ? 4.1 : 0;
-      const completion = spent ? Math.round((spent / expected) * 100) : 0;
-      const status = idx < 2 ? 'Pending' : idx === 3 ? 'Pending' : 'Completed';
-      
-      return {
-        section,
-        status: status as 'Pending' | 'Completed',
-        expectedHours: expected,
-        spentHours: spent,
-        completion: completion > 100 ? 149 : completion,
-        value: spent ? Math.round(spent * 10) : undefined,
-      };
-    });
+        // Fetch onboarding progress if onboarding
+        let qnaScore = 0;
+        let qnaTotalQuestions = 0;
+        
+        if (isOnboarding) {
+          try {
+            const progressResponse = await fetch(`${API_URL}/api/onboarding/tasks?employeeId=${employeeId}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            
+            if (progressResponse.ok) {
+              const progressData = await progressResponse.json();
+              
+              // Calculate QnA score
+              const qaModules = progressData.onboarding?.qa?.modules || [];
+              if (qaModules.length > 0) {
+                let totalScore = 0;
+                let totalQuestions = 0;
+                
+                qaModules.forEach((module: any) => {
+                  if (module.score !== null && module.totalQuestions) {
+                    totalScore += module.score;
+                    totalQuestions += module.totalQuestions;
+                  }
+                });
+                
+                qnaScore = totalQuestions > 0 ? Math.round((totalScore / totalQuestions) * 100) : 0;
+                qnaTotalQuestions = totalQuestions;
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching onboarding progress:', error);
+          }
+        }
 
-    const completed = dummySections.filter(s => s.status === 'Completed').length;
-    const pending = dummySections.filter(s => s.status === 'Pending').length;
-    const overallProgress = Math.round((completed / sections.length) * 100);
-    const efficiency = Math.round(85 + Math.random() * 10);
+        // Generate progress data
+        const sections = isOnboarding
+          ? ['Overview', 'Q&A', 'Practice', 'Bug Fixing']
+          : ['Final Call', 'Handover', 'Documentation'];
 
-    const timeSpentData = dummySections
-      .filter(s => s.spentHours !== null)
-      .map(s => ({
-        section: s.section,
-        expected: s.expectedHours,
-        spent: s.spentHours || 0,
-      }));
+        const dummySections: SectionProgress[] = sections.map((section, idx) => {
+          const expected = [5, 4, 3.5, 5.5][idx] || 4;
+          const spent = idx === 0 ? 4.3 : idx === 1 ? 3.2 : idx === 2 ? 2.8 : idx === 3 ? 4.1 : 0;
+          const completion = spent ? Math.round((spent / expected) * 100) : 0;
+          const status = idx < 2 ? 'Pending' : idx === 3 ? 'Pending' : 'Completed';
+          
+          return {
+            section,
+            status: status as 'Pending' | 'Completed',
+            expectedHours: expected,
+            spentHours: spent,
+            completion: completion > 100 ? 149 : completion,
+            value: spent ? Math.round(spent * 10) : undefined,
+          };
+        });
 
-    setEmployeeProgress({
-      employeeId: selectedEmployee.employeeId,
-      employeeName: selectedEmployee.name,
-      type: isOnboarding ? 'onboarding' : 'offboarding',
-      pendingSections: pending,
-      completedSections: completed,
-      efficiency,
-      overallProgress,
-      sections: dummySections,
-      timeSpentData,
-    });
-  }, [selectedEmployee]);
+        const completed = dummySections.filter(s => s.status === 'Completed').length;
+        const pending = dummySections.filter(s => s.status === 'Pending').length;
+        const overallProgress = Math.round((completed / sections.length) * 100);
+        const efficiency = Math.round(85 + Math.random() * 10);
+
+        const timeSpentData = dummySections
+          .filter(s => s.spentHours !== null)
+          .map(s => ({
+            section: s.section,
+            expected: s.expectedHours,
+            spent: s.spentHours || 0,
+          }));
+
+        // Generate time to productivity data (dummy for now, should come from backend)
+        const timeToProductivity = Array.from({ length: 30 }, (_, i) => ({
+          day: i + 1,
+          productivity: Math.min(100, Math.round(20 + (i * 2.5) + Math.random() * 10)),
+        }));
+
+        setEmployeeProgress({
+          employeeId: selectedEmployee.employeeId,
+          employeeName: selectedEmployee.name,
+          employeeRole: selectedEmployee.role,
+          type: isOnboarding ? 'onboarding' : 'offboarding',
+          pendingSections: pending,
+          completedSections: completed,
+          efficiency,
+          overallProgress,
+          sections: dummySections,
+          timeSpentData,
+          qnaScore,
+          qnaTotalQuestions,
+          activeRepos: selectedEmployee.active_repos || [],
+          timeToProductivity,
+        });
+      } catch (error) {
+        console.error('Error fetching employee progress:', error);
+      }
+    };
+
+    fetchEmployeeProgress();
+  }, [selectedEmployee, token]);
 
   // Filter employees based on search
   const filteredOnboarding = useMemo(() => {
@@ -579,83 +644,126 @@ export default function UnifiedDashboard() {
               </p>
             </div>
           ) : employeeProgress ? (
-            <div className="space-y-3 relative z-10">
-              {/* Employee Info Section */}
-              {selectedEmployee?.status === 'offboard' && (
-                <div className="p-4 rounded-lg border bg-white border-gray-200 shadow-sm">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <p className="text-xs text-[#0E1B2E]/60 mb-1">
-                        Last Working Day
-                      </p>
-                      <p className="text-sm font-semibold text-[#0E1B2E]">
-                        2026-01-26
-                      </p>
+            <div className="space-y-6 relative z-10">
+              {/* Employee Details Header - Compact */}
+              <div className="p-4 rounded-xl border bg-white/35 backdrop-blur-xl border-white/25 shadow-md shadow-black/5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center bg-[#0E1B2E]/10 border border-[#0E1B2E]/20">
+                      {selectedEmployee?.profilePicture ? (
+                        <img 
+                          src={selectedEmployee.profilePicture} 
+                          alt={employeeProgress.employeeName} 
+                          className="w-full h-full rounded-full object-cover" 
+                        />
+                      ) : (
+                        <User className="w-5 h-5 text-[#0E1B2E]/60" />
+                      )}
                     </div>
                     <div>
-                      <p className="text-xs text-[#0E1B2E]/60 mb-1">
-                        Effective Workdays
-                      </p>
-                      <p className="text-sm font-semibold text-[#0E1B2E]">
-                        10 Days
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-[#0E1B2E]/60 mb-1">
-                        High-Risk Tasks
-                      </p>
-                      <p className="text-sm font-semibold text-[#0E1B2E]">
-                        0 Tasks
+                      <h2 className="text-lg font-bold text-[#0E1B2E]">
+                        {employeeProgress.employeeName}
+                      </h2>
+                      <p className="text-sm text-[#0E1B2E]/70">
+                        {employeeProgress.employeeRole || selectedEmployee?.role || 'Employee'}
                       </p>
                     </div>
                   </div>
+                  
+                  {/* Repository Name - Only for onboarding */}
+                  {employeeProgress.type === 'onboarding' && employeeProgress.activeRepos && employeeProgress.activeRepos.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-[#0E1B2E]/60 font-medium">Repository:</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {employeeProgress.activeRepos.map((repo, idx) => (
+                          <span 
+                            key={idx}
+                            className="px-2.5 py-1 rounded-lg bg-[#0E1B2E] text-white text-xs font-medium font-mono"
+                          >
+                            {repo}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/40 backdrop-blur-sm border border-white/30">
+                    <div className={`w-1.5 h-1.5 rounded-full ${
+                      employeeProgress.type === 'onboarding' ? 'bg-blue-500' : 'bg-orange-500'
+                    }`} />
+                    <span className="text-xs font-medium text-[#0E1B2E] capitalize">
+                      {employeeProgress.type}
+                    </span>
+                  </div>
                 </div>
-              )}
+              </div>
 
-              {/* Summary Cards - Compact */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-4 rounded-lg border bg-white border-gray-200 shadow-sm">
+              {/* Summary Cards - With Q&A Score */}
+              <div className={`grid ${employeeProgress.type === 'onboarding' ? 'grid-cols-1 md:grid-cols-4' : 'grid-cols-1 md:grid-cols-3'} gap-4`}>
+                <div className="p-4 rounded-xl border bg-white/35 backdrop-blur-xl border-white/25 shadow-md shadow-black/5">
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-orange-100">
-                      <Clock className="w-5 h-5 text-orange-600" />
+                      <Clock className="w-4 h-4 text-orange-600" />
                     </div>
                     <div>
-                      <p className="text-xs text-[#0E1B2E]/60">
+                      <p className="text-xs text-[#0E1B2E]/60 font-medium">
                         Pending
                       </p>
-                      <p className="text-xl font-bold text-[#0E1B2E]">
+                      <p className="text-lg font-bold text-[#0E1B2E]">
                         {employeeProgress.pendingSections} sections
                       </p>
                     </div>
                   </div>
                 </div>
 
-                <div className="p-4 rounded-lg border bg-white border-gray-200 shadow-sm">
+                <div className="p-4 rounded-xl border bg-white/35 backdrop-blur-xl border-white/25 shadow-md shadow-black/5">
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-green-100">
-                      <CheckCircle className="w-5 h-5 text-green-600" />
+                      <CheckCircle className="w-4 h-4 text-green-600" />
                     </div>
                     <div>
-                      <p className="text-xs text-[#0E1B2E]/60">
+                      <p className="text-xs text-[#0E1B2E]/60 font-medium">
                         Completed
                       </p>
-                      <p className="text-xl font-bold text-[#0E1B2E]">
+                      <p className="text-lg font-bold text-[#0E1B2E]">
                         {employeeProgress.completedSections} sections
                       </p>
                     </div>
                   </div>
                 </div>
 
-                <div className="p-4 rounded-lg border bg-white border-gray-200 shadow-sm">
+                {/* Q&A Assessment Score - Only for onboarding */}
+                {employeeProgress.type === 'onboarding' && employeeProgress.qnaScore !== undefined && employeeProgress.qnaTotalQuestions !== undefined && (
+                  <div className="p-4 rounded-xl border bg-white/35 backdrop-blur-xl border-white/25 shadow-md shadow-black/5">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-blue-100">
+                        <TrendingUp className="w-4 h-4 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-[#0E1B2E]/60 font-medium">
+                          Q&A Assessment Score
+                        </p>
+                        <p className="text-lg font-bold text-[#0E1B2E]">
+                          {employeeProgress.qnaScore}%
+                        </p>
+                        <p className="text-[10px] text-[#0E1B2E]/50 mt-0.5">
+                          {employeeProgress.qnaTotalQuestions} questions
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="p-4 rounded-xl border bg-white/35 backdrop-blur-xl border-white/25 shadow-md shadow-black/5">
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded-lg bg-purple-100">
-                      <TrendingUp className="w-5 h-5 text-purple-600" />
+                      <TrendingUp className="w-4 h-4 text-purple-600" />
                     </div>
                     <div>
-                      <p className="text-xs text-[#0E1B2E]/60">
+                      <p className="text-xs text-[#0E1B2E]/60 font-medium">
                         Efficiency
                       </p>
-                      <p className="text-xl font-bold text-[#0E1B2E]">
+                      <p className="text-lg font-bold text-[#0E1B2E]">
                         {employeeProgress.efficiency}%
                       </p>
                     </div>
@@ -663,10 +771,76 @@ export default function UnifiedDashboard() {
                 </div>
               </div>
 
+              {/* Time to Productivity Plot - Only for onboarding */}
+              {employeeProgress.type === 'onboarding' && employeeProgress.timeToProductivity && (
+                <div className="p-4 rounded-xl border bg-white/35 backdrop-blur-xl border-white/25 shadow-md shadow-black/5">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-base font-semibold text-[#0E1B2E]">
+                        Time to Productivity
+                      </h3>
+                      <div className="flex items-center gap-4 text-xs">
+                        <div className="flex items-center gap-1">
+                          <div className="w-3 h-3 bg-gradient-to-r from-blue-500 to-indigo-600 rounded"></div>
+                          <span className="text-[#0E1B2E]/70">Productivity (%)</span>
+                        </div>
+                      </div>
+                    </div>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <ComposedChart data={employeeProgress.timeToProductivity}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis
+                          dataKey="day"
+                          stroke="#6b7280"
+                          style={{ fontSize: '11px' }}
+                          label={{ value: 'Days', position: 'insideBottom', offset: -5, style: { fill: '#6b7280', fontSize: '12px' } }}
+                        />
+                        <YAxis
+                          stroke="#6b7280"
+                          style={{ fontSize: '11px' }}
+                          domain={[0, 100]}
+                          label={{ value: 'Productivity %', angle: -90, position: 'insideLeft', style: { fill: '#6b7280', fontSize: '12px' } }}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: '#ffffff',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                          }}
+                          labelFormatter={(value) => `Day ${value}`}
+                          formatter={(value: any) => [`${value}%`, 'Productivity']}
+                        />
+                        <defs>
+                          <linearGradient id="productivityGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <Area
+                          type="monotone"
+                          dataKey="productivity"
+                          stroke="#3b82f6"
+                          strokeWidth={2}
+                          fill="url(#productivityGradient)"
+                          name="Productivity"
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="productivity"
+                          stroke="#1d4ed8"
+                          strokeWidth={2}
+                          dot={{ fill: '#3b82f6', r: 3 }}
+                          activeDot={{ r: 5 }}
+                        />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+
               {/* Charts Row - Compact */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* Donut Chart */}
-                <div className="p-4 rounded-lg border bg-white border-gray-200 shadow-sm">
+                <div className="p-4 rounded-xl border bg-white/35 backdrop-blur-xl border-white/25 shadow-md shadow-black/5">
                   <h3 className="text-base font-semibold mb-3 text-[#0E1B2E]">
                     {employeeProgress.employeeName} Progress
                   </h3>
@@ -713,7 +887,7 @@ export default function UnifiedDashboard() {
                 </div>
 
                 {/* Time Spent vs Expected Chart */}
-                <div className="p-4 rounded-lg border bg-white border-gray-200 shadow-sm">
+                <div className="p-4 rounded-xl border bg-white/35 backdrop-blur-xl border-white/25 shadow-md shadow-black/5">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-base font-semibold text-[#0E1B2E]">
                       Time Spent vs. Expected
@@ -756,7 +930,7 @@ export default function UnifiedDashboard() {
               </div>
 
               {/* Section Progress Table - Compact */}
-              <div className="p-4 rounded-lg border bg-white border-gray-200 shadow-sm">
+              <div className="p-4 rounded-xl border bg-white/35 backdrop-blur-xl border-white/25 shadow-md shadow-black/5">
                 <h3 className="text-base font-semibold mb-3 text-[#0E1B2E]">
                   Section Progress
                 </h3>

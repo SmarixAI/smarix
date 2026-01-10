@@ -18,7 +18,7 @@ const firaCode = Fira_Code({
 });
 
 const TypewriterLoop = () => {
-  const words = ["Onboarding.", "Offboarding.", "AI Chatbot.", "Analytics."];
+  const words = ["Onboarding.", "Offboarding.", "AI Assistant.", "Analytics."];
   const [text, setText] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const [loopNum, setLoopNum] = useState(0);

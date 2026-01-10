@@ -1,9 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2, FileText, CheckCircle2, AlertCircle, Info, FolderOpen, Clock, BookOpen, Code, Settings, Layers, Bug, GraduationCap, MessageSquare } from "lucide-react";
+import { Loader2, FileText, CheckCircle2, AlertCircle, FolderOpen, BookOpen, Code, Settings, Layers, Bug, GraduationCap, MessageSquare } from "lucide-react";
 import { StepStatus } from "./types";
 import { getStepIcon } from "./StepCard";
+import { Space_Grotesk, Fira_Code } from 'next/font/google';
+import Image from 'next/image';
+
+const spaceGrotesk = Space_Grotesk({ subsets: ['latin'] });
+const firaCode = Fira_Code({ subsets: ['latin'] });
 
 interface OnboardingViewProps {
   darkMode: boolean;
@@ -271,163 +276,126 @@ export default function OnboardingView({
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       {/* MAIN CARD */}
-      <div
-        className={`rounded-xl shadow-lg p-6 ${
-          darkMode ? "bg-gray-800" : "bg-white"
-        }`}
-      >
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2
-              className={`text-2xl font-semibold mb-2 ${
-                darkMode ? "text-white" : "text-slate-900"
-              }`}
-            >
-              Onboarding Data Generation
-            </h2>
-            <p
-              className={`text-sm ${
-                darkMode ? "text-gray-400" : "text-slate-600"
-              }`}
-            >
-              Generate comprehensive onboarding documentation and training materials
-            </p>
-          </div>
-        </div>
-
-        {/* STATUS CARD */}
-        <div
-          className={`p-6 rounded-lg border transition-all mb-6 ${
-            onboardingStatus === "completed"
-              ? darkMode
-                ? "border-green-700 bg-green-900/20"
-                : "border-emerald-200 bg-emerald-50"
-              : onboardingStatus === "running"
-              ? darkMode
-                ? "border-blue-700 bg-blue-900/20 ring-2 ring-blue-800"
-                : "border-sky-200 bg-sky-50 ring-2 ring-sky-200"
-              : onboardingStatus === "error"
-              ? darkMode
-                ? "border-red-700 bg-red-900/20"
-                : "border-rose-200 bg-rose-50"
-              : darkMode
-              ? "border-gray-700 bg-gray-800"
-              : "border-slate-200 bg-slate-50"
-          }`}
-        >
-          <div className="flex items-center justify-between mb-4">
+      <div className="relative rounded-xl shadow-lg p-6 bg-white/80 backdrop-blur-xl border border-gray-200/50">
+        {/* Grid pattern background */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#0E1B2E05_1px,transparent_1px),linear-gradient(to_bottom,#0E1B2E05_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none rounded-xl" />
+        
+        <div className="relative z-10">
+          <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-              {getStepIcon(onboardingStatus)}
+              <div className="w-10 h-10 bg-[#0E1B2E] rounded-xl flex items-center justify-center overflow-hidden">
+                <Image
+                  src="/logo.png"
+                  alt="Smarix Logo"
+                  width={24}
+                  height={24}
+                  className="w-6 h-6 object-contain"
+                />
+              </div>
               <div>
-                <h3
-                  className={`text-lg font-semibold ${
-                    darkMode ? "text-white" : "text-slate-900"
-                  }`}
-                >
-                  Onboarding Generation Status
-                </h3>
-                <p
-                  className={`text-sm ${
-                    darkMode ? "text-gray-400" : "text-slate-600"
-                  }`}
-                >
-                  {onboardingStatus === "pending" && "Ready to generate onboarding data"}
-                  {onboardingStatus === "running" && "Generating onboarding documentation..."}
-                  {onboardingStatus === "completed" && "Onboarding data generated successfully"}
-                  {onboardingStatus === "error" && "Generation failed"}
+                <h2 className={`${spaceGrotesk.className} text-2xl font-bold mb-1 text-[#0E1B2E]`}>
+                  Onboarding Data Generation
+                </h2>
+                <p className={`${firaCode.className} text-sm text-[#0E1B2E]/60`}>
+                  Generate comprehensive onboarding documentation and training materials
                 </p>
               </div>
             </div>
-
-            <button
-              onClick={() => onRunOnboarding(selectedGenerators)}
-              disabled={onboardingRunning || selectedGenerators.length === 0}
-              className={`px-6 py-2 rounded-lg font-medium transition-all ${
-                onboardingRunning || selectedGenerators.length === 0
-                  ? darkMode
-                    ? "bg-gray-600 cursor-not-allowed"
-                    : "bg-slate-200 text-slate-500 cursor-not-allowed"
-                  : "bg-blue-600 hover:bg-blue-700 text-white"
-              } shadow-md hover:shadow-lg disabled:shadow-none`}
-            >
-              {onboardingRunning ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Generating...
-                </span>
-              ) : (
-                `Generate Onboarding Data (${selectedGenerators.length} selected)`
-              )}
-            </button>
           </div>
 
-          {/* MESSAGE */}
-          {onboardingMessage && (
-            <div
-              className={`mt-4 p-3 rounded-lg text-sm ${
-                onboardingStatus === "completed"
-                  ? darkMode
-                    ? "bg-green-900/30 text-green-300"
-                    : "bg-emerald-100 text-emerald-700"
-                  : onboardingStatus === "error"
-                  ? darkMode
-                    ? "bg-red-900/30 text-red-300"
-                    : "bg-rose-100 text-rose-700"
-                  : darkMode
-                  ? "bg-blue-900/30 text-blue-300"
-                  : "bg-sky-100 text-sky-700"
-              }`}
-            >
-              {onboardingMessage}
-            </div>
-          )}
-        </div>
+          {/* STATUS CARD */}
+          <div
+            className={`p-6 rounded-xl border transition-all mb-6 backdrop-blur-sm ${
+              onboardingStatus === "completed"
+                ? "border-emerald-200/50 bg-emerald-50/80"
+                : onboardingStatus === "running"
+                ? "border-sky-200/50 bg-sky-50/80 ring-2 ring-sky-200/30"
+                : onboardingStatus === "error"
+                ? "border-rose-200/50 bg-rose-50/80"
+                : "border-gray-200/50 bg-gray-50/80"
+            }`}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                {getStepIcon(onboardingStatus)}
+                <div>
+                  <h3 className={`${spaceGrotesk.className} text-lg font-semibold text-[#0E1B2E]`}>
+                    Onboarding Generation Status
+                  </h3>
+                  <p className={`${firaCode.className} text-sm text-[#0E1B2E]/60`}>
+                    {onboardingStatus === "pending" && "Ready to generate onboarding data"}
+                    {onboardingStatus === "running" && "Generating onboarding documentation..."}
+                    {onboardingStatus === "completed" && "Onboarding data generated successfully"}
+                    {onboardingStatus === "error" && "Generation failed"}
+                  </p>
+                </div>
+              </div>
 
-        {/* CATEGORY TABS */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3
-                className={`text-lg font-semibold mb-1 ${
-                  darkMode ? "text-white" : "text-slate-900"
-                }`}
-              >
-                Select Generators
-              </h3>
-              <p
-                className={`text-sm ${
-                  darkMode ? "text-gray-400" : "text-slate-600"
-                }`}
-              >
-                Choose which documentation types to generate ({selectedGenerators.length}/{allGenerators.length} selected)
-              </p>
-            </div>
-            <div className="flex gap-2">
               <button
-                onClick={() => selectAllGenerators(activeCategory)}
-                className={`px-3 py-1.5 text-xs rounded-md transition ${
-                  darkMode
-                    ? "bg-gray-700 hover:bg-gray-600 text-gray-300"
-                    : "bg-slate-100 hover:bg-slate-200 text-slate-700"
-                }`}
+                onClick={() => onRunOnboarding(selectedGenerators)}
+                disabled={onboardingRunning || selectedGenerators.length === 0}
+                className={`${spaceGrotesk.className} px-6 py-2.5 rounded-xl font-medium transition-all ${
+                  onboardingRunning || selectedGenerators.length === 0
+                    ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                    : "bg-[#0E1B2E] hover:bg-[#0E1B2E]/90 text-white shadow-lg shadow-[#0E1B2E]/20 hover:shadow-xl hover:shadow-[#0E1B2E]/30"
+                } disabled:shadow-none`}
               >
-                Select All ({activeCategoryData.name})
-              </button>
-              <button
-                onClick={() => deselectAllGenerators(activeCategory)}
-                className={`px-3 py-1.5 text-xs rounded-md transition ${
-                  darkMode
-                    ? "bg-gray-700 hover:bg-gray-600 text-gray-300"
-                    : "bg-slate-100 hover:bg-slate-200 text-slate-700"
-                }`}
-              >
-                Deselect All ({activeCategoryData.name})
+                {onboardingRunning ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Generating...
+                  </span>
+                ) : (
+                  `Generate Onboarding Data (${selectedGenerators.length} selected)`
+                )}
               </button>
             </div>
+
+            {/* MESSAGE */}
+            {onboardingMessage && (
+              <div
+                className={`mt-4 p-3 rounded-lg text-sm ${firaCode.className} ${
+                  onboardingStatus === "completed"
+                    ? "bg-emerald-100/80 text-emerald-700 border border-emerald-200/50"
+                    : onboardingStatus === "error"
+                    ? "bg-rose-100/80 text-rose-700 border border-rose-200/50"
+                    : "bg-sky-100/80 text-sky-700 border border-sky-200/50"
+                }`}
+              >
+                {onboardingMessage}
+              </div>
+            )}
           </div>
 
-          {/* TABS */}
-          <div className="flex gap-2 mb-4 border-b border-gray-300 dark:border-gray-700">
+          {/* CATEGORY TABS */}
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className={`${spaceGrotesk.className} text-lg font-semibold mb-1 text-[#0E1B2E]`}>
+                  Select Generators
+                </h3>
+                <p className={`${firaCode.className} text-sm text-[#0E1B2E]/60`}>
+                  Choose which documentation types to generate ({selectedGenerators.length}/{allGenerators.length} selected)
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => selectAllGenerators(activeCategory)}
+                  className={`${spaceGrotesk.className} px-3 py-1.5 text-xs rounded-lg transition bg-white/80 hover:bg-[#0E1B2E]/5 text-[#0E1B2E]/70 hover:text-[#0E1B2E] border border-gray-200/50`}
+                >
+                  Select All ({activeCategoryData.name})
+                </button>
+                <button
+                  onClick={() => deselectAllGenerators(activeCategory)}
+                  className={`${spaceGrotesk.className} px-3 py-1.5 text-xs rounded-lg transition bg-white/80 hover:bg-[#0E1B2E]/5 text-[#0E1B2E]/70 hover:text-[#0E1B2E] border border-gray-200/50`}
+                >
+                  Deselect All ({activeCategoryData.name})
+                </button>
+              </div>
+            </div>
+
+            {/* TABS */}
+            <div className="flex gap-2 mb-4 border-b border-gray-200/50">
             {categories.map((category) => {
               const CategoryIcon = category.icon;
               const isActive = activeCategory === category.id;
@@ -439,26 +407,18 @@ export default function OnboardingView({
                 <button
                   key={category.id}
                   onClick={() => setActiveCategory(category.id)}
-                  className={`flex items-center gap-2 px-4 py-2 font-medium transition-all border-b-2 ${
+                  className={`${spaceGrotesk.className} flex items-center gap-2 px-4 py-2 font-medium transition-all border-b-2 ${
                     isActive
-                      ? darkMode
-                        ? "border-blue-500 text-blue-400"
-                        : "border-blue-500 text-blue-600"
-                      : darkMode
-                      ? "border-transparent text-gray-400 hover:text-gray-300"
-                      : "border-transparent text-slate-600 hover:text-slate-900"
+                      ? "border-[#0E1B2E] text-[#0E1B2E]"
+                      : "border-transparent text-[#0E1B2E]/60 hover:text-[#0E1B2E]"
                   }`}
                 >
                   <CategoryIcon className="w-4 h-4" />
                   <span>{category.name}</span>
-                  <span className={`text-xs px-1.5 py-0.5 rounded ${
+                  <span className={`${firaCode.className} text-xs px-1.5 py-0.5 rounded ${
                     isActive
-                      ? darkMode
-                        ? "bg-blue-900/30 text-blue-300"
-                        : "bg-blue-100 text-blue-700"
-                      : darkMode
-                      ? "bg-gray-700 text-gray-400"
-                      : "bg-slate-200 text-slate-600"
+                      ? "bg-[#0E1B2E]/10 text-[#0E1B2E]"
+                      : "bg-gray-100 text-[#0E1B2E]/60"
                   }`}>
                     {categorySelectedCount}/{category.generators.length}
                   </span>
@@ -467,119 +427,61 @@ export default function OnboardingView({
             })}
           </div>
 
-          {/* GENERATORS FOR ACTIVE CATEGORY */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {activeGenerators.map((generator) => {
-              const Icon = generator.icon;
-              const isSelected = selectedGenerators.includes(generator.id);
-              
-              return (
-                <div
-                  key={generator.id}
-                  onClick={() => toggleGenerator(generator.id)}
-                  className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                    isSelected
-                      ? darkMode
-                        ? "border-blue-500 bg-blue-900/20"
-                        : "border-blue-500 bg-blue-50"
-                      : darkMode
-                      ? "border-gray-700 bg-gray-800/50 hover:border-gray-600"
-                      : "border-slate-200 bg-slate-50 hover:border-slate-300"
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <div
-                      className={`p-2 rounded-lg ${
-                        isSelected
-                          ? darkMode
-                            ? "bg-blue-700/50"
-                            : "bg-blue-100"
-                          : darkMode
-                          ? "bg-gray-700"
-                          : "bg-slate-200"
-                      }`}
-                    >
-                      <Icon
-                        className={`w-5 h-5 ${
+            {/* GENERATORS FOR ACTIVE CATEGORY */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {activeGenerators.map((generator) => {
+                const Icon = generator.icon;
+                const isSelected = selectedGenerators.includes(generator.id);
+                
+                return (
+                  <div
+                    key={generator.id}
+                    onClick={() => toggleGenerator(generator.id)}
+                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all backdrop-blur-sm ${
+                      isSelected
+                        ? "border-[#0E1B2E] bg-[#0E1B2E]/5 shadow-lg shadow-[#0E1B2E]/10"
+                        : "border-gray-200/50 bg-white/50 hover:border-[#0E1B2E]/30 hover:bg-[#0E1B2E]/5"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={`p-2 rounded-lg ${
                           isSelected
-                            ? "text-blue-600 dark:text-blue-400"
-                            : darkMode
-                            ? "text-gray-400"
-                            : "text-slate-600"
-                        }`}
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-1">
-                        <h4
-                          className={`font-semibold ${
-                            darkMode ? "text-white" : "text-slate-900"
-                          }`}
-                        >
-                          {generator.name}
-                        </h4>
-                        {isSelected && (
-                          <CheckCircle2 className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                        )}
-                      </div>
-                      <p
-                        className={`text-xs mb-2 ${
-                          darkMode ? "text-gray-400" : "text-slate-600"
+                            ? "bg-[#0E1B2E]"
+                            : "bg-gray-100"
                         }`}
                       >
-                        {generator.description}
-                      </p>
-                      <div className="flex items-center gap-1.5">
-                        <FileText className={`w-3 h-3 ${
-                          darkMode ? "text-gray-500" : "text-slate-400"
-                        }`} />
-                        <span className={`text-xs ${
-                          darkMode ? "text-gray-500" : "text-slate-500"
-                        }`}>
-                          {generator.outputFile}
-                        </span>
+                        <Icon
+                          className={`w-5 h-5 ${
+                            isSelected
+                              ? "text-white"
+                              : "text-[#0E1B2E]/60"
+                          }`}
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-1">
+                          <h4 className={`${spaceGrotesk.className} font-semibold text-[#0E1B2E]`}>
+                            {generator.name}
+                          </h4>
+                          {isSelected && (
+                            <CheckCircle2 className="w-5 h-5 text-[#0E1B2E]" />
+                          )}
+                        </div>
+                        <p className={`${firaCode.className} text-xs mb-2 text-[#0E1B2E]/60`}>
+                          {generator.description}
+                        </p>
+                        <div className="flex items-center gap-1.5">
+                          <FileText className="w-3 h-3 text-[#0E1B2E]/40" />
+                          <span className={`${firaCode.className} text-xs text-[#0E1B2E]/50`}>
+                            {generator.outputFile}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* INFO SECTION */}
-        <div
-          className={`p-4 rounded-lg border ${
-            darkMode
-              ? "bg-blue-900/10 border-blue-800"
-              : "bg-blue-50 border-blue-200"
-          }`}
-        >
-          <div className="flex items-start gap-3">
-            <Info className={`w-5 h-5 mt-0.5 ${
-              darkMode ? "text-blue-400" : "text-blue-600"
-            }`} />
-            <div className="flex-1">
-              <h4
-                className={`font-semibold mb-1 ${
-                  darkMode ? "text-blue-300" : "text-blue-900"
-                }`}
-              >
-                About Onboarding Generation
-              </h4>
-              <ul className={`text-sm space-y-1 ${
-                darkMode ? "text-blue-200" : "text-blue-800"
-              }`}>
-                <li>• Generated files are saved in separate directories:</li>
-                {categories.map(category => (
-                  <li key={category.id} className="ml-4">
-                    - <code className="px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30">backend/data/Onboarding/{category.outputDir}/</code> ({category.name})
-                  </li>
-                ))}
-                <li>• All generators use the existing vector database for context</li>
-                <li>• Generation may take several minutes depending on repository size</li>
-                <li>• Each generator creates a separate JSON file with structured documentation</li>
-              </ul>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -587,82 +489,57 @@ export default function OnboardingView({
 
       {/* OUTPUT FILES SECTION */}
       {onboardingStatus === "completed" && (
-        <div
-          className={`rounded-xl shadow-lg p-6 ${
-            darkMode ? "bg-gray-800" : "bg-white"
-          }`}
-        >
-          <h3
-            className={`text-xl font-semibold mb-4 ${
-              darkMode ? "text-white" : "text-slate-900"
-            }`}
-          >
-            Generated Files
-          </h3>
-          {categories.map((category) => {
-            const categoryGenerators = category.generators.filter(g => 
-              selectedGenerators.includes(g.id)
-            );
-            
-            if (categoryGenerators.length === 0) return null;
-            
-            const CategoryIcon = category.icon;
-            
-            return (
-              <div key={category.id} className="mb-6 last:mb-0">
-                <div className="flex items-center gap-2 mb-3">
-                  <CategoryIcon className={`w-5 h-5 ${
-                    darkMode ? "text-gray-400" : "text-slate-600"
-                  }`} />
-                  <h4
-                    className={`text-lg font-semibold ${
-                      darkMode ? "text-white" : "text-slate-900"
-                    }`}
-                  >
-                    {category.name}
-                  </h4>
-                  <span className={`text-xs px-2 py-1 rounded ${
-                    darkMode
-                      ? "bg-gray-700 text-gray-300"
-                      : "bg-slate-200 text-slate-600"
-                  }`}>
-                    {category.outputDir}
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {categoryGenerators.map((generator) => {
-                    const Icon = generator.icon;
-                    return (
-                      <div
-                        key={generator.id}
-                        className={`p-3 rounded-lg border ${
-                          darkMode
-                            ? "bg-gray-700/50 border-gray-600"
-                            : "bg-slate-50 border-slate-200"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 mb-2">
-                          <Icon className={`w-4 h-4 ${
-                            darkMode ? "text-gray-400" : "text-slate-600"
-                          }`} />
-                          <span className={`text-sm font-medium ${
-                            darkMode ? "text-white" : "text-slate-900"
-                          }`}>
-                            {generator.name}
-                          </span>
+        <div className="relative rounded-xl shadow-lg p-6 bg-white/80 backdrop-blur-xl border border-gray-200/50">
+          <div className="absolute inset-0 bg-[linear-gradient(to_right,#0E1B2E05_1px,transparent_1px),linear-gradient(to_bottom,#0E1B2E05_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none rounded-xl" />
+          <div className="relative z-10">
+            <h3 className={`${spaceGrotesk.className} text-xl font-semibold mb-4 text-[#0E1B2E]`}>
+              Generated Files
+            </h3>
+            {categories.map((category) => {
+              const categoryGenerators = category.generators.filter(g => 
+                selectedGenerators.includes(g.id)
+              );
+              
+              if (categoryGenerators.length === 0) return null;
+              
+              const CategoryIcon = category.icon;
+              
+              return (
+                <div key={category.id} className="mb-6 last:mb-0">
+                  <div className="flex items-center gap-2 mb-3">
+                    <CategoryIcon className="w-5 h-5 text-[#0E1B2E]/70" />
+                    <h4 className={`${spaceGrotesk.className} text-lg font-semibold text-[#0E1B2E]`}>
+                      {category.name}
+                    </h4>
+                    <span className={`${firaCode.className} text-xs px-2 py-1 rounded bg-[#0E1B2E]/10 text-[#0E1B2E]/70`}>
+                      {category.outputDir}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {categoryGenerators.map((generator) => {
+                      const Icon = generator.icon;
+                      return (
+                        <div
+                          key={generator.id}
+                          className="p-3 rounded-xl border border-gray-200/50 bg-white/50 backdrop-blur-sm"
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <Icon className="w-4 h-4 text-[#0E1B2E]/70" />
+                            <span className={`${spaceGrotesk.className} text-sm font-medium text-[#0E1B2E]`}>
+                              {generator.name}
+                            </span>
+                          </div>
+                          <p className={`${firaCode.className} text-xs text-[#0E1B2E]/60`}>
+                            {generator.outputFile}
+                          </p>
                         </div>
-                        <p className={`text-xs ${
-                          darkMode ? "text-gray-400" : "text-slate-600"
-                        }`}>
-                          {generator.outputFile}
-                        </p>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
