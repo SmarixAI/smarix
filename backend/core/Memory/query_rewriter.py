@@ -38,8 +38,7 @@ class LLMQueryRewriter:
 
         if self.semantic_cache:
             logger.info("Simple Semantic Cache enabled (embedding-based)")
-        else:
-            logger.warning("Semantic cache disabled (missing redis or embedding function)")
+        # Suppress warning - Redis is optional for local development
 
     def rewrite(self, raw_query: str, session_id: str) -> str:
         if not session_id:
