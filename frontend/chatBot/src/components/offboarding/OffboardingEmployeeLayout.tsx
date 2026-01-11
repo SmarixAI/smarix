@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Phone, RefreshCw, FileText, LogOut } from "lucide-react";
+import { Phone, RefreshCw, FileText, ArrowLeft } from "lucide-react";
 import Image from "next/image";
 import Sidebar from "./Sidebar";
 import EmployeeFinalCallSection from "./employeeViewSections/FinalCallSection";
@@ -242,10 +242,11 @@ export default function OffboardingEmployeeLayout({}: OffboardingEmployeeLayoutP
                   </div>
                   <button
                     onClick={logout}
-                    className="ml-2 p-2 rounded-lg hover:bg-red-50 transition-colors text-red-600"
-                    title="Logout"
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-blue-50 transition-colors text-[#0E1B2E] border border-gray-200 hover:border-blue-300 text-sm font-medium"
+                    title="Go Back"
                   >
-                    <LogOut className="w-4 h-4" />
+                    <ArrowLeft className="w-4 h-4" />
+                    Go Back
                   </button>
                 </>
               )}

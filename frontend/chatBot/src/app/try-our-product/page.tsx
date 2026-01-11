@@ -115,6 +115,9 @@ export default function TryOurProductPage() {
     // For roles requiring auth, login and redirect
     if (!role.username || !role.password) return;
 
+    // Store that user came from try-our-product page
+    sessionStorage.setItem("from_try_product", "true");
+
     setLoading(role.id);
 
     try {

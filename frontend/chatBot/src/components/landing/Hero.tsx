@@ -19,7 +19,7 @@ const firaCode = Fira_Code({
 });
 
 const TypewriterLoop = () => {
-  const words = ["Onboarding.", "Offboarding.", "AI Assistant.", "Analytics."];
+  const words = ["Onboarding.", "Offboarding.", "AI Assistant."];
   const [text, setText] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const [loopNum, setLoopNum] = useState(0);
@@ -122,11 +122,12 @@ export const Hero = () => {
               <ArrowUpRight className="w-5 h-5 transition-transform duration-300 group-hover:-translate-y-1 group-hover:translate-x-1" />
             </Link>
 
-            <button
+            <Link
+              href="/documentation"
               className={`${firaCode.className} text-sm font-bold text-[#0E1B2E] hover:text-blue-600 transition-colors underline decoration-gray-300 underline-offset-4 hover:decoration-blue-600`}
             >
               View Documentation
-            </button>
+            </Link>
           </div>
         </motion.div>
 

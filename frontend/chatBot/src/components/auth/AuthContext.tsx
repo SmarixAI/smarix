@@ -163,6 +163,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Set a flag to indicate logout is in progress
     sessionStorage.setItem("logout_in_progress", "true");
     
+    // Check if user came from try-our-product page
+    const fromTryProduct = sessionStorage.getItem("from_try_product");
+    const redirectPath = fromTryProduct === "true" ? "/try-our-product" : "/login";
+    
     // Clear localStorage first
     localStorage.removeItem("access_token");
     localStorage.removeItem("user");
@@ -171,9 +175,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setToken(null);
 
+    // Remove the flag
+    if (fromTryProduct === "true") {
+      sessionStorage.removeItem("from_try_product");
+    }
+
     // Use window.location.replace to prevent back navigation
     // Force immediate redirect
-    window.location.replace("/login");
+    window.location.replace(redirectPath);
   };
 
   return (
