@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { BookOpen, Code, Wrench, Check, LogOut } from 'lucide-react';
+import { BookOpen, Code, Wrench, Check, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthContext';
 import Image from 'next/image';
 
@@ -12,7 +11,6 @@ interface HeaderProps {
 }
 
 export default function Header({ activeTab, setActiveTab }: HeaderProps) {
-  const router = useRouter();
   const { user, logout } = useAuth();
 
   const tabs = [
@@ -127,10 +125,11 @@ export default function Header({ activeTab, setActiveTab }: HeaderProps) {
               </div>
               <button
                 onClick={logout}
-                className="p-2 rounded-lg hover:bg-red-50 transition-colors text-red-600"
-                title="Logout"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-blue-50 transition-colors text-[#0E1B2E] border border-gray-200 hover:border-blue-300 text-sm font-medium"
+                title="Go Back"
               >
-                <LogOut className="w-4 h-4" />
+                <ArrowLeft className="w-4 h-4" />
+                Go Back
               </button>
             </div>
           )}

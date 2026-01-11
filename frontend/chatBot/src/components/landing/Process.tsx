@@ -3,6 +3,7 @@
 import React, { useRef } from 'react';
 import { motion, useScroll, useTransform, useSpring, useInView } from 'framer-motion';
 import Image from 'next/image';
+import Link from 'next/link';
 import { Victor_Mono, Fira_Code } from 'next/font/google';
 
 const firaCode = Fira_Code({
@@ -43,7 +44,7 @@ export const Process = () => {
     {
       id: "02",
       title: "Offboard smarter",
-      desc: "Securely revoke access and capture tribal knowledge before it walks out the door.",
+      desc: "Capture tribal knowledge before it walks out the door.",
     },
     {
       id: "03",
@@ -212,14 +213,14 @@ export const Process = () => {
             transition={{ delay: 1 }}
             className="pl-8 pt-2"
           >
-            <button className="group relative overflow-hidden rounded-none bg-[#0E1B2E] px-8 py-4 text-white transition-all hover:bg-blue-700 hover:shadow-lg hover:shadow-blue-900/20">
+            <Link href="/integration" className="group relative overflow-hidden inline-block rounded-none bg-[#0E1B2E] px-8 py-4 text-white transition-all hover:bg-blue-700 hover:shadow-lg hover:shadow-blue-900/20">
               <span className={`${firaCode.className} relative z-10 text-xs font-bold tracking-widest uppercase flex items-center gap-2`}>
                 Start Integration 
                 <svg className="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
                 </svg>
               </span>
-            </button>
+            </Link>
           </motion.div>
         </div>
 

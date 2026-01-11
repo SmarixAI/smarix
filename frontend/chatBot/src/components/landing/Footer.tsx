@@ -91,11 +91,18 @@ export const Footer = () => {
            <div className="flex flex-col gap-6">
               <h4 className={`${jetbrainsMono.className} text-[11px] font-bold text-blue-400 uppercase tracking-widest`}>Navigation</h4>
               <ul className="flex flex-col gap-4">
-                 {['Home', 'Capabilities', 'Integration'].map((item, i) => (
-                    <li key={i}>
-                       <a href="#" className="text-white/60 hover:text-white hover:translate-x-2 transition-all duration-200 text-base font-medium inline-block">{item}</a>
-                    </li>
-                 ))}
+                 <li>
+                    <Link href="/landing" className="text-white/60 hover:text-white hover:translate-x-2 transition-all duration-200 text-base font-medium inline-block">Home</Link>
+                 </li>
+                 <li>
+                    <Link href="/landing#onboarding" className="text-white/60 hover:text-white hover:translate-x-2 transition-all duration-200 text-base font-medium inline-block">Capabilities</Link>
+                 </li>
+                 <li>
+                    <Link href="/integration" className="text-white/60 hover:text-white hover:translate-x-2 transition-all duration-200 text-base font-medium inline-block">Integration</Link>
+                 </li>
+                 <li>
+                    <Link href="/documentation" className="text-white/60 hover:text-white hover:translate-x-2 transition-all duration-200 text-base font-medium inline-block">Documentation</Link>
+                 </li>
               </ul>
            </div>
 

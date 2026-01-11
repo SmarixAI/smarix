@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Briefcase, Users, Moon, Sun, User, LogOut, Search } from 'lucide-react';
+import { Briefcase, Users, Moon, Sun, User, ArrowLeft, Search } from 'lucide-react';
 
 import EmployeeSwitcher from './EmployeeSwitcher';
 import Sidebar from './Sidebar';
@@ -382,8 +382,8 @@ export default function OffboardingManagerLayout({ darkMode = false, setDarkMode
                       <div className="p-2 space-y-1">
                         <button
                           onClick={() => {
-                            logout();
                             setUserMenuOpen(false);
+                            logout();
                           }}
                           className={`w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm transition ${
                             darkMode
@@ -391,8 +391,8 @@ export default function OffboardingManagerLayout({ darkMode = false, setDarkMode
                               : "hover:bg-indigo-50 text-slate-700"
                           }`}
                         >
-                          <LogOut className="w-4 h-4" />
-                          Logout
+                          <ArrowLeft className="w-4 h-4" />
+                          Go Back
                         </button>
                       </div>
                     </div>

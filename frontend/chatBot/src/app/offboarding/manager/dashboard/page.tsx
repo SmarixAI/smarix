@@ -4,13 +4,12 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthContext';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
-import { Users, LogOut, FileText, Calendar, User, Moon, Sun, MessageSquare } from 'lucide-react';
+import { Users, ArrowLeft, FileText, Calendar, User, Moon, Sun, MessageSquare } from 'lucide-react';
 import Loader from '@/components/offboarding/Loader';
 import ThreeJsBackground from '@/components/onboarding/ThreeJsBackground';
 
 function ManagerDashboardContent() {
   const { user, logout } = useAuth();
-  const router = useRouter();
   const [darkMode, setDarkMode] = useState(true);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 50, y: 50 });
@@ -198,8 +197,8 @@ function ManagerDashboardContent() {
                       <div className="p-2 space-y-1">
                         <button
                           onClick={() => {
-                            logout();
                             setUserMenuOpen(false);
+                            logout();
                           }}
                           className={`w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm transition ${
                             darkMode
@@ -207,8 +206,8 @@ function ManagerDashboardContent() {
                               : "hover:bg-indigo-50 text-slate-700"
                           }`}
                         >
-                          <LogOut className="w-4 h-4" />
-                          Logout
+                          <ArrowLeft className="w-4 h-4" />
+                          Go Back
                         </button>
                       </div>
                     </div>

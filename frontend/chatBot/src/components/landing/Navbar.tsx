@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, ArrowRight } from "lucide-react";
 import { TypewriterLink } from "./TypeWriterLink";
 import Image from "next/image";
+import Link from "next/link";
 
 const spaceGrotesk = Space_Grotesk({
   weight: ["400", "500", "600", "700"],
@@ -46,7 +47,7 @@ export const Navbar = () => {
           }`}
       >
         {/* Logo */}
-        <div className="flex items-center gap-2 shrink-0">
+        <Link href="/landing" className="flex items-center gap-2 shrink-0 hover:opacity-80 transition-opacity cursor-pointer">
           <div className="w-8 h-8 bg-[#0E1B2E] rounded-lg flex items-center justify-center overflow-hidden">
             <Image
               src="/logo.png"
@@ -59,7 +60,7 @@ export const Navbar = () => {
           <span className="text-[#0E1B2E] font-bold text-xl tracking-tight whitespace-nowrap">
             Smarix
           </span>
-        </div>
+        </Link>
 
         {/* Desktop Nav */}
         <div className="hidden md:flex items-center gap-8 ml-auto mr-8 whitespace-nowrap">
@@ -72,14 +73,14 @@ export const Navbar = () => {
 
         {/* CTA */}
         <div className="hidden md:flex items-center shrink-0">
-          <button className="group relative overflow-hidden rounded-full bg-[#0E1B2E] px-6 py-2.5 text-white transition-all hover:bg-[#1a2f4d] hover:shadow-lg hover:shadow-[#0E1B2E]/20">
+          <Link href="/request-demo" className="group relative overflow-hidden rounded-full bg-[#0E1B2E] px-6 py-2.5 text-white transition-all hover:bg-[#1a2f4d] hover:shadow-lg hover:shadow-[#0E1B2E]/20">
             <div className="flex items-center gap-2 whitespace-nowrap">
               <span className="text-sm font-medium tracking-wide">
                 Request demo
               </span>
               <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
             </div>
-          </button>
+          </Link>
         </div>
 
         {/* Mobile Menu Toggle */}
@@ -117,12 +118,13 @@ export const Navbar = () => {
                 </motion.a>
               ))}
 
-              <button 
-                className="w-full mt-4 rounded-full bg-[#0E1B2E] py-3.5 text-white font-medium shadow-xl shadow-[#0E1B2E]/20 hover:bg-[#1a2f4d] transition-colors"
+              <Link 
+                href="/request-demo"
+                className="w-full mt-4 rounded-full bg-[#0E1B2E] py-3.5 text-white font-medium shadow-xl shadow-[#0E1B2E]/20 hover:bg-[#1a2f4d] transition-colors text-center"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 Request demo
-              </button>
+              </Link>
             </div>
           </motion.div>
         )}
