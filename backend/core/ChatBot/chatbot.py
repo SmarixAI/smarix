@@ -150,13 +150,19 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         redis_port = int(os.getenv("REDIS_PORT", "6379"))
         redis_db = int(os.getenv("REDIS_DB", "0"))
         redis_password = os.getenv("REDIS_PASSWORD")
+        
+        # Check if Redis is explicitly required (if not set, it's optional for local dev)
+        redis_required = os.getenv("REDIS_REQUIRED", "false").lower() == "true"
 
         try:
             from core.Memory.redis_client import RedisClient
             self.redis_client = RedisClient(redis_host, redis_port, redis_db, redis_password)
             self.logger.info("Redis context cache ENABLED - DB: %s" % redis_db)
         except Exception as e:
-            self.logger.warning(f"Redis unavailable, disabling cache: {e}")
+            # Only log warning if Redis is explicitly required, otherwise silently disable for local dev
+            if redis_required:
+                self.logger.warning(f"Redis unavailable, disabling cache: {e}")
+            # Suppress warning for local development - Redis is optional
             self.redis_client = None
 
         self.query_rewriter = LLMQueryRewriter(

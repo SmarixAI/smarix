@@ -266,12 +266,44 @@ async def initialize_chatbot(config: InitRequest):
 async def chat(request: ChatRequest):
     """Main chat endpoint - retrieves from GitHub first, then supplements with Gmail if needed"""
     # Import here to avoid circular dependency
-    from .chatbot_api import (
-        chatbot_instance,
-        chatbot_config,
-        get_user_repo,
-        ensure_chatbot_for_repo,
-    )
+    # Handle both relative (module) and absolute (script) imports
+    import sys
+    
+    # Try to get chatbot_api module from sys.modules first (handles script execution)
+    chatbot_api_module = None
+    for module_name in ['__main__', 'routes.api.chatbot_api', 'chatbot_api']:
+        if module_name in sys.modules:
+            chatbot_api_module = sys.modules[module_name]
+            break
+    
+    if chatbot_api_module:
+        # Use the already-loaded module
+        chatbot_instance = chatbot_api_module.chatbot_instance
+        chatbot_config = chatbot_api_module.chatbot_config
+        get_user_repo = chatbot_api_module.get_user_repo
+        ensure_chatbot_for_repo = chatbot_api_module.ensure_chatbot_for_repo
+    else:
+        # Fallback to normal import
+        try:
+            from .chatbot_api import (
+                chatbot_instance,
+                chatbot_config,
+                get_user_repo,
+                ensure_chatbot_for_repo,
+            )
+        except (ImportError, ValueError):
+            # When running as script, use absolute import
+            from pathlib import Path
+            current_dir = Path(__file__).parent
+            backend_dir = current_dir.parent.parent
+            if str(backend_dir) not in sys.path:
+                sys.path.insert(0, str(backend_dir))
+            from routes.api.chatbot_api import (
+                chatbot_instance,
+                chatbot_config,
+                get_user_repo,
+                ensure_chatbot_for_repo,
+            )
     
     if chatbot_instance is None:
         # Provide more detailed error message

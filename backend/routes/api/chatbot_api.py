@@ -41,6 +41,7 @@ except Exception:
             "Make sure this project is on PYTHONPATH and package markers (__init__.py) exist."
         ) from e
 
+# Global chatbot state - must be module-level variables
 chatbot_instance = None
 chatbot_config = {}
 available_providers = {}
@@ -244,6 +245,8 @@ async def startup():
 
         traceback.print_exc()
         chatbot_config = {"status": "error", "error": str(e)}
+        # Keep chatbot_instance as None - it will be initialized lazily on first request if possible
+        chatbot_instance = None
 
 
 async def shutdown():
