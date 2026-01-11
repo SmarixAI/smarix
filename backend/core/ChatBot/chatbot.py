@@ -5,6 +5,7 @@ Enhanced with Multi-Query Technique, LLM-powered classification, and comprehensi
 
 import json
 import re
+import os
 import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Iterator
@@ -12,9 +13,7 @@ from datetime import datetime
 import time
 import uuid
 from dotenv import load_dotenv
-
 load_dotenv()
-
 from core.VectorDB.multi_index_store import MultiIndexVectorStore
 from core.ChatBot.query_router import QueryRouter
 from core.Memory.conversation_store import ConversationStore
@@ -24,9 +23,9 @@ from .classifier import ClassifierMixin
 from .retrieval import RetrievalMixin
 from .llm_embeddings import LLMEmbeddingMixin
 from .query_type import QueryType
+from sentence_transformers import SentenceTransformer
 
 
-# 👉 NEW: RAGChatbot now inherits from mixins
 class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
 
     
@@ -87,7 +86,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             print("💡 Tip: Ensure multi-index is built using build_indices.py")
             
             
-        import os
+        
         # Load Gmail database (optional, single-index for Gmail only)
         self.gmail_db = None
         if gmail_db_path and os.path.exists(gmail_db_path):
@@ -98,10 +97,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
                 self.gmail_db = FAISSVectorDB.load(gmail_db_path)
             except Exception as e:
                 print(f"⚠️  Could not load Gmail database: {e}")
-                self.gmail_db = None
-        
- 
-        
+                self.gmail_db = None 
 
         # Initialize embeddings - detect dimension from loaded index
         self.initialize_embeddings()
@@ -113,7 +109,6 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             # Initialize embedding model for router if using sentence-transformers
             if self.embedding_provider == 'sentence-transformers':
                 try:
-                    from sentence_transformers import SentenceTransformer
                     self.query_router.embedding_model = SentenceTransformer(self.embedding_model)
                 except ImportError:
                     if self.verbose:
@@ -283,7 +278,6 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
 
 
     def chat(self, query: str, filters: Optional[Dict] = None, session_id: Optional[str] = None, role: Optional[str] = None) -> Dict[str, Any]:
-        # Default role to "general" if not provided
         if role is None:
             role = "general"
         
@@ -361,13 +355,11 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             print(f"{'=' * 70}")
 
         # STEP 0: Check for greetings FIRST (before any rewriting)
-        #         This prevents greetings from being incorrectly rewritten
         if self.is_greeting(query):
             query_type = QueryType.GREETING
             self.logger.info("CLASSIFICATION | Rule-based: GREETING (detected early)")
         else:
             # STEP 1: SESSION CONTEXT REWRITING
-            #         Uses conversation history to make query codebase-specific
             if not self.is_greeting(query) and active_session_id:
                 session_context_query = self.query_rewriter.rewrite(query, active_session_id)
                 if session_context_query and session_context_query != query:
@@ -535,7 +527,6 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             # 🔥 DIRECT LOOKUP — PR
             if entity and entity.get("type") == "pr":
                 num = str(entity["number"]).strip()
-                self.logger.info(f"DIRECT LOOKUP | Searching PR metadata for #{num}")
 
                 possible_keys = ["pr_number", "number", "id", "pr_id"]
                 for key in possible_keys:
@@ -593,11 +584,8 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             if query_type == QueryType.RANDOM_PR_GENERATOR:
                 self.logger.info("RANDOM PR GENERATOR | Will retrieve merged PRs with code changes for LLM selection")
 
-            # -----------------------------------------------
-            # 🔥 Guaranteed PR direct lookup override
-            # -----------------------------------------------
             raw_num = re.search(r'\b(\d+)\b', expanded_query.lower())
-            pr_results = None   # <---- IMPORTANT: initialize first!
+            pr_results = None  
 
             if raw_num and (
                 query_type == QueryType.PR_SPECIFIC
@@ -649,11 +637,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
 
                 return result
 
-
-
-            # -----------------------------------------------
-            # 🔥 Guaranteed ISSUE direct lookup override
-            # -----------------------------------------------
+            # Guaranteed ISSUE direct lookup override
             if query_type == QueryType.ISSUE_SPECIFIC and raw_num:
                 num = int(raw_num.group(1))
                 if any(t in query.lower() for t in ["issue", "bug", "ticket", "report"]):
@@ -686,8 +670,6 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         # STEP 4: Query routing happens in _retrieve_multi_index() using expanded_query
         #         Routes to appropriate index: docs, code, prs, commits, or combined
         #         Then searches both routed index AND combined index, merges results
-
-        # greeting handling: stream to console and return assembled greeting
         if query_type == QueryType.GREETING:
             greeting_response = ""
             for chunk in self.generate_greeting_response_streaming():
@@ -1871,8 +1853,6 @@ def main():
         enable_multi_query=not args.disable_multi_query
     )
 
-    print("\nChatbot ready! Commands: 'exit', 'clear', 'stats'")
-    print("Try: 'hi', 'Tell me about caching', 'First issue?'\n")
 
     while True:
         try:

@@ -769,6 +769,6 @@ class ClassifierMixin:
 
         except Exception as e:
             self.logger.warning(f"QUERY REWRITE | Failed to rewrite query: {e}, using original")
-            return self.expand_query(query)  # Fallback to expansion
+            return self.expand_query(query) 
 
 
