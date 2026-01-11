@@ -122,7 +122,6 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         # Use SQLite if no PostgreSQL URL is provided
         if not memory_db_url or not memory_db_url.startswith("postgresql://"):
             # Use SQLite for local development
-            import os
             from pathlib import Path
             db_path = Path(__file__).parent.parent.parent.parent / "data" / "local_db.sqlite"
             db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -147,7 +146,6 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
                 def session_exists(self, *args, **kwargs): return False
             self.conversation_store = DummyConversationStore()
 
-        import os
         redis_host = os.getenv("REDIS_HOST", "localhost")
         redis_port = int(os.getenv("REDIS_PORT", "6379"))
         redis_db = int(os.getenv("REDIS_DB", "0"))
