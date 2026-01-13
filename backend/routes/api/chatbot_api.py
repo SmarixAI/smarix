@@ -291,15 +291,14 @@ app.include_router(auth_routes.router)
 # Helper function to handle imports when running as script vs module
 def _import_route_module(module_name: str):
     """Import route module handling both relative (module) and absolute (script) imports"""
-    # Check if we're running as a script (__name__ == "__main__") or as a module
     import sys
     from pathlib import Path
-    
+    from importlib import import_module
+
     # Determine if we should use relative or absolute imports
-    # When __name__ is "__main__", we're running as a script
     current_module = sys.modules.get(__name__)
     is_main_module = __name__ == "__main__" or (current_module and current_module.__package__ is None)
-    
+
     if is_main_module:
         # Running as script - use absolute import
         current_dir = Path(__file__).parent
@@ -310,8 +309,8 @@ def _import_route_module(module_name: str):
     else:
         # Running as module - use relative import
         try:
-            from importlib import import_module
-            return import_module(f".{module_name}", package=__package__)
+            package = __package__ or "backend.routes.api"
+            return import_module(f".{module_name}", package=package)
         except (ImportError, ValueError, AttributeError):
             # Fallback to absolute import if relative fails
             current_dir = Path(__file__).parent

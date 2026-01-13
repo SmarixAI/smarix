@@ -22,6 +22,8 @@ export default function ReadingOverview({ employeeId, activeRepos = [], onboardi
   const moduleRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedModule, setSelectedModule] = useState<Module | null>(null);
+  const [darkMode, setDarkMode] = useState(false);
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   
   const { content, isLoading, error, fetchContent, clearContent } = useModuleContent();
 
@@ -50,7 +52,16 @@ export default function ReadingOverview({ employeeId, activeRepos = [], onboardi
       if (ref) observer.observe(ref);
     });
 
-    return () => observer.disconnect();
+    const handleMouseMove = (e: MouseEvent) => {
+      setMousePosition({ x: e.clientX, y: e.clientY });
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('mousemove', handleMouseMove);
+    };
   }, []);
 
   const handleCardClick = useCallback(async (moduleId: string) => {
@@ -92,6 +103,8 @@ export default function ReadingOverview({ employeeId, activeRepos = [], onboardi
             index={index}
             isVisible={visibleModules.has(`module-${module.id}`)}
             onCardClick={handleCardClick}
+            darkMode={darkMode}
+            mousePosition={mousePosition}
             ref={(el) => {
               if (el) {
                 moduleRefs.current[`module-${module.id}`] = el;
