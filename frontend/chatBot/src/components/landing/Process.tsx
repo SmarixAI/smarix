@@ -56,7 +56,7 @@ export const Process = () => {
   return (
     <section 
       ref={containerRef} 
-      className="relative w-full h-screen pt-24 px-6 bg-[#F5F8FF] text-[#0E1B2E] overflow-hidden"
+      className="relative w-full h-screen pt-36 px-6 bg-[#F5F8FF] text-[#0E1B2E] overflow-hidden"
     >
       <div className="absolute inset-0 opacity-60">
           <motion.div 
@@ -177,7 +177,7 @@ export const Process = () => {
            </svg>
         </div>
 
-        <div className="lg:col-span-5 flex flex-col justify-center h-full gap-16 py-10">
+        <div className="lg:col-span-5 flex flex-col justify-center h-auto gap-16 py-10">
           {steps.map((step, index) => (
             <motion.div
               key={step.id}
@@ -206,22 +206,6 @@ export const Process = () => {
               </div>
             </motion.div>
           ))}
-          
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={isInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ delay: 1 }}
-            className="pl-8 pt-2"
-          >
-            <Link href="/integration" className="group relative overflow-hidden inline-block rounded-none bg-[#0E1B2E] px-8 py-4 text-white transition-all hover:bg-blue-700 hover:shadow-lg hover:shadow-blue-900/20">
-              <span className={`${firaCode.className} relative z-10 text-xs font-bold tracking-widest uppercase flex items-center gap-2`}>
-                Start Integration 
-                <svg className="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                </svg>
-              </span>
-            </Link>
-          </motion.div>
         </div>
 
       </div>

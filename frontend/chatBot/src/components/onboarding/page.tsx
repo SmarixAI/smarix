@@ -226,7 +226,7 @@ export default function OnboardingPage() {
           )}
           
           <div className={`relative z-10 ${activeTab === "practice" ? "flex gap-4 items-start" : "grid grid-cols-12 gap-4"}`} style={activeTab === "practice" ? { minHeight: 'calc(100vh - 180px)' } : {}}>
-            {activeTab !== "bugfix" && activeTab !== "reading" && (
+            {activeTab === "practice" && (
               <Sidebar
                 completedModules={completedModules}
                 totalModules={totalModules}
@@ -237,7 +237,7 @@ export default function OnboardingPage() {
               />
             )}
 
-            <main className={`${activeTab === "bugfix" || activeTab === "reading" ? (activeTab === "practice" ? "" : "col-span-12") : activeTab === "practice" ? "flex-1 min-w-0 bg-[#FAFAFA]" : "col-span-9"}`} style={activeTab === "practice" ? { height: 'calc(100vh - 180px)', overflowY: 'auto', overflowX: 'hidden' } : {}}>
+            <main className={`${activeTab === "practice" ? "flex-1 min-w-0 bg-[#FAFAFA]" : "col-span-12"}`} style={activeTab === "practice" ? { height: 'calc(100vh - 180px)', overflowY: 'auto', overflowX: 'hidden' } : {}}>
               {renderTabContent()}
             </main>
           </div>

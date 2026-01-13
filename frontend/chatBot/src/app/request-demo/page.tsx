@@ -1,11 +1,14 @@
 'use client';
 
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Navbar } from '@/components/landing/Navbar';
-import { Footer } from '@/components/landing/Footer';
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useRouter } from 'next/navigation';
+import { 
+  User, Building2, Briefcase, Mail, Phone, MessageSquare, 
+  CheckCircle2, Loader2, Send, Clock, MonitorPlay, Users, 
+  HelpCircle, Globe, Users2, Calendar, ChevronDown, Search, AlertCircle, Home
+} from 'lucide-react';
 import { Fira_Code, Victor_Mono } from 'next/font/google';
-import { ArrowRight, CheckCircle2, Building2, Mail, Phone, User, MessageSquare, Calendar, Users, Briefcase, Globe, Send, Loader2 } from 'lucide-react';
 
 const firaCode = Fira_Code({
   weight: ["400", "500", "600", "700"],
@@ -19,21 +22,23 @@ const victorMono = Victor_Mono({
   display: "swap",
 });
 
-interface FormData {
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  company: string;
-  jobTitle: string;
-  companySize: string;
-  country: string;
-  message: string;
-  preferredDate: string;
+interface Country {
+  name: string;
+  code: string;
+  flag: string;
+  idd: string;
 }
 
-export default function RequestDemoPage() {
-  const [formData, setFormData] = useState<FormData>({
+export default function ContactPage() {
+  const router = useRouter();
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [filteredCountries, setFilteredCountries] = useState<Country[]>([]);
+  const [selectedCountry, setSelectedCountry] = useState<Country>({ name: 'United States', code: 'US', flag: '🇺🇸', idd: '+1' });
+  const [showCountryDropdown, setShowCountryDropdown] = useState(false);
+  const [countrySearch, setCountrySearch] = useState('');
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
     email: '',
@@ -42,528 +47,599 @@ export default function RequestDemoPage() {
     jobTitle: '',
     companySize: '',
     country: '',
-    message: '',
+    contactReason: '',
     preferredDate: '',
+    message: ''
   });
-
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
+  const [error, setError] = useState('');
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  useEffect(() => {
+    const fetchCountries = async () => {
+      try {
+        const response = await fetch('https://restcountries.com/v3.1/all?fields=name,flags,idd,cca2');
+        const data = await response.json();
+        const formatted: Country[] = data
+          .map((c: any) => ({
+            name: c.name.common,
+            code: c.cca2,
+            flag: c.flags.svg,
+            idd: c.idd.root ? `${c.idd.root}${c.idd.suffixes?.[0] || ''}` : ''
+          }))
+          .filter((c: Country) => c.idd)
+          .sort((a: Country, b: Country) => a.name.localeCompare(b.name));
+        
+        setCountries(formatted);
+        setFilteredCountries(formatted);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    fetchCountries();
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowCountryDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const filtered = countries.filter(c => 
+      c.name.toLowerCase().includes(countrySearch.toLowerCase()) || 
+      c.idd.includes(countrySearch)
+    );
+    setFilteredCountries(filtered);
+  }, [countrySearch, countries]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    // Clear error when user starts typing
-    if (errors[name as keyof FormData]) {
-      setErrors(prev => ({ ...prev, [name]: undefined }));
-    }
+    setError('');
   };
 
-  const validateForm = (): boolean => {
-    const newErrors: Partial<Record<keyof FormData, string>> = {};
-
-    if (!formData.firstName.trim()) newErrors.firstName = 'First name is required';
-    if (!formData.lastName.trim()) newErrors.lastName = 'Last name is required';
-    if (!formData.email.trim()) {
-      newErrors.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'Please enter a valid email address';
+  const validateForm = () => {
+    if (!formData.firstName || !formData.lastName || !formData.email || !formData.phone || !formData.message) return false;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      setError('Please enter a valid email address.');
+      return false;
     }
-    if (!formData.company.trim()) newErrors.company = 'Company name is required';
-    if (!formData.jobTitle.trim()) newErrors.jobTitle = 'Job title is required';
-    if (!formData.companySize) newErrors.companySize = 'Company size is required';
-    if (!formData.country.trim()) newErrors.country = 'Country is required';
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!validateForm()) {
+    setError('');
+
+    if (!validateForm()) return;
+
+    const submittedEmails = JSON.parse(localStorage.getItem('smarix_submissions') || '[]');
+    if (submittedEmails.includes(formData.email)) {
+      setError('A request with this email has already been submitted.');
       return;
     }
 
     setIsSubmitting(true);
     
-    // Simulate API call
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      const response = await fetch('/api/request-demo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...formData,
+          fullPhone: `${selectedCountry.idd} ${formData.phone}`
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to send message');
+
+      const newSubmissions = [...submittedEmails, formData.email];
+      localStorage.setItem('smarix_submissions', JSON.stringify(newSubmissions));
+
       setIsSubmitted(true);
-      // Reset form after showing success message
-      setTimeout(() => {
-        setFormData({
-          firstName: '',
-          lastName: '',
-          email: '',
-          phone: '',
-          company: '',
-          jobTitle: '',
-          companySize: '',
-          country: '',
-          message: '',
-          preferredDate: '',
-        });
-        setIsSubmitted(false);
-      }, 3000);
-    }, 1500);
+    } catch (err) {
+      setError('Something went wrong. Please try again later.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const companySizes = [
-    '1-10 employees',
-    '11-50 employees',
-    '51-200 employees',
-    '201-500 employees',
-    '501-1000 employees',
-    '1000+ employees',
-  ];
-
   return (
-    <main className="min-h-screen bg-[#FAFAFA] text-[#0E1B2E] relative selection:bg-[#0E1B2E] selection:text-white">
-      <Navbar />
-      
-      <div className="relative w-full pt-32 pb-24 px-6 overflow-hidden">
-        {/* Background Grid */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#0E1B2E05_1px,transparent_1px),linear-gradient(to_bottom,#0E1B2E05_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
+    <main className="h-screen bg-white text-[#0E1B2E] selection:bg-[#0E1B2E] selection:text-white overflow-hidden relative font-sans">
+
+      <div className="flex flex-col lg:flex-row h-screen">
         
-        <div className="relative max-w-7xl mx-auto">
-          {/* Header Section */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-16"
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#0E1B2E]/5 border border-[#0E1B2E]/10 mb-6"
-            >
-              <MessageSquare className="w-4 h-4 text-[#0E1B2E]/60" />
-              <span className={`${victorMono.className} text-xs text-[#0E1B2E]/70`}>
-                Schedule a Demo
-              </span>
-            </motion.div>
-            
-            <h1 className={`${firaCode.className} text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.1] text-[#0E1B2E] mb-6`}>
-              Request a Demo
-            </h1>
-            <p className={`${victorMono.className} text-xl text-[#0E1B2E]/70 max-w-2xl mx-auto leading-relaxed`}>
-              See how Smarix can transform your team's knowledge management. Fill out the form below and we'll schedule a personalized demo for you.
-            </p>
-          </motion.div>
+        <div className="w-full lg:w-1/2 flex flex-col relative z-10 h-screen">
+            <div className="h-screen overflow-y-auto no-scrollbar">
+                <div className="p-6 lg:p-12 xl:px-20 xl:py-12 flex flex-col justify-start min-h-full">
+                    <AnimatePresence mode="wait">
+                    {!isSubmitted ? (
+                        <motion.div
+                        key="form"
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
+                        transition={{ duration: 0.5 }}
+                        className="max-w-2xl mx-auto w-full pb-10"
+                        >
+                        <div className="mb-8">
+                            <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.1 }}
+                            className="flex items-center gap-2 mb-0"
+                            >
+                            <span className={`${firaCode.className} text-[#0E1B2E] font-semibold tracking-wider text-sm`}>GET IN TOUCH</span>
+                            </motion.div>
+                            <h1 className={`${firaCode.className} text-3xl md:text-4xl font-bold text-[#0E1B2E] mb-3`}>
+                            Let's Build the Future.
+                            </h1>
+                            <p className={`${victorMono.className} text-[#0E1B2E]/60 text-sm md:text-base mb-6`}>
+                            Ready to streamline your enterprise knowledge? Fill in the details below.
+                            </p>
 
-          {/* Success Message */}
-          {isSubmitted && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              className="max-w-2xl mx-auto mb-8 p-6 bg-green-50 border-2 border-green-200 rounded-2xl"
-            >
-              <div className="flex items-start gap-4">
-                <CheckCircle2 className="w-6 h-6 text-green-600 shrink-0 mt-0.5" />
-                <div>
-                  <h3 className={`${firaCode.className} text-lg font-bold text-green-900 mb-1`}>
-                    Request Submitted Successfully!
-                  </h3>
-                  <p className={`${victorMono.className} text-sm text-green-700`}>
-                    Thank you for your interest. Our team will reach out to you within 24 hours to schedule your demo.
-                  </p>
-                </div>
-              </div>
-            </motion.div>
-          )}
+                            <div className="flex flex-wrap gap-3 mb-4">
+                            {[
+                                { icon: Clock, text: "24hr Response" },
+                                { icon: MonitorPlay, text: "30-min Demo" },
+                                { icon: Users, text: "Expert Q&A" },
+                            ].map((item, idx) => (
+                                <div key={idx} className="flex items-center gap-2 bg-[#FAFAFA] border border-[#0E1B2E]/10 px-3 py-2 rounded-lg">
+                                <item.icon className="w-4 h-4 text-[#0E1B2E]" />
+                                <span className={`${victorMono.className} text-xs font-bold text-[#0E1B2E]/80`}>{item.text}</span>
+                                </div>
+                            ))}
+                            </div>
+                        </div>
 
-          {/* Main Content */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 max-w-6xl mx-auto">
-            {/* Form Section */}
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6, delay: 0.2 }}
-              className="lg:col-span-2"
-            >
-              <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Name Fields */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label htmlFor="firstName" className={`${victorMono.className} block text-sm font-medium text-[#0E1B2E]/70 mb-2`}>
-                      First Name <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#0E1B2E]/30" />
-                      <input
-                        type="text"
-                        id="firstName"
-                        name="firstName"
-                        value={formData.firstName}
-                        onChange={handleChange}
-                        className={`
-                          w-full pl-12 pr-4 py-3.5 bg-white border-2 rounded-xl
-                          ${errors.firstName ? 'border-red-300 focus:border-red-500' : 'border-gray-200 focus:border-[#0E1B2E]'}
-                          ${victorMono.className} text-[#0E1B2E] placeholder:text-[#0E1B2E]/30
-                          focus:outline-none focus:ring-2 focus:ring-[#0E1B2E]/10 transition-all duration-200
-                        `}
-                        placeholder="John"
-                      />
-                    </div>
-                    {errors.firstName && (
-                      <p className={`${victorMono.className} text-xs text-red-500 mt-1`}>{errors.firstName}</p>
+                        <form onSubmit={handleSubmit} className="space-y-4 mb-4">
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className={`${firaCode.className} text-[10px] font-bold text-[#0E1B2E]/50 uppercase tracking-wide`}>First Name</label>
+                                    <div className="relative group">
+                                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#0E1B2E]/30 group-focus-within:text-[#0E1B2E] transition-colors" />
+                                    <input
+                                        type="text"
+                                        name="firstName"
+                                        required
+                                        value={formData.firstName}
+                                        onChange={handleInputChange}
+                                        className={`${victorMono.className} w-full bg-[#FAFAFA] border border-[#0E1B2E]/10 rounded-lg py-3 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#0E1B2E]/10 focus:border-[#0E1B2E] transition-all`}
+                                        placeholder="Jane"
+                                    />
+                                    </div>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className={`${firaCode.className} text-[10px] font-bold text-[#0E1B2E]/50 uppercase tracking-wide`}>Last Name</label>
+                                    <div className="relative group">
+                                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#0E1B2E]/30 group-focus-within:text-[#0E1B2E] transition-colors" />
+                                    <input
+                                        type="text"
+                                        name="lastName"
+                                        required
+                                        value={formData.lastName}
+                                        onChange={handleInputChange}
+                                        className={`${victorMono.className} w-full bg-[#FAFAFA] border border-[#0E1B2E]/10 rounded-lg py-3 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#0E1B2E]/10 focus:border-[#0E1B2E] transition-all`}
+                                        placeholder="Doe"
+                                    />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className={`${firaCode.className} text-[10px] font-bold text-[#0E1B2E]/50 uppercase tracking-wide`}>Job Title</label>
+                                    <div className="relative group">
+                                    <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#0E1B2E]/30 group-focus-within:text-[#0E1B2E] transition-colors" />
+                                    <input
+                                        type="text"
+                                        name="jobTitle"
+                                        required
+                                        value={formData.jobTitle}
+                                        onChange={handleInputChange}
+                                        className={`${victorMono.className} w-full bg-[#FAFAFA] border border-[#0E1B2E]/10 rounded-lg py-3 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#0E1B2E]/10 focus:border-[#0E1B2E] transition-all`}
+                                        placeholder="Product Manager"
+                                    />
+                                    </div>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className={`${firaCode.className} text-[10px] font-bold text-[#0E1B2E]/50 uppercase tracking-wide`}>Company Name</label>
+                                    <div className="relative group">
+                                    <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#0E1B2E]/30 group-focus-within:text-[#0E1B2E] transition-colors" />
+                                    <input
+                                        type="text"
+                                        name="company"
+                                        required
+                                        value={formData.company}
+                                        onChange={handleInputChange}
+                                        className={`${victorMono.className} w-full bg-[#FAFAFA] border border-[#0E1B2E]/10 rounded-lg py-3 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#0E1B2E]/10 focus:border-[#0E1B2E] transition-all`}
+                                        placeholder="Acme Inc."
+                                    />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className={`${firaCode.className} text-[10px] font-bold text-[#0E1B2E]/50 uppercase tracking-wide`}>Company Size</label>
+                                    <div className="relative group">
+                                    <Users2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#0E1B2E]/30 group-focus-within:text-[#0E1B2E] transition-colors" />
+                                    <select
+                                        name="companySize"
+                                        required
+                                        value={formData.companySize}
+                                        onChange={handleInputChange}
+                                        className={`${victorMono.className} w-full bg-[#FAFAFA] border border-[#0E1B2E]/10 rounded-lg py-3 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#0E1B2E]/10 focus:border-[#0E1B2E] transition-all appearance-none text-[#0E1B2E]`}
+                                    >
+                                        <option value="" disabled>Select Size</option>
+                                        <option value="1-10">1 - 10 employees</option>
+                                        <option value="11-50">11 - 50 employees</option>
+                                        <option value="51-200">51 - 200 employees</option>
+                                        <option value="201-500">201 - 500 employees</option>
+                                        <option value="500+">500+ employees</option>
+                                    </select>
+                                    </div>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className={`${firaCode.className} text-[10px] font-bold text-[#0E1B2E]/50 uppercase tracking-wide`}>Country</label>
+                                    <div className="relative group">
+                                    <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#0E1B2E]/30 group-focus-within:text-[#0E1B2E] transition-colors" />
+                                    <input
+                                        type="text"
+                                        name="country"
+                                        required
+                                        value={formData.country}
+                                        onChange={handleInputChange}
+                                        className={`${victorMono.className} w-full bg-[#FAFAFA] border border-[#0E1B2E]/10 rounded-lg py-3 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#0E1B2E]/10 focus:border-[#0E1B2E] transition-all`}
+                                        placeholder="United States"
+                                    />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className={`${firaCode.className} text-[10px] font-bold text-[#0E1B2E]/50 uppercase tracking-wide`}>Email Address</label>
+                                    <div className="relative group">
+                                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#0E1B2E]/30 group-focus-within:text-[#0E1B2E] transition-colors" />
+                                    <input
+                                        type="email"
+                                        name="email"
+                                        required
+                                        value={formData.email}
+                                        onChange={handleInputChange}
+                                        className={`${victorMono.className} w-full bg-[#FAFAFA] border border-[#0E1B2E]/10 rounded-lg py-3 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#0E1B2E]/10 focus:border-[#0E1B2E] transition-all`}
+                                        placeholder="name@work.com"
+                                    />
+                                    </div>
+                                </div>
+                                <div className="space-y-1 relative" ref={dropdownRef}>
+                                    <label className={`${firaCode.className} text-[10px] font-bold text-[#0E1B2E]/50 uppercase tracking-wide`}>Phone Number</label>
+                                    <div className="flex gap-2">
+                                      <div className="relative w-1/3 min-w-[130px]">
+                                        <button
+                                          type="button"
+                                          onClick={() => setShowCountryDropdown(!showCountryDropdown)}
+                                          className="w-full bg-[#FAFAFA] border border-[#0E1B2E]/10 rounded-lg py-3 px-3 text-sm flex items-center justify-between gap-2 hover:bg-[#F0F0F0] transition-colors h-full"
+                                        >
+                                          <div className="flex items-center gap-2 overflow-hidden">
+                                            <img src={selectedCountry.flag} alt="" className="w-5 h-auto object-cover" />
+                                            <span className={`${victorMono.className} truncate`}>{selectedCountry.idd}</span>
+                                          </div>
+                                          <ChevronDown className="w-3 h-3 opacity-50 flex-shrink-0" />
+                                        </button>
+
+                                        {showCountryDropdown && (
+                                          <div className="absolute top-full left-0 w-[300px] mt-1 bg-white border border-[#0E1B2E]/10 rounded-lg shadow-xl z-50 max-h-[300px] flex flex-col">
+                                            <div className="p-2 border-b border-[#0E1B2E]/5 sticky top-0 bg-white rounded-t-lg">
+                                              <div className="relative">
+                                                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[#0E1B2E]/40" />
+                                                <input
+                                                  type="text"
+                                                  value={countrySearch}
+                                                  onChange={(e) => setCountrySearch(e.target.value)}
+                                                  className={`${victorMono.className} w-full bg-[#FAFAFA] pl-7 pr-2 py-2 text-xs rounded border border-[#0E1B2E]/5 focus:outline-none`}
+                                                  placeholder="Search country..."
+                                                  autoFocus
+                                                />
+                                              </div>
+                                            </div>
+                                            <div className="overflow-y-auto flex-1">
+                                              {filteredCountries.map((c) => (
+                                                <button
+                                                  key={c.code}
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setSelectedCountry(c);
+                                                    setShowCountryDropdown(false);
+                                                    setCountrySearch('');
+                                                  }}
+                                                  className="w-full px-3 py-2 text-left hover:bg-[#FAFAFA] flex items-center gap-3 transition-colors border-b border-[#0E1B2E]/5 last:border-0"
+                                                >
+                                                  <img src={c.flag} alt="" className="w-5 h-auto" />
+                                                  <span className={`${victorMono.className} text-xs flex-1 truncate`}>{c.name}</span>
+                                                  <span className={`${firaCode.className} text-[10px] text-[#0E1B2E]/50`}>{c.idd}</span>
+                                                </button>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div className="relative group flex-1">
+                                        <input
+                                            type="tel"
+                                            name="phone"
+                                            required
+                                            value={formData.phone}
+                                            onChange={handleInputChange}
+                                            className={`${victorMono.className} w-full bg-[#FAFAFA] border border-[#0E1B2E]/10 rounded-lg py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#0E1B2E]/10 focus:border-[#0E1B2E] transition-all`}
+                                            placeholder="000-0000"
+                                        />
+                                      </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className={`${firaCode.className} text-[10px] font-bold text-[#0E1B2E]/50 uppercase tracking-wide`}>Reason to Contact</label>
+                                    <div className="relative group">
+                                    <HelpCircle className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#0E1B2E]/30 group-focus-within:text-[#0E1B2E] transition-colors" />
+                                    <select
+                                        name="contactReason"
+                                        required
+                                        value={formData.contactReason}
+                                        onChange={handleInputChange}
+                                        className={`${victorMono.className} w-full bg-[#FAFAFA] border border-[#0E1B2E]/10 rounded-lg py-3 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#0E1B2E]/10 focus:border-[#0E1B2E] transition-all appearance-none text-[#0E1B2E]`}
+                                    >
+                                        <option value="" disabled>Select Reason</option>
+                                        <option value="sales">Sales Inquiry</option>
+                                        <option value="demo">Request a Demo</option>
+                                        <option value="support">Technical Support</option>
+                                        <option value="partnership">Partnership Opportunity</option>
+                                        <option value="other">Other</option>
+                                    </select>
+                                    </div>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className={`${firaCode.className} text-[10px] font-bold text-[#0E1B2E]/50 uppercase tracking-wide`}>Preferred Date</label>
+                                    <div className="relative group">
+                                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#0E1B2E]/30 group-focus-within:text-[#0E1B2E] transition-colors" />
+                                    <input
+                                        type="date"
+                                        name="preferredDate"
+                                        value={formData.preferredDate}
+                                        onChange={handleInputChange}
+                                        className={`${victorMono.className} w-full bg-[#FAFAFA] border border-[#0E1B2E]/10 rounded-lg py-3 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#0E1B2E]/10 focus:border-[#0E1B2E] transition-all text-[#0E1B2E]`}
+                                    />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className={`${firaCode.className} text-[10px] font-bold text-[#0E1B2E]/50 uppercase tracking-wide`}>Message</label>
+                                <div className="relative group">
+                                <MessageSquare className="absolute left-3 top-3 w-4 h-4 text-[#0E1B2E]/30 group-focus-within:text-[#0E1B2E] transition-colors" />
+                                <textarea
+                                    name="message"
+                                    required
+                                    rows={3}
+                                    value={formData.message}
+                                    onChange={handleInputChange}
+                                    className={`${victorMono.className} w-full bg-[#FAFAFA] border border-[#0E1B2E]/10 rounded-lg py-3 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#0E1B2E]/10 focus:border-[#0E1B2E] transition-all resize-none`}
+                                    placeholder="Tell us about your requirements..."
+                                />
+                                </div>
+                            </div>
+
+                            {error && (
+                                <motion.div 
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: 'auto' }}
+                                    className="flex items-center gap-2 text-red-500 bg-red-50 p-2 rounded text-xs"
+                                >
+                                    <AlertCircle className="w-3 h-3" />
+                                    <span className={victorMono.className}>{error}</span>
+                                </motion.div>
+                            )}
+
+                            <motion.button
+                            whileHover={{ scale: 1.01 }}
+                            whileTap={{ scale: 0.99 }}
+                            disabled={isSubmitting}
+                            className={`
+                                ${firaCode.className} w-full py-4 bg-[#0E1B2E] text-white rounded-lg
+                                font-semibold text-base flex items-center justify-center gap-2
+                                shadow-lg shadow-[#0E1B2E]/20 hover:shadow-xl hover:shadow-[#0E1B2E]/30
+                                transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed
+                            `}
+                            >
+                            {isSubmitting ? (
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                            ) : (
+                                <>
+                                Submit Inquiry <Send className="w-4 h-4" />
+                                </>
+                            )}
+                            </motion.button>
+                        </form>
+
+                        <div className="bg-[#FAFAFA] border border-[#0E1B2E]/5 rounded-xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+                            <div className="flex items-start gap-3">
+                            <div className="p-2 bg-white rounded-lg border border-[#0E1B2E]/10">
+                                <HelpCircle className="w-5 h-5 text-[#0E1B2E]" />
+                            </div>
+                            <div>
+                                <h4 className={`${firaCode.className} text-sm font-bold text-[#0E1B2E]`}>Need Immediate Help?</h4>
+                                <p className={`${victorMono.className} text-xs text-[#0E1B2E]/60`}>Direct line to our team.</p>
+                            </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-1">
+                            <a href="mailto:contact@smarix.net" className={`${victorMono.className} text-xs font-bold text-[#0E1B2E] hover:underline flex items-center gap-2`}>
+                                <Mail className="w-3 h-3" /> contact@smarix.net
+                            </a>
+                            <a href="tel:+917607066219" className={`${victorMono.className} text-xs font-bold text-[#0E1B2E] hover:underline flex items-center gap-2`}>
+                                <Phone className="w-3 h-3" /> +91 76070 66219
+                            </a>
+                            </div>
+                        </div>
+                        </motion.div>
+                    ) : (
+                        <motion.div
+                        key="success"
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.5, type: "spring" }}
+                        className="max-w-xl mx-auto w-full bg-[#FAFAFA] border border-[#0E1B2E]/5 p-12 rounded-3xl text-center shadow-2xl shadow-[#0E1B2E]/5 mt-10"
+                        >
+                        <motion.div
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+                            className="w-24 h-24 bg-[#0E1B2E] rounded-full flex items-center justify-center mx-auto mb-8 shadow-xl shadow-[#0E1B2E]/20"
+                        >
+                            <CheckCircle2 className="w-10 h-10 text-white" />
+                        </motion.div>
+                        
+                        <h2 className={`${firaCode.className} text-3xl font-bold text-[#0E1B2E] mb-4`}>
+                            Request Received!
+                        </h2>
+                        
+                        <p className={`${victorMono.className} text-[#0E1B2E]/70 text-lg mb-8 leading-relaxed`}>
+                            Thank you for your interest in Smarix. Your inquiry has been securely registered in our system. A senior executive will review your requirements and reach out to you shortly.
+                        </p>
+                        
+                        <div className="p-4 bg-white border border-[#0E1B2E]/10 rounded-xl inline-block mb-10">
+                            <p className={`${firaCode.className} text-xs text-[#0E1B2E]/50 font-bold uppercase tracking-wider`}>Reference ID</p>
+                            <p className={`${victorMono.className} text-[#0E1B2E] font-bold mt-1`}>SMX-{Math.floor(Math.random() * 100000)}</p>
+                        </div>
+
+                        <motion.button
+                            onClick={() => router.push('/landing')}
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            className={`
+                            ${firaCode.className} w-full py-4 bg-[#0E1B2E] text-white rounded-xl
+                            font-semibold text-base flex items-center justify-center gap-2
+                            shadow-lg shadow-[#0E1B2E]/10 hover:shadow-xl hover:shadow-[#0E1B2E]/20
+                            transition-all duration-300
+                            `}
+                        >
+                            <Home className="w-5 h-5" />
+                            Back to Home
+                        </motion.button>
+                        </motion.div>
                     )}
-                  </div>
-
-                  <div>
-                    <label htmlFor="lastName" className={`${victorMono.className} block text-sm font-medium text-[#0E1B2E]/70 mb-2`}>
-                      Last Name <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#0E1B2E]/30" />
-                      <input
-                        type="text"
-                        id="lastName"
-                        name="lastName"
-                        value={formData.lastName}
-                        onChange={handleChange}
-                        className={`
-                          w-full pl-12 pr-4 py-3.5 bg-white border-2 rounded-xl
-                          ${errors.lastName ? 'border-red-300 focus:border-red-500' : 'border-gray-200 focus:border-[#0E1B2E]'}
-                          ${victorMono.className} text-[#0E1B2E] placeholder:text-[#0E1B2E]/30
-                          focus:outline-none focus:ring-2 focus:ring-[#0E1B2E]/10 transition-all duration-200
-                        `}
-                        placeholder="Doe"
-                      />
-                    </div>
-                    {errors.lastName && (
-                      <p className={`${victorMono.className} text-xs text-red-500 mt-1`}>{errors.lastName}</p>
-                    )}
-                  </div>
+                    </AnimatePresence>
                 </div>
+            </div>
+        </div>
 
-                {/* Email and Phone */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label htmlFor="email" className={`${victorMono.className} block text-sm font-medium text-[#0E1B2E]/70 mb-2`}>
-                      Email Address <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#0E1B2E]/30" />
-                      <input
-                        type="email"
-                        id="email"
-                        name="email"
-                        value={formData.email}
-                        onChange={handleChange}
-                        className={`
-                          w-full pl-12 pr-4 py-3.5 bg-white border-2 rounded-xl
-                          ${errors.email ? 'border-red-300 focus:border-red-500' : 'border-gray-200 focus:border-[#0E1B2E]'}
-                          ${victorMono.className} text-[#0E1B2E] placeholder:text-[#0E1B2E]/30
-                          focus:outline-none focus:ring-2 focus:ring-[#0E1B2E]/10 transition-all duration-200
-                        `}
-                        placeholder="john.doe@company.com"
-                      />
-                    </div>
-                    {errors.email && (
-                      <p className={`${victorMono.className} text-xs text-red-500 mt-1`}>{errors.email}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label htmlFor="phone" className={`${victorMono.className} block text-sm font-medium text-[#0E1B2E]/70 mb-2`}>
-                      Phone Number
-                    </label>
-                    <div className="relative">
-                      <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#0E1B2E]/30" />
-                      <input
-                        type="tel"
-                        id="phone"
-                        name="phone"
-                        value={formData.phone}
-                        onChange={handleChange}
-                        className={`
-                          w-full pl-12 pr-4 py-3.5 bg-white border-2 rounded-xl
-                          border-gray-200 focus:border-[#0E1B2E]
-                          ${victorMono.className} text-[#0E1B2E] placeholder:text-[#0E1B2E]/30
-                          focus:outline-none focus:ring-2 focus:ring-[#0E1B2E]/10 transition-all duration-200
-                        `}
-                        placeholder="+1 (555) 000-0000"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Company and Job Title */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label htmlFor="company" className={`${victorMono.className} block text-sm font-medium text-[#0E1B2E]/70 mb-2`}>
-                      Company Name <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#0E1B2E]/30" />
-                      <input
-                        type="text"
-                        id="company"
-                        name="company"
-                        value={formData.company}
-                        onChange={handleChange}
-                        className={`
-                          w-full pl-12 pr-4 py-3.5 bg-white border-2 rounded-xl
-                          ${errors.company ? 'border-red-300 focus:border-red-500' : 'border-gray-200 focus:border-[#0E1B2E]'}
-                          ${victorMono.className} text-[#0E1B2E] placeholder:text-[#0E1B2E]/30
-                          focus:outline-none focus:ring-2 focus:ring-[#0E1B2E]/10 transition-all duration-200
-                        `}
-                        placeholder="Acme Inc."
-                      />
-                    </div>
-                    {errors.company && (
-                      <p className={`${victorMono.className} text-xs text-red-500 mt-1`}>{errors.company}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label htmlFor="jobTitle" className={`${victorMono.className} block text-sm font-medium text-[#0E1B2E]/70 mb-2`}>
-                      Job Title <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#0E1B2E]/30" />
-                      <input
-                        type="text"
-                        id="jobTitle"
-                        name="jobTitle"
-                        value={formData.jobTitle}
-                        onChange={handleChange}
-                        className={`
-                          w-full pl-12 pr-4 py-3.5 bg-white border-2 rounded-xl
-                          ${errors.jobTitle ? 'border-red-300 focus:border-red-500' : 'border-gray-200 focus:border-[#0E1B2E]'}
-                          ${victorMono.className} text-[#0E1B2E] placeholder:text-[#0E1B2E]/30
-                          focus:outline-none focus:ring-2 focus:ring-[#0E1B2E]/10 transition-all duration-200
-                        `}
-                        placeholder="Engineering Manager"
-                      />
-                    </div>
-                    {errors.jobTitle && (
-                      <p className={`${victorMono.className} text-xs text-red-500 mt-1`}>{errors.jobTitle}</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Company Size and Country */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label htmlFor="companySize" className={`${victorMono.className} block text-sm font-medium text-[#0E1B2E]/70 mb-2`}>
-                      Company Size <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <Users className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#0E1B2E]/30 z-10" />
-                      <select
-                        id="companySize"
-                        name="companySize"
-                        value={formData.companySize}
-                        onChange={handleChange}
-                        className={`
-                          w-full pl-12 pr-4 py-3.5 bg-white border-2 rounded-xl appearance-none
-                          ${errors.companySize ? 'border-red-300 focus:border-red-500' : 'border-gray-200 focus:border-[#0E1B2E]'}
-                          ${victorMono.className} text-[#0E1B2E]
-                          focus:outline-none focus:ring-2 focus:ring-[#0E1B2E]/10 transition-all duration-200 cursor-pointer
-                        `}
-                      >
-                        <option value="">Select company size</option>
-                        {companySizes.map(size => (
-                          <option key={size} value={size}>{size}</option>
-                        ))}
-                      </select>
-                      <ArrowRight className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#0E1B2E]/30 rotate-90 pointer-events-none" />
-                    </div>
-                    {errors.companySize && (
-                      <p className={`${victorMono.className} text-xs text-red-500 mt-1`}>{errors.companySize}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label htmlFor="country" className={`${victorMono.className} block text-sm font-medium text-[#0E1B2E]/70 mb-2`}>
-                      Country <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#0E1B2E]/30" />
-                      <input
-                        type="text"
-                        id="country"
-                        name="country"
-                        value={formData.country}
-                        onChange={handleChange}
-                        className={`
-                          w-full pl-12 pr-4 py-3.5 bg-white border-2 rounded-xl
-                          ${errors.country ? 'border-red-300 focus:border-red-500' : 'border-gray-200 focus:border-[#0E1B2E]'}
-                          ${victorMono.className} text-[#0E1B2E] placeholder:text-[#0E1B2E]/30
-                          focus:outline-none focus:ring-2 focus:ring-[#0E1B2E]/10 transition-all duration-200
-                        `}
-                        placeholder="United States"
-                      />
-                    </div>
-                    {errors.country && (
-                      <p className={`${victorMono.className} text-xs text-red-500 mt-1`}>{errors.country}</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Preferred Date */}
-                <div>
-                  <label htmlFor="preferredDate" className={`${victorMono.className} block text-sm font-medium text-[#0E1B2E]/70 mb-2`}>
-                    Preferred Demo Date
-                  </label>
-                  <div className="relative">
-                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#0E1B2E]/30" />
-                    <input
-                      type="date"
-                      id="preferredDate"
-                      name="preferredDate"
-                      value={formData.preferredDate}
-                      onChange={handleChange}
-                      min={new Date().toISOString().split('T')[0]}
-                      className={`
-                        w-full pl-12 pr-4 py-3.5 bg-white border-2 rounded-xl
-                        border-gray-200 focus:border-[#0E1B2E]
-                        ${victorMono.className} text-[#0E1B2E] placeholder:text-[#0E1B2E]/30
-                        focus:outline-none focus:ring-2 focus:ring-[#0E1B2E]/10 transition-all duration-200
-                      `}
-                    />
-                  </div>
-                </div>
-
-                {/* Message */}
-                <div>
-                  <label htmlFor="message" className={`${victorMono.className} block text-sm font-medium text-[#0E1B2E]/70 mb-2`}>
-                    Additional Message
-                  </label>
-                  <textarea
-                    id="message"
-                    name="message"
-                    value={formData.message}
-                    onChange={handleChange}
-                    rows={5}
-                    className={`
-                      w-full px-4 py-3.5 bg-white border-2 rounded-xl resize-none
-                      border-gray-200 focus:border-[#0E1B2E]
-                      ${victorMono.className} text-[#0E1B2E] placeholder:text-[#0E1B2E]/30
-                      focus:outline-none focus:ring-2 focus:ring-[#0E1B2E]/10 transition-all duration-200
-                    `}
-                    placeholder="Tell us about your use case, specific requirements, or any questions you have..."
-                  />
-                </div>
-
-                {/* Submit Button */}
-                <motion.button
-                  type="submit"
-                  disabled={isSubmitting}
-                  whileHover={!isSubmitting ? { scale: 1.02 } : {}}
-                  whileTap={!isSubmitting ? { scale: 0.98 } : {}}
-                  className={`
-                    w-full group relative inline-flex items-center justify-center gap-3
-                    bg-[#0E1B2E] text-white px-8 py-4 rounded-xl
-                    ${isSubmitting ? 'opacity-75 cursor-wait' : 'hover:bg-[#1a2f4d]'}
-                    transition-all duration-300 shadow-xl shadow-[#0E1B2E]/10
-                  `}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      <span className={`${firaCode.className} font-bold tracking-wide text-sm`}>
-                        SUBMITTING...
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span className={`${firaCode.className} font-bold tracking-wide text-sm`}>
-                        SUBMIT REQUEST
-                      </span>
-                      <span className="w-px h-5 bg-white/20" />
-                      <Send className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1" />
-                    </>
-                  )}
-                </motion.button>
-              </form>
-            </motion.div>
-
-            {/* Info Sidebar */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6, delay: 0.3 }}
-              className="lg:col-span-1"
-            >
-              <div className="sticky top-32 space-y-6">
-                {/* What to Expect Card */}
-                <div className="p-6 bg-white border-2 border-gray-200 rounded-2xl shadow-lg shadow-black/5">
-                  <h3 className={`${firaCode.className} text-xl font-bold text-[#0E1B2E] mb-4`}>
-                    What to Expect
-                  </h3>
-                  <ul className={`${victorMono.className} space-y-3 text-sm text-[#0E1B2E]/70`}>
-                    <li className="flex items-start gap-3">
-                      <CheckCircle2 className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-                      <span>30-minute personalized demo</span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <CheckCircle2 className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-                      <span>Live product walkthrough</span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <CheckCircle2 className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-                      <span>Q&A session with our team</span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                      <CheckCircle2 className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-                      <span>Custom solution discussion</span>
-                    </li>
-                  </ul>
-                </div>
-
-                {/* Contact Info Card */}
-                <div className="p-6 bg-[#0E1B2E] text-white rounded-2xl shadow-xl shadow-[#0E1B2E]/20">
-                  <h3 className={`${firaCode.className} text-xl font-bold mb-4`}>
-                    Need Immediate Help?
-                  </h3>
-                  <p className={`${victorMono.className} text-sm text-white/70 mb-4`}>
-                    Our sales team is here to assist you. Reach out directly for faster response.
-                  </p>
-                  <div className="space-y-3">
-                    <a 
-                      href="mailto:sales@smarix.ai" 
-                      className={`${victorMono.className} flex items-center gap-3 text-sm text-white/90 hover:text-white transition-colors`}
-                    >
-                      <Mail className="w-4 h-4" />
-                      sales@smarix.ai
-                    </a>
-                    <a 
-                      href="tel:+1234567890" 
-                      className={`${victorMono.className} flex items-center gap-3 text-sm text-white/90 hover:text-white transition-colors`}
-                    >
-                      <Phone className="w-4 h-4" />
-                      +1 (555) 123-4567
-                    </a>
-                  </div>
-                </div>
-
-                {/* Trust Indicators */}
-                <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-100 rounded-2xl">
-                  <div className="text-center">
-                    <div className={`${firaCode.className} text-3xl font-bold text-[#0E1B2E] mb-1`}>
-                      24hrs
-                    </div>
-                    <p className={`${victorMono.className} text-xs text-[#0E1B2E]/70`}>
-                      Average response time
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
+        <div className="hidden lg:flex w-1/2 bg-[#0E1B2E] relative overflow-hidden items-center justify-center fixed right-0 h-screen">
+          <div className="absolute inset-0 opacity-20">
+             <div className="absolute top-0 left-0 w-full h-full bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:50px_50px]" />
           </div>
+
+          <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-500/20 rounded-full blur-[120px]" />
+          <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-purple-500/20 rounded-full blur-[120px]" />
+
+          <div className="relative w-[600px] h-[600px] flex items-center justify-center">
+            
+            {[1, 2, 3].map((ring, i) => (
+              <motion.div
+                key={i}
+                animate={{ rotate: 360 }}
+                transition={{ 
+                  duration: 20 + (i * 10), 
+                  repeat: Infinity, 
+                  ease: "linear",
+                  delay: i * 2 
+                }}
+                className={`absolute rounded-full border border-white/${10 - (i * 2)}`}
+                style={{
+                  width: `${300 + (i * 100)}px`,
+                  height: `${300 + (i * 100)}px`,
+                }}
+              >
+                <motion.div 
+                  className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-[0_0_15px_rgba(255,255,255,0.5)]" 
+                />
+              </motion.div>
+            ))}
+
+            <motion.div
+              animate={{ 
+                scale: [1, 1.1, 1],
+                boxShadow: [
+                  "0 0 20px rgba(255,255,255,0.1)", 
+                  "0 0 50px rgba(255,255,255,0.3)", 
+                  "0 0 20px rgba(255,255,255,0.1)"
+                ]
+              }}
+              transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+              className="w-32 h-32 bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-md rounded-full border border-white/20 flex items-center justify-center relative z-20"
+            >
+              <img 
+                src="/logo-without-bg.png" 
+                alt="Smarix Logo" 
+                className="w-20 h-20 text-white/80 object-fit"
+              />
+            </motion.div>
+
+            <motion.div
+              animate={{ y: [-15, 15, -15] }}
+              transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+              className="absolute top-20 right-20 bg-white/10 backdrop-blur-xl border border-white/10 p-4 rounded-xl z-30 w-48"
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
+                  <Clock className="w-4 h-4 text-green-400" />
+                </div>
+                <div>
+                  <div className="h-1.5 w-12 bg-white/40 rounded-full mb-1" />
+                  <div className={`${victorMono.className} text-[10px] text-white/80 font-bold`}>Avg: 24hrs</div>
+                </div>
+              </div>
+              <div className="h-1 w-full bg-white/10 rounded-full mb-2 overflow-hidden">
+                 <div className="h-full w-[90%] bg-green-400 rounded-full" />
+              </div>
+            </motion.div>
+
+            <motion.div
+              animate={{ y: [20, -20, 20] }}
+              transition={{ duration: 7, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+              className="absolute bottom-32 left-10 bg-white/10 backdrop-blur-xl border border-white/10 p-4 rounded-xl z-30 w-48"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                  <MonitorPlay className="w-4 h-4 text-blue-400" />
+                </div>
+                <div className={`${victorMono.className} text-[10px] text-white/80 font-bold`}>Product Demo</div>
+              </div>
+              <div className="flex justify-between items-end h-8 gap-1">
+                {[40, 70, 50, 90, 60, 80, 45].map((h, i) => (
+                  <motion.div
+                    key={i}
+                    animate={{ height: [`${h}%`, `${h - 20}%`, `${h}%`] }}
+                    transition={{ duration: 2, repeat: Infinity, delay: i * 0.1 }}
+                    className="w-full bg-blue-400/50 rounded-sm"
+                  />
+                ))}
+              </div>
+            </motion.div>
+
+          </div>
+        
         </div>
       </div>
-
-      <Footer />
     </main>
   );
 }
-
