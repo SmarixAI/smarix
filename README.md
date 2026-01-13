@@ -10,4 +10,3 @@ deactivate
 
 windows: 
 venv\Scripts\activate
-
