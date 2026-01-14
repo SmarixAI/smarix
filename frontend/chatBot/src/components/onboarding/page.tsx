@@ -17,6 +17,9 @@ export default function OnboardingPage() {
   const [onboardingData, setOnboardingData] = useState<any>(null);
   const [completedModules, setCompletedModules] = useState(0);
   const [totalModules, setTotalModules] = useState(0);
+  
+  // State to control Header visibility
+  const [isHeaderVisible, setIsHeaderVisible] = useState(true);
 
   // Get employeeId from localStorage and fetch onboarding data
   useEffect(() => {
@@ -179,6 +182,7 @@ export default function OnboardingPage() {
             activeRepos={activeRepos}
             onboardingData={onboardingData}
             onUpdateProgress={updateProgress}
+            onModalChange={(isOpen) => setIsHeaderVisible(!isOpen)} // Handle modal visibility
           />
         );
       case "practice":
@@ -206,6 +210,7 @@ export default function OnboardingPage() {
             activeRepos={activeRepos}
             onboardingData={onboardingData}
             onUpdateProgress={updateProgress}
+            onModalChange={(isOpen) => setIsHeaderVisible(!isOpen)}
           />
         );
     }
@@ -214,13 +219,15 @@ export default function OnboardingPage() {
   return (
     <div className="min-h-screen bg-[#FAFAFA] text-[#0E1B2E]">
       <div className="relative z-10 min-h-screen">
-        <Header
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-        />
+        {/* Conditionally render Header */}
+        {isHeaderVisible && (
+          <Header
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+          />
+        )}
 
         <div className="max-w-[1800px] mx-auto px-6 py-6 relative">
-          {/* Grid Pattern Background - matching landing page - only for non-practice tabs */}
           {activeTab !== "practice" && (
             <div className="absolute inset-0 bg-[linear-gradient(to_right,#0E1B2E05_1px,transparent_1px),linear-gradient(to_bottom,#0E1B2E05_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
           )}
@@ -249,4 +256,3 @@ export default function OnboardingPage() {
     </div>
   );
 }
-

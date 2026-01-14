@@ -3,7 +3,11 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { Inter, JetBrains_Mono } from 'next/font/google';
+
+const inter = Inter({ subsets: ['latin'], weight: ['400', '500', '600', '700'] });
+const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], weight: ['400', '500'] });
 
 interface ContentSectionProps {
   title: string;
@@ -12,65 +16,71 @@ interface ContentSectionProps {
 
 export default function ContentSection({ title, content }: ContentSectionProps) {
   return (
-    <div className="rounded-xl border border-white/25 overflow-hidden bg-white/35 backdrop-blur-xl shadow-md shadow-black/5">
-      <div className="px-6 py-3 border-b border-[#0E1B2E]/10 bg-white/40 backdrop-blur-sm">
-        <h3 className="text-base font-semibold text-[#0E1B2E]">{title}</h3>
+    <div className="rounded-2xl border-2 border-[#0E1B2E]/5 overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow duration-300">
+      <div className="px-6 py-4 border-b border-[#0E1B2E]/5 bg-slate-50/50">
+        <h3 className={`${inter.className} text-[15px] font-bold text-[#0E1B2E] uppercase tracking-wide flex items-center gap-2`}>
+          <div className="w-1 h-4 bg-[#0E1B2E] rounded-full" />
+          {title}
+        </h3>
       </div>
       
-      <div className="px-6 py-4 bg-white">
-        <div className="prose max-w-none">
+      <div className="px-6 py-6 bg-white">
+        <div className="prose prose-sm max-w-none prose-slate">
           <ReactMarkdown
             components={{
               code(props) {
                 const { children, className, node, ref, ...rest } = props;
                 const match = /language-(\w+)/.exec(className || '');
                 return match ? (
-                  <SyntaxHighlighter
-                    PreTag="div"
-                    language={match[1]}
-                    style={oneLight}
-                    customStyle={{
-                      borderRadius: '0.5rem',
-                      padding: '1rem',
-                      fontSize: '0.8rem',
-                      border: '1px solid #e5e7eb',
-                    }}
-                  >
-                    {String(children).replace(/\n$/, '')}
-                  </SyntaxHighlighter>
+                  <div className="my-4 rounded-xl overflow-hidden bg-[#282c34] border border-slate-800 shadow-inner">
+                    <SyntaxHighlighter
+                      PreTag="div"
+                      language={match[1]}
+                      style={oneDark}
+                      customStyle={{
+                        margin: 0,
+                        padding: '1.25rem',
+                        fontSize: '0.85rem',
+                        backgroundColor: 'transparent',
+                        fontFamily: jetbrainsMono.style.fontFamily,
+                      }}
+                    >
+                      {String(children).replace(/\n$/, '')}
+                    </SyntaxHighlighter>
+                  </div>
                 ) : (
-                  <code className="px-1.5 py-0.5 rounded text-xs font-mono border bg-[#0E1B2E]/5 text-[#0E1B2E] border-[#0E1B2E]/10">
+                  <code className={`${jetbrainsMono.className} px-1.5 py-0.5 rounded text-[13px] bg-[#0E1B2E]/5 text-[#0E1B2E] border border-[#0E1B2E]/10`}>
                     {children}
                   </code>
                 );
               },
               p: ({ children }) => (
-                <p className="mb-3 leading-relaxed text-sm text-[#0E1B2E]/80">
+                <p className={`${inter.className} mb-4 leading-relaxed text-[15px] text-[#0E1B2E]/80`}>
                   {children}
                 </p>
               ),
               ul: ({ children }) => (
-                <ul className="list-disc list-outside mb-3 space-y-1.5 ml-5 text-sm text-[#0E1B2E]/80">
+                <ul className="list-disc list-outside mb-4 space-y-2 ml-4 text-sm text-[#0E1B2E]/80 marker:text-[#0E1B2E]/40">
                   {children}
                 </ul>
               ),
               ol: ({ children }) => (
-                <ol className="list-decimal list-outside mb-3 space-y-1.5 ml-5 text-sm text-[#0E1B2E]/80">
+                <ol className="list-decimal list-outside mb-4 space-y-2 ml-4 text-sm text-[#0E1B2E]/80 marker:text-[#0E1B2E]/60 marker:font-semibold">
                   {children}
                 </ol>
               ),
               li: ({ children }) => (
-                <li className="mb-1 leading-relaxed text-sm text-[#0E1B2E]/80">
+                <li className={`${inter.className} leading-relaxed pl-1`}>
                   {children}
                 </li>
               ),
               h3: ({ children }) => (
-                <h3 className="text-sm font-semibold mb-2 mt-3 text-[#0E1B2E]">
+                <h3 className={`${inter.className} text-base font-bold mb-3 mt-6 text-[#0E1B2E]`}>
                   {children}
                 </h3>
               ),
               blockquote: ({ children }) => (
-                <blockquote className="border-l-3 pl-3 py-2 my-3 rounded-r italic border-[#0E1B2E]/20 bg-[#0E1B2E]/5 text-sm text-[#0E1B2E]/80">
+                <blockquote className="border-l-4 pl-4 py-3 my-5 rounded-r bg-blue-50/50 border-blue-500/30 text-[15px] text-[#0E1B2E]/70 italic">
                   {children}
                 </blockquote>
               ),

@@ -3,14 +3,19 @@
 import { Code, GitBranch, Terminal, FileText } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import remarkGfm from 'remark-gfm';
 import type { ContentSection } from '../../../../../types/onboarding';
+import { Inter, JetBrains_Mono, Source_Code_Pro } from 'next/font/google';
 
 interface ContentRendererProps {
   sections: ContentSection[];
   renderedMermaid: { [key: number]: string };
 }
+
+const inter = Inter({ subsets: ['latin'], weight: ['400', '500', '600', '700'] });
+const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], weight: ['400', '500', '600'] });
+const sourceCodePro = Source_Code_Pro({ subsets: ['latin'], weight: ['400', '500', '600'] });
 
 export default function ContentRenderer({ sections, renderedMermaid }: ContentRendererProps) {
 
@@ -70,8 +75,8 @@ export default function ContentRenderer({ sections, renderedMermaid }: ContentRe
 
   if (!sections || sections.length === 0) {
     return (
-      <div className="p-8 rounded-lg text-center bg-yellow-50 border border-yellow-200">
-        <p className="text-lg font-semibold text-yellow-700">
+      <div className="p-8 rounded-xl text-center bg-gradient-to-br from-amber-50/80 to-orange-50/50 backdrop-blur-sm border border-amber-200/60">
+        <p className={`${inter.className} text-base font-semibold text-amber-700`}>
           No content available
         </p>
       </div>
@@ -79,74 +84,74 @@ export default function ContentRenderer({ sections, renderedMermaid }: ContentRe
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {sections.map((section, idx) => {
         return (
           <div key={idx}>
             {section.type === 'text' && (
-              <div className="prose max-w-none">
+              <div className="prose prose-slate max-w-none">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{
                     h1: ({ children }) => (
-                      <h1 className="text-base font-bold mb-3 mt-4 pb-2 border-b border-[#0E1B2E]/10 text-[#0E1B2E]">
+                      <h1 className={`${inter.className} text-2xl font-bold mb-4 mt-6 pb-3 border-b-2 border-blue-200/60 text-[#0E1B2E] tracking-tight`}>
                         {children}
                       </h1>
                     ),
                     h2: ({ children }) => (
-                      <h2 className="text-sm font-semibold mb-2 mt-4 pb-1.5 border-b border-[#0E1B2E]/10 text-[#0E1B2E]">
+                      <h2 className={`${inter.className} text-xl font-semibold mb-3 mt-5 pb-2 border-b border-slate-200/60 text-[#0E1B2E] tracking-tight`}>
                         {children}
                       </h2>
                     ),
                     h3: ({ children }) => (
-                      <h3 className="text-sm font-semibold mb-2 mt-3 flex items-center text-[#0E1B2E]">
-                        <span className="w-1 h-4 mr-2 rounded-full bg-[#0E1B2E]/30" />
+                      <h3 className={`${inter.className} text-lg font-semibold mb-3 mt-4 flex items-center text-[#0E1B2E] tracking-tight`}>
+                        <span className="w-1.5 h-5 mr-3 rounded-full bg-gradient-to-b from-blue-500 to-indigo-500" />
                         {children}
                       </h3>
                     ),
                     h4: ({ children }) => (
-                      <h4 className="text-xs font-semibold mb-1.5 mt-3 text-[#0E1B2E]/90">
+                      <h4 className={`${inter.className} text-base font-semibold mb-2 mt-3 text-[#0E1B2E]/90`}>
                         {children}
                       </h4>
                     ),
                     p: ({ children }) => (
-                      <p className="mb-3 leading-relaxed text-sm text-[#0E1B2E]/80">
+                      <p className={`${inter.className} mb-4 leading-relaxed text-[15px] text-slate-700 font-normal`}>
                         {children}
                       </p>
                     ),
                     ul: ({ children }) => (
-                      <ul className="list-none mb-3 space-y-1.5 text-[#0E1B2E]/80">
+                      <ul className={`${inter.className} list-none mb-4 space-y-2 text-slate-700`}>
                         {children}
                       </ul>
                     ),
                     ol: ({ children }) => (
-                      <ol className="list-decimal list-inside mb-3 space-y-1.5 ml-2 text-[#0E1B2E]/80">
+                      <ol className={`${inter.className} list-decimal list-inside mb-4 space-y-2 ml-1 text-slate-700`}>
                         {children}
                       </ol>
                     ),
                     li: ({ children }) => (
-                      <li className="flex items-start text-sm">
-                        <span className="inline-block w-1.5 h-1.5 rounded-full mt-2 mr-2 flex-shrink-0 bg-[#0E1B2E]/40" />
-                        <span className="flex-1">{children}</span>
+                      <li className={`${inter.className} flex items-start text-[15px]`}>
+                        <span className="inline-flex items-center justify-center w-1.5 h-1.5 rounded-full mt-2.5 mr-3 flex-shrink-0 bg-blue-500" />
+                        <span className={`${inter.className} flex-1 leading-relaxed`}>{children}</span>
                       </li>
                     ),
                     strong: ({ children }) => (
-                      <strong className="font-semibold text-[#0E1B2E]">
+                      <strong className={`${inter.className} font-semibold text-[#0E1B2E]`}>
                         {children}
                       </strong>
                     ),
                     em: ({ children }) => (
-                      <em className="italic text-[#0E1B2E]/80">
+                      <em className={`${inter.className} italic text-slate-600`}>
                         {children}
                       </em>
                     ),
                     code: ({ children }) => (
-                      <code className="px-1.5 py-0.5 rounded text-xs font-mono bg-[#0E1B2E]/5 text-[#0E1B2E] border border-[#0E1B2E]/10">
+                      <code className={`${sourceCodePro.className} px-2 py-1 rounded-md text-[13px] font-medium bg-slate-100 text-[#0E1B2E] border border-slate-200`}>
                         {children}
                       </code>
                     ),
                     blockquote: ({ children }) => (
-                      <blockquote className="border-l-3 pl-3 py-1.5 my-3 italic rounded-r border-[#0E1B2E]/20 bg-[#0E1B2E]/5 text-[#0E1B2E]/80 text-xs">
+                      <blockquote className={`${inter.className} border-l-4 pl-4 py-2 my-4 rounded-r-lg border-blue-400 bg-blue-50/50 text-slate-700 text-[15px] italic`}>
                         {children}
                       </blockquote>
                     ),
@@ -155,33 +160,33 @@ export default function ContentRenderer({ sections, renderedMermaid }: ContentRe
                         href={href}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="font-medium underline decoration-1 underline-offset-2 transition-colors text-[#0E1B2E] hover:text-[#0E1B2E]/70 text-xs"
+                        className={`${inter.className} font-medium underline decoration-2 underline-offset-2 transition-colors text-blue-600 hover:text-blue-700`}
                       >
                         {children}
                       </a>
                     ),
                     hr: () => (
-                      <hr className="my-4 border-t border-[#0E1B2E]/10" />
+                      <hr className="my-6 border-t-2 border-slate-200/60" />
                     ),
                     table: ({ children }) => (
-                      <div className="overflow-x-auto my-4">
-                        <table className="min-w-full divide-y divide-[#0E1B2E]/10">
+                      <div className="overflow-x-auto my-5 rounded-xl border border-slate-200/60 shadow-sm">
+                        <table className="min-w-full divide-y divide-slate-200">
                           {children}
                         </table>
                       </div>
                     ),
                     thead: ({ children }) => (
-                      <thead className="bg-[#0E1B2E]/5">
+                      <thead className="bg-gradient-to-r from-slate-50 to-blue-50/30">
                         {children}
                       </thead>
                     ),
                     th: ({ children }) => (
-                      <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-[#0E1B2E]">
+                      <th className={`${inter.className} px-4 py-3 text-left text-sm font-semibold text-[#0E1B2E]`}>
                         {children}
                       </th>
                     ),
                     td: ({ children }) => (
-                      <td className="px-3 py-2 text-xs text-[#0E1B2E]/80">
+                      <td className={`${inter.className} px-4 py-3 text-sm text-slate-700`}>
                         {children}
                       </td>
                     ),
@@ -193,19 +198,19 @@ export default function ContentRenderer({ sections, renderedMermaid }: ContentRe
             )}
 
             {section.type === 'code' && (
-              <div className="rounded-lg overflow-hidden shadow-sm bg-gray-50 border border-[#0E1B2E]/10">
-                <div className="flex items-center justify-between px-4 py-2.5 border-b bg-[#0E1B2E]/5 border-[#0E1B2E]/10">
-                  <div className="flex items-center space-x-2">
-                    <div className="text-[#0E1B2E]/70">
+              <div className="rounded-xl overflow-hidden shadow-lg border border-slate-200/60 bg-[#282c34]">
+                <div className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-slate-800 to-slate-900 border-b border-slate-700/50">
+                  <div className="flex items-center space-x-3">
+                    <div className="text-slate-300">
                       {getLanguageIcon(section.language)}
                     </div>
-                    <span className="text-xs font-bold uppercase tracking-wider text-[#0E1B2E]">
+                    <span className={`${inter.className} text-sm font-semibold text-slate-200`}>
                       {getLanguageLabel(section.language)}
                     </span>
                   </div>
                   <button
                     onClick={() => copyToClipboard(section.content)}
-                    className="text-xs px-3 py-1.5 rounded-lg font-medium transition-all hover:bg-[#0E1B2E]/10 text-[#0E1B2E]/70 hover:text-[#0E1B2E]"
+                    className={`${inter.className} text-xs px-4 py-2 rounded-lg font-medium transition-all bg-slate-700/50 hover:bg-slate-600 text-slate-200 hover:text-white border border-slate-600/50 hover:border-slate-500`}
                   >
                     Copy Code
                   </button>
@@ -213,16 +218,19 @@ export default function ContentRenderer({ sections, renderedMermaid }: ContentRe
                 <div className="overflow-x-auto">
                   <SyntaxHighlighter
                     language={section.language || 'text'}
-                    style={vs}
+                    style={oneDark}
                     customStyle={{
                       margin: 0,
-                      padding: '1rem',
-                      background: 'transparent',
-                      fontSize: '0.8rem',
-                      lineHeight: '1.6',
+                      padding: '1.25rem',
+                      background: '#282c34',
+                      fontSize: '0.875rem',
+                      lineHeight: '1.7',
                     }}
                     showLineNumbers
                     wrapLines
+                    codeTagProps={{
+                      className: sourceCodePro.className,
+                    }}
                   >
                     {section.content}
                   </SyntaxHighlighter>
@@ -231,15 +239,15 @@ export default function ContentRenderer({ sections, renderedMermaid }: ContentRe
             )}
 
             {section.type === 'mermaid' && (
-              <div className="my-4">
+              <div className="my-6">
                 {section.index !== undefined && renderedMermaid[section.index] ? (
                   <div
-                    className="rounded-lg overflow-hidden border border-gray-200 bg-white"
+                    className="rounded-xl overflow-hidden border-2 border-slate-200/60 bg-white shadow-lg p-6"
                     dangerouslySetInnerHTML={{ __html: renderedMermaid[section.index] }}
                   />
                 ) : (
-                  <div className="text-sm italic text-gray-500">
-                    <span className="opacity-50">[Diagram unavailable]</span>
+                  <div className={`${inter.className} text-sm italic text-slate-500 text-center py-8 bg-slate-50 rounded-xl border border-slate-200/60`}>
+                    <span className="opacity-60">[Diagram unavailable]</span>
                   </div>
                 )}
               </div>
