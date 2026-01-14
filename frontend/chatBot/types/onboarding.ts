@@ -13,8 +13,8 @@ export interface Module {
 }
 
 export interface ModuleContent {
-  question?: string;
-  answer?: string;
+  topic?: string;
+  content?: string;
   quality?: number;
 }
 

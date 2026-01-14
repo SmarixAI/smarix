@@ -10,10 +10,6 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
-  MessageSquare,
-  CheckCircle2,
-  XCircle,
-  Send,
   ArrowLeft,
 } from "lucide-react";
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
@@ -21,8 +17,7 @@ import { ContentParser } from "../../utils/ReadingOverview/contentParser";
 import { MermaidRenderer } from "../../utils/ReadingOverview/mermaidRenderer";
 import ContentRenderer from "./ContentRenderer";
 import { ContentService } from "../../services/ReadingOverview/contentService";
-import { QAService } from "../../services/QASession/contentService";
-import type { ModuleContent, QuestionData } from "../../../../../types/onboarding";
+import type { ModuleContent } from "../../../../../types/onboarding";
 
 interface ContentModalProps {
   isOpen: boolean;
@@ -38,19 +33,7 @@ interface ModuleWithContent {
   jsonFile: string;
   content: ModuleContent | null;
   sections: any[];
-  isQnASection?: boolean;
-  questions?: QuestionData[];
 }
-
-// Mapping from ReadingOverview module IDs to QA module IDs
-const MODULE_ID_TO_QA_ID: { [key: string]: string } = {
-  '1': 'overview',           // Project Overview
-  '2': 'tech_stack',         // Tech Stacks
-  '3': 'repo_structure',     // Repo Structure
-  '4': 'app_features',       // App Features
-  '5': 'dev_setup',          // Dev Setup
-  '6': 'code_conventions',   // Code Conventions
-};
 
 export default function OverviewModal({
   isOpen,
@@ -67,13 +50,6 @@ export default function OverviewModal({
   const [isLoading, setIsLoading] = useState(false);
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
-  const [selectedAnswers, setSelectedAnswers] = useState<{ [key: string]: string }>({});
-  const [submittedAnswers, setSubmittedAnswers] = useState<{ [key: string]: string }>({});
-  const [isSubmitted, setIsSubmitted] = useState(false);
-  const [showQnA, setShowQnA] = useState(false);
-  const [qaData, setQaData] = useState<{ questions: QuestionData[]; moduleTitle: string } | null>(null);
-  const [isLoadingQnA, setIsLoadingQnA] = useState(false);
-  const [hasQnA, setHasQnA] = useState(false);
   
   const scrollTimeoutRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -112,28 +88,24 @@ export default function OverviewModal({
 
           if (response && response.sections) {
             response.sections.forEach((section) => {
+              const isQnA = section.content?.type === 'qna';
+              const isTeaching = section.content?.type === 'teaching_content';
+              
               content.push({
                 moduleId: section.sectionId,
                 moduleTitle: section.sectionTitle,
                 jsonFile: response.jsonFile,
                 content: section.content,
-                sections: section.content?.answer
-                  ? ContentParser.parseContent(section.content.answer)
+                sections: isTeaching && section.content?.content
+                  ? ContentParser.parseContent(section.content.content)
+                  : isQnA
+                  ? [] // QnA sections will be rendered separately
+                  : section.content?.content
+                  ? ContentParser.parseContent(section.content.content)
                   : [],
-                isQnASection: false,
+                isQnASection: isQnA,
               });
             });
-          }
-
-          // Check if QnA is available for this module
-          const qaModuleId = MODULE_ID_TO_QA_ID[moduleId];
-          if (qaModuleId) {
-            try {
-              const qaResponse = await QAService.fetchQAModule(qaModuleId, repo);
-              setHasQnA(qaResponse && qaResponse.questions && qaResponse.questions.length > 0);
-            } catch (qaError) {
-              setHasQnA(false);
-            }
           }
 
           // Set content immediately to show it, don't wait for mermaid
@@ -153,12 +125,6 @@ export default function OverviewModal({
       setRenderedMermaid({});
       setScrollProgress(0);
       setCurrentSectionIndex(0);
-      setSelectedAnswers({});
-      setSubmittedAnswers({});
-      setIsSubmitted(false);
-      setShowQnA(false);
-      setQaData(null);
-      setHasQnA(false);
     }
 
     return () => {
@@ -180,9 +146,9 @@ export default function OverviewModal({
 
         // Process mermaid rendering in batches to avoid blocking
         for (const moduleData of moduleContent) {
-          if (moduleData.content?.answer) {
+          if (moduleData.content?.content) {
             const mermaidDiagrams = ContentParser.extractMermaidDiagrams(
-              moduleData.content.answer
+              moduleData.content.content
             );
 
             if (mermaidDiagrams.length > 0) {
@@ -256,54 +222,9 @@ export default function OverviewModal({
     });
   }, []);
 
-  const handleAnswerSelect = useCallback((questionKey: string, option: string) => {
-    if (isSubmitted) return;
-    
-    setSelectedAnswers((prev) => ({
-      ...prev,
-      [questionKey]: option,
-    }));
-  }, [isSubmitted]);
 
-  const handleSubmitQnA = useCallback(() => {
-    setSubmittedAnswers(selectedAnswers);
-    setIsSubmitted(true);
-  }, [selectedAnswers]);
 
-  const handleResetQnA = useCallback(() => {
-    setSelectedAnswers({});
-    setSubmittedAnswers({});
-    setIsSubmitted(false);
-  }, []);
 
-  const handleStartQnA = useCallback(async () => {
-    setIsLoadingQnA(true);
-    const repo = activeReposRef.current.length > 0 ? activeReposRef.current[0] : undefined;
-    const qaModuleId = MODULE_ID_TO_QA_ID[moduleId];
-    
-    if (qaModuleId) {
-      try {
-        const qaResponse = await QAService.fetchQAModule(qaModuleId, repo);
-        if (qaResponse && qaResponse.questions && qaResponse.questions.length > 0) {
-          setQaData({
-            questions: qaResponse.questions,
-            moduleTitle: title
-          });
-          setShowQnA(true);
-        }
-      } catch (qaError) {
-        console.error("Error fetching Q&A data:", qaError);
-      }
-    }
-    setIsLoadingQnA(false);
-  }, [moduleId, title]);
-
-  const handleBackToContent = useCallback(() => {
-    setShowQnA(false);
-    setSelectedAnswers({});
-    setSubmittedAnswers({});
-    setIsSubmitted(false);
-  }, []);
 
   const handleBackdropClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {
@@ -313,7 +234,7 @@ export default function OverviewModal({
 
   const stats = useMemo(() => {
     const totalWords = moduleContent.reduce(
-      (sum, mod) => sum + (mod.content?.answer?.length || 0),
+      (sum, mod) => sum + (mod.content?.content?.length || 0),
       0
     );
     const estimatedReadTime = Math.ceil(totalWords / 1000);
@@ -508,132 +429,6 @@ export default function OverviewModal({
                 No content found
               </p>
             </div>
-          ) : showQnA && qaData ? (
-            /* Exam-Style QnA View */
-            <div className="flex flex-col h-full">
-              {/* Exam Header */}
-              <div className="mb-6 p-6 rounded-lg border bg-white border-gray-200">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h2 className="text-2xl font-semibold mb-2 text-gray-900">
-                      Knowledge Assessment
-                    </h2>
-                    <p className="text-sm text-gray-600">
-                      {qaData.moduleTitle} - Test your understanding
-                    </p>
-                  </div>
-                  <div className="px-4 py-2 rounded-lg bg-gray-100">
-                    <span className="text-sm font-medium text-gray-700">
-                      {qaData.questions.length} Questions
-                    </span>
-                  </div>
-                </div>
-                
-                {!isSubmitted && (
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <Clock className="w-4 h-4" />
-                    <span>Take your time to answer all questions</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Questions */}
-              <div className="flex-1 overflow-y-auto space-y-6">
-                {qaData.questions.map((question) => {
-                  const qKey = `qa-${question.question_number}`;
-                  const selectedOption = selectedAnswers[qKey];
-                  const submittedOption = submittedAnswers[qKey];
-                  const isCorrect = submittedOption === question.correct_answer;
-
-                  return (
-                    <div
-                      key={question.question_number}
-                      className="p-6 rounded-lg border-2 bg-white border-gray-200"
-                    >
-                      <div className="flex items-start gap-4 mb-4">
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center font-semibold flex-shrink-0 bg-gray-200 text-gray-800">
-                          {question.question_number}
-                        </div>
-                        <p className="font-semibold text-lg flex-1 text-gray-900">
-                          {question.question}
-                        </p>
-                      </div>
-
-                      <div className="ml-12 space-y-3">
-                        {Object.entries(question.options).map(([optKey, optText]) => {
-                          const isSelected = selectedOption === optKey;
-                          const isCorrectOption = optKey === question.correct_answer;
-                          const showCorrect = isSubmitted && isCorrectOption;
-                          const showWrong = isSubmitted && submittedOption === optKey && !isCorrect;
-
-                          return (
-                            <button
-                              key={optKey}
-                              onClick={() => handleAnswerSelect(qKey, optKey)}
-                              disabled={isSubmitted}
-                              className={`w-full text-left px-5 py-4 rounded-lg border-2 text-sm transition-all ${
-                                showCorrect
-                                  ? "bg-green-100 border-green-500 text-green-900"
-                                  : showWrong
-                                  ? "bg-red-100 border-red-500 text-red-900"
-                                  : isSelected
-                                  ? "bg-blue-100 border-blue-500 text-gray-900"
-                                  : "bg-gray-50 border-gray-300 text-gray-700 hover:bg-blue-50"
-                              } ${isSubmitted ? "cursor-not-allowed" : "cursor-pointer"}`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="font-medium">
-                                  <strong>{optKey}.</strong> {optText as string}
-                                </span>
-                                {showCorrect && <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />}
-                                {showWrong && <XCircle className="w-5 h-5 text-red-500 flex-shrink-0" />}
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      {isSubmitted && (
-                        <div className="mt-4 ml-12 p-4 rounded-lg border bg-gray-50 text-gray-800 border-gray-200">
-                          <p className="font-semibold mb-2 text-green-700">
-                            Correct Answer: <strong>{question.correct_answer}</strong>
-                          </p>
-                          <p className="text-sm leading-relaxed text-gray-600">{question.explanation}</p>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Submit Button */}
-              {!isSubmitted && (
-                <div className="mt-6 flex justify-center">
-                  <button
-                    onClick={handleSubmitQnA}
-                    disabled={Object.keys(selectedAnswers).length === 0}
-                    className={`px-8 py-4 rounded-lg font-medium text-lg transition-all flex items-center space-x-3 ${
-                      Object.keys(selectedAnswers).length === 0
-                        ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                        : "bg-gray-900 text-white hover:bg-gray-800"
-                    }`}
-                  >
-                    <Send className="w-6 h-6" />
-                    <span>Submit Answers</span>
-                  </button>
-                </div>
-              )}
-
-              {/* Back to Content Button */}
-              <div className="mt-4 flex justify-center">
-                <button
-                  onClick={handleBackToContent}
-                  className="px-6 py-3 rounded-lg font-semibold transition-all bg-gray-200 text-gray-700 hover:bg-gray-300"
-                >
-                  ← Back to Content
-                </button>
-              </div>
-            </div>
           ) : moduleContent.length > 0 && currentSectionIndex < moduleContent.length ? (
             <div className="flex flex-col h-full">
               {/* Current Section Display */}
@@ -660,7 +455,7 @@ export default function OverviewModal({
                         </h3>
                       </div>
 
-                          {!moduleData.isQnASection && moduleData.content?.quality && (
+                          {moduleData.content?.quality && (
                         <div className="flex items-center space-x-1 px-3 py-1 rounded-lg bg-amber-50 border border-amber-200">
                           <Award className="w-3 h-3 text-amber-600" />
                           <span className="text-xs font-semibold text-amber-700">
@@ -668,18 +463,9 @@ export default function OverviewModal({
                           </span>
                         </div>
                       )}
-
-                          {moduleData.isQnASection && moduleData.questions && (
-                            <div className="flex items-center space-x-1 px-3 py-1 rounded-lg bg-[#0E1B2E]/5 border border-[#0E1B2E]/10">
-                              <MessageSquare className="w-3 h-3 text-[#0E1B2E]/60" />
-                              <span className="text-xs font-semibold text-[#0E1B2E]">
-                                {moduleData.questions.length} Questions
-                          </span>
-                        </div>
-                      )}
                     </div>
 
-                    {moduleData.content?.question && (
+                    {moduleData.content?.topic && !moduleData.isQnASection && (
                       <div className="mt-2.5">
                         <button
                           onClick={() => toggleModuleExpanded(moduleData.moduleId)}
@@ -695,7 +481,7 @@ export default function OverviewModal({
 
                         {expandedModules.has(moduleData.moduleId) && (
                           <p className="mt-1.5 text-xs leading-relaxed text-[#0E1B2E]/70">
-                            {moduleData.content.question}
+                            {moduleData.content.topic}
                           </p>
                         )}
                       </div>
@@ -703,46 +489,131 @@ export default function OverviewModal({
                   </div>
 
                   <div className="px-5 py-4">
-                    <ContentRenderer
-                      sections={moduleData.sections}
-                      renderedMermaid={renderedMermaid[moduleData.moduleId] || {}}
-                    />
-                        
-                        {/* Show Start QnA button after last section */}
-                        {isLastSection && (
-                          <div className="mt-8 pt-6 border-t border-[#0E1B2E]/10">
-                            <div className="p-6 rounded-xl border text-center bg-white/35 backdrop-blur-xl border-white/25 shadow-md shadow-black/5">
-                              <MessageSquare className="w-10 h-10 mx-auto mb-3 text-[#0E1B2E]/60" />
-                              <h3 className="text-lg font-semibold mb-2 text-[#0E1B2E]">
-                                Ready for Assessment?
-                              </h3>
-                              <p className="text-sm mb-5 text-[#0E1B2E]/70">
-                                Test your understanding with a knowledge check quiz
-                              </p>
-                              <button
-                                onClick={handleStartQnA}
-                                disabled={isLoadingQnA}
-                                className={`px-6 py-3 rounded-lg font-medium text-sm transition-all flex items-center space-x-2 mx-auto ${
-                                  isLoadingQnA
-                                    ? "bg-[#0E1B2E]/10 text-[#0E1B2E]/40 cursor-not-allowed"
-                                    : "bg-[#0E1B2E] text-white hover:bg-[#1a2f4d] shadow-md hover:shadow-lg"
-                                }`}
-                              >
-                                {isLoadingQnA ? (
-                                  <>
-                                    <Loader2 className="w-5 h-5 animate-spin" />
-                                    <span>Loading...</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <MessageSquare className="w-5 h-5" />
-                                    <span>Start QnA Assessment</span>
-                                  </>
-                                )}
-                              </button>
-                  </div>
-            </div>
-          )}
+                    {moduleData.isQnASection ? (
+                      // Render QnA section - all questions together
+                      <div className="space-y-6">
+                        {moduleData.content?.questions && Array.isArray(moduleData.content.questions) ? (
+                          // Multiple questions (all QnA from a section)
+                          moduleData.content.questions.map((qnaItem: any, qnaIndex: number) => (
+                            <div key={qnaIndex} className="border-b border-[#0E1B2E]/10 pb-6 last:border-b-0 last:pb-0">
+                              <div className="mb-4">
+                                <div className="flex items-center space-x-2 mb-2">
+                                  <span className="text-xs font-semibold text-[#0E1B2E]/60 bg-[#0E1B2E]/10 px-2 py-1 rounded">
+                                    Question {qnaIndex + 1}
+                                  </span>
+                                  {qnaItem.subsection && (
+                                    <span className="text-xs text-[#0E1B2E]/50 italic">
+                                      {qnaItem.subsection}
+                                    </span>
+                                  )}
+                                </div>
+                                <h4 className="text-sm font-semibold text-[#0E1B2E] mb-3">
+                                  {qnaItem.question}
+                                </h4>
+                              </div>
+                              {qnaItem.options && (
+                                <div className="mb-4">
+                                  <div className="space-y-2">
+                                    {Object.entries(qnaItem.options).map(([key, value]) => (
+                                      <div
+                                        key={key}
+                                        className={`p-3 rounded-lg border ${
+                                          key === qnaItem.correct_answer
+                                            ? 'bg-green-50 border-green-200'
+                                            : 'bg-gray-50 border-gray-200'
+                                        }`}
+                                      >
+                                        <span className="font-semibold text-[#0E1B2E] mr-2">
+                                          {key}:
+                                        </span>
+                                        <span className="text-sm text-[#0E1B2E]/80">
+                                          {value as string}
+                                        </span>
+                                        {key === qnaItem.correct_answer && (
+                                          <span className="ml-2 text-xs font-semibold text-green-700">
+                                            ✓ Correct
+                                          </span>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {qnaItem.explanation && (
+                                <div className="mt-4 p-3 rounded-lg bg-blue-50 border border-blue-200">
+                                  <h5 className="text-xs font-semibold text-blue-900 mb-2">
+                                    Explanation:
+                                  </h5>
+                                  <p className="text-sm text-blue-800 leading-relaxed">
+                                    {qnaItem.explanation}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          ))
+                        ) : (
+                          // Single question (backward compatibility)
+                          <>
+                            {moduleData.content?.question && (
+                              <div className="mb-4">
+                                <h4 className="text-sm font-semibold text-[#0E1B2E] mb-3">
+                                  Question:
+                                </h4>
+                                <p className="text-sm text-[#0E1B2E]/80 leading-relaxed">
+                                  {moduleData.content.question}
+                                </p>
+                              </div>
+                            )}
+                            {moduleData.content?.options && (
+                              <div className="mb-4">
+                                <h4 className="text-sm font-semibold text-[#0E1B2E] mb-3">
+                                  Options:
+                                </h4>
+                                <div className="space-y-2">
+                                  {Object.entries(moduleData.content.options).map(([key, value]) => (
+                                    <div
+                                      key={key}
+                                      className={`p-3 rounded-lg border ${
+                                        key === moduleData.content.correct_answer
+                                          ? 'bg-green-50 border-green-200'
+                                          : 'bg-gray-50 border-gray-200'
+                                      }`}
+                                    >
+                                      <span className="font-semibold text-[#0E1B2E] mr-2">
+                                        {key}:
+                                      </span>
+                                      <span className="text-sm text-[#0E1B2E]/80">
+                                        {value as string}
+                                      </span>
+                                      {key === moduleData.content.correct_answer && (
+                                        <span className="ml-2 text-xs font-semibold text-green-700">
+                                          ✓ Correct
+                                        </span>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {moduleData.content?.explanation && (
+                              <div className="mt-4 p-3 rounded-lg bg-blue-50 border border-blue-200">
+                                <h4 className="text-sm font-semibold text-blue-900 mb-2">
+                                  Explanation:
+                                </h4>
+                                <p className="text-sm text-blue-800 leading-relaxed">
+                                  {moduleData.content.explanation}
+                                </p>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    ) : (
+                      <ContentRenderer
+                        sections={moduleData.sections}
+                        renderedMermaid={renderedMermaid[moduleData.moduleId] || {}}
+                      />
+                    )}
                       </div>
                     </div>
                   );
@@ -778,21 +649,6 @@ export default function OverviewModal({
                       aria-label={`Go to section ${index + 1}`}
                     />
                   ))}
-                  {hasQnA && (
-                    <button
-                      onClick={handleStartQnA}
-                      disabled={isLoadingQnA}
-                      className={`w-3 h-3 rounded-sm transition-all duration-300 flex items-center justify-center ${
-                        showQnA
-                          ? "bg-[#0E1B2E]"
-                          : "bg-[#0E1B2E]/30 hover:bg-[#0E1B2E]/50 border border-[#0E1B2E]/40"
-                      }`}
-                      aria-label="Start QnA Assessment"
-                      title="QnA Assessment"
-                    >
-                      <MessageSquare className={`w-2 h-2 ${showQnA ? "text-white" : "text-gray-600"}`} />
-                    </button>
-                  )}
                 </div>
 
                 <button
