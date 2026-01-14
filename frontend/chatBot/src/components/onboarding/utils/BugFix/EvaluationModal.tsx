@@ -1,6 +1,10 @@
 'use client';
 
-import { X, Trophy, AlertCircle, CheckCircle, TrendingUp, Lightbulb } from 'lucide-react';
+import { X, Trophy, AlertCircle, CheckCircle, Lightbulb, FileText, ArrowRight } from 'lucide-react';
+import { Inter, JetBrains_Mono } from 'next/font/google';
+
+const inter = Inter({ subsets: ['latin'], weight: ['400', '500', '600', '700'] });
+const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], weight: ['400', '500', '600'] });
 
 interface FileEvaluation {
   file_path: string;
@@ -39,226 +43,192 @@ export default function EvaluationModal({ evaluationData, onClose }: EvaluationM
   if (!evaluationData) return null;
 
   const getScoreColor = (score: number) => {
-    if (score >= 8) return 'text-green-700';
-    if (score >= 6) return 'text-yellow-700';
-    if (score >= 4) return 'text-orange-700';
-    return 'text-red-700';
+    if (score >= 8) return 'text-emerald-600';
+    if (score >= 6) return 'text-amber-600';
+    if (score >= 4) return 'text-orange-600';
+    return 'text-rose-600';
   };
 
   const getScoreBgColor = (score: number) => {
-    if (score >= 8) return 'bg-green-50 border-green-200';
-    if (score >= 6) return 'bg-yellow-50 border-yellow-200';
-    if (score >= 4) return 'bg-orange-50 border-orange-200';
-    return 'bg-red-50 border-red-200';
+    if (score >= 8) return 'bg-emerald-50 border-emerald-100';
+    if (score >= 6) return 'bg-amber-50 border-amber-100';
+    if (score >= 4) return 'bg-orange-50 border-orange-100';
+    return 'bg-rose-50 border-rose-100';
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-xl shadow-2xl bg-white">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0E1B2E]/40 backdrop-blur-sm p-4 animate-in fade-in duration-300">
+      <div className="w-full max-w-4xl max-h-[90vh] flex flex-col rounded-2xl shadow-2xl bg-white overflow-hidden animate-in zoom-in-95 duration-300">
+        
         {/* Header */}
-        <div className="sticky top-0 z-10 px-6 py-4 border-b flex items-center justify-between bg-white border-gray-200">
-          <div className="flex items-center space-x-3">
-            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-              evaluationData.overall_score >= 6 ? 'bg-green-100' : 'bg-red-100'
+        <div className="px-8 py-5 border-b border-[#0E1B2E]/5 flex items-center justify-between bg-white sticky top-0 z-20">
+          <div className="flex items-center gap-4">
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center border-2 ${
+              evaluationData.overall_score >= 6 ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'
             }`}>
               <Trophy className={`w-6 h-6 ${
-                evaluationData.overall_score >= 6 ? 'text-green-600' : 'text-red-600'
+                evaluationData.overall_score >= 6 ? 'text-emerald-600' : 'text-rose-600'
               }`} />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">
+              <h2 className={`${inter.className} text-xl font-bold text-[#0E1B2E]`}>
                 Evaluation Results
               </h2>
-              <p className="text-sm text-gray-600">
-                PR #{evaluationData.pr_number} - {new Date(evaluationData.evaluated_at).toLocaleString()}
-              </p>
+              <div className="flex items-center gap-2 mt-1">
+                 <span className={`${jetbrainsMono.className} text-xs font-bold px-2 py-0.5 rounded bg-[#0E1B2E]/5 text-[#0E1B2E]/60`}>
+                    PR #{evaluationData.pr_number}
+                 </span>
+                 <span className={`${inter.className} text-xs text-[#0E1B2E]/40`}>
+                    {new Date(evaluationData.evaluated_at).toLocaleString()}
+                 </span>
+              </div>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-lg transition-colors hover:bg-gray-100 text-gray-600"
+            className="p-2 rounded-lg hover:bg-gray-100 text-[#0E1B2E]/40 hover:text-[#0E1B2E] transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="p-6 space-y-6">
-          {/* Overall Score */}
-          <div className={`p-6 rounded-xl border ${getScoreBgColor(evaluationData.overall_score)}`}>
-            <div className="text-center">
-              <div className={`text-5xl font-bold mb-2 ${getScoreColor(evaluationData.overall_score)}`}>
-                {evaluationData.overall_score.toFixed(1)}/10
-              </div>
-              <div className="text-sm font-medium text-gray-700">
-                Overall Score
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-4 mt-6">
-              <div className="text-center">
-                <div className={`text-2xl font-semibold ${getScoreColor(evaluationData.correctness_score)}`}>
-                  {evaluationData.correctness_score.toFixed(1)}
+        <div className="overflow-y-auto p-8 space-y-8 bg-slate-50/50">
+          {/* Score Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+             <div className={`p-6 rounded-2xl border-2 flex flex-col items-center justify-center bg-white ${getScoreBgColor(evaluationData.overall_score)}`}>
+                <div className={`${jetbrainsMono.className} text-4xl font-bold mb-1 ${getScoreColor(evaluationData.overall_score)}`}>
+                   {evaluationData.overall_score.toFixed(1)}
                 </div>
-                <div className="text-xs text-gray-600">
-                  Correctness
+                <div className={`${inter.className} text-xs font-bold uppercase tracking-wider text-[#0E1B2E]/60`}>Overall Score</div>
+             </div>
+             
+             {[
+                { label: 'Correctness', score: evaluationData.correctness_score },
+                { label: 'Code Quality', score: evaluationData.code_quality_score },
+                { label: 'Completeness', score: evaluationData.completeness_score },
+             ].map((item, i) => (
+                <div key={i} className="p-4 rounded-xl bg-white border border-[#0E1B2E]/5 shadow-sm flex flex-col items-center justify-center">
+                   <div className={`${jetbrainsMono.className} text-2xl font-bold mb-1 ${getScoreColor(item.score)}`}>
+                      {item.score.toFixed(1)}
+                   </div>
+                   <div className={`${inter.className} text-xs font-semibold text-[#0E1B2E]/40`}>{item.label}</div>
                 </div>
-              </div>
-              <div className="text-center">
-                <div className={`text-2xl font-semibold ${getScoreColor(evaluationData.code_quality_score)}`}>
-                  {evaluationData.code_quality_score.toFixed(1)}
-                </div>
-                <div className="text-xs text-gray-600">
-                  Code Quality
-                </div>
-              </div>
-              <div className="text-center">
-                <div className={`text-2xl font-semibold ${getScoreColor(evaluationData.completeness_score)}`}>
-                  {evaluationData.completeness_score.toFixed(1)}
-                </div>
-                <div className="text-xs text-gray-600">
-                  Completeness
-                </div>
-              </div>
-            </div>
+             ))}
           </div>
 
           {/* Summary */}
-          <div className="p-5 rounded-lg border bg-gray-50 border-gray-200">
-            <h3 className="font-semibold mb-2 text-gray-900">
-              Summary
+          <div className="bg-white rounded-xl border border-[#0E1B2E]/5 p-6 shadow-sm">
+            <h3 className={`${inter.className} text-sm font-bold uppercase tracking-wide text-[#0E1B2E] mb-3`}>
+              Executive Summary
             </h3>
-            <p className="text-sm text-gray-700">
+            <p className={`${inter.className} text-sm leading-relaxed text-[#0E1B2E]/70`}>
               {evaluationData.evaluation_summary}
             </p>
           </div>
 
-          {/* Strengths */}
-          {evaluationData.strengths.length > 0 && (
-            <div className="p-5 rounded-lg border bg-gray-50 border-gray-200">
-              <div className="flex items-center space-x-2 mb-3">
-                <CheckCircle className="w-5 h-5 text-gray-700" />
-                <h3 className="font-semibold text-gray-900">
-                  Strengths
-                </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Strengths */}
+            {evaluationData.strengths.length > 0 && (
+              <div className="bg-white rounded-xl border border-emerald-100 p-6 shadow-sm">
+                <div className="flex items-center gap-2 mb-4">
+                  <CheckCircle className="w-5 h-5 text-emerald-500" />
+                  <h3 className={`${inter.className} font-bold text-[#0E1B2E]`}>Key Strengths</h3>
+                </div>
+                <ul className="space-y-3">
+                  {evaluationData.strengths.map((strength, idx) => (
+                    <li key={idx} className="flex gap-3 text-sm text-[#0E1B2E]/70">
+                      <span className="text-emerald-500 mt-0.5 font-bold">✓</span>
+                      <span>{strength}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <ul className="space-y-2">
-                {evaluationData.strengths.map((strength, idx) => (
-                  <li key={idx} className="text-sm flex items-start text-gray-700">
-                    <span className="mr-2 text-gray-600">✓</span>
-                    <span>{strength}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+            )}
 
-          {/* Areas for Improvement */}
-          {evaluationData.areas_for_improvement.length > 0 && (
-            <div className="p-5 rounded-lg border bg-gray-50 border-gray-200">
-              <div className="flex items-center space-x-2 mb-3">
-                <AlertCircle className="w-5 h-5 text-gray-700" />
-                <h3 className="font-semibold text-gray-900">
-                  Areas for Improvement
-                </h3>
+            {/* Improvements */}
+            {evaluationData.areas_for_improvement.length > 0 && (
+              <div className="bg-white rounded-xl border border-rose-100 p-6 shadow-sm">
+                <div className="flex items-center gap-2 mb-4">
+                  <AlertCircle className="w-5 h-5 text-rose-500" />
+                  <h3 className={`${inter.className} font-bold text-[#0E1B2E]`}>Areas for Improvement</h3>
+                </div>
+                <ul className="space-y-3">
+                  {evaluationData.areas_for_improvement.map((area, idx) => (
+                    <li key={idx} className="flex gap-3 text-sm text-[#0E1B2E]/70">
+                      <span className="text-rose-500 mt-0.5 font-bold">!</span>
+                      <span>{area}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <ul className="space-y-2">
-                {evaluationData.areas_for_improvement.map((area, idx) => (
-                  <li key={idx} className="text-sm flex items-start text-gray-700">
-                    <span className="mr-2 text-gray-600">→</span>
-                    <span>{area}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+            )}
+          </div>
 
-          {/* Suggestions */}
-          {evaluationData.suggestions.length > 0 && (
-            <div className="p-5 rounded-lg border bg-gray-50 border-gray-200">
-              <div className="flex items-center space-x-2 mb-3">
-                <Lightbulb className="w-5 h-5 text-gray-700" />
-                <h3 className="font-semibold text-gray-900">
-                  Suggestions
-                </h3>
-              </div>
-              <ul className="space-y-2">
-                {evaluationData.suggestions.map((suggestion, idx) => (
-                  <li key={idx} className="text-sm flex items-start text-gray-700">
-                    <span className="mr-2 text-gray-600">💡</span>
-                    <span>{suggestion}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* File-by-File Evaluation */}
+          {/* Detailed File Breakdown */}
           <div>
-            <h3 className="font-semibold text-lg mb-4 text-gray-900">
-              File Evaluations
+            <h3 className={`${inter.className} text-lg font-bold text-[#0E1B2E] mb-4 flex items-center gap-2`}>
+               <FileText className="w-5 h-5 text-[#0E1B2E]/40" />
+               File Analysis
             </h3>
             <div className="space-y-4">
               {evaluationData.file_evaluations.map((fileEval, idx) => (
-                <div key={idx} className="p-4 rounded-lg border bg-gray-50 border-gray-200">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="font-medium text-sm text-gray-900">
+                <div key={idx} className="bg-white rounded-xl border border-[#0E1B2E]/10 overflow-hidden shadow-sm">
+                  <div className="px-6 py-4 bg-[#0E1B2E]/[0.02] border-b border-[#0E1B2E]/5 flex items-center justify-between">
+                    <div className={`${jetbrainsMono.className} text-sm font-bold text-[#0E1B2E]`}>
                       {fileEval.file_path}
                     </div>
-                    <div className="flex items-center space-x-3 text-xs">
-                      <div>
-                        <span className="text-gray-600">Similarity: </span>
-                        <span className={`font-semibold ${getScoreColor(fileEval.similarity_to_solution / 10)}`}>
-                          {fileEval.similarity_to_solution.toFixed(1)}%
-                        </span>
-                      </div>
+                    <div className={`${jetbrainsMono.className} text-xs font-bold px-2 py-1 rounded bg-white border border-[#0E1B2E]/10 text-[#0E1B2E]/60`}>
+                      Match: {fileEval.similarity_to_solution.toFixed(1)}%
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3 mb-3">
-                    <div className={`text-center p-2 rounded border ${getScoreBgColor(fileEval.correctness_score)}`}>
-                      <div className={`text-lg font-semibold ${getScoreColor(fileEval.correctness_score)}`}>
-                        {fileEval.correctness_score.toFixed(1)}
-                      </div>
-                      <div className="text-xs text-gray-600">
-                        Correctness
-                      </div>
-                    </div>
-                    <div className={`text-center p-2 rounded border ${getScoreBgColor(fileEval.quality_score)}`}>
-                      <div className={`text-lg font-semibold ${getScoreColor(fileEval.quality_score)}`}>
-                        {fileEval.quality_score.toFixed(1)}
-                      </div>
-                      <div className="text-xs text-gray-600">
-                        Quality
-                      </div>
-                    </div>
-                    <div className={`text-center p-2 rounded border ${getScoreBgColor(fileEval.completeness_score)}`}>
-                      <div className={`text-lg font-semibold ${getScoreColor(fileEval.completeness_score)}`}>
-                        {fileEval.completeness_score.toFixed(1)}
-                      </div>
-                      <div className="text-xs text-gray-600">
-                        Completeness
-                      </div>
-                    </div>
-                  </div>
-
-                  <p className="text-sm mb-2 text-gray-700">
-                    {fileEval.feedback}
-                  </p>
-
-                  {fileEval.improvements.length > 0 && (
-                    <div className="text-xs mt-2 text-gray-600">
-                      <strong>Improvements:</strong>
-                      <ul className="list-disc list-inside mt-1">
-                        {fileEval.improvements.map((imp, i) => (
-                          <li key={i}>{imp}</li>
+                  <div className="p-6">
+                     <div className="grid grid-cols-3 gap-4 mb-6">
+                        {[
+                           { label: 'Correctness', score: fileEval.correctness_score },
+                           { label: 'Quality', score: fileEval.quality_score },
+                           { label: 'Completeness', score: fileEval.completeness_score },
+                        ].map((metric, i) => (
+                           <div key={i} className="bg-slate-50 rounded-lg p-3 text-center border border-slate-100">
+                              <div className={`${jetbrainsMono.className} font-bold ${getScoreColor(metric.score)}`}>
+                                 {metric.score.toFixed(1)}
+                              </div>
+                              <div className="text-[10px] uppercase font-bold text-slate-400 mt-1">{metric.label}</div>
+                           </div>
                         ))}
-                      </ul>
-                    </div>
-                  )}
+                     </div>
+
+                    <p className={`${inter.className} text-sm text-[#0E1B2E]/70 mb-4 bg-slate-50 p-4 rounded-lg border border-slate-100 italic`}>
+                      "{fileEval.feedback}"
+                    </p>
+
+                    {fileEval.improvements.length > 0 && (
+                      <div>
+                        <h4 className="text-xs font-bold uppercase tracking-wide text-[#0E1B2E]/40 mb-2">Specific Improvements</h4>
+                        <ul className="space-y-1.5">
+                          {fileEval.improvements.map((imp, i) => (
+                            <li key={i} className="text-sm flex gap-2 text-[#0E1B2E]/60">
+                               <ArrowRight className="w-4 h-4 text-[#0E1B2E]/20 flex-shrink-0 mt-0.5" />
+                               <span>{imp}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
           </div>
+        </div>
+        
+        <div className="p-4 border-t border-[#0E1B2E]/5 bg-white flex justify-end">
+           <button 
+             onClick={onClose}
+             className={`${inter.className} px-6 py-2.5 bg-[#0E1B2E] text-white rounded-lg font-bold text-sm hover:bg-blue-900 transition-colors shadow-lg shadow-[#0E1B2E]/10`}
+           >
+             Close Evaluation
+           </button>
         </div>
       </div>
     </div>

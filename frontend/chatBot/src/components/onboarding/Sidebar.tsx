@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BookOpen, Users, Sparkles, ListTree, ChevronRight, Bug, ChevronDown, ChevronUp } from 'lucide-react';
+import { BookOpen, Users, Sparkles, ListTree, ChevronRight, Bug, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react';
+import { Inter } from 'next/font/google';
 
 interface SidebarProps {
   completedModules: number;
@@ -16,6 +17,8 @@ interface SidebarProps {
   onSwitchMode?: (mode: 'tutorials' | 'challenges') => void;
 }
 
+const inter = Inter({ subsets: ['latin'], weight: ['400', '500', '600', '700'] });
+
 export default function Sidebar({
   completedModules,
   totalModules,
@@ -29,7 +32,6 @@ export default function Sidebar({
   onSwitchMode
 }: SidebarProps) {
 
-  // Track practice task completion status from localStorage
   const [completionMap, setCompletionMap] = useState<Record<number, boolean>>({});
   const [tasksExpanded, setTasksExpanded] = useState<boolean>(true);
 
@@ -42,136 +44,141 @@ export default function Sidebar({
     }
   }, []);
 
-  // ------------------------------------------------------------------
-  //     IF ACTIVE TAB IS PRACTICE → SHOW PRACTICE SIDEBAR
-  // ------------------------------------------------------------------
   if (activeTab === "practice") {
-    // Calculate practice stats
     const completedTasks = practiceTasks?.filter((t: any) => t._completed).length || 0;
     const totalTasks = practiceTasks?.length || 0;
     const completionPercent = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
 
     return (
-      <aside className="col-span-3 flex flex-col border-r border-gray-200 bg-white" style={{ height: 'calc(100vh - 180px)' }}>
+      <aside className="w-80 flex-shrink-0 flex flex-col bg-white/70 backdrop-blur-xl rounded-2xl border-2 border-slate-200/60 shadow-lg shadow-slate-200/30 overflow-hidden" style={{ height: 'calc(100vh - 200px)' }}>
 
         {/* PRACTICE HEADER CARD */}
-        <div className="p-4 border-b border-gray-200 flex-shrink-0">
-          <h3 className="font-semibold mb-1.5 flex items-center space-x-2 text-base text-[#0E1B2E]">
-            <Sparkles className="w-4 h-4 text-[#0E1B2E]" />
-            <span>Practice Tasks</span>
-          </h3>
-
-          <p className="text-xs text-[#0E1B2E]/60">
-            Master the codebase with hands-on exercises
-          </p>
-
-          {/* Progress Stats */}
-          <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
-            <span className="text-sm font-semibold text-[#0E1B2E]">
-              {completedTasks}/{totalTasks} Completed
-            </span>
-            <span className="text-xs text-[#0E1B2E]/60">{Math.round(completionPercent)}%</span>
+        <div className="p-5 border-b-2 border-slate-200/60 flex-shrink-0 bg-gradient-to-br from-white to-blue-50/30">
+          <div className="flex items-center space-x-3 mb-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center shadow-md">
+              <Sparkles className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h3 className={`${inter.className} font-bold text-base text-[#0E1B2E]`}>
+                Practice Tasks
+              </h3>
+              <p className={`${inter.className} text-xs text-slate-600 font-medium`}>
+                Hands-on exercises
+              </p>
+            </div>
           </div>
 
-          <div className="h-2 rounded-full overflow-hidden mt-2 bg-[#0E1B2E]/10">
-            <div
-              className="h-full bg-[#0E1B2E] transition-all duration-500"
-              style={{ width: `${completionPercent}%` }}
-            />
+          {/* Progress Stats */}
+          <div className="mt-4 pt-4 border-t border-slate-200/60">
+            <div className="flex items-center justify-between mb-2">
+              <span className={`${inter.className} text-sm font-semibold text-[#0E1B2E]`}>
+                {completedTasks}/{totalTasks} Completed
+              </span>
+              <span className={`${inter.className} text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200`}>
+                {Math.round(completionPercent)}%
+              </span>
+            </div>
+
+            <div className="h-2.5 rounded-full overflow-hidden bg-slate-100 border border-slate-200/60">
+              <div
+                className="h-full bg-gradient-to-r from-[#0E1B2E] via-blue-600 to-indigo-600 transition-all duration-500 shadow-sm"
+                style={{ width: `${completionPercent}%` }}
+              />
+            </div>
           </div>
         </div>
 
         {/* Scrollable Content Area */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="p-4 space-y-4">
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+          <div className="p-5 space-y-4">
             {/* TASK LIST */}
-            <div className="rounded-lg border border-gray-200 shadow-sm bg-white">
+            <div className="rounded-xl border-2 border-slate-200/60 shadow-sm bg-white/60 backdrop-blur-sm overflow-hidden">
               <button
                 onClick={() => setTasksExpanded(!tasksExpanded)}
-                className="w-full flex items-center justify-between p-4 hover:bg-[#0E1B2E]/5 transition-colors rounded-t-lg"
+                className={`${inter.className} w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors`}
               >
-                <div className="flex items-center space-x-2">
-                  <ListTree className="w-4 h-4 text-[#0E1B2E]" />
-                  <h3 className="font-semibold text-base text-[#0E1B2E]">
-                    Practice Tasks
-                  </h3>
-                  <span className="text-xs text-[#0E1B2E]/60 font-normal">
-                    ({totalTasks})
-                  </span>
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center">
+                    <ListTree className="w-4 h-4 text-slate-600" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="font-semibold text-sm text-[#0E1B2E]">
+                      All Tasks
+                    </h3>
+                    <span className="text-xs text-slate-600 font-medium">
+                      {totalTasks} available
+                    </span>
+                  </div>
                 </div>
                 {tasksExpanded ? (
-                  <ChevronUp className="w-4 h-4 text-[#0E1B2E]/60" />
+                  <ChevronUp className="w-4 h-4 text-slate-600" />
                 ) : (
-                  <ChevronDown className="w-4 h-4 text-[#0E1B2E]/60" />
+                  <ChevronDown className="w-4 h-4 text-slate-600" />
                 )}
               </button>
 
               {tasksExpanded && (
-                <nav className="p-4 pt-0 space-y-2 border-t border-gray-200">
-            {practiceTasks && practiceTasks.length > 0 ? (
-              practiceTasks.map((task: any) => {
-                const isCompleted = completionMap[task.question_number];
-                const isSelected = selectedPracticeTask === task.question_number;
-                const difficultyColor =
-                  task.difficulty === "Easy"
-                    ? "bg-green-100 text-green-700"
-                    : task.difficulty === "Intermediate"
-                    ? "bg-yellow-100 text-yellow-700"
-                    : "bg-red-100 text-red-700";
+                <nav className="p-3 pt-0 space-y-2 border-t-2 border-slate-200/60">
+                  {practiceTasks && practiceTasks.length > 0 ? (
+                    practiceTasks.map((task: any) => {
+                      const isCompleted = completionMap[task.question_number];
+                      const isSelected = selectedPracticeTask === task.question_number;
 
-                return (
-                  <button
-                    key={task.question_number}
-                    onClick={() => onSelectPracticeTask?.(task.question_number)}
-                    className={`
-                      w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm transition-colors group
-                      ${
-                        isSelected
-                          ? "bg-[#0E1B2E] border-2 border-[#0E1B2E] text-white"
-                          : isCompleted
-                          ? "bg-green-50 border border-green-200 text-green-700"
-                          : "hover:bg-[#0E1B2E]/5 text-[#0E1B2E] border border-transparent"
-                      }
-                    `}
-                  >
-                    {/* Task Number and Title */}
-                    <div className="flex-1 text-left min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className={`font-semibold ${isSelected ? 'text-white' : 'text-[#0E1B2E]'}`}>
-                          Task #{task.question_number}
-                        </span>
-                      </div>
-                      {task.steps && (
-                        <span className={`text-xs ml-1 ${isSelected ? 'text-white/80' : 'text-[#0E1B2E]/60'}`}>
-                          ({task.steps.length} steps)
-                        </span>
-                      )}
-                    </div>
+                      return (
+                        <button
+                          key={task.question_number}
+                          onClick={() => onSelectPracticeTask?.(task.question_number)}
+                          className={`${inter.className} w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-all group ${
+                            isSelected
+                              ? "bg-gradient-to-r from-[#0E1B2E] to-blue-900 border-2 border-blue-600 text-white shadow-lg shadow-blue-900/20"
+                              : isCompleted
+                              ? "bg-green-50 border-2 border-green-200 text-green-700 hover:bg-green-100"
+                              : "hover:bg-slate-50 text-[#0E1B2E] border-2 border-slate-200 hover:border-slate-300"
+                          }`}
+                        >
+                          {/* Task Number Circle */}
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs flex-shrink-0 ${
+                            isSelected
+                              ? "bg-white/20 text-white"
+                              : isCompleted
+                              ? "bg-green-100 text-green-700"
+                              : "bg-slate-100 text-slate-600"
+                          }`}>
+                            {task.question_number}
+                          </div>
 
-                    {/* Completion Check */}
-                    {isCompleted && !isSelected && (
-                      <span className="text-green-600 font-bold">✓</span>
-                    )}
+                          {/* Task Info */}
+                          <div className="flex-1 text-left min-w-0">
+                            <div className="font-semibold">
+                              Task #{task.question_number}
+                            </div>
+                            {task.steps && (
+                              <span className={`text-xs ${isSelected ? 'text-white/80' : isCompleted ? 'text-green-600' : 'text-slate-600'}`}>
+                                {task.steps.length} steps
+                              </span>
+                            )}
+                          </div>
 
-                    {/* Selected Indicator */}
-                    {isSelected && (
-                      <span className="text-xs font-bold text-white">
-                        →
-                      </span>
-                    )}
+                          {/* Status Icon */}
+                          {isCompleted && !isSelected && (
+                            <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
+                          )}
 
-                    {/* Hover Indicator */}
-                    {!isCompleted && !isSelected && (
-                      <ChevronRight className="w-4 h-4 text-[#0E1B2E]/40 group-hover:text-[#0E1B2E]/60 transition-all" />
-                    )}
-                  </button>
-                );
-              })
-            ) : (
-              <p className="text-xs text-[#0E1B2E]/60 py-4 text-center">
-                No tasks available yet
-              </p>
-            )}
+                          {isSelected && (
+                            <ChevronRight className="w-5 h-5 text-white flex-shrink-0" />
+                          )}
+
+                          {!isCompleted && !isSelected && (
+                            <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-slate-600 transition-all flex-shrink-0" />
+                          )}
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <p className={`${inter.className} text-xs text-slate-600 py-6 text-center`}>
+                      No tasks available yet
+                    </p>
+                  )}
                 </nav>
               )}
             </div>
@@ -181,143 +188,178 @@ export default function Sidebar({
     );
   }
 
-  // ------------------------------------------------------------------
-  //     IF ACTIVE TAB IS BUG FIX → SHOW BUG FIX SIDEBAR
-// ------------------------------------------------------------------
-if (activeTab === "bugfix") {
-  const total = (tutorialsCount ?? 0) + (challengesCount ?? 0);
-  const progress =
-    total > 0
-      ? activeMode === "tutorials"
-        ? (tutorialsCount! / total) * 100
-        : (challengesCount! / total) * 100
-      : 0;
+  if (activeTab === "bugfix") {
+    const total = (tutorialsCount ?? 0) + (challengesCount ?? 0);
+    const progress =
+      total > 0
+        ? activeMode === "tutorials"
+          ? (tutorialsCount! / total) * 100
+          : (challengesCount! / total) * 100
+        : 0;
 
-  return (
-    <aside className="col-span-3 space-y-4 max-h-screen overflow-y-auto pr-2">
+    return (
+      <aside className="w-80 flex-shrink-0 space-y-5 max-h-screen overflow-y-auto pr-2 custom-scrollbar">
 
         {/* BUG FIX OVERVIEW */}
-        <div className="rounded-lg p-4 bg-white border border-gray-200 shadow-sm">
-          <h3 className="font-semibold flex items-center gap-2 text-base">
-            <Bug className="w-4 h-4 text-gray-700" />
-          <span>Bug Fix Training</span>
-        </h3>
-
-          <p className="text-xs mt-1 text-gray-600">
-          Debug real-world issues & broken flows
-        </p>
-
-        {/* COUNTS */}
-        <div className="mt-3 grid grid-cols-2 gap-3">
-            <div className="rounded-lg p-2 bg-gray-50 text-center border border-gray-200">
-              <p className="text-xs text-gray-500">Tutorials</p>
-              <p className="text-lg font-bold text-gray-700">
-              {tutorialsCount ?? 0}
-            </p>
+        <div className="rounded-2xl p-5 bg-white/70 backdrop-blur-sm border-2 border-slate-200/60 shadow-lg shadow-slate-200/30">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center shadow-md">
+              <Bug className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h3 className={`${inter.className} font-bold text-base text-[#0E1B2E]`}>
+                Bug Fix Training
+              </h3>
+              <p className={`${inter.className} text-xs text-slate-600 font-medium`}>
+                Debug real issues
+              </p>
+            </div>
           </div>
-            <div className="rounded-lg p-2 bg-gray-50 text-center border border-gray-200">
-              <p className="text-xs text-gray-500">Challenges</p>
-              <p className="text-lg font-bold text-gray-700">
-              {challengesCount ?? 0}
-            </p>
+
+          {/* COUNTS */}
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="rounded-xl p-3 bg-gradient-to-br from-blue-50 to-indigo-50 text-center border-2 border-blue-200/60">
+              <p className={`${inter.className} text-xs text-blue-600 font-semibold mb-1`}>Tutorials</p>
+              <p className={`${inter.className} text-2xl font-bold text-blue-700`}>
+                {tutorialsCount ?? 0}
+              </p>
+            </div>
+            <div className="rounded-xl p-3 bg-gradient-to-br from-amber-50 to-orange-50 text-center border-2 border-amber-200/60">
+              <p className={`${inter.className} text-xs text-amber-600 font-semibold mb-1`}>Challenges</p>
+              <p className={`${inter.className} text-2xl font-bold text-amber-700`}>
+                {challengesCount ?? 0}
+              </p>
+            </div>
+          </div>
+
+          {/* PROGRESS BAR */}
+          <div className="mt-4">
+            <div className={`${inter.className} flex justify-between text-xs font-semibold mb-2`}>
+              <span className="text-[#0E1B2E]">Mode Progress</span>
+              <span className="text-blue-600">{Math.round(progress)}%</span>
+            </div>
+            <div className="h-2.5 rounded-full overflow-hidden bg-slate-100 border border-slate-200/60">
+              <div
+                className="h-full bg-gradient-to-r from-[#0E1B2E] to-blue-600 transition-all duration-500 shadow-sm"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
           </div>
         </div>
-
-        {/* PROGRESS BAR */}
-        <div className="mt-3">
-            <div className="flex justify-between text-xs text-gray-500 mb-1">
-            <span>Mode Progress</span>
-            <span>{Math.round(progress)}%</span>
-          </div>
-            <div className="h-2 rounded-full overflow-hidden bg-gray-200">
-            <div
-                className="h-full bg-gray-600 transition-all duration-500"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-        </div>
-      </div>
 
         {/* MODE SWITCH */}
-        <div className="rounded-lg p-3 bg-white border border-gray-200 shadow-sm">
-          <h4 className="text-sm font-semibold mb-2">Focus Mode</h4>
+        <div className="rounded-2xl p-5 bg-white/70 backdrop-blur-sm border-2 border-slate-200/60 shadow-lg shadow-slate-200/30">
+          <h4 className={`${inter.className} text-sm font-bold mb-3 text-[#0E1B2E]`}>Focus Mode</h4>
 
-        <div className="grid grid-cols-2 gap-2">
-          {(["tutorials", "challenges"] as const).map((mode) => {
-            const isActive = activeMode === mode;
+          <div className="grid grid-cols-2 gap-3">
+            {(["tutorials", "challenges"] as const).map((mode) => {
+              const isActive = activeMode === mode;
 
-            return (
-              <button
-                key={mode}
-                onClick={() => onSwitchMode?.(mode)}
-                className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
-                  isActive
-                      ? "bg-gray-800 text-white"
-                      : "bg-gray-100 hover:bg-gray-200 text-gray-700"
-                }`}
-              >
-                {mode === "tutorials" ? "🎓 Tutorials" : "🎯 Challenges"}
-              </button>
-            );
-          })}
+              return (
+                <button
+                  key={mode}
+                  onClick={() => onSwitchMode?.(mode)}
+                  className={`${inter.className} px-4 py-3 rounded-xl text-xs font-bold transition-all border-2 ${
+                    isActive
+                      ? "bg-gradient-to-r from-[#0E1B2E] to-blue-900 text-white border-blue-600 shadow-lg"
+                      : "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200 hover:border-slate-300"
+                  }`}
+                >
+                  {mode === "tutorials" ? "🎓 Tutorials" : "🎯 Challenges"}
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
 
         {/* DEBUG WORKFLOW */}
-        <div className="rounded-lg p-4 bg-white border border-gray-200 shadow-sm">
-          <h3 className="font-semibold text-base mb-2 flex items-center gap-2">
-          <span>🧠</span>
-          <span>Debug Workflow</span>
-        </h3>
+        <div className="rounded-2xl p-5 bg-gradient-to-br from-blue-50/50 to-white border-2 border-blue-200/60 shadow-md">
+          <h3 className={`${inter.className} font-bold text-sm mb-4 flex items-center gap-2 text-[#0E1B2E]`}>
+            <span>🧠</span>
+            <span>Debug Workflow</span>
+          </h3>
 
-          <ol className="text-xs space-y-2 text-gray-600">
-          <li>1. Understand expected vs actual behavior</li>
-          <li>2. Reproduce the issue reliably</li>
-          <li>3. Inspect logs & state</li>
-          <li>4. Identify root cause</li>
-          <li>5. Apply minimal fix & retest</li>
-        </ol>
-      </div>
+          <ol className={`${inter.className} text-xs space-y-2.5 text-slate-700`}>
+            <li className="flex items-start gap-2">
+              <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center flex-shrink-0 text-[10px]">1</span>
+              <span className="pt-0.5">Understand expected vs actual behavior</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center flex-shrink-0 text-[10px]">2</span>
+              <span className="pt-0.5">Reproduce the issue reliably</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center flex-shrink-0 text-[10px]">3</span>
+              <span className="pt-0.5">Inspect logs & state</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center flex-shrink-0 text-[10px]">4</span>
+              <span className="pt-0.5">Identify root cause</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center flex-shrink-0 text-[10px]">5</span>
+              <span className="pt-0.5">Apply minimal fix & retest</span>
+            </li>
+          </ol>
+        </div>
 
         {/* COMMON BUG TYPES */}
-        <div className="rounded-lg p-4 bg-white border border-gray-200 shadow-sm">
-          <h3 className="font-semibold text-base mb-2 flex items-center gap-2">
-          <span>🐞</span>
-          <span>Common Bug Patterns</span>
-        </h3>
+        <div className="rounded-2xl p-5 bg-gradient-to-br from-amber-50/50 to-white border-2 border-amber-200/60 shadow-md">
+          <h3 className={`${inter.className} font-bold text-sm mb-4 flex items-center gap-2 text-[#0E1B2E]`}>
+            <span>🐞</span>
+            <span>Common Bug Patterns</span>
+          </h3>
 
-          <ul className="text-xs space-y-2 text-gray-600">
-          <li>→ State & lifecycle issues</li>
-          <li>→ Async / race conditions</li>
-          <li>→ Incorrect assumptions</li>
-          <li>→ Edge cases & null handling</li>
-          <li>→ Environment-specific bugs</li>
-        </ul>
-      </div>
+          <ul className={`${inter.className} text-xs space-y-2.5 text-slate-700`}>
+            <li className="flex items-start gap-2">
+              <ChevronRight className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+              <span>State & lifecycle issues</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <ChevronRight className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+              <span>Async / race conditions</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <ChevronRight className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+              <span>Incorrect assumptions</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <ChevronRight className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+              <span>Edge cases & null handling</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <ChevronRight className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+              <span>Environment-specific bugs</span>
+            </li>
+          </ul>
+        </div>
 
-    </aside>
-  );
-}
+      </aside>
+    );
+  }
 
-  // ------------------------------------------------------------------
-  //     OTHERWISE → NORMAL READING SIDEBAR
-  // ------------------------------------------------------------------
   return (
-    <aside className="col-span-3">
-      <div className="rounded-lg p-4 mb-4 bg-white border border-gray-200 shadow-sm">
-        <h3 className="font-semibold mb-1.5 flex items-center space-x-2 text-base">
-          <BookOpen className="w-4 h-4" />
-          <span>Navigation</span>
-        </h3>
-        <p className="text-xs mb-3 text-gray-600">
-          Learn the basics
-        </p>
+    <aside className="w-80 flex-shrink-0">
+      <div className="rounded-2xl p-5 mb-5 bg-white/70 backdrop-blur-sm border-2 border-slate-200/60 shadow-lg shadow-slate-200/30">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#0E1B2E] to-blue-900 flex items-center justify-center shadow-md">
+            <BookOpen className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h3 className={`${inter.className} font-bold text-base text-[#0E1B2E]`}>
+              Navigation
+            </h3>
+            <p className={`${inter.className} text-xs text-slate-600 font-medium`}>
+              Learn the basics
+            </p>
+          </div>
+        </div>
         <nav className="space-y-2">
-          <button className="w-full text-left px-3 py-2 rounded-lg text-sm font-semibold bg-gray-800 text-white">
+          <button className={`${inter.className} w-full text-left px-4 py-3 rounded-xl text-sm font-semibold bg-gradient-to-r from-[#0E1B2E] to-blue-900 text-white shadow-md`}>
             Reading & Overview
           </button>
-          <button className="w-full text-left px-3 py-2 rounded-lg text-sm transition-colors hover:bg-gray-50 text-gray-700">
-            <Users className="w-3.5 h-3.5 inline mr-1.5" />
+          <button className={`${inter.className} w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-colors hover:bg-slate-50 text-slate-700 border-2 border-slate-200 hover:border-slate-300`}>
+            <Users className="w-4 h-4 inline mr-2" />
             Know Your Team
           </button>
         </nav>
