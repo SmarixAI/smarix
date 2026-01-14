@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ArrowLeft,
+  ClipboardCheck,
 } from "lucide-react";
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { ContentParser } from "../../utils/ReadingOverview/contentParser";
@@ -33,6 +34,7 @@ interface ModuleWithContent {
   jsonFile: string;
   content: ModuleContent | null;
   sections: any[];
+  isQnASection?: boolean;
 }
 
 export default function OverviewModal({
@@ -329,12 +331,13 @@ export default function OverviewModal({
       />
 
       <div
-        className="relative w-full h-full overflow-hidden modal-content bg-white"
+        className="relative w-full h-full flex flex-col modal-content bg-white"
         style={{
           boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
         }}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Progress Bar */}
         <div className="absolute top-0 left-0 right-0 h-1 z-20 bg-[#0E1B2E]/10">
           <div
             className="h-full transition-all duration-300 bg-[#0E1B2E]"
@@ -342,8 +345,9 @@ export default function OverviewModal({
           />
         </div>
 
+        {/* Top Navigation - Fixed */}
         <div
-          className="sticky top-0 z-10 px-6 py-4 border-b bg-white/35 backdrop-blur-xl border-[#0E1B2E]/10 shadow-sm"
+          className="flex-shrink-0 px-6 py-4 border-b bg-white/35 backdrop-blur-xl border-[#0E1B2E]/10 shadow-sm z-10"
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4 flex-1">
@@ -395,278 +399,292 @@ export default function OverviewModal({
           </div>
         </div>
 
+        {/* Scrollable Content Box - Fixed height */}
         <div
-          className="overflow-y-auto custom-scrollbar relative"
-          style={{
-            height: "calc(100vh - 100px)",
-          }}
+          className="flex-1 overflow-y-auto custom-scrollbar relative"
           onScroll={handleScroll}
         >
-          <div className="w-full px-6 py-4 relative">
-            {/* Floating Close Button - Always Visible */}
-            <div className="sticky top-4 z-30 flex justify-end -mt-2 mb-4">
-              <button
-                onClick={onClose}
-                className="flex items-center justify-center w-9 h-9 rounded-lg transition-all bg-white/90 backdrop-blur-sm border-2 border-red-200 hover:bg-red-500 hover:border-red-500 group shadow-lg"
-                aria-label="Close modal"
-                title="Close (Esc)"
-              >
-                <X className="w-4 h-4 transition-colors text-red-600 group-hover:text-white" />
-              </button>
-            </div>
-          {isLoading && moduleContent.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-32">
-              <div className="relative">
-                <Loader2 className="w-16 h-16 animate-spin text-gray-600" />
+          {/* Floating Close Button - Top Right */}
+          <div className="sticky top-4 z-30 flex justify-end pr-6 pt-4 -mb-4">
+            <button
+              onClick={onClose}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg transition-all bg-white/90 backdrop-blur-sm border-2 border-red-200 hover:bg-red-500 hover:border-red-500 group shadow-lg"
+              aria-label="Close modal"
+              title="Close (Esc)"
+            >
+              <X className="w-4 h-4 transition-colors text-red-600 group-hover:text-white" />
+              <span className="text-sm font-semibold text-red-600 group-hover:text-white">Close</span>
+            </button>
+          </div>
+
+          <div className="w-full px-6 pt-6 pb-4">
+            {isLoading && moduleContent.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-32">
+                <div className="relative">
+                  <Loader2 className="w-16 h-16 animate-spin text-gray-600" />
+                </div>
+                <p className="mt-4 text-sm font-medium text-gray-600">
+                  Loading module...
+                </p>
               </div>
-              <p className="mt-4 text-sm font-medium text-gray-600">
-                Loading module...
-              </p>
-            </div>
-          ) : moduleContent.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-32">
-              <p className="text-lg font-medium text-gray-600">
-                No content found
-              </p>
-            </div>
-          ) : moduleContent.length > 0 && currentSectionIndex < moduleContent.length ? (
-            <div className="flex flex-col h-full">
-              {/* Current Section Display */}
-              <div className="flex-1">
+            ) : moduleContent.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-32">
+                <p className="text-lg font-medium text-gray-600">
+                  No content found
+                </p>
+              </div>
+            ) : moduleContent.length > 0 && currentSectionIndex < moduleContent.length ? (
+              <div className="flex flex-col">
                 {(() => {
                   const moduleData = moduleContent[currentSectionIndex];
-                  const isLastSection = currentSectionIndex === moduleContent.length - 1;
                   return (
-                <div
-                  key={moduleData.moduleId}
-                  id={`module-section-${moduleData.moduleId}`}
+                    <div
+                      key={moduleData.moduleId}
+                      id={`module-section-${moduleData.moduleId}`}
                       className="rounded-xl overflow-hidden transition-all animate-fade-in bg-white/35 backdrop-blur-xl border border-white/25 shadow-md shadow-black/5"
-                >
-                  <div
-                    className="px-5 py-3 border-b border-[#0E1B2E]/10 bg-white/40 backdrop-blur-sm"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2.5">
-                        <span className="text-sm font-semibold text-[#0E1B2E]/60">
+                    >
+                      <div
+                        className="px-5 py-3 border-b border-[#0E1B2E]/10 bg-white/40 backdrop-blur-sm"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2.5">
+                            <span className="text-sm font-semibold text-[#0E1B2E]/60">
                               {currentSectionIndex + 1}.
-                        </span>
-                        <h3 className="text-sm font-semibold text-[#0E1B2E]">
-                          {moduleData.moduleTitle}
-                        </h3>
-                      </div>
+                            </span>
+                            <h3 className="text-sm font-semibold text-[#0E1B2E]">
+                              {moduleData.moduleTitle}
+                            </h3>
+                          </div>
 
                           {moduleData.content?.quality && (
-                        <div className="flex items-center space-x-1 px-3 py-1 rounded-lg bg-amber-50 border border-amber-200">
-                          <Award className="w-3 h-3 text-amber-600" />
-                          <span className="text-xs font-semibold text-amber-700">
-                            {(moduleData.content.quality * 5).toFixed(1)}
-                          </span>
+                            <div className="flex items-center space-x-1 px-3 py-1 rounded-lg bg-amber-50 border border-amber-200">
+                              <Award className="w-3 h-3 text-amber-600" />
+                              <span className="text-xs font-semibold text-amber-700">
+                                {(moduleData.content.quality * 5).toFixed(1)}
+                              </span>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
 
-                    {moduleData.content?.topic && !moduleData.isQnASection && (
-                      <div className="mt-2.5">
-                        <button
-                          onClick={() => toggleModuleExpanded(moduleData.moduleId)}
-                          className="w-full text-left text-xs text-[#0E1B2E]/60 hover:text-[#0E1B2E] transition-colors flex items-center space-x-1.5"
-                        >
-                          <ChevronDown
-                            className={`w-3.5 h-3.5 transition-transform ${
-                              expandedModules.has(moduleData.moduleId) ? "rotate-180" : ""
-                            }`}
-                          />
-                          <span className="font-medium">Learning Objective</span>
-                        </button>
+                        {moduleData.content?.topic && !moduleData.isQnASection && (
+                          <div className="mt-2.5">
+                            <button
+                              onClick={() => toggleModuleExpanded(moduleData.moduleId)}
+                              className="w-full text-left text-xs text-[#0E1B2E]/60 hover:text-[#0E1B2E] transition-colors flex items-center space-x-1.5"
+                            >
+                              <ChevronDown
+                                className={`w-3.5 h-3.5 transition-transform ${
+                                  expandedModules.has(moduleData.moduleId) ? "rotate-180" : ""
+                                }`}
+                              />
+                              <span className="font-medium">Learning Objective</span>
+                            </button>
 
-                        {expandedModules.has(moduleData.moduleId) && (
-                          <p className="mt-1.5 text-xs leading-relaxed text-[#0E1B2E]/70">
-                            {moduleData.content.topic}
-                          </p>
+                            {expandedModules.has(moduleData.moduleId) && (
+                              <p className="mt-1.5 text-xs leading-relaxed text-[#0E1B2E]/70">
+                                {moduleData.content.topic}
+                              </p>
+                            )}
+                          </div>
                         )}
                       </div>
-                    )}
-                  </div>
 
-                  <div className="px-5 py-4">
-                    {moduleData.isQnASection ? (
-                      // Render QnA section - all questions together
-                      <div className="space-y-6">
-                        {moduleData.content?.questions && Array.isArray(moduleData.content.questions) ? (
-                          // Multiple questions (all QnA from a section)
-                          moduleData.content.questions.map((qnaItem: any, qnaIndex: number) => (
-                            <div key={qnaIndex} className="border-b border-[#0E1B2E]/10 pb-6 last:border-b-0 last:pb-0">
-                              <div className="mb-4">
-                                <div className="flex items-center space-x-2 mb-2">
-                                  <span className="text-xs font-semibold text-[#0E1B2E]/60 bg-[#0E1B2E]/10 px-2 py-1 rounded">
-                                    Question {qnaIndex + 1}
-                                  </span>
-                                  {qnaItem.subsection && (
-                                    <span className="text-xs text-[#0E1B2E]/50 italic">
-                                      {qnaItem.subsection}
-                                    </span>
-                                  )}
-                                </div>
-                                <h4 className="text-sm font-semibold text-[#0E1B2E] mb-3">
-                                  {qnaItem.question}
-                                </h4>
-                              </div>
-                              {qnaItem.options && (
-                                <div className="mb-4">
-                                  <div className="space-y-2">
-                                    {Object.entries(qnaItem.options).map(([key, value]) => (
-                                      <div
-                                        key={key}
-                                        className={`p-3 rounded-lg border ${
-                                          key === qnaItem.correct_answer
-                                            ? 'bg-green-50 border-green-200'
-                                            : 'bg-gray-50 border-gray-200'
-                                        }`}
-                                      >
-                                        <span className="font-semibold text-[#0E1B2E] mr-2">
-                                          {key}:
-                                        </span>
-                                        <span className="text-sm text-[#0E1B2E]/80">
-                                          {value as string}
-                                        </span>
-                                        {key === qnaItem.correct_answer && (
-                                          <span className="ml-2 text-xs font-semibold text-green-700">
-                                            ✓ Correct
-                                          </span>
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                              {qnaItem.explanation && (
-                                <div className="mt-4 p-3 rounded-lg bg-blue-50 border border-blue-200">
-                                  <h5 className="text-xs font-semibold text-blue-900 mb-2">
-                                    Explanation:
-                                  </h5>
-                                  <p className="text-sm text-blue-800 leading-relaxed">
-                                    {qnaItem.explanation}
-                                  </p>
-                                </div>
-                              )}
-                            </div>
-                          ))
-                        ) : (
-                          // Single question (backward compatibility)
-                          <>
-                            {moduleData.content?.question && (
-                              <div className="mb-4">
-                                <h4 className="text-sm font-semibold text-[#0E1B2E] mb-3">
-                                  Question:
-                                </h4>
-                                <p className="text-sm text-[#0E1B2E]/80 leading-relaxed">
-                                  {moduleData.content.question}
-                                </p>
-                              </div>
-                            )}
-                            {moduleData.content?.options && (
-                              <div className="mb-4">
-                                <h4 className="text-sm font-semibold text-[#0E1B2E] mb-3">
-                                  Options:
-                                </h4>
-                                <div className="space-y-2">
-                                  {Object.entries(moduleData.content.options).map(([key, value]) => (
-                                    <div
-                                      key={key}
-                                      className={`p-3 rounded-lg border ${
-                                        key === moduleData.content.correct_answer
-                                          ? 'bg-green-50 border-green-200'
-                                          : 'bg-gray-50 border-gray-200'
-                                      }`}
-                                    >
-                                      <span className="font-semibold text-[#0E1B2E] mr-2">
-                                        {key}:
+                      <div className="px-5 py-4">
+                        {moduleData.isQnASection ? (
+                          // Render QnA section - all questions together
+                          <div className="space-y-6">
+                            {moduleData.content?.questions && Array.isArray(moduleData.content.questions) ? (
+                              // Multiple questions (all QnA from a section)
+                              moduleData.content.questions.map((qnaItem: any, qnaIndex: number) => (
+                                <div key={qnaIndex} className="border-b border-[#0E1B2E]/10 pb-6 last:border-b-0 last:pb-0">
+                                  <div className="mb-4">
+                                    <div className="flex items-center space-x-2 mb-2">
+                                      <span className="text-xs font-semibold text-[#0E1B2E]/60 bg-[#0E1B2E]/10 px-2 py-1 rounded">
+                                        Question {qnaIndex + 1}
                                       </span>
-                                      <span className="text-sm text-[#0E1B2E]/80">
-                                        {value as string}
-                                      </span>
-                                      {key === moduleData.content.correct_answer && (
-                                        <span className="ml-2 text-xs font-semibold text-green-700">
-                                          ✓ Correct
+                                      {qnaItem.subsection && (
+                                        <span className="text-xs text-[#0E1B2E]/50 italic">
+                                          {qnaItem.subsection}
                                         </span>
                                       )}
                                     </div>
-                                  ))}
+                                    <h4 className="text-sm font-semibold text-[#0E1B2E] mb-3">
+                                      {qnaItem.question}
+                                    </h4>
+                                  </div>
+                                  {qnaItem.options && (
+                                    <div className="mb-4">
+                                      <div className="space-y-2">
+                                        {Object.entries(qnaItem.options).map(([key, value]) => (
+                                          <div
+                                            key={key}
+                                            className={`p-3 rounded-lg border ${
+                                              key === qnaItem.correct_answer
+                                                ? 'bg-green-50 border-green-200'
+                                                : 'bg-gray-50 border-gray-200'
+                                            }`}
+                                          >
+                                            <span className="font-semibold text-[#0E1B2E] mr-2">
+                                              {key}:
+                                            </span>
+                                            <span className="text-sm text-[#0E1B2E]/80">
+                                              {value as string}
+                                            </span>
+                                            {key === qnaItem.correct_answer && (
+                                              <span className="ml-2 text-xs font-semibold text-green-700">
+                                                ✓ Correct
+                                              </span>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {qnaItem.explanation && (
+                                    <div className="mt-4 p-3 rounded-lg bg-blue-50 border border-blue-200">
+                                      <h5 className="text-xs font-semibold text-blue-900 mb-2">
+                                        Explanation:
+                                      </h5>
+                                      <p className="text-sm text-blue-800 leading-relaxed">
+                                        {qnaItem.explanation}
+                                      </p>
+                                    </div>
+                                  )}
                                 </div>
-                              </div>
+                              ))
+                            ) : (
+                              // Single question (backward compatibility)
+                              <>
+                                {moduleData.content?.question && (
+                                  <div className="mb-4">
+                                    <h4 className="text-sm font-semibold text-[#0E1B2E] mb-3">
+                                      Question:
+                                    </h4>
+                                    <p className="text-sm text-[#0E1B2E]/80 leading-relaxed">
+                                      {moduleData.content.question}
+                                    </p>
+                                  </div>
+                                )}
+                                {moduleData.content?.options && (
+                                  <div className="mb-4">
+                                    <h4 className="text-sm font-semibold text-[#0E1B2E] mb-3">
+                                      Options:
+                                    </h4>
+                                    <div className="space-y-2">
+                                      {Object.entries(moduleData.content.options).map(([key, value]) => (
+                                        <div
+                                          key={key}
+                                          className={`p-3 rounded-lg border ${
+                                            key === moduleData.content.correct_answer
+                                              ? 'bg-green-50 border-green-200'
+                                              : 'bg-gray-50 border-gray-200'
+                                          }`}
+                                        >
+                                          <span className="font-semibold text-[#0E1B2E] mr-2">
+                                            {key}:
+                                          </span>
+                                          <span className="text-sm text-[#0E1B2E]/80">
+                                            {value as string}
+                                          </span>
+                                          {key === moduleData.content.correct_answer && (
+                                            <span className="ml-2 text-xs font-semibold text-green-700">
+                                              ✓ Correct
+                                            </span>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {moduleData.content?.explanation && (
+                                  <div className="mt-4 p-3 rounded-lg bg-blue-50 border border-blue-200">
+                                    <h4 className="text-sm font-semibold text-blue-900 mb-2">
+                                      Explanation:
+                                    </h4>
+                                    <p className="text-sm text-blue-800 leading-relaxed">
+                                      {moduleData.content.explanation}
+                                    </p>
+                                  </div>
+                                )}
+                              </>
                             )}
-                            {moduleData.content?.explanation && (
-                              <div className="mt-4 p-3 rounded-lg bg-blue-50 border border-blue-200">
-                                <h4 className="text-sm font-semibold text-blue-900 mb-2">
-                                  Explanation:
-                                </h4>
-                                <p className="text-sm text-blue-800 leading-relaxed">
-                                  {moduleData.content.explanation}
-                                </p>
-                              </div>
-                            )}
-                          </>
+                          </div>
+                        ) : (
+                          <ContentRenderer
+                            sections={moduleData.sections}
+                            renderedMermaid={renderedMermaid[moduleData.moduleId] || {}}
+                          />
                         )}
-                      </div>
-                    ) : (
-                      <ContentRenderer
-                        sections={moduleData.sections}
-                        renderedMermaid={renderedMermaid[moduleData.moduleId] || {}}
-                      />
-                    )}
                       </div>
                     </div>
                   );
                 })()}
-                  </div>
-
-              {/* Navigation Buttons */}
-              <div className="mt-6 flex items-center justify-between pt-4 border-t border-[#0E1B2E]/10 px-6 pb-4">
-                <button
-                  onClick={handlePreviousSection}
-                  disabled={currentSectionIndex === 0}
-                  className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition-all duration-300 ${
-                    currentSectionIndex === 0
-                      ? "bg-[#0E1B2E]/10 text-[#0E1B2E]/40 cursor-not-allowed"
-                      : "bg-[#0E1B2E] text-white hover:bg-[#1a2f4d]"
-                  }`}
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                  <span>Previous</span>
-                </button>
-
-                {/* Progress Dots */}
-                <div className="flex items-center space-x-2">
-                  {moduleContent.map((_, index) => (
-                    <button
-                      key={index}
-                      onClick={() => setCurrentSectionIndex(index)}
-                      className={`h-2 rounded-full transition-all duration-300 ${
-                        index === currentSectionIndex
-                          ? "bg-[#0E1B2E] w-8"
-                          : "bg-[#0E1B2E]/30 hover:bg-[#0E1B2E]/50 w-2"
-                      }`}
-                      aria-label={`Go to section ${index + 1}`}
-                    />
-                  ))}
-                </div>
-
-                <button
-                  onClick={handleNextSection}
-                  disabled={currentSectionIndex === moduleContent.length - 1}
-                  className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition-all duration-300 ${
-                    currentSectionIndex === moduleContent.length - 1
-                      ? "bg-[#0E1B2E]/10 text-[#0E1B2E]/40 cursor-not-allowed"
-                      : "bg-[#0E1B2E] text-white hover:bg-[#1a2f4d]"
-                  }`}
-                >
-                  <span>Next</span>
-                  <ChevronRight className="w-5 h-5" />
-                </button>
               </div>
-            </div>
-          ) : null}
+            ) : null}
           </div>
+        </div>
+
+        {/* Navigation Buttons - Fixed at bottom, centered */}
+        <div className="flex-shrink-0 flex items-center justify-center gap-4 px-6 py-4 border-t border-[#0E1B2E]/10 bg-white z-10">
+          <button
+            onClick={handlePreviousSection}
+            disabled={currentSectionIndex === 0}
+            className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition-all duration-300 ${
+              currentSectionIndex === 0
+                ? "bg-[#0E1B2E]/10 text-[#0E1B2E]/40 cursor-not-allowed"
+                : "bg-[#0E1B2E] text-white hover:bg-[#1a2f4d]"
+            }`}
+          >
+            <ChevronLeft className="w-5 h-5" />
+            <span>Previous</span>
+          </button>
+
+          {/* Progress Dots */}
+          <div className="flex items-center space-x-2">
+            {moduleContent.map((module, index) => {
+              const isQnA = module.isQnASection;
+              const isActive = index === currentSectionIndex;
+              
+              return (
+                <button
+                  key={index}
+                  onClick={() => setCurrentSectionIndex(index)}
+                  className={`transition-all duration-300 ${
+                    isQnA
+                      ? `p-1.5 rounded-lg ${
+                          isActive
+                            ? "bg-[#0E1B2E] text-white"
+                            : "bg-[#0E1B2E]/20 text-[#0E1B2E]/60 hover:bg-[#0E1B2E]/30"
+                        }`
+                      : `h-2 rounded-full ${
+                          isActive
+                            ? "bg-[#0E1B2E] w-8"
+                            : "bg-[#0E1B2E]/30 hover:bg-[#0E1B2E]/50 w-2"
+                        }`
+                  }`}
+                  aria-label={`Go to section ${index + 1}${isQnA ? " (QnA)" : ""}`}
+                  title={isQnA ? "QnA Section" : `Section ${index + 1}`}
+                >
+                  {isQnA ? (
+                    <ClipboardCheck className="w-3.5 h-3.5" />
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            onClick={handleNextSection}
+            disabled={currentSectionIndex === moduleContent.length - 1}
+            className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition-all duration-300 ${
+              currentSectionIndex === moduleContent.length - 1
+                ? "bg-[#0E1B2E]/10 text-[#0E1B2E]/40 cursor-not-allowed"
+                : "bg-[#0E1B2E] text-white hover:bg-[#1a2f4d]"
+            }`}
+          >
+            <span>Next</span>
+            <ChevronRight className="w-5 h-5" />
+          </button>
         </div>
       </div>
     </div>

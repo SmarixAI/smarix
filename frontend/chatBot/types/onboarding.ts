@@ -16,6 +16,20 @@ export interface ModuleContent {
   topic?: string;
   content?: string;
   quality?: number;
+  type?: 'teaching_content' | 'qna';
+  title?: string;
+  question?: string;
+  questions?: Array<{
+    question: string;
+    options: Record<string, string>;
+    correct_answer: string;
+    explanation: string;
+    subsection?: string;
+  }>;
+  options?: Record<string, string>;
+  correct_answer?: string;
+  explanation?: string;
+  sectionKey?: string;
 }
 
 export interface ContentSection {
