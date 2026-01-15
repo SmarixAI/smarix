@@ -1,7 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Phone, RefreshCw, FileText, ArrowLeft } from "lucide-react";
+import {
+  Phone,
+  RefreshCw,
+  FileText,
+  ArrowLeft,
+  Calendar,
+  AlertCircle,
+  LogOut,
+} from "lucide-react";
 import Image from "next/image";
 import Sidebar from "./Sidebar";
 import EmployeeFinalCallSection from "./employeeViewSections/FinalCallSection";
@@ -10,6 +18,7 @@ import EmployeeDocumentationSection from "./employeeViewSections/DocumentationSe
 import Loader from "./Loader";
 import { useAuth } from "@/components/auth/AuthContext";
 import Chatbot from "@/components/onboarding/Chatbot";
+import { Inter, JetBrains_Mono } from "next/font/google";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -28,23 +37,32 @@ type Employee = {
 
 type OffboardingEmployeeLayoutProps = {};
 
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+});
+
 export default function OffboardingEmployeeLayout({}: OffboardingEmployeeLayoutProps = {}) {
   const { user, logout, token } = useAuth();
   const [activeSection, setActiveSection] = useState<SectionType>("finalcall");
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [loading, setLoading] = useState(true);
-  const [effectiveWorkdays, setEffectiveWorkdays] = useState<number | null>(null);
+  const [effectiveWorkdays, setEffectiveWorkdays] = useState<number | null>(
+    null
+  );
   const [highRiskTasksPending, setHighRiskTasksPending] = useState<number>(0);
 
   useEffect(() => {
     const fetchEmployeeData = async () => {
       try {
         if (!user || !token) {
-          // If no user/token yet, keep loading or just return
           return;
         }
 
-        // Fetch latest data from DB to get 'lastDay' and real status
         const response = await fetch(`${API_URL}/auth/users`, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -53,7 +71,6 @@ export default function OffboardingEmployeeLayout({}: OffboardingEmployeeLayoutP
 
         if (response.ok) {
           const users = await response.json();
-          // Find the current logged-in user in the list
           const currentUserData = users.find(
             (u: any) => u.username === user.username
           );
@@ -71,11 +88,9 @@ export default function OffboardingEmployeeLayout({}: OffboardingEmployeeLayoutP
               risk: "medium",
               status:
                 currentUserData.status === "offboard" ? "leaving" : "active",
-              // Map DB snake_case to frontend camelCase
               lastDay: currentUserData.last_day || null,
             });
           } else {
-            // Fallback if user not found in list (should rarely happen)
             setEmployee({
               id: user.employeeId || user.username,
               employeeId: user.employeeId || "UNKNOWN",
@@ -98,7 +113,6 @@ export default function OffboardingEmployeeLayout({}: OffboardingEmployeeLayoutP
     fetchEmployeeData();
   }, [user, token]);
 
-  // Calculate effective workdays remaining
   useEffect(() => {
     if (!employee?.lastDay) {
       setEffectiveWorkdays(null);
@@ -122,12 +136,11 @@ export default function OffboardingEmployeeLayout({}: OffboardingEmployeeLayoutP
       const effectiveDays = Math.round(diffDays * 0.6);
       setEffectiveWorkdays(effectiveDays);
     } catch (error) {
-      console.error('Error calculating workdays:', error);
+      console.error("Error calculating workdays:", error);
       setEffectiveWorkdays(null);
     }
   }, [employee?.lastDay]);
 
-  // Fetch and count high-risk tasks
   useEffect(() => {
     if (!employee?.employeeId) {
       setHighRiskTasksPending(0);
@@ -136,13 +149,13 @@ export default function OffboardingEmployeeLayout({}: OffboardingEmployeeLayoutP
 
     const fetchTasks = async () => {
       try {
-        const response = await fetch('/api/offboarding/tasks');
+        const response = await fetch("/api/offboarding/tasks");
         if (!response.ok) {
-          console.error('Failed to fetch tasks data');
+          console.error("Failed to fetch tasks data");
           return;
         }
         const data = await response.json();
-        
+
         if (!data?.employees?.length) return;
 
         const foundEmployee = data.employees.find(
@@ -156,14 +169,13 @@ export default function OffboardingEmployeeLayout({}: OffboardingEmployeeLayoutP
         const allTasks = [...aiTasks, ...managerTasks];
 
         const highRiskCount = allTasks.filter(
-          (task: any) => 
-            task.priority === 'High' && 
-            task.status !== 'not_needed'
+          (task: any) =>
+            task.priority === "High" && task.status !== "not_needed"
         ).length;
 
         setHighRiskTasksPending(highRiskCount);
       } catch (error) {
-        console.error('Error fetching tasks:', error);
+        console.error("Error fetching tasks:", error);
       }
     };
 
@@ -182,14 +194,19 @@ export default function OffboardingEmployeeLayout({}: OffboardingEmployeeLayoutP
 
   if (!employee) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#FAFAFA]">
-        <div className="text-center p-8 rounded-xl border border-gray-200 bg-white shadow-sm">
-          <p className="text-lg font-semibold text-[#0E1B2E]">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white via-slate-50 to-blue-50/30">
+        <div
+          className={`${inter.className} text-center p-8 rounded-2xl border-2 border-slate-200 bg-white/70 backdrop-blur-sm shadow-lg max-w-md`}
+        >
+          <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
+            <AlertCircle className="w-8 h-8 text-slate-400" />
+          </div>
+          <p className="text-lg font-semibold text-[#0E1B2E] mb-4">
             Unable to load profile data.
           </p>
           <button
             onClick={logout}
-            className="mt-4 text-[#0E1B2E] hover:underline"
+            className="px-6 py-2.5 rounded-xl font-semibold transition-all bg-gradient-to-r from-[#0E1B2E] to-blue-900 text-white hover:shadow-lg"
           >
             Return to Login
           </button>
@@ -199,86 +216,117 @@ export default function OffboardingEmployeeLayout({}: OffboardingEmployeeLayoutP
   }
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA]">
+    <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-blue-50/30 relative overflow-hidden">
+      <div className="absolute inset-0 bg-white pointer-events-none" />
+
       <div className="h-screen relative flex">
-        {/* Grid Pattern Background - matching landing page */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#0E1B2E05_1px,transparent_1px),linear-gradient(to_bottom,#0E1B2E05_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
-        
-        {/* Sidebar with Navigation */}
-        <aside className="w-80 flex-shrink-0 border-r border-gray-200 bg-white relative z-10 flex flex-col">
-          {/* Sidebar Header */}
-          <div className="p-4 border-b border-gray-200">
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(14,27,46,0.02)_1px,transparent_1px),linear-gradient(to_bottom,rgba(14,27,46,0.02)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
+
+        <aside className="w-80 flex-shrink-0 border-r border-slate-200/60 bg-white/80 backdrop-blur-xl relative z-10 flex flex-col shadow-lg">
+          <div className="p-5 border-b border-slate-200/60 bg-gradient-to-r from-white to-slate-50/50">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 bg-[#0E1B2E] rounded-lg flex items-center justify-center overflow-hidden">
+              <div className="w-10 h-10 bg-gradient-to-br from-[#0E1B2E] to-blue-900 rounded-xl flex items-center justify-center overflow-hidden shadow-md shadow-slate-300/30 border border-slate-200/40">
                 <Image
                   src="/logo.png"
                   alt="Smarix Logo"
-                  width={24}
-                  height={24}
-                  className="w-6 h-6 object-contain"
+                  width={28}
+                  height={28}
+                  className="w-7 h-7 object-contain"
                 />
               </div>
-              <h2 className="text-xl font-bold tracking-tight text-[#0E1B2E]">
+              <h2
+                className={`${inter.className} text-xl font-bold tracking-tight text-[#0E1B2E]`}
+              >
                 Smarix
               </h2>
             </div>
-            <p className="text-sm text-[#0E1B2E]/60 ml-11">
+            <p
+              className={`${inter.className} text-sm text-slate-600 ml-[52px] font-medium`}
+            >
               Offboarding Dashboard
             </p>
           </div>
 
-          {/* Profile & Logout */}
-          <div className="p-4 border-b border-gray-200">
+          <div className="p-5 border-b border-slate-200/60">
             <div className="flex items-center justify-between mb-4">
               {employee && (
                 <>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold text-[#0E1B2E] truncate">
+                    <div
+                      className={`${inter.className} text-sm font-semibold text-[#0E1B2E] truncate`}
+                    >
                       {employee.name}
                     </div>
-                    <div className="text-xs text-[#0E1B2E]/60 capitalize truncate">
+                    <div
+                      className={`${inter.className} text-xs text-slate-600 capitalize truncate font-medium`}
+                    >
                       {employee.designation || employee.role}
                     </div>
                   </div>
                   <button
                     onClick={logout}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-blue-50 transition-colors text-[#0E1B2E] border border-gray-200 hover:border-blue-300 text-sm font-medium"
+                    className={`${inter.className} flex items-center gap-2 px-4 py-2.5 rounded-xl hover:bg-slate-50 transition-all text-[#0E1B2E] border-2 border-slate-200 hover:border-slate-300 text-sm font-semibold shadow-sm hover:shadow-md`}
                     title="Go Back"
                   >
-                    <ArrowLeft className="w-4 h-4" />
-                    Go Back
+                    <LogOut className="w-4 h-4" />
+                    Logout
                   </button>
                 </>
               )}
             </div>
 
-            {/* Employee Info */}
             {employee && (
-              <div className="space-y-2">
-                <div className="p-2.5 rounded-lg bg-[#0E1B2E]/5">
-                  <p className="text-[10px] text-[#0E1B2E]/60 mb-0.5">
-                    Last Working Day
-                  </p>
-                  <p className="text-xs font-semibold text-[#0E1B2E]">
-                    {employee.lastDay || 'Not set'}
-                  </p>
-                </div>
-                <div className="p-2.5 rounded-lg bg-[#0E1B2E]/5">
-                  <p className="text-[10px] text-[#0E1B2E]/60 mb-0.5">
-                    Effective Workdays
-                  </p>
-                  <p className="text-xs font-semibold text-[#0E1B2E]">
-                    {effectiveWorkdays !== null 
-                      ? `${effectiveWorkdays} ${effectiveWorkdays === 1 ? 'Day' : 'Days'}`
-                      : 'N/A'}
+              <div className="space-y-3">
+                <div className="p-3 rounded-xl bg-gradient-to-br from-blue-50/80 to-indigo-50/50 border-2 border-blue-200/60 shadow-sm">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                    <p
+                      className={`${inter.className} text-xs text-blue-900 font-semibold`}
+                    >
+                      Last Working Day
+                    </p>
+                  </div>
+                  <p
+                    className={`${jetbrainsMono.className} text-sm font-bold text-[#0E1B2E] ml-5.5`}
+                  >
+                    {employee.lastDay || "Not set"}
                   </p>
                 </div>
-                <div className="p-2.5 rounded-lg bg-[#0E1B2E]/5">
-                  <p className="text-[10px] text-[#0E1B2E]/60 mb-0.5">
-                    High-Risk Tasks
+
+                <div className="p-3 rounded-xl bg-gradient-to-br from-green-50/80 to-emerald-50/50 border-2 border-green-200/60 shadow-sm">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Calendar className="w-3.5 h-3.5 text-green-600" />
+                    <p
+                      className={`${inter.className} text-xs text-green-900 font-semibold`}
+                    >
+                      Effective Workdays
+                    </p>
+                  </div>
+                  <p
+                    className={`${jetbrainsMono.className} text-sm font-bold text-[#0E1B2E] ml-5.5`}
+                  >
+                    {effectiveWorkdays !== null
+                      ? `${effectiveWorkdays} ${
+                          effectiveWorkdays === 1 ? "Day" : "Days"
+                        }`
+                      : "N/A"}
                   </p>
-                  <p className="text-xs font-semibold text-[#0E1B2E]">
-                    {highRiskTasksPending} {highRiskTasksPending === 1 ? 'Task' : 'Tasks'}
+                </div>
+
+                <div className="p-3 rounded-xl bg-gradient-to-br from-red-50/80 to-orange-50/50 border-2 border-red-200/60 shadow-sm">
+                  <div className="flex items-center gap-2 mb-1">
+                    <AlertCircle className="w-3.5 h-3.5 text-red-600" />
+                    <p
+                      className={`${inter.className} text-xs text-red-900 font-semibold`}
+                    >
+                      High-Risk Tasks
+                    </p>
+                  </div>
+                  <p
+                    className={`${jetbrainsMono.className} text-sm font-bold text-[#0E1B2E] ml-5.5`}
+                  >
+                    {highRiskTasksPending}{" "}
+                    {highRiskTasksPending === 1 ? "Task" : "Tasks"}
                   </p>
                 </div>
               </div>
@@ -286,22 +334,26 @@ export default function OffboardingEmployeeLayout({}: OffboardingEmployeeLayoutP
           </div>
 
           <nav className="flex-1 overflow-y-auto">
-
-            {/* Sections Navigation */}
-            <div className="border-t border-gray-200 p-4">
-              <div className="space-y-1">
+            <div className="border-t border-slate-200/60 p-5">
+              <div className="space-y-2">
                 {[
                   { key: "finalcall", label: "Final Call", icon: Phone },
                   { key: "handover", label: "Handover", icon: RefreshCw },
-                  { key: "documentation", label: "Documentation", icon: FileText },
+                  {
+                    key: "documentation",
+                    label: "Documentation",
+                    icon: FileText,
+                  },
                 ].map((item) => (
                   <button
                     key={item.key}
                     onClick={() => setActiveSection(item.key as SectionType)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-semibold transition ${
+                    className={`${
+                      inter.className
+                    } w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${
                       activeSection === item.key
-                        ? "bg-[#0E1B2E] text-white"
-                        : "text-[#0E1B2E] hover:bg-[#0E1B2E]/5"
+                        ? "bg-gradient-to-r from-[#0E1B2E] to-blue-900 text-white shadow-lg"
+                        : "text-[#0E1B2E] hover:bg-slate-50 border-2 border-transparent hover:border-slate-200"
                     }`}
                   >
                     <item.icon className="w-5 h-5" />
@@ -313,9 +365,7 @@ export default function OffboardingEmployeeLayout({}: OffboardingEmployeeLayoutP
           </nav>
         </aside>
 
-        {/* Main Content */}
         <main className="flex-1 relative z-10 flex flex-col overflow-hidden">
-          {/* Section Content */}
           {activeSection === "finalcall" && employee.employeeId && (
             <div className="flex-1 px-6 pb-6 flex flex-col overflow-hidden">
               <EmployeeFinalCallSection
@@ -344,7 +394,10 @@ export default function OffboardingEmployeeLayout({}: OffboardingEmployeeLayoutP
           )}
         </main>
       </div>
-      <Chatbot role="offboarding" />
+
+      <div className="fixed bottom-10 right-10 z-[100] transition-transform shadow-2xl rounded-full">
+        <Chatbot role="offboarding" />
+      </div>
     </div>
   );
 }
