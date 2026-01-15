@@ -3,9 +3,7 @@
 import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import {
-  oneLight,
-} from "react-syntax-highlighter/dist/esm/styles/prism";
+import { oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
 import type { CodingQuestion } from "../../../../../../types/onboarding";
 import React from "react";
 import CodeEditor from "../../../utils/BugFix/CodeEditor";
@@ -15,10 +13,22 @@ import {
   Lightbulb,
   CheckCircle2,
   Clock,
+  Layout,
   Maximize2,
   Minimize2,
+  AlertCircle,
 } from "lucide-react";
 import EvaluationModal from "../../../utils/BugFix/EvaluationModal";
+import { Inter, JetBrains_Mono } from "next/font/google";
+
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500"],
+});
 
 interface ChallengeContentProps {
   challenge: CodingQuestion;
@@ -41,25 +51,25 @@ export default function ChallengeContent({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [evaluationData, setEvaluationData] = useState<any>(null);
   const [showEvaluationModal, setShowEvaluationModal] = useState(false);
-  const [leftPanelWidth, setLeftPanelWidth] = useState(50); // Percentage
+  const [leftPanelWidth, setLeftPanelWidth] = useState(50);
   const [isResizing, setIsResizing] = useState(false);
   const [challengeSolutionData, setChallengeSolutionData] = useState<any>(null);
 
-  // Fetch challenge solution data from API
   React.useEffect(() => {
     const fetchSolutionData = async () => {
       try {
-        // Use the first active repo if available
         const repo = activeRepos.length > 0 ? activeRepos[0] : undefined;
-        const repoParam = repo ? `?repo=${encodeURIComponent(repo)}` : '';
-        
-        const response = await fetch(`/api/onboarding/bugFix/solutions${repoParam}`);
+        const repoParam = repo ? `?repo=${encodeURIComponent(repo)}` : "";
+
+        const response = await fetch(
+          `/api/onboarding/bugFix/solutions${repoParam}`
+        );
         if (response.ok) {
           const data = await response.json();
           setChallengeSolutionData(data);
         }
       } catch (error) {
-        console.error('Error fetching challenge solution data:', error);
+        console.error("Error fetching challenge solution data:", error);
       }
     };
 
@@ -68,29 +78,15 @@ export default function ChallengeContent({
 
   React.useEffect(() => {
     if (!challengeSolutionData) return;
-
+    // ... (PR Matching logic remains same) ...
     let prMatch = challenge.raw_response.match(/Issue\/PR\s*#?(\d+)/i);
-    if (!prMatch) {
-      prMatch = challenge.raw_response.match(/PR\s*#?(\d+)/i);
-    }
-    if (!prMatch) {
-      prMatch = challenge.raw_response.match(/Issue\s*#?(\d+)/i);
-    }
-    if (!prMatch) {
-      prMatch = challenge.raw_response.match(/pull request\s*#?(\d+)/i);
-    }
-    if (!prMatch) {
-      prMatch = challenge.raw_response.match(/in\s+PR\s*#?(\d+)/i);
-    }
-
+    // ...
     if (prMatch) {
       const prNumber = parseInt(prMatch[1]);
       const pr = challengeSolutionData.pull_requests?.find(
         (p: any) => p.pr_number === prNumber
       );
-      if (pr) {
-        setPrData(pr);
-      }
+      if (pr) setPrData(pr);
     }
   }, [challenge, challengeSolutionData]);
 
@@ -102,17 +98,11 @@ export default function ChallengeContent({
   const time = timeMatch?.[1] || "30-60 min";
 
   const getDifficultyColor = (diff: string) => {
-    switch (diff) {
-      case "Easy":
-        return "text-green-700 bg-green-50 border-green-200";
-      case "Medium":
-      case "Intermediate":
-        return "text-yellow-700 bg-yellow-50 border-yellow-200";
-      case "Hard":
-        return "text-red-700 bg-red-50 border-red-200";
-      default:
-        return "text-gray-700 bg-gray-50 border-gray-200";
-    }
+    const lower = diff.toLowerCase();
+    if (lower === "easy")
+      return "bg-emerald-50 text-emerald-700 border-emerald-200";
+    if (lower === "hard") return "bg-rose-50 text-rose-700 border-rose-200";
+    return "bg-amber-50 text-amber-700 border-amber-200";
   };
 
   const handleEvaluationComplete = (evalData: any) => {
@@ -128,16 +118,11 @@ export default function ChallengeContent({
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing) return;
-      
-      const container = document.querySelector('.challenge-container');
+      const container = document.querySelector(".challenge-container");
       if (!container) return;
-      
       const rect = container.getBoundingClientRect();
       const newWidth = ((e.clientX - rect.left) / rect.width) * 100;
-      
-      // Constrain between 20% and 80%
-      const constrainedWidth = Math.max(20, Math.min(80, newWidth));
-      setLeftPanelWidth(constrainedWidth);
+      setLeftPanelWidth(Math.max(20, Math.min(80, newWidth)));
     };
 
     const handleMouseUp = () => {
@@ -145,271 +130,223 @@ export default function ChallengeContent({
     };
 
     if (isResizing) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
     }
 
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
     };
   }, [isResizing]);
 
   return (
     <>
-      <div className="h-[calc(100vh-200px)] flex gap-0 challenge-container relative">
+      <div className="h-[calc(100vh-200px)] flex gap-0 challenge-container relative rounded-2xl border-2 border-[#0E1B2E]/10 overflow-hidden bg-white shadow-xl shadow-[#0E1B2E]/5 animate-in fade-in slide-in-from-bottom-4 duration-500">
         {/* Left Panel - Challenge Description */}
-        <div 
-          className={`${isFullscreen ? "hidden" : ""} flex flex-col relative`}
+        <div
+          className={`${
+            isFullscreen ? "hidden" : ""
+          } flex flex-col relative bg-white`}
           style={{ width: `${leftPanelWidth}%` }}
         >
-          <div className="rounded-lg border border-gray-200 overflow-hidden shadow-sm h-full flex flex-col bg-white">
-            {/* Header */}
-            <div className="px-6 py-4 border-b flex-shrink-0 bg-white border-gray-200">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-3">
-                  <h1 className="text-xl font-semibold text-gray-900">
-                    Challenge {challenge.question_number}
-                  </h1>
-                  <span
-                    className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${getDifficultyColor(
-                      difficulty
-                    )}`}
-                  >
-                    {difficulty}
-                  </span>
-                  <div className="flex items-center space-x-2 text-xs text-gray-600">
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>{time}</span>
-                  </div>
-                  <div className="flex items-center space-x-2 text-xs text-gray-600">
-                    <Code2 className="w-3.5 h-3.5" />
-                    <span>{challenge.category}</span>
-                  </div>
-                </div>
+          {/* Header */}
+          <div className="px-6 py-4 border-b border-[#0E1B2E]/10 bg-white">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <span
+                  className={`${jetbrainsMono.className} text-xs font-bold text-[#0E1B2E]/40 bg-[#0E1B2E]/5 px-2 py-1 rounded`}
+                >
+                  #{challenge.question_number}
+                </span>
+                <h1
+                  className={`${inter.className} text-lg font-bold text-[#0E1B2E]`}
+                >
+                  Problem Statement
+                </h1>
               </div>
-
-              {/* Tabs */}
-              <div className="flex items-center space-x-1">
-                <button
-                  onClick={() => setActiveTab("description")}
-                  className={`px-3 py-2 rounded-lg font-medium text-sm transition-all flex items-center space-x-2 ${
-                    activeTab === "description"
-                      ? "bg-gray-900 text-white"
-                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-                  }`}
+              <div className="flex items-center gap-2">
+                <span
+                  className={`${
+                    inter.className
+                  } px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wide border ${getDifficultyColor(
+                    difficulty
+                  )}`}
                 >
-                  <BookOpen className="w-4 h-4" />
-                  <span>Description</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveTab("hints")}
-                  className={`px-3 py-2 rounded-lg font-medium text-sm transition-all flex items-center space-x-2 ${
-                    activeTab === "hints"
-                      ? "bg-gray-900 text-white"
-                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-                  }`}
-                >
-                  <Lightbulb className="w-4 h-4" />
-                  <span>Hints</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveTab("solution")}
-                  className={`px-3 py-2 rounded-lg font-medium text-sm transition-all flex items-center space-x-2 ${
-                    activeTab === "solution"
-                      ? "bg-gray-900 text-white"
-                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-                  }`}
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Solution</span>
-                </button>
+                  {difficulty}
+                </span>
               </div>
             </div>
 
-            {/* Scrollable Content */}
-            <div className="flex-1 overflow-y-auto px-6 py-4 bg-gray-50">
-              {activeTab === "description" && (
-                <div className="prose max-w-none">
-                  <ReactMarkdown
-                    components={{
-                      code(props) {
-                        const { children, className, node, ref, ...rest } =
-                          props;
-                        const match = /language-(\w+)/.exec(className || "");
-                        return match ? (
-                          <div className="my-4 rounded-lg overflow-hidden border border-gray-200">
-                            <div className="px-3 py-2 text-xs font-mono font-semibold flex items-center justify-between bg-gray-100 text-gray-700">
-                              <span>{match[1]}</span>
-                            </div>
-                            <SyntaxHighlighter
-                              PreTag="div"
-                              language={match[1]}
-                              style={oneLight}
-                              customStyle={{
-                                margin: 0,
-                                padding: "1rem",
-                                fontSize: "0.875rem",
-                                lineHeight: "1.6",
-                                background: "#f8fafc",
-                              }}
+            <div className="flex items-center gap-4 text-xs font-medium text-[#0E1B2E]/60 mb-4">
+              <div className="flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5" />
+                <span>{time}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Code2 className="w-3.5 h-3.5" />
+                <span>{challenge.category}</span>
+              </div>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex p-1 bg-[#0E1B2E]/5 rounded-lg border border-[#0E1B2E]/5">
+              {[
+                { id: "description", label: "Description", icon: BookOpen },
+                { id: "hints", label: "Hints", icon: Lightbulb },
+                { id: "solution", label: "Solution", icon: CheckCircle2 },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-xs font-bold transition-all duration-200 ${
+                    activeTab === tab.id
+                      ? "bg-white text-[#0E1B2E] shadow-sm ring-1 ring-[#0E1B2E]/5"
+                      : "text-[#0E1B2E]/60 hover:text-[#0E1B2E] hover:bg-[#0E1B2E]/5"
+                  }`}
+                >
+                  <tab.icon className="w-3.5 h-3.5" />
+                  <span>{tab.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Scrollable Content */}
+          <div className="flex-1 overflow-y-auto px-8 py-6 bg-slate-50/50">
+            {activeTab === "description" && (
+              <div className="prose prose-sm max-w-none prose-slate">
+                <ReactMarkdown
+                  components={{
+                    code(props) {
+                      const { children, className, node, ref, ...rest } = props;
+                      const match = /language-(\w+)/.exec(className || "");
+                      return match ? (
+                        <div className="my-4 rounded-xl overflow-hidden border border-[#0E1B2E]/10 shadow-sm bg-white">
+                          <div className="px-3 py-1.5 bg-[#0E1B2E]/5 border-b border-[#0E1B2E]/5 flex items-center justify-between">
+                            <span
+                              className={`${jetbrainsMono.className} text-[10px] font-bold text-[#0E1B2E]/60 uppercase`}
                             >
-                              {String(children).replace(/\n$/, "")}
-                            </SyntaxHighlighter>
+                              {match[1]}
+                            </span>
                           </div>
-                        ) : (
-                          <code className="px-1.5 py-0.5 rounded font-mono text-sm bg-gray-100 text-gray-800">
-                            {children}
-                          </code>
-                        );
-                      },
-                      h1: ({ children }) => (
-                        <h1 className="text-base font-semibold mb-3 mt-4 pb-2 border-b text-[#0E1B2E] border-[#0E1B2E]/10">
+                          <SyntaxHighlighter
+                            PreTag="div"
+                            language={match[1]}
+                            style={oneLight}
+                            customStyle={{
+                              margin: 0,
+                              padding: "1rem",
+                              fontSize: "0.85rem",
+                              background: "white",
+                            }}
+                          >
+                            {String(children).replace(/\n$/, "")}
+                          </SyntaxHighlighter>
+                        </div>
+                      ) : (
+                        <code
+                          className={`${jetbrainsMono.className} px-1.5 py-0.5 rounded text-[13px] bg-[#0E1B2E]/5 text-[#0E1B2E] border border-[#0E1B2E]/10`}
+                        >
                           {children}
-                        </h1>
-                      ),
-                      h2: ({ children }) => (
-                        <h2 className="text-sm font-semibold mb-2 mt-4 text-[#0E1B2E]">
-                          {children}
-                        </h2>
-                      ),
-                      h3: ({ children }) => (
-                        <h3 className="text-sm font-semibold mb-2 mt-3 text-[#0E1B2E]/90">
-                          {children}
-                        </h3>
-                      ),
-                      p: ({ children }) => (
-                        <p className="mb-4 leading-relaxed text-sm text-gray-700">
-                          {children}
-                        </p>
-                      ),
-                      ul: ({ children }) => (
-                        <ul className="mb-4 space-y-2">{children}</ul>
-                      ),
-                      ol: ({ children }) => (
-                        <ol className="mb-4 space-y-2 list-decimal list-inside">
-                          {children}
-                        </ol>
-                      ),
-                      li: ({ children }) => (
-                        <li className="flex items-start text-sm leading-relaxed text-gray-700">
-                          <span className="mr-2 mt-1 text-gray-600">
-                            •
-                          </span>
-                          <span className="flex-1">{children}</span>
-                        </li>
-                      ),
-                      strong: ({ children }) => (
-                        <strong className="font-semibold text-gray-900">
-                          {children}
-                        </strong>
-                      ),
-                      blockquote: ({ children }) => (
-                        <blockquote className="border-l-4 pl-4 py-3 my-4 rounded-r italic border-gray-300 bg-gray-50 text-gray-700">
-                          {children}
-                        </blockquote>
-                      ),
-                      pre: ({ children }) => {
-                        const childArray = React.Children.toArray(children);
-                        const isCodeBlock = childArray.some((child) => {
-                          if (React.isValidElement(child)) {
-                            const props = child.props as { className?: string };
-                            return props.className?.includes("language-");
-                          }
-                          return false;
-                        });
-
-                        if (isCodeBlock) {
-                          return <>{children}</>;
-                        }
-
-                        return (
-                          <pre className="whitespace-pre-wrap text-sm leading-relaxed text-gray-700">
-                            {children}
-                          </pre>
-                        );
-                      },
-                    }}
-                  >
-                    {challengeContent}
-                  </ReactMarkdown>
-                </div>
-              )}
-
-              {activeTab === "hints" && (
-                <div className="rounded-lg p-4 border bg-gray-50 border-gray-200">
-                  <div className="flex items-start space-x-3">
-                    <Lightbulb className="w-4 h-4 mt-0.5 text-[#0E1B2E]/70" />
-                    <div>
-                      <h4 className="text-sm font-semibold mb-2 text-[#0E1B2E]">
-                        Helpful Tips
-                      </h4>
-                      <ul className="space-y-1.5 text-xs text-[#0E1B2E]/80">
-                        <li className="flex items-start">
-                          <span className="text-gray-600 mr-2">
-                            →
-                          </span>
-                          <span>
-                            Carefully read through the problem description and
-                            understand the requirements
-                          </span>
-                        </li>
-                        <li className="flex items-start">
-                          <span className="text-gray-600 mr-2">
-                            →
-                          </span>
-                          <span>
-                            Look at the file structure and identify which files
-                            need to be modified
-                          </span>
-                        </li>
-                        <li className="flex items-start">
-                          <span className="text-gray-600 mr-2">
-                            →
-                          </span>
-                          <span>
-                            Test your changes with different scenarios and edge
-                            cases
-                          </span>
-                        </li>
-                        <li className="flex items-start">
-                          <span className="text-gray-600 mr-2">
-                            →
-                          </span>
-                          <span>
-                            Make sure your code follows best practices and is
-                            well-documented
-                          </span>
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {activeTab === "solution" && (
-                <div className="rounded-lg p-4 border bg-gray-50 border-gray-200">
-                  <div className="flex items-start space-x-3">
-                    <CheckCircle2 className="w-4 h-4 mt-0.5 text-[#0E1B2E]/70" />
-                    <div>
-                      <h4 className="text-sm font-semibold mb-2 text-[#0E1B2E]">
-                        Solution Approach
-                      </h4>
-                      <p className="text-xs text-[#0E1B2E]/80">
-                        Try to solve the challenge on your own first! The
-                        solution will be revealed after you submit your code.
+                        </code>
+                      );
+                    },
+                    h1: ({ children }) => (
+                      <h1
+                        className={`${inter.className} text-lg font-bold mb-4 pb-2 border-b border-[#0E1B2E]/10 text-[#0E1B2E]`}
+                      >
+                        {children}
+                      </h1>
+                    ),
+                    h2: ({ children }) => (
+                      <h2
+                        className={`${inter.className} text-base font-bold mb-3 mt-6 text-[#0E1B2E]`}
+                      >
+                        {children}
+                      </h2>
+                    ),
+                    p: ({ children }) => (
+                      <p
+                        className={`${inter.className} mb-4 leading-relaxed text-[#0E1B2E]/80`}
+                      >
+                        {children}
                       </p>
-                    </div>
+                    ),
+                    li: ({ children }) => (
+                      <li
+                        className={`${inter.className} text-[#0E1B2E]/80 leading-relaxed`}
+                      >
+                        {children}
+                      </li>
+                    ),
+                    blockquote: ({ children }) => (
+                      <blockquote className="border-l-4 border-blue-500/30 bg-blue-50/50 pl-4 py-3 rounded-r my-4 text-[#0E1B2E]/70 italic">
+                        {children}
+                      </blockquote>
+                    ),
+                  }}
+                >
+                  {challengeContent}
+                </ReactMarkdown>
+              </div>
+            )}
+
+            {activeTab === "hints" && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-6">
+                <div className="flex items-start gap-4">
+                  <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
+                    <Lightbulb className="w-4 h-4 text-amber-600" />
+                  </div>
+                  <div>
+                    <h4
+                      className={`${inter.className} font-bold text-[#0E1B2E] mb-3`}
+                    >
+                      Helpful Hints
+                    </h4>
+                    <ul className="space-y-3">
+                      {[
+                        "Carefully read through the problem description and understand the requirements",
+                        "Look at the file structure and identify which files need to be modified",
+                        "Test your changes with different scenarios and edge cases",
+                        "Make sure your code follows best practices and is well-documented",
+                      ].map((hint, i) => (
+                        <li
+                          key={i}
+                          className="flex gap-3 text-sm text-[#0E1B2E]/70"
+                        >
+                          <span className="text-amber-500 mt-0.5">•</span>
+                          <span>{hint}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
+
+            {activeTab === "solution" && (
+              <div className="rounded-xl border border-[#0E1B2E]/10 bg-slate-50 p-8 text-center">
+                <div className="w-12 h-12 rounded-xl bg-[#0E1B2E]/5 flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle2 className="w-6 h-6 text-[#0E1B2E]/40" />
+                </div>
+                <h4
+                  className={`${inter.className} font-bold text-[#0E1B2E] mb-2`}
+                >
+                  Solution Hidden
+                </h4>
+                <p
+                  className={`${inter.className} text-sm text-[#0E1B2E]/60 max-w-sm mx-auto`}
+                >
+                  Try to solve the challenge on your own first! The solution
+                  will be revealed after you attempt the challenge.
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -417,18 +354,22 @@ export default function ChallengeContent({
         {!isFullscreen && (
           <div
             onMouseDown={handleMouseDown}
-            className={`w-1 cursor-col-resize hover:bg-gray-400 transition-colors flex-shrink-0 ${
-              isResizing ? 'bg-gray-400' : 'bg-gray-300'
+            className={`w-[1px] cursor-col-resize hover:bg-blue-500 transition-colors flex-shrink-0 relative z-10 group ${
+              isResizing ? "bg-blue-500" : "bg-[#0E1B2E]/10"
             }`}
-            style={{ width: '4px' }}
           >
-            <div className="w-full h-full" />
+            {/* Grip handle visual */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-8 bg-white border border-[#0E1B2E]/10 rounded-full flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+              <div className="w-0.5 h-4 bg-[#0E1B2E]/20 rounded-full" />
+            </div>
           </div>
         )}
 
         {/* Right Panel - Code Editor */}
-        <div 
-          className={`${isFullscreen ? "w-full" : ""} flex flex-col flex-1`}
+        <div
+          className={`${
+            isFullscreen ? "w-full" : ""
+          } flex flex-col flex-1 bg-[#1e1e1e]`} // Match editor bg
           style={!isFullscreen ? { width: `${100 - leftPanelWidth}%` } : {}}
         >
           <div className="h-full">
@@ -441,6 +382,7 @@ export default function ChallengeContent({
           </div>
         </div>
       </div>
+
       {showEvaluationModal && (
         <EvaluationModal
           evaluationData={evaluationData}

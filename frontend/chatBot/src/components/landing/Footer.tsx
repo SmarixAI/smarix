@@ -51,14 +51,14 @@ export const Footer = () => {
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400">Smarix</span> in your life?
             </motion.h2>
 
-            <Link href="/try-our-product">
+            <Link href="/request-demo">
               <motion.button 
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 className="group relative inline-flex items-center gap-5 bg-white text-[#0E1B2E] px-8 py-4 rounded-none transition-all duration-300 hover:bg-blue-50"
               >
                 <span className={`${firaCode.className} font-bold tracking-wide text-base relative z-10`}>
-                  TRY OUR PRODUCT
+                  REQUEST DEMO
                 </span>
                 <span className="w-px h-6 bg-[#0E1B2E]/20 relative z-10" />
                 <ArrowUpRight className="w-6 h-6 transition-transform duration-300 group-hover:-translate-y-1 group-hover:translate-x-1 relative z-10" />

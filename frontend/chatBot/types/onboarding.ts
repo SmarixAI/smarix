@@ -169,4 +169,3 @@ export interface CodingQuestionsResponse {
   };
   questions: CodingQuestion[];
 }
-

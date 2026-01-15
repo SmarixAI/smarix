@@ -112,11 +112,11 @@ export const Hero = () => {
           </p>
 
           <div className="flex items-center gap-6">
-            <Link href="/try-our-product" className="group relative inline-flex items-center justify-center gap-3 bg-[#0E1B2E] text-white pl-6 pr-4 py-4 rounded-none hover:bg-[#1a2f4d] transition-all duration-300 shadow-xl shadow-blue-900/10">
+            <Link href="/request-demo" className="group relative inline-flex items-center justify-center gap-3 bg-[#0E1B2E] text-white pl-6 pr-4 py-4 rounded-none hover:bg-[#1a2f4d] transition-all duration-300 shadow-xl shadow-blue-900/10">
               <span
                 className={`${firaCode.className} font-bold tracking-wide text-sm`}
               >
-                TRY OUR PRODUCT
+                REQUEST A DEMO
               </span>
               <span className="w-px h-5 bg-white/20" />
               <ArrowUpRight className="w-5 h-5 transition-transform duration-300 group-hover:-translate-y-1 group-hover:translate-x-1" />
