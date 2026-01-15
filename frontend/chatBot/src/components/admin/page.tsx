@@ -233,12 +233,12 @@ export default function AdminPage() {
                 const responseData = await response.json();
                 const updatedHistory = responseData.history || [];
                 setSetupHistory(updatedHistory);
-                setStats({
-                  totalSetups: updatedHistory.length,
-                  successfulSetups: updatedHistory.filter((h) => h.status === "success").length,
-                  failedSetups: updatedHistory.filter((h) => h.status === "failed").length,
-                  lastSetup: failedEntry.timestamp,
-                });
+                // setStats({
+                //   totalSetups: updatedHistory.length,
+                //   successfulSetups: updatedHistory.filter((h) => h.status === "success").length,
+                //   failedSetups: updatedHistory.filter((h) => h.status === "failed").length,
+                //   lastSetup: failedEntry.timestamp,
+                // });
               }
             } catch (error) {
               console.error("Error saving history:", error);
@@ -280,12 +280,12 @@ export default function AdminPage() {
                 const responseData = await response.json();
                 const updatedHistory = responseData.history || [];
                 setSetupHistory(updatedHistory);
-                setStats({
-                  totalSetups: updatedHistory.length,
-                  successfulSetups: updatedHistory.filter((h) => h.status === "success").length,
-                  failedSetups: updatedHistory.filter((h) => h.status === "failed").length,
-                  lastSetup: historyEntry.timestamp,
-                });
+                // setStats({
+                //   totalSetups: updatedHistory.length,
+                //   successfulSetups: updatedHistory.filter((h) => h.status === "success").length,
+                //   failedSetups: updatedHistory.filter((h) => h.status === "failed").length,
+                //   lastSetup: historyEntry.timestamp,
+                // });
               }
             } catch (error) {
               console.error("Error saving history:", error);
@@ -440,12 +440,12 @@ export default function AdminPage() {
           const historyData = await historyResponse.json();
           const updatedHistory = historyData.history || [];
           setSetupHistory(updatedHistory);
-          setStats({
-            totalSetups: updatedHistory.length,
-            successfulSetups: updatedHistory.filter((h) => h.status === "success").length,
-            failedSetups: updatedHistory.filter((h) => h.status === "failed").length,
-            lastSetup: stepHistoryEntry.timestamp,
-          });
+          // setStats({
+          //   totalSetups: updatedHistory.length,
+          //   successfulSetups: updatedHistory.filter((h) => h.status === "success").length,
+          //   failedSetups: updatedHistory.filter((h) => h.status === "failed").length,
+          //   lastSetup: stepHistoryEntry.timestamp,
+          // });
         }
       } catch (historyError) {
         console.error("Error saving step history:", historyError);
@@ -483,12 +483,12 @@ export default function AdminPage() {
           const historyData = await historyResponse.json();
           const updatedHistory = historyData.history || [];
           setSetupHistory(updatedHistory);
-          setStats({
-            totalSetups: updatedHistory.length,
-            successfulSetups: updatedHistory.filter((h) => h.status === "success").length,
-            failedSetups: updatedHistory.filter((h) => h.status === "failed").length,
-            lastSetup: stepHistoryEntry.timestamp,
-          });
+          // setStats({
+          //   totalSetups: updatedHistory.length,
+          //   successfulSetups: updatedHistory.filter((h) => h.status === "success").length,
+          //   failedSetups: updatedHistory.filter((h) => h.status === "failed").length,
+          //   lastSetup: stepHistoryEntry.timestamp,
+          // });
         }
       } catch (historyError) {
         console.error("Error saving step history:", historyError);
@@ -586,12 +586,12 @@ export default function AdminPage() {
           const historyData = await historyResponse.json();
           const updatedHistory = historyData.history || [];
           setSetupHistory(updatedHistory);
-          setStats({
-            totalSetups: updatedHistory.length,
-            successfulSetups: updatedHistory.filter((h) => h.status === "success").length,
-            failedSetups: updatedHistory.filter((h) => h.status === "failed").length,
-            lastSetup: historyEntry.timestamp,
-          });
+          // setStats({
+          //   totalSetups: updatedHistory.length,
+          //   successfulSetups: updatedHistory.filter((h) => h.status === "success").length,
+          //   failedSetups: updatedHistory.filter((h) => h.status === "failed").length,
+          //   lastSetup: historyEntry.timestamp,
+          // });
         }
       } catch (historyError) {
         console.error("Error saving onboarding history:", historyError);
@@ -628,12 +628,12 @@ export default function AdminPage() {
           const historyData = await historyResponse.json();
           const updatedHistory = historyData.history || [];
           setSetupHistory(updatedHistory);
-          setStats({
-            totalSetups: updatedHistory.length,
-            successfulSetups: updatedHistory.filter((h) => h.status === "success").length,
-            failedSetups: updatedHistory.filter((h) => h.status === "failed").length,
-            lastSetup: historyEntry.timestamp,
-          });
+          // setStats({
+          //   totalSetups: updatedHistory.length,
+          //   successfulSetups: updatedHistory.filter((h) => h.status === "success").length,
+          //   failedSetups: updatedHistory.filter((h) => h.status === "failed").length,
+          //   lastSetup: historyEntry.timestamp,
+          // });
         }
       } catch (historyError) {
         console.error("Error saving onboarding history:", historyError);
@@ -706,12 +706,12 @@ export default function AdminPage() {
           const historyData = await historyResponse.json();
           const updatedHistory = historyData.history || [];
           setSetupHistory(updatedHistory);
-          setStats({
-            totalSetups: updatedHistory.length,
-            successfulSetups: updatedHistory.filter((h) => h.status === "success").length,
-            failedSetups: updatedHistory.filter((h) => h.status === "failed").length,
-            lastSetup: historyEntry.timestamp,
-          });
+          // setStats({
+          //   totalSetups: updatedHistory.length,
+          //   successfulSetups: updatedHistory.filter((h) => h.status === "success").length,
+          //   failedSetups: updatedHistory.filter((h) => h.status === "failed").length,
+          //   lastSetup: historyEntry.timestamp,
+          // });
         }
       } catch (historyError) {
         console.error("Error saving offboarding history:", historyError);
@@ -748,12 +748,12 @@ export default function AdminPage() {
           const historyData = await historyResponse.json();
           const updatedHistory = historyData.history || [];
           setSetupHistory(updatedHistory);
-          setStats({
-            totalSetups: updatedHistory.length,
-            successfulSetups: updatedHistory.filter((h) => h.status === "success").length,
-            failedSetups: updatedHistory.filter((h) => h.status === "failed").length,
-            lastSetup: historyEntry.timestamp,
-          });
+          // setStats({
+          //   totalSetups: updatedHistory.length,
+          //   successfulSetups: updatedHistory.filter((h) => h.status === "success").length,
+          //   failedSetups: updatedHistory.filter((h) => h.status === "failed").length,
+          //   lastSetup: historyEntry.timestamp,
+          // });
         }
       } catch (historyError) {
         console.error("Error saving offboarding history:", historyError);
