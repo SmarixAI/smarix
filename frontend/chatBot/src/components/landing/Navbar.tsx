@@ -73,10 +73,10 @@ export const Navbar = () => {
 
         {/* CTA */}
         <div className="hidden md:flex items-center shrink-0">
-          <Link href="/request-demo" className="group relative overflow-hidden rounded-full bg-[#0E1B2E] px-6 py-2.5 text-white transition-all hover:bg-[#1a2f4d] hover:shadow-lg hover:shadow-[#0E1B2E]/20">
+          <Link href="/contact" className="group relative overflow-hidden rounded-full bg-[#0E1B2E] px-6 py-2.5 text-white transition-all hover:bg-[#1a2f4d] hover:shadow-lg hover:shadow-[#0E1B2E]/20">
             <div className="flex items-center gap-2 whitespace-nowrap">
               <span className="text-sm font-medium tracking-wide">
-                Request demo
+                Contact Us
               </span>
               <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
             </div>
@@ -123,7 +123,7 @@ export const Navbar = () => {
                 className="w-full mt-4 rounded-full bg-[#0E1B2E] py-3.5 text-white font-medium shadow-xl shadow-[#0E1B2E]/20 hover:bg-[#1a2f4d] transition-colors text-center"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
-                Request demo
+                Contact Us
               </Link>
             </div>
           </motion.div>

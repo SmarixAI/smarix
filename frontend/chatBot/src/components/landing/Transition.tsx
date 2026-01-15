@@ -58,7 +58,7 @@ export const Transition = () => {
               style={{ opacity: opacity1, filter: `blur(${blur1}px)`, y: y1 }}
               className={`${firaCode.className} text-5xl md:text-6xl lg:text-7xl font-tahoma font-bold tracking-tighter text-[#0E1B2E]`}
             >
-              Simple
+              Capture
               <span className={`${firaCode.className} text-blue-600`}>.</span>
             </motion.h2>
 
@@ -66,7 +66,7 @@ export const Transition = () => {
               style={{ opacity: opacity2, filter: `blur(${blur2}px)`, y: y2 }}
               className={`${firaCode.className} text-5xl md:text-6xl lg:text-7xl font-tahoma font-bold tracking-tighter text-[#0E1B2E]`}
             >
-              Faster
+              Transfer
               <span className={`${firaCode.className} text-blue-600`}>.</span>
             </motion.h2>
 
@@ -74,7 +74,7 @@ export const Transition = () => {
                style={{ opacity: opacity3, filter: `blur(${blur3}px)`, y: y3, scale: scale3 }}
                className={`${firaCode.className} text-5xl md:text-6xl lg:text-7xl font-tahoma font-bold tracking-tighter text-[#0E1B2E]`}
             >
-                Done
+                Retain
                 <span className={`${firaCode.className} text-green-500`}>.</span>
             </motion.h2>
         </div>

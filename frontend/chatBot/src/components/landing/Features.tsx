@@ -44,7 +44,7 @@ const features = [
     id: 2,
     tag: 'Smarix Assistance',
     title: 'Smarix Assistance',
-    desc: 'Your always-on engineering companion. Intelligent code analysis, instant answers, and proactive insights exactly when needed.',
+    desc: 'Your 24x7 engineering companion. Intelligent code analysis, instant answers, and proactive insights exactly when needed.',
     image: '/assistance-demo.gif',
     icon: Code2,
     color: '#10B981', 
