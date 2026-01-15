@@ -15,7 +15,6 @@ import { useAuth } from "@/components/auth/AuthContext";
 import OnboardingEmployeeSwitcher from "./OnboardingEmployeeSwitcher";
 import OnboardingSidebar from "./OnboardingSidebar";
 import ReadingSection from "./managerViewSections/ReadingSection";
-import QASection from "./managerViewSections/QASection";
 import PracticeSection from "./managerViewSections/PracticeSection";
 import BugFixSection from "./managerViewSections/BugFixSection";
 
@@ -326,12 +325,6 @@ export default function OnboardingManagerLayout({
                     >
                       {activeSection === "reading" && (
                         <ReadingSection
-                          employeeId={selectedEmployee.employeeId}
-                          darkMode={darkMode}
-                        />
-                      )}
-                      {activeSection === "qa" && (
-                        <QASection
                           employeeId={selectedEmployee.employeeId}
                           darkMode={darkMode}
                         />

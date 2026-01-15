@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthContext';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
-import { Users, ArrowLeft, FileText, Calendar, User, Moon, Sun, MessageSquare } from 'lucide-react';
+import { Users, ArrowLeft, FileText, Calendar, User, Moon, Sun, MessageSquare, LogOut } from 'lucide-react';
 import Loader from '@/components/offboarding/Loader';
 import ThreeJsBackground from '@/components/onboarding/ThreeJsBackground';
 
@@ -14,8 +14,9 @@ function ManagerDashboardContent() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 50, y: 50 });
 
+  const router = useRouter();
+
   useEffect(() => {
-    // Redirect to unified dashboard
     router.replace('/manager/dashboard');
   }, [router]);
 
