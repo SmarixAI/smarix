@@ -6,6 +6,7 @@ Extracts comprehensive development setup, installation, and configuration inform
 import sys
 import os
 import json
+import re
 from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
@@ -66,6 +67,223 @@ def _load_rag_chatbot_class():
 
 
 RAGChatbot = _load_rag_chatbot_class()
+
+
+def parse_single_mcq_from_response(response_text: str) -> dict:
+    """
+    Parse a single MCQ question from chatbot's response
+    Returns a dict with question, options, correct_answer, and explanation
+    """
+    # Try to find the first MCQ in the response
+    question_pattern = r'###\s+Question\s+(\d+)\s+\(MCQ\s*-\s*(\w+)\)'
+    match = re.search(question_pattern, response_text)
+    
+    if not match:
+        # Try alternative format without header
+        # Look for question text followed by options A-D
+        lines = response_text.split('\n')
+        question_text = []
+        options = {}
+        correct_answer = None
+        explanation = ""
+        
+        answer_section = False
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            
+            # Check for answer markers
+            if '**Answer:**' in line or 'Answer:' in line:
+                answer_section = True
+                answer_line = line.split(':', 1)[-1].strip() if ':' in line else line.replace('**Answer:**', '').strip()
+                if answer_line:
+                    answer_match = re.match(r'^([A-D])\s*[-–—]\s*(.+)', answer_line, re.DOTALL)
+                    if answer_match:
+                        correct_answer = answer_match.group(1)
+                        explanation = answer_match.group(2).strip()
+                    else:
+                        letter_match = re.match(r'^([A-D])', answer_line)
+                        if letter_match:
+                            correct_answer = letter_match.group(1)
+                            explanation = answer_line[1:].strip()
+                continue
+            
+            if answer_section:
+                explanation += " " + line if explanation else line
+                continue
+            
+            # Check if line is an option
+            option_match = re.match(r'^([A-D])\.\s+(.+)$', line)
+            if option_match:
+                option_letter = option_match.group(1)
+                option_text = option_match.group(2).strip()
+                options[option_letter] = option_text
+            else:
+                # It's part of the question text
+                question_text.append(line)
+        
+        if len(options) == 4 and correct_answer and correct_answer in options:
+            return {
+                'question': ' '.join(question_text),
+                'options': options,
+                'correct_answer': correct_answer,
+                'explanation': explanation.strip()
+            }
+        return None
+    
+    # Extract content after the header
+    start_idx = match.end()
+    content = response_text[start_idx:].strip()
+    
+    # Split content into question text and answer
+    answer_split = re.split(r'\*\*Answer:\*\*', content, maxsplit=1)
+    
+    if len(answer_split) < 2:
+        return None
+    
+    question_part = answer_split[0].strip()
+    answer_part = answer_split[1].strip()
+    
+    # Extract question text and options
+    lines = question_part.split('\n')
+    question_text = []
+    options = {}
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        
+        # Check if line is an option
+        option_match = re.match(r'^([A-D])\.\s+(.+)$', line)
+        if option_match:
+            option_letter = option_match.group(1)
+            option_text = option_match.group(2).strip()
+            options[option_letter] = option_text
+        else:
+            question_text.append(line)
+    
+    # Extract correct answer and explanation
+    correct_answer = None
+    explanation = ""
+    
+    answer_match = re.match(r'^([A-D])\s*[-–—]\s*(.+)', answer_part, re.DOTALL)
+    if answer_match:
+        correct_answer = answer_match.group(1)
+        explanation = answer_match.group(2).strip()
+    else:
+        letter_match = re.match(r'^([A-D])', answer_part)
+        if letter_match:
+            correct_answer = letter_match.group(1)
+            explanation = answer_part[1:].strip()
+    
+    # Validate this is a proper MCQ
+    if len(options) == 4 and correct_answer and correct_answer in options:
+        return {
+            'question': ' '.join(question_text),
+            'options': options,
+            'correct_answer': correct_answer,
+            'explanation': explanation
+        }
+    
+    return None
+
+
+def generate_section_qna(dev_setup_data, chatbot, gmail_db_path=None, provider='openai', model=None):
+    """
+    Generate MCQ questions for each section based on subsections
+    Adds a 'qna' array to each section with one MCQ per subsection
+    """
+    print("\n" + "=" * 80)
+    print("GENERATING MCQ QUESTIONS FOR EACH SECTION")
+    print("=" * 80 + "\n")
+    
+    sections = dev_setup_data.get("sections", {})
+    total_qnas = 0
+    
+    for section_name, section_content in sections.items():
+        if section_name == "qna":  # Skip if qna key exists
+            continue
+            
+        print(f"Processing section: {section_name}")
+        
+        # Get all subsections (excluding 'qna' if it exists)
+        subsections = {k: v for k, v in section_content.items() if k != "qna" and isinstance(v, dict) and "question" in v and "answer" in v}
+        
+        if not subsections:
+            print(f"  ⚠ No subsections found, skipping...\n")
+            continue
+        
+        qna_list = []
+        
+        for idx, (subsection_name, subsection_data) in enumerate(subsections.items(), 1):
+            question_text = subsection_data.get("question", "")
+            answer_text = subsection_data.get("answer", "")
+            
+            if not question_text or not answer_text or str(answer_text).startswith("Error:"):
+                print(f"  [{idx}/{len(subsections)}] ⚠ Skipping '{subsection_name}' (invalid data)")
+                continue
+            
+            print(f"  [{idx}/{len(subsections)}] Generating MCQ for '{subsection_name}'...")
+            
+            # Create prompt for generating MCQ
+            mcq_prompt = f"""Based on the following topic information, generate ONE multiple-choice question (MCQ) for new employee onboarding.
+
+TOPIC: {subsection_name}
+
+INFORMATION ABOUT THIS TOPIC:
+{answer_text[:2000]}
+
+CRITICAL REQUIREMENTS:
+- Generate EXACTLY ONE multiple-choice question (MCQ format)
+- The question must have exactly 4 options (A, B, C, D)
+- Only ONE option should be correct
+- The question should test understanding of the key concepts from the topic
+- Focus on important, practical knowledge that helps new employees understand the development setup
+- Provide a clear explanation (3-5 sentences) that helps users learn
+- Format the response as:
+  ### Question 1 (MCQ - Medium)
+  [Your question text here]
+  A. [Option A]
+  B. [Option B]
+  C. [Option C]
+  D. [Option D]
+  **Answer:** [Correct letter] - [Detailed explanation]
+
+Generate the MCQ question now."""
+
+            try:
+                response = chatbot.chat(mcq_prompt)
+                answer = response.get('answer', '') if isinstance(response, dict) else getattr(response, 'answer', str(response))
+                
+                if answer:
+                    mcq = parse_single_mcq_from_response(answer)
+                    if mcq:
+                        mcq['subsection'] = subsection_name
+                        qna_list.append(mcq)
+                        print(f"    ✓ Generated MCQ successfully")
+                    else:
+                        print(f"    ✗ Failed to parse MCQ from response")
+                else:
+                    print(f"    ✗ Empty response from chatbot")
+                    
+            except Exception as e:
+                print(f"    ✗ Error: {e}")
+                continue
+        
+        # Add qna list to section
+        if qna_list:
+            sections[section_name]["qna"] = qna_list
+            total_qnas += len(qna_list)
+            print(f"  ✓ Added {len(qna_list)} MCQ questions to section '{section_name}'\n")
+        else:
+            print(f"  ⚠ No MCQ questions generated for section '{section_name}'\n")
+    
+    print(f"✓ Total MCQ questions generated: {total_qnas}")
+    print("=" * 80 + "\n")
+    
+    return dev_setup_data
 
 
 def generate_dev_setup_data(gmail_db_path=None, provider='openai', model=None):
@@ -299,6 +517,83 @@ def generate_dev_setup_data(gmail_db_path=None, provider='openai', model=None):
     for section_name, section_data in dev_setup_data["sections"].items():
         print(f"   - {section_name}: {len(section_data)} questions")
 
+    # Generate MCQ questions for each section
+    print("\n" + "=" * 80)
+    print("Starting MCQ QNA Generation...")
+    print("=" * 80)
+    dev_setup_data = generate_section_qna(dev_setup_data, chatbot, gmail_db_path, provider, model)
+    
+    # Save updated file with QNA
+    with open(json_file, 'w', encoding='utf-8') as f:
+        json.dump(dev_setup_data, f, indent=2, ensure_ascii=False)
+    
+    print(f"✓ Updated file saved with QNA sections: {json_file}")
+
+    return json_file
+
+
+def add_qna_to_existing_dev_setup(
+    json_file_path: str = None,
+    gmail_db_path: str = None,
+    provider: str = 'openai',
+    model: str = None
+) -> Path:
+    """
+    Add MCQ QNA questions to an existing dev setup JSON file
+    
+    Args:
+        json_file_path: Path to existing dev setup JSON file (if None, uses default path)
+        gmail_db_path: Optional path to Gmail database
+        provider: LLM provider (openai/anthropic/ollama)
+        model: Model name (optional, uses default for provider)
+    
+    Returns:
+        Path to updated JSON file
+    """
+    print("╔" + "═" * 78 + "╗")
+    print("║" + " ADD QNA TO EXISTING DEV SETUP ".center(78) + "║")
+    print("╚" + "═" * 78 + "╝\n")
+    
+    # Determine file path
+    if json_file_path is None:
+        json_file_path = str(ONBOARDING_ROOT / "reading" / "onboarding_dev_setup.json")
+    
+    json_file = Path(json_file_path)
+    
+    if not json_file.exists():
+        print(f"✗  File not found: {json_file}")
+        return None
+    
+    print(f"📄 Loading existing dev setup: {json_file.name}")
+    
+    # Load existing data
+    with open(json_file, 'r', encoding='utf-8') as f:
+        dev_setup_data = json.load(f)
+    
+    # Initialize chatbot
+    print("⚙  Initializing chatbot...")
+    try:
+        chatbot = RAGChatbot(
+            vector_db_path=VECTOR_DB_PATH,
+            gmail_db_path=gmail_db_path,
+            provider=provider,
+            model=model,
+            verbose=False
+        )
+        print("✓  Chatbot initialized successfully\n")
+    except Exception as e:
+        print(f"✗  Failed to initialize chatbot: {e}")
+        return None
+    
+    # Generate QNA
+    dev_setup_data = generate_section_qna(dev_setup_data, chatbot, gmail_db_path, provider, model)
+    
+    # Save updated file
+    with open(json_file, 'w', encoding='utf-8') as f:
+        json.dump(dev_setup_data, f, indent=2, ensure_ascii=False)
+    
+    print(f"✓  Updated file saved: {json_file}\n")
+    
     return json_file
 
 
@@ -307,5 +602,9 @@ if __name__ == "__main__":
     PROVIDER = "openai"
     MODEL = None
 
-    generate_dev_setup_data( GMAIL_DB_PATH, PROVIDER, MODEL)
+    # Uncomment to just add QNA to existing file:
+    # add_qna_to_existing_dev_setup(gmail_db_path=GMAIL_DB_PATH, provider=PROVIDER, model=MODEL)
+    
+    # Generate complete dev setup with QNA:
+    generate_dev_setup_data(GMAIL_DB_PATH, PROVIDER, MODEL)
 

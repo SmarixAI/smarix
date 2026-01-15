@@ -10,25 +10,74 @@ interface JSONData {
   [key: string]: any;
 }
 
+function groupTeachingThenQna(teachingContent: any[], qna: any[], prefix: string = ''): Record<string, any> {
+  const grouped: Record<string, any> = {};
+  let index = 1;
+  
+  // Add all teaching_content items first (each as separate page)
+  teachingContent.forEach((item) => {
+    const key = prefix ? `${prefix}_teaching_content_${index}` : `teaching_content_${index}`;
+    grouped[key] = {
+      type: 'teaching_content',
+      ...item
+    };
+    index++;
+  });
+  
+  // Then add all qna items together as a single page
+  if (qna.length > 0) {
+    const key = prefix ? `${prefix}_qna_all` : `qna_all`;
+    grouped[key] = {
+      type: 'qna',
+      questions: qna, // All questions in an array
+      sectionKey: prefix
+    };
+  }
+  
+  return grouped;
+}
+
 function extractSections(jsonData: JSONData): Record<string, any> {
   if (jsonData.data && typeof jsonData.data === 'object') {
+    // Check if data has teaching_content and qna arrays
+    const teachingContent = jsonData.data.teaching_content;
+    const qna = jsonData.data.qna;
+    
+    if (Array.isArray(teachingContent) && Array.isArray(qna)) {
+      return groupTeachingThenQna(teachingContent, qna);
+    }
+    
     return jsonData.data;
   }
   
   if (jsonData.sections && typeof jsonData.sections === 'object') {
     const firstValue = Object.values(jsonData.sections)[0];
     
+    // Check if it's a QnA-only structure (old format)
     if (firstValue && typeof firstValue === 'object' && ('question' in firstValue || 'answer' in firstValue)) {
       return jsonData.sections;
-    } else {
-      const allData: Record<string, any> = {};
-      for (const category of Object.values(jsonData.sections)) {
-        if (typeof category === 'object' && !Array.isArray(category)) {
-          Object.assign(allData, category);
+    }
+    
+    // Process sections structure - handle both sections.data and sections.{section_name}
+    const interleavedSections: Record<string, any> = {};
+    
+    for (const [sectionKey, sectionValue] of Object.entries(jsonData.sections)) {
+      if (typeof sectionValue === 'object' && !Array.isArray(sectionValue)) {
+        const teachingContent = sectionValue.teaching_content;
+        const qna = sectionValue.qna;
+        
+        if (Array.isArray(teachingContent) && Array.isArray(qna)) {
+          // Group all teaching_content first, then all qna for this section
+          const grouped = groupTeachingThenQna(teachingContent, qna, sectionKey);
+          Object.assign(interleavedSections, grouped);
+        } else {
+          // If no interleaving needed, keep original structure
+          interleavedSections[sectionKey] = sectionValue;
         }
       }
-      return allData;
     }
+    
+    return interleavedSections;
   }
   
   for (const [key, value] of Object.entries(jsonData)) {
@@ -157,11 +206,25 @@ export async function GET(
     const jsonData: JSONData = JSON.parse(fileContent);
     const moduleData = extractSections(jsonData);
 
-    const sections = Object.keys(moduleData).map((key, index) => ({
-      sectionId: `${moduleId}-${index + 1}`,
-      sectionTitle: key,
-      content: moduleData[key],
-    }));
+    const sections = Object.entries(moduleData).map(([key, value], index) => {
+      // Handle interleaved structure with type field
+      let sectionTitle: string;
+      if (value?.type === 'qna' && value?.questions && Array.isArray(value.questions)) {
+        // For QnA sections with multiple questions, use a descriptive title
+        sectionTitle = value.sectionKey 
+          ? `QnA: ${value.sectionKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`
+          : 'QnA Questions';
+      } else {
+        sectionTitle = value?.title || value?.question || key;
+      }
+      const content = value;
+      
+      return {
+        sectionId: `${moduleId}-${index + 1}`,
+        sectionTitle: sectionTitle,
+        content: content,
+      };
+    });
 
     return NextResponse.json({
       moduleId,

@@ -2,12 +2,20 @@ import { FileText, Code, BookOpen, Wrench, Lock, Sparkles, Zap } from 'lucide-re
 import type { Module } from '../../../../../types/onboarding';
 
 export const MODULE_FILE_MAPPING: { [key: string]: string } = {
+  // Numeric IDs (used by frontend modules)
   '1': 'onboarding_project_overview.json',
   '2': 'onboarding_tech_stack.json',
   '3': 'onboarding_repo_structure.json',
   '4': 'onboarding_app_features.json',
   '5': 'onboarding_dev_setup.json',
   '6': 'onboarding_code_conventions.json',
+  // String IDs (used by employee_onboarding_tasks.json)
+  'overview': 'onboarding_project_overview.json',
+  'tech_stack': 'onboarding_tech_stack.json',
+  'repo_structure': 'onboarding_repo_structure.json',
+  'app_features': 'onboarding_app_features.json',
+  'dev_setup': 'onboarding_dev_setup.json',
+  'code_conventions': 'onboarding_code_conventions.json',
 };
 
 export const modules: Module[] = [
