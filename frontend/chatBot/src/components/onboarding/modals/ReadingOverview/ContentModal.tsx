@@ -358,14 +358,6 @@ export default function OverviewModal({
             <div className="flex items-center gap-3">
               <button
                 onClick={onClose}
-                className={`${inter.className} flex items-center gap-2 px-5 py-2.5 rounded-xl transition-all bg-white/80 backdrop-blur-sm border border-slate-200 hover:bg-[#0E1B2E] hover:border-[#0E1B2E] hover:text-white group shadow-sm hover:shadow-md`}
-                aria-label="Go back"
-              >
-                <ArrowLeft className="w-4 h-4 transition-colors text-[#0E1B2E] group-hover:text-white" />
-                <span className="text-sm font-semibold text-[#0E1B2E] group-hover:text-white">Back</span>
-              </button>
-              <button
-                onClick={onClose}
                 className="flex items-center justify-center w-10 h-10 rounded-xl transition-all bg-white/80 backdrop-blur-sm border border-red-200 hover:bg-red-500 hover:border-red-500 group shadow-sm hover:shadow-md"
                 aria-label="Close modal"
                 title="Close (Esc)"

@@ -207,41 +207,41 @@ class ClassifierMixin:
         repo_name = self.repo_info.get('name', 'this repository')
         total_chunks = self.repo_info.get('total_chunks', 0)
 
-        greeting = f"""Hello! I'm your AI-powered codebase assistant for **{repo_name}**.
+        greeting = f"""Hello! I'm your AI-powered codebase assistant.
 
-            ## What I Can Help You With
+## What I Can Help You With
 
-            I have indexed **{total_chunks:,} code chunks** and can help you with:
+I have indexed **{total_chunks:,} code chunks** and can help you with:
 
-            ### Code Architecture & Flow
-            - **Architecture diagrams**: "What is the architecture of the notification service?"
-            - **Flow explanations**: "Explain the authentication flow with a diagram"
-            - **Component interactions**: "How do services communicate?"
+### Code Architecture & Flow
+- **Architecture diagrams**: "What is the architecture of the notification service?"
+- **Flow explanations**: "Explain the authentication flow with a diagram"
+- **Component interactions**: "How do services communicate?"
 
-            ### Code Search & Understanding
-            - **Find code**: "Where is the login functionality?"
-            - **Understand implementations**: "How does the task manager work?"
-            - **Class/function details**: "Show me the TaskService class implementation"
+### Code Search & Understanding
+- **Find code**: "Where is the login functionality?"
+- **Understand implementations**: "How does the task manager work?"
+- **Class/function details**: "Show me the TaskService class implementation"
 
-            ### Issues & Pull Requests
-            - **Specific queries**: "Tell me about issue #123" or "Show me PR #45"
-            - **Browse history**: "What is the first issue?" or "Show me the latest PR"
-            - **Search by topic**: "Show me notification-related issues"
+### Issues & Pull Requests
+- **Specific queries**: "Tell me about issue #123" or "Show me PR #45"
+- **Browse history**: "What is the first issue?" or "Show me the latest PR"
+- **Search by topic**: "Show me notification-related issues"
 
-            ### Repository Insights
-            - **Metrics**: "Show me repository metrics"
-            - **Tech stack**: "What technologies are used?"
-            - **Structure**: "Show me the repository structure"
+### Repository Insights
+- **Metrics**: "Show me repository metrics"
+- **Tech stack**: "What technologies are used?"
+- **Structure**: "Show me the repository structure"
 
-            ### Development Guidance
-            - **How-to guides**: "How do I add a new feature?"
-            - **Troubleshooting**: "How to fix authentication errors?"
-            - **Best practices**: "How is error handling implemented?"
+### Development Guidance
+- **How-to guides**: "How do I add a new feature?"
+- **Troubleshooting**: "How to fix authentication errors?"
+- **Best practices**: "How is error handling implemented?"
 
-            ### Learning & Practice
-            - **Tutorials**: "Create a tutorial from PR #45" or "Guide me through issue #23"
-            - **Coding questions**: "Generate a coding challenge from issue #67"
-            """
+### Learning & Practice
+- **Tutorials**: "Create a tutorial from PR #45" or "Guide me through issue #23"
+- **Coding questions**: "Generate a coding challenge from issue #67"
+"""
 
         if self.gmail_db:
             try:
@@ -251,18 +251,18 @@ class ClassifierMixin:
                 greeting += "\nI also have access to related emails for additional context.\n"
 
         greeting += """
-            ## Example Questions
+## Example Questions
 
-            - "What is the architecture of the authentication service?"
-            - "Show me the first issue"
-            - "Where is the notification logic implemented?"
-            - "Tell me about PR #28"
-            - "What tech stack is used?"
-            - "How does the profile switching work?"
-            - "Create a tutorial from PR #45"
-            - "Generate a coding question based on issue #23"
+- "What is the architecture of the authentication service?"
+- "Show me the first issue"
+- "Where is the notification logic implemented?"
+- "Tell me about PR #28"
+- "What tech stack is used?"
+- "How does the profile switching work?"
+- "Create a tutorial from PR #45"
+- "Generate a coding question based on issue #23"
 
-            Feel free to ask me anything about the codebase!"""
+Feel free to ask me anything about the codebase!"""
 
         self.logger.info("GREETING | Generated greeting response")
 
