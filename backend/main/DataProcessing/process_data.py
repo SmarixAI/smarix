@@ -53,6 +53,207 @@ REPO_OWNER, REPO_NAME = load_current_repo_from_state()
 FULL_REPO_NAME = f"{REPO_OWNER}/{REPO_NAME}"
 
 
+class GraphExtractor:
+    """
+    Extracts Graph Nodes and Edges from Code Analysis data.
+    Prepares data for Neo4j/NetworkX.
+    Supports AST for Python/JS and Regex Fallback for C/C++/Java/Go/Rust/Ruby/PHP etc.
+    """
+    
+    # Regex patterns for fallback extraction
+    # Format: "language": {"function": r"pattern", "class": r"pattern", "import": r"pattern"}
+    LANGUAGE_REGEX = {
+        # C-family (C, C++, Java, C#, Dart, Kotlin, Scala, Swift)
+        "c": {
+            "function": r'(?:[\w\[\]\*]+\s+)+(\w+)\s*\([^)]*\)\s*\{',
+            "class": r'(?:struct|enum)\s+(\w+)',
+            "import": r'#include\s*[<"]([^>"]+)[>"]'
+        },
+        "cpp": {
+            "function": r'(?:[\w\[\]\*:<>]+\s+)+(\w+)\s*\([^)]*\)\s*\{', 
+            "class": r'(?:class|struct|enum|namespace)\s+(\w+)',
+            "import": r'#include\s*[<"]([^>"]+)[>"]'
+        },
+        "java": {
+            "function": r'(?:public|protected|private|static|\s)+[\w\[\]<>]+\s+(\w+)\s*\([^)]*\)\s*(?:throws\s+[\w,\s]+)?\s*\{',
+            "class": r'(?:class|interface|enum)\s+(\w+)',
+            "import": r'import\s+([\w\.]+);'
+        },
+        "csharp": {
+            "function": r'(?:public|protected|private|static|virtual|override|\s)+[\w\[\]<>]+\s+(\w+)\s*\([^)]*\)\s*\{',
+            "class": r'(?:class|interface|struct|enum)\s+(\w+)',
+            "import": r'using\s+([\w\.]+);'
+        },
+        "dart": {
+            "function": r'(?:[\w\[\]<>]+\s+)?(\w+)\s*\([^)]*\)\s*\{',
+            "class": r'(?:class|mixin|enum)\s+(\w+)',
+            "import": r"import\s+['\"]([^'\"]+)['\"];"
+        },
+        
+        # Modern Compiled (Go, Rust)
+        "go": {
+            "function": r'func\s+(?:\([^)]+\)\s+)?(\w+)\s*\(', # Matches func Name() and func (r *Receiver) Name()
+            "class": r'type\s+(\w+)\s+(?:struct|interface)',
+            "import": r'import\s+(?:\(([^)]+)\)|"([^"]+)")' # Handles block and single imports
+        },
+        "rust": {
+            "function": r'fn\s+(\w+)\s*(?:<[^>]+>)?\s*\(',
+            "class": r'(?:struct|enum|trait|impl)\s+(\w+)',
+            "import": r'use\s+([\w:{}]+);'
+        },
+
+        # Scripting (Ruby, PHP, Shell)
+        "ruby": {
+            "function": r'def\s+(\w+)',
+            "class": r'(?:class|module)\s+(\w+)',
+            "import": r'require\s+[\'"]([^\'"]+)[\'"]'
+        },
+        "php": {
+            "function": r'function\s+(\w+)\s*\(',
+            "class": r'(?:class|interface|trait)\s+(\w+)',
+            "import": r'(?:require|include)(?:_once)?\s*[\'"]([^\'"]+)[\'"]'
+        },
+        "shell": {
+            "function": r'(\w+)\s*\(\)\s*\{', # function_name() {
+            "class": None,
+            "import": r'source\s+([^\s]+)'
+        }
+    }
+
+    def __init__(self, repo_name):
+        self.repo_name = repo_name
+        self.nodes = {} 
+        self.edges = [] 
+
+    def _make_id(self, _type, name, parent_file):
+        """Create deterministic Node IDs"""
+        clean_path = parent_file.replace("/", "_").replace(".", "_")
+        return f"{self.repo_name}::{clean_path}::{_type}::{name}"
+
+    def process_analysis(self, file_path: str, analysis: Dict[str, Any], content: str = ""):
+        """Convert analysis into Nodes and Edges. Uses AST if available, else Regex."""
+        
+        if not analysis: analysis = {}
+        
+        # 1. Always create the File Node
+        file_id = f"{self.repo_name}::{file_path}"
+        lang = analysis.get('language') or 'text'
+        
+        self.nodes[file_id] = {
+            "id": file_id,
+            "label": "File",
+            "properties": {"name": Path(file_path).name, "path": file_path, "lang": lang}
+        }
+
+        # 2. Check for Rich AST Data (Python/JS)
+        has_ast = (isinstance(analysis.get('classes'), list) and len(analysis['classes']) > 0) or \
+                  (isinstance(analysis.get('functions'), list) and len(analysis['functions']) > 0)
+
+        if has_ast:
+            self._process_ast(file_path, file_id, analysis)
+        elif content:
+            # 3. Fallback: Use Regex for other languages
+            # Normalize lang string (e.g., "c++" -> "cpp")
+            norm_lang = lang.lower()
+            if norm_lang == "c++": norm_lang = "cpp"
+            
+            self._process_generic(file_path, file_id, content, norm_lang)
+
+    def _process_ast(self, file_path, file_id, analysis):
+        """Handle rich data from Python/JS analyzers"""
+        # Extract Classes
+        for cls in analysis.get('classes', []):
+            class_id = self._make_id("CLASS", cls['name'], file_path)
+            self.nodes[class_id] = {
+                "id": class_id, "label": "Class",
+                "properties": {"name": cls['name'], "lineno": cls.get('lineno')}
+            }
+            self.edges.append({"source": class_id, "target": file_id, "type": "DEFINED_IN"})
+            
+            for base in cls.get('bases', []):
+                base_id = self._make_id("CLASS", base, "EXTERNAL") 
+                self.edges.append({"source": class_id, "target": base_id, "type": "INHERITS"})
+
+        # Extract Functions
+        for func in analysis.get('functions', []):
+            func_id = self._make_id("FUNCTION", func['name'], file_path)
+            self.nodes[func_id] = {
+                "id": func_id, "label": "Function",
+                "properties": {"name": func['name'], "args": func.get('args', []), "lineno": func.get('lineno')}
+            }
+            self.edges.append({"source": func_id, "target": file_id, "type": "DEFINED_IN"})
+
+            for call in func.get('calls', []):
+                call_target_id = f"CONCEPT::{call}" 
+                self.edges.append({"source": func_id, "target": call_target_id, "type": "CALLS"})
+
+        # Extract Imports
+        for imp in analysis.get('imports', []):
+            module_name = imp.get('module') if isinstance(imp, dict) else imp
+            if module_name:
+                mod_id = f"MODULE::{module_name}"
+                self.edges.append({"source": file_id, "target": mod_id, "type": "IMPORTS"})
+
+    def _process_generic(self, file_path, file_id, content, lang):
+        """Fallback: Regex extraction for various languages"""
+        import re
+        
+        # Get patterns for this language, or default to empty
+        patterns = self.LANGUAGE_REGEX.get(lang)
+        
+        # If language not found, try to map based on extension logic or defaults
+        if not patterns:
+            # Simple fallback for C-like languages if exact match missing
+            if lang in ['h', 'hpp', 'cxx', 'cc']: patterns = self.LANGUAGE_REGEX['cpp']
+            elif lang in ['kt', 'kotlin']: patterns = self.LANGUAGE_REGEX['java'] # Close enough
+            elif lang in ['ts', 'tsx', 'js', 'jsx']: patterns = self.LANGUAGE_REGEX['dart'] # Close enough structure
+            else: return # Unknown language, skip extraction
+
+        # 1. Extract Functions
+        if patterns.get("function"):
+            for match in re.finditer(patterns["function"], content, re.MULTILINE):
+                # Some patterns return groups, we want the name group (usually last one)
+                func_name = match.group(1) if match.lastindex >= 1 else match.group(0)
+                
+                # Filter common keywords to avoid false positives
+                if func_name in ['if', 'for', 'while', 'switch', 'catch', 'return']: continue
+                
+                func_id = self._make_id("FUNCTION", func_name, file_path)
+                self.nodes[func_id] = {
+                    "id": func_id, "label": "Function",
+                    "properties": {"name": func_name, "lang": lang}
+                }
+                self.edges.append({"source": func_id, "target": file_id, "type": "DEFINED_IN"})
+
+        # 2. Extract Classes/Structs
+        if patterns.get("class"):
+            for match in re.finditer(patterns["class"], content, re.MULTILINE):
+                class_name = match.group(1)
+                class_id = self._make_id("CLASS", class_name, file_path)
+                self.nodes[class_id] = {
+                    "id": class_id, "label": "Class",
+                    "properties": {"name": class_name, "lang": lang}
+                }
+                self.edges.append({"source": class_id, "target": file_id, "type": "DEFINED_IN"})
+
+        # 3. Extract Imports/Includes
+        if patterns.get("import"):
+            for match in re.finditer(patterns["import"], content, re.MULTILINE):
+                # Handles Go block imports slightly differently, but generally group 1 or 2 is the name
+                module_name = match.group(1) if match.group(1) else match.group(2) if match.lastindex >= 2 else None
+                
+                if module_name:
+                    # Clean up quotes/newlines
+                    module_name = module_name.strip().strip('"').strip("'").replace('\n', '')
+                    mod_id = f"MODULE::{module_name}"
+                    self.edges.append({"source": file_id, "target": mod_id, "type": "IMPORTS"})
+
+    def get_graph_data(self):
+        return {
+            "nodes": list(self.nodes.values()),
+            "edges": self.edges
+        }
+
 class CodeAnalyzer:
     """
     Advanced code analysis for repository structure and metrics
@@ -781,11 +982,12 @@ class DataChunker:
     Intelligent chunking with cross-reference tracking, edge case handling, and code analysis
     """
 
-    def __init__(self):
+    def __init__(self, repo_name):
         self.chunk_registry = {}  # Track all chunks by ID for deduplication
         self.entity_map = defaultdict(set)  # Map entities to chunk IDs
         self.git_keywords = set()  # Global keywords for correlation
         self.code_analyzer = CodeAnalyzer()  # Initialize code analyzer
+        self.graph_extractor = GraphExtractor(repo_name)
 
     def generate_chunk_id(self, data: Dict[str, Any], chunk_type: str, index: int) -> str:
         """Generate deterministic, collision-resistant chunk IDs"""
@@ -1459,6 +1661,10 @@ class DataChunker:
             content = codefile.get('content', '') or ''
             size = codefile.get('size', 0)
 
+            ast_analysis = codefile.get('analysis') 
+            if path:
+                self.graph_extractor.process_analysis(path, ast_analysis, content)
+                
             chunk = {
                 'chunk_id': chunk_id,
                 'type': 'code',
@@ -1474,7 +1680,7 @@ class DataChunker:
                 'content': {
                     'content': content,
                     'size': size,
-                    'analysis': codefile.get('analysis')
+                    'analysis': ast_analysis
                 },
                 'search_hints': {
                     'text': content[:1000],
@@ -1903,10 +2109,10 @@ def process_multi_source_data(
 def process_file(input_file: str, output_dir: str, chunker: 'DataChunker',
                 git_entities: Optional[Dict[str, Set[str]]] = None) -> Dict[str, Any]:
     """
-    Load JSON, Chunk with dual indexing, Save SPLIT BY TYPE
+    Load JSON, Chunk with dual indexing, Save SPLIT BY TYPE + GRAPH DATA
     """
     print("=" * 70)
-    print("ENTERPRISE-GRADE MULTI-SOURCE PROCESSING WITH CODE ANALYSIS")
+    print("ENTERPRISE-GRADE MULTI-SOURCE PROCESSING WITH GRAPH EXTRACTION")
     print("=" * 70)
 
     print(f"Loading {input_file}")
@@ -1948,11 +2154,9 @@ def process_file(input_file: str, output_dir: str, chunker: 'DataChunker',
     repo_output_dir = Path(output_dir) / repo_owner / repo_name
     repo_output_dir.mkdir(parents=True, exist_ok=True)
 
-
     # Optional subfolders
     chunks_dir = repo_output_dir / "chunks"
     chunks_dir.mkdir(exist_ok=True)
-
 
     # GROUP CHUNKS BY TYPE
     from collections import defaultdict
@@ -1984,6 +2188,21 @@ def process_file(input_file: str, output_dir: str, chunker: 'DataChunker',
     print(f"   Saved {len(chunks)} combined chunks -> {Path(combined_file).name}")
     saved_files.append(combined_file)
 
+    # --- NEW: SAVE GRAPH DATA ---
+    graph_has_data = len(chunker.graph_extractor.nodes) > 0
+    
+    if source == 'git' or graph_has_data:
+        # Extract graph data from the chunker's state
+        graph_data = chunker.graph_extractor.get_graph_data()
+        graph_file = repo_output_dir / "graph_data.json"
+        
+        with open(graph_file, 'w', encoding='utf-8') as f:
+            json.dump(graph_data, f, indent=2, ensure_ascii=False)
+            
+        print(f"   🕸️  Graph Data Saved: {len(graph_data['nodes'])} nodes, {len(graph_data['edges'])} edges -> {graph_file.name}")
+        saved_files.append(graph_file)
+    # ----------------------------
+
     # Save entities
     if entities and source == 'git':
         entities_file = repo_output_dir / "entities.json"
@@ -2001,14 +2220,12 @@ def process_file(input_file: str, output_dir: str, chunker: 'DataChunker',
 
     # Save retrieval strategy
     strategy = {
-
         "repository": {
-        "owner": REPO_OWNER,
-        "name": REPO_NAME,
-        "full_name": f"{REPO_OWNER}/{REPO_NAME}",
-        "url": f"https://github.com/{REPO_OWNER}/{REPO_NAME}",
+            "owner": REPO_OWNER,
+            "name": REPO_NAME,
+            "full_name": f"{REPO_OWNER}/{REPO_NAME}",
+            "url": f"https://github.com/{REPO_OWNER}/{REPO_NAME}",
         },
-
         'source': source,
         'chatbot_flow': [
             "1. User query received",
@@ -2032,6 +2249,10 @@ def process_file(input_file: str, output_dir: str, chunker: 'DataChunker',
             'processed': len(processed_chunks),
             'raw_references': len(raw_chunks),
             'by_type': {k: len(v) for k, v in chunks_by_type.items()}
+        },
+        'graph_stats': {
+            'nodes_count': len(chunker.graph_extractor.nodes) if source == 'git' else 0,
+            'edges_count': len(chunker.graph_extractor.edges) if source == 'git' else 0
         },
         'correlation_strategy': 'Entity-based linking (authors, issue/PR numbers, commits, file paths)',
         'edge_case_handling': 'Raw data preserved for queries requiring full context or missing from processed chunks',
@@ -2086,7 +2307,7 @@ def batch_process():
     output_dir = "../../data/DataProcessing"
 
     # Initialize shared chunker
-    chunker = DataChunker()
+    chunker = DataChunker(REPO_NAME)
 
     git_files = []
     if os.path.exists(git_dir):
@@ -2312,7 +2533,7 @@ def main():
             sys.exit(1)
 
         try:
-            chunker = DataChunker()
+            chunker = DataChunker(REPO_NAME)
             process_file(args.input_file, args.output_dir, chunker)
             print("✅ Success!")
         except Exception as e:

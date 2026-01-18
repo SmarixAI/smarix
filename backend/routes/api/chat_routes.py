@@ -14,6 +14,7 @@ from datetime import datetime
 import difflib
 from openai import OpenAI
 import re
+from backend.routes.api import shared
 
 # Import shared state and utilities from main module
 # Note: This creates a circular import, but Python handles it at runtime
@@ -270,47 +271,47 @@ async def chat(request: ChatRequest):
     import sys
     
     # Try to get chatbot_api module from sys.modules first (handles script execution)
-    chatbot_api_module = None
-    for module_name in ['__main__', 'routes.api.chatbot_api', 'chatbot_api']:
-        if module_name in sys.modules:
-            chatbot_api_module = sys.modules[module_name]
-            break
+    # chatbot_api_module = None
+    # for module_name in ['__main__', 'routes.api.chatbot_api', 'chatbot_api']:
+    #     if module_name in sys.modules:
+    #         chatbot_api_module = sys.modules[module_name]
+    #         break
     
-    if chatbot_api_module:
-        # Use the already-loaded module
-        chatbot_instance = chatbot_api_module.chatbot_instance
-        chatbot_config = chatbot_api_module.chatbot_config
-        get_user_repo = chatbot_api_module.get_user_repo
-        ensure_chatbot_for_repo = chatbot_api_module.ensure_chatbot_for_repo
-    else:
-        # Fallback to normal import
-        try:
-            from .chatbot_api import (
-                chatbot_instance,
-                chatbot_config,
-                get_user_repo,
-                ensure_chatbot_for_repo,
-            )
-        except (ImportError, ValueError):
-            # When running as script, use absolute import
-            from pathlib import Path
-            current_dir = Path(__file__).parent
-            backend_dir = current_dir.parent.parent
-            if str(backend_dir) not in sys.path:
-                sys.path.insert(0, str(backend_dir))
-            from routes.api.chatbot_api import (
-                chatbot_instance,
-                chatbot_config,
-                get_user_repo,
-                ensure_chatbot_for_repo,
-            )
+    # if chatbot_api_module:
+    #     # Use the already-loaded module
+    #     chatbot_instance = chatbot_api_module.chatbot_instance
+    #     chatbot_config = chatbot_api_module.chatbot_config
+    #     get_user_repo = chatbot_api_module.get_user_repo
+    #     ensure_chatbot_for_repo = chatbot_api_module.ensure_chatbot_for_repo
+    # else:
+    #     # Fallback to normal import
+    #     try:
+    #         from .chatbot_api import (
+    #             chatbot_instance,
+    #             chatbot_config,
+    #             get_user_repo,
+    #             ensure_chatbot_for_repo,
+    #         )
+    #     except (ImportError, ValueError):
+    #         # When running as script, use absolute import
+    #         from pathlib import Path
+    #         current_dir = Path(__file__).parent
+    #         backend_dir = current_dir.parent.parent
+    #         if str(backend_dir) not in sys.path:
+    #             sys.path.insert(0, str(backend_dir))
+    #         from routes.api.chatbot_api import (
+    #             chatbot_instance,
+    #             chatbot_config,
+    #             get_user_repo,
+    #             ensure_chatbot_for_repo,
+    #         )
     
-    if chatbot_instance is None:
+    if shared.chatbot_instance is None:
         # Provide more detailed error message
         error_detail = "Chatbot not initialized"
-        if chatbot_config:
-            config_status = chatbot_config.get("status", "unknown")
-            config_error = chatbot_config.get("error")
+        if shared.chatbot_config:
+            config_status = shared.chatbot_config.get("status", "unknown")
+            config_error = shared.chatbot_config.get("error")
             if config_error:
                 error_detail = f"Chatbot not initialized: {config_error}"
             elif config_status == "waiting":
@@ -323,7 +324,7 @@ async def chat(request: ChatRequest):
 
     try:
         # Determine which repo to use based on username
-        user_repo = get_user_repo(request.username)
+        user_repo = shared.get_user_repo(request.username)
         
         if user_repo:
             owner = user_repo.get("owner")
@@ -332,7 +333,7 @@ async def chat(request: ChatRequest):
             if owner and repo_name:
                 print(f"Using repo for user {request.username or 'anonymous'}: {owner}/{repo_name}")
                 # Ensure chatbot is using the correct repo database
-                if not ensure_chatbot_for_repo(owner, repo_name):
+                if not shared.ensure_chatbot_for_repo(owner, repo_name):
                     print(f"⚠ Warning: Could not switch to repo {owner}/{repo_name}, using current database")
         else:
             if request.username:
@@ -346,7 +347,7 @@ async def chat(request: ChatRequest):
         if request.username:
             print(f"User: {request.username}")
 
-        result = chatbot_instance.chat(
+        result = shared.chatbot_instance.chat(
             request.query, 
             request.filters,
             session_id=request.session_id,
@@ -372,7 +373,7 @@ async def chat(request: ChatRequest):
             print()
         print()
 
-        session_id = chatbot_instance.get_session_id()
+        session_id = shared.chatbot_instance.get_session_id()
 
         return ChatResponse(
             answer=result["answer"],
@@ -397,26 +398,23 @@ async def chat(request: ChatRequest):
 @router.post("/new-session")
 async def new_session():
     """Generate a fresh session ID and persist it immediately."""
-    from .chatbot_api import chatbot_instance
     
-    if chatbot_instance is None:
+    if shared.chatbot_instance is None:
         raise HTTPException(status_code=503, detail="Chatbot not initialized")
 
-    new_session_id = chatbot_instance.start_new_session()
+    new_session_id = shared.chatbot_instance.start_new_session()
     print(f"🔄 NEW SESSION CREATED AND STORED: {new_session_id}")
     return {"session_id": new_session_id, "message": "New session created"}
 
 
 @router.post("/clear-history")
 async def clear_history(request: ChatRequest):
-    """Clear conversation history for specific session"""
-    from .chatbot_api import chatbot_instance
     
-    if chatbot_instance is None:
+    if shared.chatbot_instance is None:
         raise HTTPException(status_code=503, detail="Chatbot not initialized")
 
-    session_id = chatbot_instance.set_session(request.session_id)
-    chatbot_instance.conversation_store.clear_session(session_id)
+    session_id = shared.chatbot_instance.set_session(request.session_id)
+    shared.chatbot_instance.conversation_store.clear_session(session_id)
     print(f"History cleared for session {session_id[:8]}...\n")
 
     return {"status": "success", "message": "Session history cleared"}
@@ -425,17 +423,16 @@ async def clear_history(request: ChatRequest):
 @router.get("/sessions")
 async def get_sessions(limit: int = 50):
     """List recent sessions with metadata"""
-    from .chatbot_api import chatbot_instance
     
-    if chatbot_instance is None:
+    if shared.chatbot_instance is None:
         raise HTTPException(status_code=503, detail="Chatbot not initialized")
 
     try:
         sessions = []
-        all_sessions = chatbot_instance.conversation_store.get_all_sessions(limit=limit)
+        all_sessions = shared.chatbot_instance.conversation_store.get_all_sessions(limit=limit)
 
         for session_data in all_sessions:
-            stats = chatbot_instance.conversation_store.get_session_stats(session_data['session_id'])
+            stats = shared.chatbot_instance.conversation_store.get_session_stats(session_data['session_id'])
             sessions.append({
                 'session_id': session_data['session_id'],
                 'title': session_data.get('title', 'New Chat'),
@@ -452,20 +449,18 @@ async def get_sessions(limit: int = 50):
 
 @router.get("/load-session/{session_id}")
 async def load_session(session_id: str):
-    """Load messages for a specific session"""
-    from .chatbot_api import chatbot_instance
     
-    if chatbot_instance is None:
+    if shared.chatbot_instance is None:
         raise HTTPException(status_code=503, detail="Chatbot not initialized")
 
     try:
-        messages = chatbot_instance.conversation_store.get_full_history(session_id)
-        chatbot_instance.set_session(session_id)
+        messages = shared.chatbot_instance.conversation_store.get_full_history(session_id)
+        shared.chatbot_instance.set_session(session_id)
 
         return {
             'session_id': session_id,
             'messages': messages,
-            'stats': chatbot_instance.conversation_store.get_session_stats(session_id)
+            'stats': shared.chatbot_instance.conversation_store.get_session_stats(session_id)
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -473,13 +468,12 @@ async def load_session(session_id: str):
 
 @router.delete("/delete-session/{session_id}")
 async def delete_session(session_id: str):
-    from .chatbot_api import chatbot_instance
     
-    if chatbot_instance is None:
+    if shared.chatbot_instance is None:
         raise HTTPException(status_code=503, detail="Chatbot not initialized")
 
     try:
-        chatbot_instance.conversation_store.delete_session(session_id)
+        shared.chatbot_instance.conversation_store.delete_session(session_id)
         return {"status": "success", "message": "Session deleted"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -488,29 +482,28 @@ async def delete_session(session_id: str):
 @router.get("/stats")
 async def get_stats():
     """Get chatbot statistics including GitHub and Gmail stats"""
-    from .chatbot_api import chatbot_instance
-    
-    if chatbot_instance is None:
+
+    if shared.chatbot_instance is None:
         raise HTTPException(status_code=503, detail="Chatbot not initialized")
 
     try:
-        stats = chatbot_instance.get_stats()
+        stats = shared.chatbot_instance.get_stats()
 
         enhanced_stats = {
             "status": "success",
             "stats": stats,
             "databases": {
                 "github": {
-                    "enabled": bool(chatbot_instance.db),
+                    "enabled": bool(shared.chatbot_instance.db),
                     "vectors": (
-                        chatbot_instance.db.index.ntotal if chatbot_instance.db else 0
+                        shared.chatbot_instance.db.index.ntotal if shared.chatbot_instance.db else 0
                     ),
                 },
                 "gmail": {
-                    "enabled": bool(chatbot_instance.gmail_db),
+                    "enabled": bool(shared.chatbot_instance.gmail_db),
                     "emails": (
-                        chatbot_instance.gmail_db.index.ntotal
-                        if chatbot_instance.gmail_db
+                        shared.chatbot_instance.gmail_db.index.ntotal
+                        if shared.chatbot_instance.gmail_db
                         else 0
                     ),
                 },
@@ -525,22 +518,21 @@ async def get_stats():
 @router.get("/semantic-cache-stats")
 async def get_semantic_cache_stats():
     """Get universal semantic cache statistics with confidence breakdown"""
-    from .chatbot_api import chatbot_instance
-    
-    if chatbot_instance is None:
+
+    if shared.chatbot_instance is None:
         raise HTTPException(status_code=503, detail="Chatbot not initialized")
 
     try:
         # Check if semantic cache is enabled
-        if not (chatbot_instance.query_rewriter and
-                chatbot_instance.query_rewriter.semantic_cache):
+        if not (shared.chatbot_instance.query_rewriter and
+                shared.chatbot_instance.query_rewriter.semantic_cache):
             return {
                 "status": "disabled",
                 "message": "Semantic cache not enabled. Ensure Redis and embeddings are configured."
             }
 
         # Get comprehensive stats
-        cache_stats = chatbot_instance.query_rewriter.semantic_cache.get_stats()
+        cache_stats = shared.chatbot_instance.query_rewriter.semantic_cache.get_stats()
 
         return {
             "status": "success",
@@ -555,21 +547,20 @@ async def get_semantic_cache_stats():
 @router.post("/invalidate-cache/{session_id}")
 async def invalidate_semantic_cache(session_id: str):
     """Invalidate semantic cache for a specific session"""
-    from .chatbot_api import chatbot_instance
-    
-    if chatbot_instance is None:
+
+    if shared.chatbot_instance is None:
         raise HTTPException(status_code=503, detail="Chatbot not initialized")
 
     try:
-        if not (chatbot_instance.query_rewriter and
-                chatbot_instance.query_rewriter.semantic_cache):
+        if not (shared.chatbot_instance.query_rewriter and
+                shared.chatbot_instance.query_rewriter.semantic_cache):
             raise HTTPException(
                 status_code=400,
                 detail="Semantic cache not enabled"
             )
 
         # Invalidate cache
-        count = chatbot_instance.query_rewriter.semantic_cache.invalidate_session(session_id)
+        count = shared.chatbot_instance.query_rewriter.semantic_cache.invalidate_session(session_id)
 
         return {
             "status": "success",
@@ -585,25 +576,24 @@ async def invalidate_semantic_cache(session_id: str):
 @router.post("/clear-all-cache")
 async def clear_all_semantic_cache():
     """Clear entire semantic cache (admin operation)"""
-    from .chatbot_api import chatbot_instance
-    
-    if chatbot_instance is None:
+
+    if shared.chatbot_instance is None:
         raise HTTPException(status_code=503, detail="Chatbot not initialized")
 
     try:
-        if not (chatbot_instance.query_rewriter and
-                chatbot_instance.query_rewriter.semantic_cache):
+        if not (shared.chatbot_instance.query_rewriter and
+                shared.chatbot_instance.query_rewriter.semantic_cache):
             raise HTTPException(
                 status_code=400,
                 detail="Semantic cache not enabled"
             )
 
         # Clear in-memory index
-        initial_size = len(chatbot_instance.query_rewriter.semantic_cache.cache_index)
-        chatbot_instance.query_rewriter.semantic_cache.cache_index.clear()
+        initial_size = len(shared.chatbot_instance.query_rewriter.semantic_cache.cache_index)
+        shared.chatbot_instance.query_rewriter.semantic_cache.cache_index.clear()
 
         # Reset stats
-        chatbot_instance.query_rewriter.semantic_cache.stats = {
+        shared.chatbot_instance.query_rewriter.semantic_cache.stats = {
             'total_queries': 0,
             'exact_matches': 0,
             'very_high_matches': 0,
@@ -629,12 +619,11 @@ async def clear_all_semantic_cache():
 @router.get("/config")
 async def get_config():
     """Get current configuration"""
-    from .chatbot_api import chatbot_config, available_providers
-    
+
     return {
         "status": "success",
-        "config": chatbot_config,
-        "available_providers": available_providers,
+        "config": shared.chatbot_config,
+        "available_providers": shared.available_providers,
     }
 
 
@@ -1219,11 +1208,10 @@ async def evaluate_submission(request: EvaluationRequest):
 @router.websocket("/ws/chat")
 async def websocket_chat(websocket: WebSocket):
     """WebSocket for streaming responses with GitHub + Gmail support"""
-    from .chatbot_api import chatbot_instance, get_user_repo, ensure_chatbot_for_repo
-    
+
     await websocket.accept()
 
-    if chatbot_instance is None:
+    if shared.chatbot_instance is None:
         await websocket.send_json(
             {"type": "error", "message": "Chatbot not initialized"}
         )
@@ -1245,7 +1233,7 @@ async def websocket_chat(websocket: WebSocket):
                 continue
 
             # Determine which repo to use based on username
-            user_repo = get_user_repo(username)
+            user_repo = shared.get_user_repo(username)
             
             if user_repo:
                 owner = user_repo.get("owner")
@@ -1253,7 +1241,7 @@ async def websocket_chat(websocket: WebSocket):
                 
                 if owner and repo_name:
                     # Ensure chatbot is using the correct repo database
-                    if not ensure_chatbot_for_repo(owner, repo_name):
+                    if not shared.ensure_chatbot_for_repo(owner, repo_name):
                         await websocket.send_json({
                             "type": "status",
                             "message": f"Warning: Could not switch to repo {owner}/{repo_name}, using current database"
@@ -1263,7 +1251,7 @@ async def websocket_chat(websocket: WebSocket):
                 {"type": "status", "message": "Searching GitHub codebase..."}
             )
 
-            result = chatbot_instance.chat(query, message.get("filters"))
+            result = shared.chatbot_instance.chat(query, message.get("filters"))
 
             if result.get("emails"):
                 await websocket.send_json(

@@ -371,43 +371,62 @@ class CodeStructureCollector:
         
         return frameworks
     
-    def _build_component_hierarchy(self, code_files: List[Dict]) -> Dict[str, Any]:
-        """Build component/class hierarchy"""
+    def _build_component_hierarchy(self, code_files: List[Dict], analyzed_files: List[Dict] = None) -> Dict[str, Any]:
+        """Build component/class hierarchy using AST data when available"""
         hierarchy = {
             'classes': [],
             'inheritance': {},
             'imports': {}
         }
         
+        # 1. create a lookup for analyzed files
+        analyzed_map = {f['file_path']: f for f in analyzed_files} if analyzed_files else {}
+
         for file_data in code_files:
-            content = file_data.get('content', '')
             file_path = file_data.get('path', '')
             
-            # Find class definitions
-            class_matches = re.findall(
-                r'class\s+(\w+)(?:\(([^)]+)\))?:',
-                content
-            )
-            
-            for class_name, parent_classes in class_matches:
-                hierarchy['classes'].append({
-                    'name': class_name,
-                    'file': file_path
-                })
+            # CHECK: Do we have rich AST data for this file?
+            if file_path in analyzed_map and analyzed_map[file_path].get('language') == 'python':
+                analysis = analyzed_map[file_path]
                 
-                if parent_classes:
-                    parents = [p.strip() for p in parent_classes.split(',')]
-                    hierarchy['inheritance'][class_name] = parents
+                # A. Use AST Data (100% Accurate)
+                for cls in analysis.get('classes', []):
+                    hierarchy['classes'].append({
+                        'name': cls['name'],
+                        'file': file_path,
+                        'lineno': cls.get('lineno')
+                    })
+                    # Capture Inheritance from AST
+                    if cls.get('bases'):
+                         hierarchy['inheritance'][cls['name']] = cls['bases']
+
+                # B. Use AST Imports
+                if analysis.get('imports'):
+                    # Convert list of dicts [{'module': 'x'}] to simple list for backward compat
+                    hierarchy['imports'][file_path] = [
+                        i['module'] for i in analysis['imports'] if isinstance(i, dict)
+                    ]
+
+            else:
+                content = file_data.get('content', '')
+                
+                # Regex for Classes
+                class_matches = re.findall(r'class\s+(\w+)(?:\(([^)]+)\))?:', content)
+                for class_name, parent_classes in class_matches:
+                    hierarchy['classes'].append({'name': class_name, 'file': file_path})
+                    if parent_classes:
+                        parents = [p.strip() for p in parent_classes.split(',')]
+                        hierarchy['inheritance'][class_name] = parents
             
-            # Extract imports
-            import_matches = re.findall(
-                r'(?:from\s+([\w.]+)\s+import|import\s+([\w.]+))',
-                content
-            )
-            
-            if import_matches:
-                hierarchy['imports'][file_path] = [
-                    m[0] or m[1] for m in import_matches
-                ]
+                # Extract imports
+                import_matches = re.findall(
+                    r'(?:from\s+([\w.]+)\s+import|import\s+([\w.]+))',
+                    content
+                )
+                
+                if import_matches:
+                    hierarchy['imports'][file_path] = [
+                        m[0] or m[1] for m in import_matches
+                    ]
         
         return hierarchy
