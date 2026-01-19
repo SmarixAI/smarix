@@ -1296,6 +1296,7 @@ class DataChunker:
             'type': 'repository_overview',
             'source': 'git',
             'repo_name': reponame,
+            'repo_owner': REPO_OWNER,  # Add owner for strict filtering
             'retrieval_priority': 0,
             'techstack': techstack,
             'summary': {
@@ -1379,7 +1380,8 @@ class DataChunker:
                 'chunk_id': chunk_id,
                 'type': 'issue',
                 'source': 'git',
-                'repo_name': reponame,
+                'repo_name': reponame,  # Ensure this matches current repo
+                'repo_owner': REPO_OWNER,  # Add owner for consistency
                 'retrieval_priority': 1,
                 'entities': {
                     'issue_number': issue.get('number'),
@@ -1522,6 +1524,7 @@ class DataChunker:
                 'type': 'pr',
                 'source': 'git',
                 'repo_name': reponame,
+                'repo_owner': REPO_OWNER,  # Add owner for strict filtering
                 'retrieval_priority': 1,
                 'entities': {
                     'pr_number': pr.get('number'),
@@ -1607,6 +1610,7 @@ class DataChunker:
                 'type': 'commit',
                 'source': 'git',
                 'repo_name': reponame,
+                'repo_owner': REPO_OWNER,  # Add owner for strict filtering
                 'retrieval_priority': 2,
                 'entities': {
                     'sha': commit.get('sha'),
@@ -1670,6 +1674,7 @@ class DataChunker:
                 'type': 'code',
                 'source': 'git',
                 'repo_name': reponame,
+                'repo_owner': REPO_OWNER,  # Add owner for strict filtering
                 'retrieval_priority': 2,
                 'entities': {
                     'path': path,
@@ -1712,6 +1717,7 @@ class DataChunker:
                 'type': 'documentation',
                 'source': 'git',
                 'repo_name': reponame,
+                'repo_owner': REPO_OWNER,  # Add owner for strict filtering
                 'retrieval_priority': 1,
                 'entities': {
                     'path': doc.get('path', ''),
@@ -1777,6 +1783,7 @@ class DataChunker:
                 'type': 'analyzed_file',
                 'source': 'git',
                 'repo_name': reponame,
+                'repo_owner': REPO_OWNER,  # Add owner for strict filtering
                 'retrieval_priority': 2,
                 'entities': {
                     'path': analyzed.get('path', '')
@@ -1799,6 +1806,8 @@ class DataChunker:
                 'type': 'onboarding',
                 'source': 'git',
                 'repo_name': reponame,
+                'repo_owner': REPO_OWNER,  # Add owner for strict filtering
+                'repo_name': reponame,
                 'retrieval_priority': 1,
                 'content': data['onboarding'],
                 'search_hints': {
@@ -1816,6 +1825,8 @@ class DataChunker:
                 'chunk_id': f"{reponame}_offboarding_all",
                 'type': 'offboarding',
                 'source': 'git',
+                'repo_name': reponame,
+                'repo_owner': REPO_OWNER,  # Add owner for strict filtering
                 'repo_name': reponame,
                 'retrieval_priority': 1,
                 'content': data['offboarding'],
@@ -2109,11 +2120,53 @@ def process_multi_source_data(
 def process_file(input_file: str, output_dir: str, chunker: 'DataChunker',
                 git_entities: Optional[Dict[str, Set[str]]] = None) -> Dict[str, Any]:
     """
-    Load JSON, Chunk with dual indexing, Save SPLIT BY TYPE + GRAPH DATA
+    Load JSON, Chunk with dual indexing, Save SPLIT BY TYPE
+    Only processes data for the current repo specified in runtime_state.json
     """
     print("=" * 70)
     print("ENTERPRISE-GRADE MULTI-SOURCE PROCESSING WITH GRAPH EXTRACTION")
     print("=" * 70)
+
+    # Validate input file path matches current repo
+    input_path = Path(input_file).resolve()
+    
+    # Check if the file path matches the expected repo structure
+    # Expected structure: .../DataCollectionFromGit/{owner}/{repo}/{repo}.json
+    path_parts = list(input_path.parts)
+    
+    # Find DataCollectionFromGit in the path
+    try:
+        git_dir_idx = path_parts.index('DataCollectionFromGit')
+        if git_dir_idx >= 0 and len(path_parts) >= git_dir_idx + 4:
+            file_owner = path_parts[git_dir_idx + 1]
+            file_repo = path_parts[git_dir_idx + 2]
+            file_name = path_parts[git_dir_idx + 3]
+            
+            # Validate owner and repo match
+            if file_owner != REPO_OWNER or file_repo != REPO_NAME:
+                print(f"⚠️  WARNING: File path indicates different repo: {file_owner}/{file_repo}")
+                print(f"   Expected: {REPO_OWNER}/{REPO_NAME}")
+                print(f"   File: {input_file}")
+                print(f"   Skipping this file to prevent cross-repo contamination")
+                return {
+                    'output_files': [],
+                    'chunk_count': 0,
+                    'processed_count': 0,
+                    'raw_count': 0,
+                    'repo_name': REPO_NAME,
+                    'source': 'unknown',
+                    'entities': {},
+                    'techstack': None
+                }
+            
+            # Also validate filename matches repo name
+            if file_name != f"{REPO_NAME}.json":
+                print(f"⚠️  WARNING: Filename mismatch: {file_name} (expected: {REPO_NAME}.json)")
+    except (ValueError, IndexError):
+        # If we can't parse the path structure, log a warning but continue
+        # (some files might be in different locations)
+        print(f"⚠️  WARNING: Could not validate file path structure for: {input_file}")
+        print(f"   Proceeding with caution - will filter chunks by repo_name")
 
     print(f"Loading {input_file}")
     with open(input_file, 'r', encoding='utf-8') as f:
@@ -2125,6 +2178,7 @@ def process_file(input_file: str, output_dir: str, chunker: 'DataChunker',
 
     print(f"Source: {source}")
     print(f"File: {repo_name}")
+    print(f"Processing for repo: {repo_owner}/{repo_name}")
 
     if source == 'git':
         print(f"Issues: {len(data.get('issues', []))}")
@@ -2141,10 +2195,57 @@ def process_file(input_file: str, output_dir: str, chunker: 'DataChunker',
     print("Processing...")
     chunks, entities, tech_stack = process_multi_source_data(data, repo_name, chunker, git_entities)
 
+    # CRITICAL: Filter chunks to ensure they only belong to the current repo
+    # Also ensure all chunks have the correct repo_name set
+    expected_repo_full = f"{repo_owner}/{repo_name}"
+    filtered_chunks = []
+    skipped_count = 0
+    fixed_count = 0
+    
+    for chunk in chunks:
+        chunk_repo = chunk.get('repo_name', '').strip()
+        chunk_owner = chunk.get('repo_owner', '').strip()
+        
+        # STRICT matching: BOTH owner AND repo name must match
+        matches_repo = False
+        
+        # Check full format first: "owner/repo"
+        if chunk_repo == expected_repo_full:
+            matches_repo = True
+        # Check separate owner and repo name (BOTH must match)
+        elif chunk_owner == repo_owner and chunk_repo == repo_name:
+            matches_repo = True
+        # If repo_name is stored as just the name, owner must still match
+        elif chunk_repo == repo_name and chunk_owner == repo_owner:
+            matches_repo = True
+        
+        if matches_repo:
+            # Ensure repo_name is set correctly (use just repo_name, not full format)
+            if chunk.get('repo_name') != repo_name:
+                chunk['repo_name'] = repo_name
+                fixed_count += 1
+            # Ensure repo_owner is set
+            if chunk.get('repo_owner') != repo_owner:
+                chunk['repo_owner'] = repo_owner
+                fixed_count += 1
+            filtered_chunks.append(chunk)
+        else:
+            skipped_count += 1
+            if skipped_count <= 5:  # Only print first 5 warnings
+                print(f"   ⚠️  Skipping chunk with mismatched repo: '{chunk_owner}/{chunk_repo}' (expected: '{repo_owner}/{repo_name}')")
+                print(f"      Chunk ID: {chunk.get('chunk_id', 'unknown')}, Type: {chunk.get('type', 'unknown')}")
+    
+    if skipped_count > 0:
+        print(f"   ⚠️  Filtered out {skipped_count} chunks from other repositories")
+    if fixed_count > 0:
+        print(f"   ✓ Fixed repo_name for {fixed_count} chunks")
+    
+    chunks = filtered_chunks  # Use filtered chunks from now on
+
     processed_chunks = [c for c in chunks if not c.get('is_raw_data', False)]
     raw_chunks = [c for c in chunks if c.get('is_raw_data', False)]
 
-    print(f"Total chunks: {len(chunks)}")
+    print(f"Total chunks (after filtering): {len(chunks)}")
     print(f" - Processed chunks: {len(processed_chunks)}")
     print(f" - Raw data references: {len(raw_chunks)}")
 
@@ -2163,6 +2264,10 @@ def process_file(input_file: str, output_dir: str, chunker: 'DataChunker',
     chunks_by_type = defaultdict(list)
 
     for chunk in chunks:
+        # Double-check repo_name before grouping
+        chunk_repo = chunk.get('repo_name', '')
+        if chunk_repo != repo_name and chunk_repo != expected_repo_full:
+            continue  # Skip chunks that don't match
         chunk_type = chunk.get('type', 'unknown')
         chunks_by_type[chunk_type].append(chunk)
 
@@ -2301,18 +2406,38 @@ def process_file(input_file: str, output_dir: str, chunker: 'DataChunker',
 def batch_process():
     """
     Batch process with Git-first → Gmail correlation strategy
+    Only processes files for the current repo specified in runtime_state.json
     """
     git_dir = "../../data/DataCollectionFromGit"
     gmail_dir = "../../data/DataCollectionFromGmail"
     output_dir = "../../data/DataProcessing"
 
+    # Display current repo being processed
+    print(f"\n{'=' * 70}")
+    print(f"PROCESSING DATA FOR CURRENT REPO: {REPO_OWNER}/{REPO_NAME}")
+    print(f"{'=' * 70}\n")
+
     # Initialize shared chunker
     chunker = DataChunker(REPO_NAME)
 
+    # Filter Git files to only include the current repo
     git_files = []
     if os.path.exists(git_dir):
-        git_files = list(Path(git_dir).glob("*/*/*.json"))
-        print(f"📂 Found {len(git_files)} Git files")
+        # Build the expected path for the current repo
+        expected_repo_path = Path(git_dir) / REPO_OWNER / REPO_NAME / f"{REPO_NAME}.json"
+        
+        # Find all Git files first
+        all_git_files = list(Path(git_dir).glob("*/*/*.json"))
+        print(f"📂 Found {len(all_git_files)} Git files (total)")
+        
+        # Filter to only the current repo
+        git_files = [f for f in all_git_files if f == expected_repo_path]
+        
+        if git_files:
+            print(f"📂 Processing Git file for current repo: {REPO_OWNER}/{REPO_NAME}")
+        else:
+            print(f"⚠️  No Git file found for current repo: {REPO_OWNER}/{REPO_NAME}")
+            print(f"   Expected path: {expected_repo_path}")
 
     gmail_files = []
     if os.path.exists(gmail_dir):
@@ -2499,18 +2624,6 @@ def batch_process():
             )
         print(f"\n💾 Aggregated tech stack summary saved: {aggregated_summary_file}")
 
-    print(f"\n💡 Next Steps:")
-    print(
-        f"   1. Review generated retrieval strategies in {output_dir}/*_retrieval_strategy.json"
-    )
-    print(f"   2. Review tech stack analysis in {output_dir}/*_tech_stack.json")
-    print(
-        f"   3. Review aggregated summary in {output_dir}/aggregated_tech_stack_summary.json"
-    )
-    print(f"   4. Use chunks for vector embedding and indexing")
-    print(f"   5. Implement chatbot with GitHub-first → Gmail correlation logic")
-    print(f"   6. Set up hybrid search (semantic + keyword) for optimal retrieval")
-    print(f"   7. Integrate tech stack awareness in chatbot responses")
 
 
 def main():
