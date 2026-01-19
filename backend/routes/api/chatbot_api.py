@@ -129,11 +129,11 @@ def find_vector_databases():
                         if has_structure:
                             github_db = str(db_dir)
                             print(f"Found Multi-Index DB: {db_dir} (repo: {owner}/{repo_name})")
-                            break
+                            return github_db, None, owner, repo_name  # Return owner and repo_name
         except Exception as e:
             print(f"⚠ Warning: Could not read runtime_state.json: {e}")
 
-    return github_db, None
+    return github_db, None, None, None
 
 
 async def startup():
@@ -162,7 +162,7 @@ async def startup():
     print(f"\nUsing provider: {default_provider}\n")
 
     print("Looking for vector databases...")
-    github_db_path, gmail_db_path = find_vector_databases()
+    github_db_path, gmail_db_path, db_owner, db_repo = find_vector_databases()
 
     if not github_db_path:
         print("No multi-index vector database found.")
@@ -191,6 +191,8 @@ async def startup():
             use_hybrid_retrieval=True,
             verbose=False,
             routing_method="llm",
+            repo_owner=db_owner,
+            repo_name=db_repo,
         )
 
         databases = []
@@ -526,6 +528,8 @@ def ensure_chatbot_for_repo(owner: str, repo_name: str) -> bool:
             use_hybrid_retrieval=True,
             verbose=False,
             routing_method="llm",
+            repo_owner=owner,
+            repo_name=repo_name,
         )
         
         # Update config

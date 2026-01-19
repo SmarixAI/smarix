@@ -1130,7 +1130,8 @@ def prepare_enhanced_chunk_for_embedding(chunk: Dict[str, Any]) -> Dict[str, Any
         "chunk_type": chunk_type,   # <-- CRITICAL for retriever & embedding
         "type": chunk_type,
         "source": source,
-        "repo_name": chunk.get("repo_name"),
+        "repo_name": chunk.get("repo_name") or f"{REPO_OWNER}/{REPO_NAME}",  # Use current repo as fallback
+        "repo_owner": REPO_OWNER,
         "file_path": file_path_val,
         "language": entities.get("language") or chunk.get("language"),
         "filename": entities.get("filename") or derived_filename,
@@ -1572,14 +1573,34 @@ def main():
         batch_generate(args)
         return
 
-    processed_dir = Path("../../data/DataProcessing") / REPO_OWNER / REPO_NAME / "chunks"
+    # Use absolute paths from script location (not relative to CWD)
+    backend_dir = Path(__file__).resolve().parents[2]
+    processed_dir = backend_dir / "data" / "DataProcessing" / REPO_OWNER / REPO_NAME / "chunks"
+    embeddings_base_dir = backend_dir / "data" / "Embeddings"
+    output_base_dir = backend_dir / "data" / "Embeddings"
+    
     chunks_files = sorted(
         f for f in processed_dir.glob("*_chunks.json")
         if not any(skip in f.name for skip in ['strategy', 'entities', 'aggregated'])
     )
 
     if not chunks_files:
-        print(f"Error: No JSON files found in {processed_dir}")
+        # Check if embeddings already exist for this repo
+        embeddings_dir = embeddings_base_dir / REPO_OWNER / REPO_NAME
+        if embeddings_dir.exists() and any(embeddings_dir.glob("*/faiss.index")):
+            print(f"✅ Embeddings already exist for {REPO_OWNER}/{REPO_NAME}")
+            print(f"   Location: {embeddings_dir}")
+            print(f"\n   No processed chunks found at: {processed_dir}")
+            print(f"   This is expected if embeddings were already generated.")
+            print(f"\n   To regenerate embeddings:")
+            print(f"   1. Run: python main/DataProcessing/process_data.py")
+            print(f"   2. Then: python main/GenerateEmbedding/generate_embedding.py")
+            sys.exit(0)
+        
+        print(f"Error: No JSON files found at {processed_dir}")
+        print(f"\nTo generate embeddings, you need:")
+        print(f"  1. Run data processing first: python main/DataProcessing/process_data.py")
+        print(f"  2. Then generate embeddings: python main/GenerateEmbedding/generate_embedding.py")
         sys.exit(1)
 
     print(f"Found {len(chunks_files)} JSON files to embed:")
@@ -1589,11 +1610,11 @@ def main():
     provider = args.provider
     model = args.model
 
-    cache_dir = Path(str(args.cache_dir))
+    # Use absolute paths for cache and output
+    cache_dir = backend_dir / "data" / "Embeddings" / "embeddings_cache"
     cache_dir.mkdir(parents=True, exist_ok=True)
 
-    base_output_dir = Path(str(args.output_dir))
-    output_dir = base_output_dir / REPO_OWNER / REPO_NAME
+    output_dir = output_base_dir / REPO_OWNER / REPO_NAME
     output_dir.mkdir(parents=True, exist_ok=True)
 
 
@@ -1739,47 +1760,128 @@ def main():
             print(f"   2. Create .env file with: COHERE_API_KEY=your-key")
         sys.exit(1)
 
-    print("\nGenerating embeddings...")
-    try:
-        result = generator.generate_embeddings(prepared_chunks)
-    except Exception as e:
-        print(f"Error generating embeddings: {e}")
-        sys.exit(1)
-
-    output_name = f"{file_name}_embeddings"
-    output_path = output_dir / output_name
-    generator.save_embeddings(result, str(output_path))
+    print("\nGenerating embeddings by chunk type...")
+    
+    # Group prepared chunks by type
+    chunks_by_type = defaultdict(list)
+    for prepared_chunk in prepared_chunks:
+        chunk_type = prepared_chunk.get('type', 'unknown')
+        chunks_by_type[chunk_type].append(prepared_chunk)
+    
+    # Track results by type
+    type_results = {}
+    all_chunks_for_combined = []
+    
+    # Generate embeddings for each chunk type separately
+    print(f"\n   Found {len(chunks_by_type)} chunk types:")
+    for chunk_type in sorted(chunks_by_type.keys()):
+        print(f"      {chunk_type}: {len(chunks_by_type[chunk_type])} chunks")
+    
+    print("\n   Generating embeddings for each type...\n")
+    
+    for chunk_type, type_chunks in sorted(chunks_by_type.items()):
+        if chunk_type == 'repo_metrics':
+            # Skip metrics chunk for individual type generation
+            all_chunks_for_combined.extend(type_chunks)
+            continue
+        
+        print(f"   Processing {chunk_type}...")
+        try:
+            # Generate embeddings for this type
+            type_result = generator.generate_embeddings(type_chunks)
+            
+            # Create type-specific directory
+            type_dir = output_dir / chunk_type
+            type_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Save embeddings
+            output_path = type_dir / chunk_type
+            generator.save_embeddings(type_result, str(output_path))
+            
+            type_results[chunk_type] = {
+                'path': output_path,
+                'config': type_result['config'],
+                'stats': type_result['statistics'],
+                'count': len(type_chunks)
+            }
+            
+            print(f"      ✓ Saved -> {chunk_type}/{chunk_type}.npy + {chunk_type}.json")
+            print(f"        Embeddings: {type_result['statistics'].get('count', 0)}")
+            
+            # Collect for combined index
+            all_chunks_for_combined.extend(type_chunks)
+            
+        except Exception as e:
+            print(f"      ✗ Error: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    # Generate combined "all" index
+    if all_chunks_for_combined:
+        print(f"\n   Generating combined 'all' index...")
+        try:
+            print(f"      Total chunks: {len(all_chunks_for_combined)}")
+            
+            # Generate combined embeddings
+            combined_result = generator.generate_embeddings(all_chunks_for_combined)
+            
+            # Save to "all" directory
+            all_dir = output_dir / "all"
+            all_dir.mkdir(parents=True, exist_ok=True)
+            
+            combined_path = all_dir / "all"
+            generator.save_embeddings(combined_result, str(combined_path))
+            
+            type_results['all'] = {
+                'path': combined_path,
+                'config': combined_result['config'],
+                'stats': combined_result['statistics'],
+                'count': len(all_chunks_for_combined)
+            }
+            
+            print(f"      ✓ Saved -> all/all.npy + all.json")
+            print(f"        Embeddings: {combined_result['statistics'].get('count', 0)}")
+            
+        except Exception as e:
+            print(f"      ✗ Failed to generate combined index: {e}")
+            import traceback
+            traceback.print_exc()
 
     print(f"\n{'='*70}")
     print("EMBEDDING GENERATION COMPLETE")
     print(f"{'='*70}")
 
-    config = result['config']
-    stats = result['statistics']
-
     print(f"\nConfiguration:")
     print(f"   Source: {source_type}")
-    print(f"   Provider: {config['provider']}")
-    print(f"   Model: {config['model']}")
-    print(f"   Dimension: {config['dimension']}")
-    #print(f"   Embedded: {config['embedded_chunks']}/{config['total_chunks']}")
-    if config.get('skipped_chunks', 0) > 0:
-        print(f"   Skipped: {config['skipped_chunks']} (empty/raw data)")
+    print(f"   Provider: {provider}")
+    print(f"   Model: {model}")
+    if type_results:
+        first_result = next(iter(type_results.values()))
+        print(f"   Dimension: {first_result['config']['dimension']}")
 
-    print(f"\nEmbedding Statistics:")
-    print(f"   Total embeddings: {stats.get('count', 0)}")
-    print(f"   Mean norm: {stats.get('mean_norm', 0):.2f}")
-    print(f"   Sparsity: {stats.get('sparsity', 0):.2%}")
+    print(f"\nGenerated Embeddings by Type:")
+    total_embeddings = 0
+    for chunk_type in sorted(type_results.keys()):
+        result_info = type_results[chunk_type]
+        embeddings_count = result_info['stats'].get('count', 0)
+        total_embeddings += embeddings_count
+        print(f"   {chunk_type}: {embeddings_count} embeddings")
+        print(f"      Vectors: {result_info['path']}.npy ({_get_size(result_info['path'].with_suffix('.npy'))})")
+        print(f"      Metadata: {result_info['path']}.json ({_get_size(result_info['path'].with_suffix('.json'))})")
 
-    print(f"\nOutput:")
-    print(f"   Vectors: {output_path}.npy ({_get_size(output_path.with_suffix('.npy'))})")
-    print(f"   Metadata: {output_path}.json ({_get_size(output_path.with_suffix('.json'))})")
+    print(f"\n   Total embeddings: {total_embeddings}")
 
     if provider in ['openai', 'cohere']:
-        estimate_cost(provider, model, len(prepared_chunks), stats)
+        estimate_cost(provider, model, len(prepared_chunks), type_results.get('all', {}).get('stats', {}))
 
     print(f"\n{'='*70}\n")
-    print(f"Ready for vector DB indexing!")
+    print(f"Output structure:")
+    print(f"   {output_dir}/")
+    for chunk_type in sorted(type_results.keys()):
+        print(f"      {chunk_type}/")
+        print(f"         {chunk_type}.npy")
+        print(f"         {chunk_type}.json")
+    print(f"\nReady for vector DB indexing!")
     print(f"   Next: python core/VectorDB/build_indices.py\n")
 
 

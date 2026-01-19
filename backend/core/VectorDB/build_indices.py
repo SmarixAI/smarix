@@ -33,8 +33,10 @@ def load_current_repo_from_state():
 
 REPO_OWNER, REPO_NAME = load_current_repo_from_state()
 
-EMBEDDINGS_DIR = Path("../../data/Embeddings") / REPO_OWNER / REPO_NAME
-VECTORDB_ROOT = Path("../../data/VectorDB") / REPO_OWNER / REPO_NAME
+# Use absolute paths from script location (not relative to CWD)
+backend_dir = Path(__file__).resolve().parents[2]
+EMBEDDINGS_DIR = backend_dir / "data" / "Embeddings" / REPO_OWNER / REPO_NAME
+VECTORDB_ROOT = backend_dir / "data" / "VectorDB" / REPO_OWNER / REPO_NAME
 
 VECTORDB_ROOT.mkdir(parents=True, exist_ok=True)
 
@@ -127,7 +129,9 @@ def save_index_and_metadata(index_name: str, index, metadata):
     for m in metadata:
         m["chunk_type"] = m.get("chunk_type") or m.get("type")
         m["file_path"] = m.get("file_path") or m.get("path") or m.get("repo_file_path")
-        m["repo_name"] = m.get("repo_name") or m.get("repository") or m.get("repo")
+        # Ensure repo_name is set - fallback to current repo
+        m["repo_name"] = m.get("repo_name") or m.get("repository") or m.get("repo") or f"{REPO_OWNER}/{REPO_NAME}"
+        m["repo_owner"] = m.get("repo_owner") or REPO_OWNER
         m["language"] = m.get("language") or m.get("entities", {}).get("language")
         m["pr_number"] = m.get("pr_number") or m.get("metadata", {}).get("pr_number")
         m["issue_number"] = m.get("issue_number") or m.get("metadata", {}).get("issue_number")
@@ -167,6 +171,13 @@ def main():
     # Skip cache directories
     skip_dirs = {"embeddings_cache"}
 
+    # Check if embeddings directory exists
+    if not EMBEDDINGS_DIR.exists():
+        print(f"❌ Embeddings directory not found: {EMBEDDINGS_DIR}")
+        print(f"\nPlease run the embedding generation step first:")
+        print(f"   python main/GenerateEmbedding/generate_embedding.py")
+        return
+
     # List subfolders inside Embeddings directory
     type_dirs = [
         d for d in EMBEDDINGS_DIR.iterdir()
@@ -175,6 +186,8 @@ def main():
 
     if not type_dirs:
         print("❌ No folders found in Embeddings/. Expected: Embeddings/<type>/<type>.npy")
+        print(f"\nEmbeddings directory path: {EMBEDDINGS_DIR}")
+        print(f"Contents: {list(EMBEDDINGS_DIR.iterdir()) if EMBEDDINGS_DIR.exists() else 'directory does not exist'}")
         return
 
     print(f"📦 Found {len(type_dirs)} embedding types:")

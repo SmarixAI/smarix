@@ -11,6 +11,12 @@ from .query_type import QueryType
 class RetrievalMixin:
     
     
+    def _get_repo_filters(self) -> Optional[Dict[str, Any]]:
+        """Get repo-based filters if repo info is available"""
+        if hasattr(self, 'repo_full_name') and self.repo_full_name:
+            return {"repo_name": self.repo_full_name}
+        return None
+
     def retrieve_github_first(
         self,
         query_embedding: np.ndarray,
@@ -43,13 +49,24 @@ class RetrievalMixin:
                 target_id = int(match.group(1))
 
                 # Direct hit lookup (no embedding required)
+                repo_filters = self._get_repo_filters()
                 direct_results = []
-                direct_results += self.db.search_by_metadata(filters={"issue_number": target_id}, top_k=20) or []
-                direct_results += self.db.search_by_metadata(filters={"pr_number": target_id}, top_k=20) or []
-                direct_results += self.db.search_by_metadata(filters={"ticket_number": target_id}, top_k=20) or []
+                # Add repo filter to each search
+                issue_filter = {"issue_number": target_id}
+                pr_filter = {"pr_number": target_id}
+                ticket_filter = {"ticket_number": target_id}
+                
+                if repo_filters:
+                    issue_filter.update(repo_filters)
+                    pr_filter.update(repo_filters)
+                    ticket_filter.update(repo_filters)
+                
+                direct_results += self.db.search_by_metadata(filters=issue_filter, top_k=20) or []
+                direct_results += self.db.search_by_metadata(filters=pr_filter, top_k=20) or []
+                direct_results += self.db.search_by_metadata(filters=ticket_filter, top_k=20) or []
 
-                # Semantic similarity for more context
-                semantic_results = self.db.search(query_embedding, top_k=self.top_k * 2)
+                # Semantic similarity for more context (with repo filtering)
+                semantic_results = self.db.search(query_embedding, top_k=self.top_k * 2, filters=repo_filters)
 
                 # Merge → direct hits should dominate
                 merged = {}
@@ -83,13 +100,23 @@ class RetrievalMixin:
 
         # If entity extracted (existing behaviour)
         if entity:
+            repo_filters = self._get_repo_filters()
             entity_type = entity.get('type')
             if entity_type == 'issue':
-                results = self.db.search_by_metadata(query_embedding, filters={'issue_number': entity['number']}, top_k=10)
+                filters = {'issue_number': entity['number']}
+                if repo_filters:
+                    filters.update(repo_filters)
+                results = self.db.search_by_metadata(query_embedding, filters=filters, top_k=10)
             elif entity_type == 'pr':
-                results = self.db.search_by_metadata(query_embedding, filters={'pr_number': entity['number']}, top_k=10)
+                filters = {'pr_number': entity['number']}
+                if repo_filters:
+                    filters.update(repo_filters)
+                results = self.db.search_by_metadata(query_embedding, filters=filters, top_k=10)
             elif entity_type == 'commit':
-                results = self.db.search_by_metadata(query_embedding, filters={'sha': entity['sha']}, top_k=10)
+                filters = {'sha': entity['sha']}
+                if repo_filters:
+                    filters.update(repo_filters)
+                results = self.db.search_by_metadata(query_embedding, filters=filters, top_k=10)
             else:
                 results = []
 
@@ -97,7 +124,8 @@ class RetrievalMixin:
                 return results
 
         # Regular similarity search
-        results = self.db.search(query_embedding, top_k=retrieve_k)
+        repo_filters = self._get_repo_filters()
+        results = self.db.search(query_embedding, top_k=retrieve_k, filters=repo_filters)
 
         # Hybrid metadata boost (unchanged)
         if self.use_hybrid_retrieval:
@@ -190,14 +218,17 @@ class RetrievalMixin:
         top3_indexes_sorted = sorted(top3_indexes, key=lambda x: x[1], reverse=True)[:3]
         
         all_results = []
+        repo_filters = self._get_repo_filters()
         
         def search_index(index_type: str, top_k_count: int) -> List[Dict[str, Any]]:
             """Search a single index in parallel with specified top_k"""
             try:
+                # Include repo filters in the search
                 results = self.multi_index_store.search_by_type(
                     query_embedding,
                     index_type=index_type,
-                    top_k=top_k_count
+                    top_k=top_k_count,
+                    filters=repo_filters
                 )
                 # Add index type and routing confidence
                 for result in results:
@@ -231,7 +262,8 @@ class RetrievalMixin:
         try:
             combined_results = self.multi_index_store.search_all(
                 query_embedding,
-                top_k=5  # Fixed 5 for fallback
+                top_k=5,  # Fixed 5 for fallback
+                filters=repo_filters
             )
             for result in combined_results:
                 result['index_type'] = result.get('index_type', 'all')
@@ -890,11 +922,11 @@ class RetrievalMixin:
         db = getattr(self, "db", None)
 
         if db is None:
-            # Multi-index mode → chronological queries not ƒsupported
+            # Multi-index mode → chronological queries not supported
             return None
 
-
-        results = self.db.search(query_embedding, top_k=100)
+        repo_filters = self._get_repo_filters()
+        results = self.db.search(query_embedding, top_k=100, filters=repo_filters)
 
         matching_entities = []
         for result in results:
@@ -929,15 +961,21 @@ class RetrievalMixin:
         target_number = target['number']
 
         if entity_type == 'issue':
+            filters = {'issue_number': target_number}
+            if repo_filters:
+                filters.update(repo_filters)
             specific_results = self.db.search_by_metadata(
                 query_embedding,
-                filters={'issue_number': target_number},
+                filters=filters,
                 top_k=5
             )
         else:
+            filters = {'pr_number': target_number}
+            if repo_filters:
+                filters.update(repo_filters)
             specific_results = self.db.search_by_metadata(
                 query_embedding,
-                filters={'pr_number': target_number},
+                filters=filters,
                 top_k=5
             )
 

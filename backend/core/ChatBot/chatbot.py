@@ -41,7 +41,9 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         verbose: bool = False,
         log_file: Optional[str] = None,
         enable_multi_query: bool = False,
-        routing_method: str = "llm"  # Default to LLM-based routing for better accuracy
+        routing_method: str = "llm",  # Default to LLM-based routing for better accuracy
+        repo_owner: Optional[str] = None,  # Repository owner for filtering
+        repo_name: Optional[str] = None    # Repository name for filtering
     ):
         self.vector_db_path = vector_db_path
         self.gmail_db_path = gmail_db_path
@@ -51,6 +53,10 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         self.use_hybrid_retrieval = use_hybrid_retrieval
         self.verbose = verbose
         self.enable_multi_query = enable_multi_query
+        self.repo_owner = repo_owner
+        self.repo_name = repo_name
+        # Store repo_name string for filtering
+        self.repo_full_name = f"{repo_owner}/{repo_name}" if repo_owner and repo_name else None
 
         # Initialize multi-index store or single DB
         self.multi_index_store = None
