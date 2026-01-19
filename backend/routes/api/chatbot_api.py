@@ -319,13 +319,25 @@ def _import_route_module(module_name: str):
                 sys.path.insert(0, str(backend_dir))
             return __import__(f"routes.api.{module_name}", fromlist=[module_name])
 
-# Import and include chat routes
-chat_routes = _import_route_module("chat_routes")
-app.include_router(chat_routes.router)
 
-# Import and include admin routes
-admin_routes = _import_route_module("admin_routes")
-app.include_router(admin_routes.router)
+def register_route_modules():
+    """
+    Register route modules with the FastAPI app.
+    This function is called after all module-level code is executed to avoid circular imports.
+    """
+    # Import and include chat routes (deferred to avoid circular dependency)
+    chat_routes = _import_route_module("chat_routes")
+    app.include_router(chat_routes.router)
+
+    # Import and include admin routes (deferred to avoid circular dependency)
+    admin_routes = _import_route_module("admin_routes")
+    app.include_router(admin_routes.router)
+
+
+# Register route modules after all module-level code is executed
+# This breaks the circular dependency by ensuring chatbot_api is fully loaded
+# before chat_routes and admin_routes try to import from it
+register_route_modules()
 
 # ==================== SHARED HELPER FUNCTIONS ====================
 # These are used by both chat and admin routes

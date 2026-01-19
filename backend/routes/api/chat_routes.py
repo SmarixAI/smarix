@@ -16,8 +16,8 @@ from openai import OpenAI
 import re
 
 # Import shared state and utilities from main module
-# Note: This creates a circular import, but Python handles it at runtime
-# We import these at runtime in the functions that need them
+# All imports from chatbot_api are done inside functions (runtime imports)
+# to avoid circular dependency issues during module initialization
 
 router = APIRouter()
 
