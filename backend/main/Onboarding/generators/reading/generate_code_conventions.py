@@ -66,7 +66,15 @@ def _load_rag_chatbot_class():
     )
 
 
-RAGChatbot = _load_rag_chatbot_class()
+def get_rag_chatbot_class():
+    """Get RAGChatbot class, loading it if not already loaded."""
+    global RAGChatbot
+    if RAGChatbot is None:
+        RAGChatbot = _load_rag_chatbot_class()
+    return RAGChatbot
+
+# Initialize as None, will be loaded on first use
+RAGChatbot = None
 
 
 def parse_single_mcq_from_response(response_text: str) -> dict:
@@ -181,8 +189,8 @@ def parse_single_mcq_from_response(response_text: str) -> dict:
 
 def generate_section_qna(code_conventions_data, chatbot, gmail_db_path=None, provider='openai', model=None):
     """
-    Generate MCQ questions for each section based on subsections
-    Adds a 'qna' array to each section with one MCQ per subsection
+    Generate MCQ questions for each section based on teaching_content
+    Adds a 'qna' array to each section
     """
     print("\n" + "=" * 80)
     print("GENERATING MCQ QUESTIONS FOR EACH SECTION")
@@ -192,35 +200,41 @@ def generate_section_qna(code_conventions_data, chatbot, gmail_db_path=None, pro
     total_qnas = 0
     
     for section_name, section_content in sections.items():
-        if section_name == "qna":
+        if not isinstance(section_content, dict):
             continue
             
         print(f"Processing section: {section_name}")
         
-        subsections = {k: v for k, v in section_content.items() if k != "qna" and isinstance(v, dict) and "question" in v and "answer" in v}
+        # Get teaching_content array from section
+        teaching_content = section_content.get("teaching_content", [])
         
-        if not subsections:
-            print(f"  ⚠ No subsections found, skipping...\n")
+        if not teaching_content:
+            print(f"  ⚠ No teaching_content found, skipping...\n")
             continue
         
         qna_list = []
         
-        for idx, (subsection_name, subsection_data) in enumerate(subsections.items(), 1):
-            question_text = subsection_data.get("question", "")
-            answer_text = subsection_data.get("answer", "")
+        for idx, item_data in enumerate(teaching_content, 1):
+            if not isinstance(item_data, dict):
+                continue
+                
+            topic_text = item_data.get("topic", "")
+            content_text = item_data.get("content", "")
+            title = item_data.get("title", f"Item {idx}")
             
-            if not question_text or not answer_text or str(answer_text).startswith("Error:"):
-                print(f"  [{idx}/{len(subsections)}] ⚠ Skipping '{subsection_name}' (invalid data)")
+            if not topic_text or not content_text or str(content_text).startswith("Error:"):
+                print(f"  [{idx}/{len(teaching_content)}] ⚠ Skipping '{title}' (invalid data)")
                 continue
             
-            print(f"  [{idx}/{len(subsections)}] Generating MCQ for '{subsection_name}'...")
+            print(f"  [{idx}/{len(teaching_content)}] Generating MCQ for '{title}'...")
             
+            # Create prompt for generating MCQ
             mcq_prompt = f"""Based on the following topic information, generate ONE multiple-choice question (MCQ) for new employee onboarding.
 
-TOPIC: {subsection_name}
+TOPIC: {title}
 
 INFORMATION ABOUT THIS TOPIC:
-{answer_text[:2000]}
+{content_text[:2000]}
 
 CRITICAL REQUIREMENTS:
 - Generate EXACTLY ONE multiple-choice question (MCQ format)
@@ -247,7 +261,7 @@ Generate the MCQ question now."""
                 if answer:
                     mcq = parse_single_mcq_from_response(answer)
                     if mcq:
-                        mcq['subsection'] = subsection_name
+                        mcq['subsection'] = title
                         qna_list.append(mcq)
                         print(f"    ✓ Generated MCQ successfully")
                     else:
@@ -259,6 +273,7 @@ Generate the MCQ question now."""
                 print(f"    ✗ Error: {e}")
                 continue
         
+        # Add qna list to section
         if qna_list:
             sections[section_name]["qna"] = qna_list
             total_qnas += len(qna_list)
@@ -279,7 +294,8 @@ def generate_code_conventions_data( gmail_db_path=None, provider='openai', model
 
     # Initialize chatbot
     print("Loading chatbot...")
-    chatbot = RAGChatbot(
+    RAGChatbotClass = get_rag_chatbot_class()
+    chatbot = RAGChatbotClass(
         vector_db_path=VECTOR_DB_PATH,
         gmail_db_path=gmail_db_path,
         provider=provider,
@@ -435,12 +451,24 @@ def generate_code_conventions_data( gmail_db_path=None, provider='openai', model
             "model": getattr(chatbot, "model", None)
         },
         "sections": {
-            "styling_rules": {},
-            "naming_guidelines": {},
-            "pr_rules": {},
-            "issues_rules": {},
-            "testing_guidelines": {},
-            "referencing": {}
+            "styling_rules": {
+                "teaching_content": []
+            },
+            "naming_guidelines": {
+                "teaching_content": []
+            },
+            "pr_rules": {
+                "teaching_content": []
+            },
+            "issues_rules": {
+                "teaching_content": []
+            },
+            "testing_guidelines": {
+                "teaching_content": []
+            },
+            "referencing": {
+                "teaching_content": []
+            }
         }
     }
 
@@ -493,19 +521,21 @@ def generate_code_conventions_data( gmail_db_path=None, provider='openai', model
                                                                                                       1.0)
 
             section = section_mapping.get(idx - 1, "referencing")
-            code_conventions_data["sections"][section][key] = {
-                "question": question,
-                "answer": answer,
+            code_conventions_data["sections"][section]["teaching_content"].append({
+                "title": key,
+                "topic": question,
+                "content": answer,
                 "quality": quality
-            }
+            })
         except Exception as e:
             print(f"Error: {e}")
             section = section_mapping.get(idx - 1, "referencing")
-            code_conventions_data["sections"][section][key] = {
-                "question": question,
-                "answer": f"Error: {str(e)}",
+            code_conventions_data["sections"][section]["teaching_content"].append({
+                "title": key,
+                "topic": question,
+                "content": f"Error: {str(e)}",
                 "quality": 0.0
-            }
+            })
 
     # Save to file
     output_dir = ONBOARDING_ROOT / "reading"
@@ -517,18 +547,19 @@ def generate_code_conventions_data( gmail_db_path=None, provider='openai', model
         json.dump(code_conventions_data, f, indent=2, ensure_ascii=False)
 
     # Calculate success stats
-    total_answers = sum(len(section) for section in code_conventions_data["sections"].values())
+    total_answers = sum(len(section.get("teaching_content", [])) for section in code_conventions_data["sections"].values())
     successful_answers = sum(
         1 for section in code_conventions_data["sections"].values()
-        for item in section.values()
-        if not str(item.get('answer', '')).startswith('Error:')
+        for item in section.get("teaching_content", [])
+        if not str(item.get('content', '')).startswith('Error:')
     )
 
     print(f"\nDone! Saved to: {json_file}")
     print(f"📊 Answered {successful_answers}/{total_answers} questions successfully")
     print(f"\nData organized into {len(code_conventions_data['sections'])} sections:")
     for section_name, section_data in code_conventions_data["sections"].items():
-        print(f"   - {section_name}: {len(section_data)} questions")
+        teaching_count = len(section_data.get("teaching_content", []))
+        print(f"   - {section_name}: {teaching_count} teaching content items")
 
     # Generate MCQ questions for each section
     print("\n" + "=" * 80)
@@ -583,7 +614,8 @@ def add_qna_to_existing_code_conventions(
     
     print("⚙  Initializing chatbot...")
     try:
-        chatbot = RAGChatbot(
+        RAGChatbotClass = get_rag_chatbot_class()
+        chatbot = RAGChatbotClass(
             vector_db_path=VECTOR_DB_PATH,
             gmail_db_path=gmail_db_path,
             provider=provider,

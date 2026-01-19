@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs/promises';
 import path from 'path';
-import { MODULE_FILE_MAPPING } from '../../../../../components/onboarding/constants/ReadingOverview/modules';
+import { MODULE_FILE_MAPPING, getModuleName } from '../../../../../components/onboarding/constants/ReadingOverview/modules';
 
 interface JSONData {
   metadata?: any;
@@ -98,7 +98,9 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const repo = searchParams.get('repo');
     
-    const jsonFileName = MODULE_FILE_MAPPING[moduleId];
+    // Normalize moduleId to string name if it's numeric
+    const normalizedModuleId = getModuleName(moduleId);
+    const jsonFileName = MODULE_FILE_MAPPING[normalizedModuleId] || MODULE_FILE_MAPPING[moduleId];
 
     if (!jsonFileName) {
       return NextResponse.json(

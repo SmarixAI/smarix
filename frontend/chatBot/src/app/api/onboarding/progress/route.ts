@@ -2,10 +2,28 @@ import { NextRequest, NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
 
+// Mapping from numeric IDs to string names
+const MODULE_ID_TO_NAME: { [key: string]: string } = {
+  '1': 'overview',
+  '2': 'tech_stack',
+  '3': 'repo_structure',
+  '4': 'app_features',
+  '5': 'dev_setup',
+  '6': 'code_conventions',
+};
+
+// Helper function to normalize module ID (convert numeric to string name)
+const normalizeModuleId = (itemId: string): string => {
+  return MODULE_ID_TO_NAME[itemId] || itemId;
+};
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { employeeId, section, itemId, updates } = body;
+    
+    // Normalize itemId to use string names instead of numeric IDs
+    const normalizedItemId = normalizeModuleId(itemId);
 
     if (!employeeId || !section || !itemId || !updates) {
       return NextResponse.json(
@@ -76,11 +94,13 @@ export async function POST(request: NextRequest) {
         employee.onboarding.reading = { modules: [] };
       }
       const moduleIndex = employee.onboarding.reading.modules.findIndex(
-        (m: any) => m.id === itemId
+        (m: any) => m.id === normalizedItemId || m.id === itemId
       );
       if (moduleIndex !== -1) {
+        // Update existing module and ensure it uses normalized ID
         employee.onboarding.reading.modules[moduleIndex] = {
           ...employee.onboarding.reading.modules[moduleIndex],
+          id: normalizedItemId, // Ensure normalized ID is used
           ...updates,
           // Set completedAt if status is completed
           ...(updates.status === 'completed' && !updates.completedAt
@@ -91,18 +111,30 @@ export async function POST(request: NextRequest) {
             ? { startedAt: new Date().toISOString() }
             : {}),
         };
+      } else {
+        // Create new module if it doesn't exist
+        const newModule = {
+          id: normalizedItemId,
+          title: updates.title || normalizedItemId,
+          status: updates.status || 'pending',
+          progress: updates.progress || 0,
+          ...(updates.status === 'completed' ? { completedAt: new Date().toISOString() } : {}),
+          ...(updates.status === 'in-progress' ? { startedAt: new Date().toISOString() } : {}),
+        };
+        employee.onboarding.reading.modules.push(newModule);
       }
     } else if (section === 'qa') {
       if (!employee.onboarding.qa) {
         employee.onboarding.qa = { modules: [] };
       }
       const moduleIndex = employee.onboarding.qa.modules.findIndex(
-        (m: any) => m.id === itemId
+        (m: any) => m.id === normalizedItemId || m.id === itemId
       );
       if (moduleIndex !== -1) {
-        // Update existing module
+        // Update existing module and ensure it uses normalized ID
         employee.onboarding.qa.modules[moduleIndex] = {
           ...employee.onboarding.qa.modules[moduleIndex],
+          id: normalizedItemId, // Ensure normalized ID is used
           ...updates,
           ...(updates.status === 'completed' && !updates.completedAt
             ? { completedAt: new Date().toISOString() }
@@ -114,8 +146,8 @@ export async function POST(request: NextRequest) {
       } else {
         // Create new module if it doesn't exist
         const newModule = {
-          id: itemId,
-          title: updates.title || itemId,
+          id: normalizedItemId,
+          title: updates.title || normalizedItemId,
           status: updates.status || 'pending',
           score: updates.score !== undefined ? updates.score : 0,
           totalQuestions: updates.totalQuestions || 0,

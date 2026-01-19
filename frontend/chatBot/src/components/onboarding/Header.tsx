@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BookOpen, Code, Wrench, Check, ArrowLeft } from 'lucide-react';
+import { BookOpen, Code, Wrench, Check, LogOut } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthContext';
 import Image from 'next/image';
 import { Inter } from 'next/font/google';
@@ -128,11 +128,11 @@ export default function Header({ activeTab, setActiveTab }: HeaderProps) {
               </div>
               <button
                 onClick={logout}
-                className={`${inter.className} flex items-center gap-2 px-4 py-2.5 rounded-xl hover:bg-slate-50 transition-all text-[#0E1B2E] border-2 border-slate-200 hover:border-slate-300 text-sm font-semibold shadow-sm hover:shadow-md`}
-                title="Go Back"
+                className={`${inter.className} flex items-center gap-2 px-4 py-2.5 rounded-xl hover:bg-red-50 transition-all text-red-600 border-2 border-red-200 hover:border-red-300 text-sm font-semibold shadow-sm hover:shadow-md`}
+                title="Logout"
               >
-                <ArrowLeft className="w-4 h-4" />
-                Go Back
+                <LogOut className="w-4 h-4" />
+                Logout
               </button>
             </div>
           )}
