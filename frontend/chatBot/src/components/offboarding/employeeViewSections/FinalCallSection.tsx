@@ -3,13 +3,15 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle, ChevronDown, ChevronUp, FileText, Clock, Brain, HelpCircle, ExternalLink, Filter } from 'lucide-react';
 import Loader from '../Loader';
+import { Inter, JetBrains_Mono } from 'next/font/google';
 
-/* ================= TYPES ================= */
+const inter = Inter({ subsets: ['latin'], weight: ['400', '500', '600', '700'] });
+const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], weight: ['400', '500', '600'] });
 
 type Task = {
   id: string;
-  title?: string;  // Short title (AI-generated)
-  description?: string;  // Full description
+  title?: string;
+  description?: string;
   priority: 'High' | 'Medium' | 'Low';
   tags: string[];
   source: 'AI' | 'Manager';
@@ -27,45 +29,23 @@ type Props = {
   darkMode?: boolean;
 };
 
-/* ================= PRIORITY STYLES ================= */
-
-const getPriorityStyles = (priority: Task['priority'], darkMode: boolean): string => {
-  if (darkMode) {
-    return priority === 'High'
-      ? 'bg-red-900/30 text-red-300 border-red-700'
-      : priority === 'Medium'
-      ? 'bg-yellow-900/30 text-yellow-300 border-yellow-700'
-      : 'bg-green-900/30 text-green-300 border-green-700';
-  }
+const getPriorityStyles = (priority: Task['priority']): string => {
   return priority === 'High'
     ? 'bg-red-50 text-red-700 border-red-300'
     : priority === 'Medium'
-    ? 'bg-yellow-50 text-yellow-800 border-yellow-300'
+    ? 'bg-amber-50 text-amber-700 border-amber-300'
     : 'bg-green-50 text-green-700 border-green-300';
 };
-
-/* ================= COMPONENT ================= */
 
 export default function EmployeeFinalCallSection({ employeeId, darkMode = false }: Props) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [acknowledged, setAcknowledged] = useState(false);
   const [loading, setLoading] = useState(true);
-
-  // ✅ NEW: per-task completion state
-  const [completedTaskIds, setCompletedTaskIds] = useState<Set<string>>(
-    new Set()
-  );
-
-  // ✅ NEW: expanded task details
-  const [expandedTaskIds, setExpandedTaskIds] = useState<Set<string>>(
-    new Set()
-  );
-
-  // Filter state
+  const [completedTaskIds, setCompletedTaskIds] = useState<Set<string>>(new Set());
+  const [expandedTaskIds, setExpandedTaskIds] = useState<Set<string>>(new Set());
   const [filterOpen, setFilterOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'high' | 'medium' | 'low' | 'ai' | 'manager'>('all');
 
-  // Filter tasks based on active filter
   const filteredTasks = tasks.filter(task => {
     if (activeFilter === 'all') return true;
     if (activeFilter === 'high') return task.priority === 'High';
@@ -75,8 +55,6 @@ export default function EmployeeFinalCallSection({ employeeId, darkMode = false 
     if (activeFilter === 'manager') return task.source === 'Manager';
     return true;
   });
-
-  /* ================= LOAD TASKS ================= */
 
   useEffect(() => {
     setLoading(true);
@@ -96,10 +74,6 @@ export default function EmployeeFinalCallSection({ employeeId, darkMode = false 
           return;
         }
 
-        console.log('Looking for employeeId:', employeeId);
-        console.log('Available employeeIds:', data.employees.map((e: any) => e.employeeId || e.employee_id));
-        
-        // Try multiple matching strategies
         const employee =
           data.employees.find((e: any) => 
             e.employeeId === employeeId || 
@@ -107,11 +81,7 @@ export default function EmployeeFinalCallSection({ employeeId, darkMode = false 
             String(e.employeeId) === String(employeeId) ||
             String(e.employee_id) === String(employeeId)
           ) ?? data.employees[0];
-        
-        console.log('Found employee:', employee ? { employeeId: employee.employeeId || employee.employee_id, name: employee.name } : 'NOT FOUND');
-        console.log('Employee tasks:', employee?.tasks);
 
-        // Filter for final call tasks (IDs starting with "FC")
         const allTasks = (employee.tasks?.ai ?? []).map((task: any) => ({
           ...task,
           tags: task.tags || ['Manual']
@@ -122,14 +92,11 @@ export default function EmployeeFinalCallSection({ employeeId, darkMode = false 
           tags: task.tags || ['Manual']
         }));
 
-        // Filter final call tasks (FC prefix) from AI tasks
         const finalCallTasks = allTasks.filter((task: Task) => task.id.startsWith('FC'));
-        
-        // Combine final call tasks with manager tasks
         const combinedTasks = [...finalCallTasks, ...managerTasks];
 
         setTasks(combinedTasks);
-        setCompletedTaskIds(new Set()); // reset on employee change
+        setCompletedTaskIds(new Set());
       } catch (error) {
         console.error('Error fetching tasks data:', error);
       } finally {
@@ -140,16 +107,12 @@ export default function EmployeeFinalCallSection({ employeeId, darkMode = false 
     fetchData();
   }, [employeeId]);
 
-  /* ================= SUMMARY ================= */
-
   const summary = {
     total: tasks.length,
     explained: completedTaskIds.size,
     remaining: tasks.length - completedTaskIds.size,
     high: tasks.filter(t => t.priority === 'High').length
   };
-
-  /* ================= ACTION ================= */
 
   const markTaskExplained = (taskId: string) => {
     setCompletedTaskIds(prev => new Set(prev).add(taskId));
@@ -167,65 +130,56 @@ export default function EmployeeFinalCallSection({ employeeId, darkMode = false 
     });
   };
 
-  // Helper to get title - use title field if available, otherwise extract from description
   const getTaskTitle = (task: Task): string => {
-    // Use the title field if it exists (AI-generated short title)
     if (task.title) {
       return task.title;
     }
     
-    // Fallback: extract from description if title not available
     if (!task.description) return 'Untitled Task';
     
-    // Remove markdown formatting
     let cleanTitle = task.description
       .replace(/\*\*/g, '')
       .replace(/#{1,6}\s*/g, '')
       .replace(/\n/g, ' ')
       .trim();
     
-    // Remove common prefixes
     cleanTitle = cleanTitle
       .replace(/^Task Description[:\s]+(?:for|Knowledge Transfer[:\s]+)?/i, '')
       .replace(/^Handover session:\s*/i, '')
       .replace(/^Documentation requirements:\s*/i, '')
       .trim();
     
-    // Extract first meaningful phrase (before first period, colon, or newline)
     const firstPhrase = cleanTitle.split(/[.:\n]/)[0].trim();
     if (firstPhrase && firstPhrase.length > 0 && firstPhrase.length < 60) {
       return firstPhrase;
     }
     
-    // Fallback: first 60 characters
     return cleanTitle.length > 60 ? cleanTitle.substring(0, 60) + '...' : cleanTitle;
   };
-
-  /* ================= UI ================= */
 
   if (loading) {
     return <Loader darkMode={false} message="Loading tasks..." size="md" />;
   }
 
   return (
-    <div className="h-full flex flex-col">
-      {/* ================= TASK LIST (Scrollable) ================= */}
-      <div className="flex-1 rounded-lg border border-gray-200 shadow-sm bg-white flex flex-col overflow-hidden">
-        {/* Enhanced Header with Filter */}
-        <div className="px-5 py-4 border-b border-gray-200 bg-gradient-to-r from-[#0E1B2E]/5 to-[#0E1B2E]/10">
+    <div className="h-full flex flex-col gap-6 py-6">
+      {/* Task List */}
+      <div className="flex-1 rounded-2xl border-2 border-slate-200 shadow-lg bg-white/70 backdrop-blur-sm flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="px-6 py-5 border-b-2 border-slate-200 bg-gradient-to-r from-slate-50 to-blue-50/30">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
-              <h2 className="text-lg font-bold text-[#0E1B2E]">Final Call Tasks</h2>
-              <p className="text-xs text-[#0E1B2E]/60 mt-1">
+              <h2 className={`${inter.className} text-xl font-bold text-[#0E1B2E]`}>Final Call Tasks</h2>
+              <p className={`${inter.className} text-sm text-slate-600 mt-1 font-medium`}>
                 Topics you must explain before your last working day
               </p>
             </div>
             
-            {/* Filter Dropdown */}
+            {/* Filter */}
             <div className="relative">
               <button
                 onClick={() => setFilterOpen(!filterOpen)}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white hover:bg-[#0E1B2E]/5 transition-colors text-sm font-medium text-[#0E1B2E]"
+                className={`${inter.className} flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-slate-200 bg-white hover:bg-slate-50 transition-all text-sm font-semibold text-[#0E1B2E] shadow-sm`}
               >
                 <Filter className="w-4 h-4" />
                 <span>
@@ -239,9 +193,8 @@ export default function EmployeeFinalCallSection({ employeeId, darkMode = false 
                 <ChevronDown className={`w-4 h-4 transition-transform ${filterOpen ? 'rotate-180' : ''}`} />
               </button>
 
-              {/* Dropdown Menu */}
               {filterOpen && (
-                <div className="absolute right-0 top-full mt-2 w-48 rounded-lg border border-gray-200 bg-white shadow-lg z-10">
+                <div className="absolute right-0 top-full mt-2 w-52 rounded-xl border-2 border-slate-200 bg-white shadow-xl z-10 overflow-hidden">
                   <div className="py-1">
                     {[
                       { value: 'all', label: 'All Tasks' },
@@ -257,10 +210,10 @@ export default function EmployeeFinalCallSection({ employeeId, darkMode = false 
                           setActiveFilter(option.value as any);
                           setFilterOpen(false);
                         }}
-                        className={`w-full text-left px-4 py-2 text-sm transition-colors ${
+                        className={`${inter.className} w-full text-left px-4 py-2.5 text-sm font-semibold transition-all ${
                           activeFilter === option.value
-                            ? 'bg-[#0E1B2E] text-white'
-                            : 'text-[#0E1B2E] hover:bg-[#0E1B2E]/5'
+                            ? 'bg-gradient-to-r from-[#0E1B2E] to-blue-900 text-white'
+                            : 'text-[#0E1B2E] hover:bg-slate-50'
                         }`}
                       >
                         {option.label}
@@ -273,10 +226,10 @@ export default function EmployeeFinalCallSection({ employeeId, darkMode = false 
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto divide-y divide-gray-200">
+        <div className="flex-1 overflow-y-auto divide-y-2 divide-slate-200">
           {filteredTasks.length === 0 ? (
             <div className="flex items-center justify-center h-full p-8">
-              <p className="text-[#0E1B2E]/60">
+              <p className={`${inter.className} text-slate-600 text-center`}>
                 {tasks.length === 0 ? 'No tasks available' : 'No tasks match the selected filter'}
               </p>
             </div>
@@ -289,48 +242,41 @@ export default function EmployeeFinalCallSection({ employeeId, darkMode = false 
             return (
               <div
                 key={task.id}
-                className={`
-                  ${isDone ? 'opacity-60' : ''}
-                  transition-all duration-200
-                `}
+                className={`transition-all duration-200 ${isDone ? 'opacity-50' : ''}`}
               >
-                {/* MAIN TASK ROW */}
+                {/* Main Row */}
                 <div 
-                  className={`px-5 py-4 flex justify-between items-start gap-4 ${
-                    hasDetails ? 'cursor-pointer hover:bg-[#0E1B2E]/5 transition-colors' : ''
+                  className={`px-6 py-5 flex justify-between items-start gap-4 ${
+                    hasDetails ? 'cursor-pointer hover:bg-slate-50 transition-colors' : ''
                   }`}
                   onClick={() => hasDetails && toggleTaskDetails(task.id)}
                 >
-                  {/* LEFT */}
+                  {/* Left */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-start gap-2">
-                      <h4 className="font-bold text-base flex-1 text-[#0E1B2E]">
+                    <div className="flex items-start gap-3">
+                      <h4 className={`${inter.className} font-bold text-base flex-1 text-[#0E1B2E] leading-snug`}>
                         {getTaskTitle(task)}
                       </h4>
                       {task.ai_analyzed && (
-                        <span className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-[#0E1B2E]/5 text-[#0E1B2E] border border-[#0E1B2E]/20">
-                          <Brain className="w-3 h-3" />
+                        <span className={`${inter.className} flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border-2 border-blue-200`}>
+                          <Brain className="w-3.5 h-3.5" />
                           AI Analyzed
                         </span>
                       )}
                     </div>
-                    <div className="flex flex-wrap items-center gap-2 mt-2">
-                      <span className="text-xs text-[#0E1B2E]/60">
+                    <div className="flex flex-wrap items-center gap-2 mt-2.5">
+                      <span className={`${jetbrainsMono.className} text-xs text-slate-600 font-medium`}>
                         Source: {task.source}
                       </span>
-                      <span className="text-xs text-[#0E1B2E]/40">•</span>
-                      <span className="text-xs text-[#0E1B2E]/60">
+                      <span className="text-xs text-slate-400">•</span>
+                      <span className={`${inter.className} text-xs text-slate-600 font-medium`}>
                         Tags: {(task.tags || ['Manual']).join(', ')}
                       </span>
                       {task.estimated_time_minutes && (
                         <>
-                          <span className={`text-xs ${
-                            darkMode ? "text-gray-500" : "text-slate-500"
-                          }`}>•</span>
-                          <span className={`flex items-center gap-1 text-xs ${
-                            darkMode ? "text-gray-400" : "text-slate-600"
-                          }`}>
-                            <Clock className="w-3 h-3" />
+                          <span className="text-xs text-slate-400">•</span>
+                          <span className={`${jetbrainsMono.className} flex items-center gap-1 text-xs text-slate-600 font-medium`}>
+                            <Clock className="w-3.5 h-3.5" />
                             ~{task.estimated_time_minutes} min
                           </span>
                         </>
@@ -338,42 +284,24 @@ export default function EmployeeFinalCallSection({ employeeId, darkMode = false 
                     </div>
                   </div>
 
-                  {/* RIGHT */}
+                  {/* Right */}
                   <div className="flex items-center gap-3 flex-shrink-0">
-                    {/* PRIORITY */}
-                    <span
-                      className={`
-                        px-3 py-1.5 rounded-lg text-xs font-semibold border
-                        ${getPriorityStyles(task.priority, darkMode)}
-                      `}
-                    >
+                    {/* Priority */}
+                    <span className={`${inter.className} px-3 py-1.5 rounded-xl text-xs font-bold border-2 ${getPriorityStyles(task.priority)}`}>
                       {task.priority}
                     </span>
 
-                    {/* EXPAND BUTTON */}
+                    {/* Expand */}
                     {hasDetails && (
-                      <div
-                        className={`p-1.5 rounded-lg transition ${
-                          darkMode
-                            ? "text-gray-400"
-                            : "text-slate-500"
-                        }`}
-                        title={isExpanded ? "Collapse details" : "Expand details"}
-                      >
-                        {isExpanded ? (
-                          <ChevronUp className="w-4 h-4" />
-                        ) : (
-                          <ChevronDown className="w-4 h-4" />
-                        )}
+                      <div className="p-1.5 rounded-lg text-slate-500" title={isExpanded ? "Collapse details" : "Expand details"}>
+                        {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                       </div>
                     )}
 
-                    {/* ACTION */}
+                    {/* Action */}
                     {isDone ? (
                       <span 
-                        className={`flex items-center gap-1.5 text-xs font-semibold ${
-                          darkMode ? "text-green-400" : "text-green-700"
-                        }`}
+                        className={`${inter.className} flex items-center gap-1.5 text-xs font-bold text-green-700 bg-green-50 px-3 py-2 rounded-xl border-2 border-green-200`}
                         onClick={(e) => e.stopPropagation()}
                       >
                         <CheckCircle className="w-4 h-4" />
@@ -385,13 +313,7 @@ export default function EmployeeFinalCallSection({ employeeId, darkMode = false 
                           e.stopPropagation();
                           markTaskExplained(task.id);
                         }}
-                        className={`
-                          px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition
-                          ${darkMode
-                            ? "bg-[#0E1B2E] hover:bg-[#1a2f4d]"
-                            : "bg-[#0E1B2E] hover:bg-[#1a2f4d]"
-                          }
-                        `}
+                        className={`${inter.className} px-4 py-2.5 rounded-xl text-xs font-bold text-white transition-all bg-gradient-to-r from-[#0E1B2E] to-blue-900 hover:shadow-lg`}
                       >
                         Mark as Explained
                       </button>
@@ -399,52 +321,36 @@ export default function EmployeeFinalCallSection({ employeeId, darkMode = false 
                   </div>
                 </div>
 
-                {/* EXPANDED DETAILS */}
+                {/* Expanded Details */}
                 {isExpanded && hasDetails && (
-                  <div className={`px-5 pb-4 border-t ${
-                    darkMode ? "border-gray-700 bg-gray-800/50" : "border-slate-200 bg-slate-50"
-                  }`}>
-                    <div className="pt-4 space-y-4">
-                      {/* FULL DESCRIPTION (in expanded view) */}
+                  <div className="px-6 pb-5 border-t-2 border-slate-200 bg-slate-50/50">
+                    <div className="pt-5 space-y-5">
                       {task.description && (
                         <div>
-                          <div className="flex items-center gap-2 mb-2">
-                            <FileText className={`w-4 h-4 ${
-                              darkMode ? "text-gray-400" : "text-slate-600"
-                            }`} />
-                            <h4 className={`text-sm font-semibold ${
-                              darkMode ? "text-gray-200" : "text-slate-800"
-                            }`}>
+                          <div className="flex items-center gap-2 mb-3">
+                            <FileText className="w-4 h-4 text-slate-600" />
+                            <h4 className={`${inter.className} text-sm font-bold text-[#0E1B2E]`}>
                               Full Description
                             </h4>
                           </div>
-                          <div className={`text-sm ml-6 whitespace-pre-wrap ${
-                            darkMode ? "text-gray-300" : "text-slate-700"
-                          }`}>
+                          <div className={`${inter.className} text-sm ml-6 whitespace-pre-wrap text-slate-700 leading-relaxed`}>
                             {task.description.replace(/\*\*/g, '').replace(/#{1,6}\s*/g, '')}
                           </div>
                         </div>
                       )}
 
-                      {/* QUESTIONS */}
                       {task.questions && task.questions.length > 0 && (
                         <div>
-                          <div className="flex items-center gap-2 mb-2">
-                            <HelpCircle className={`w-4 h-4 ${
-                              darkMode ? "text-[#0E1B2E]/60" : "text-[#0E1B2E]"
-                            }`} />
-                            <h4 className={`text-sm font-semibold ${
-                              darkMode ? "text-gray-200" : "text-slate-800"
-                            }`}>
+                          <div className="flex items-center gap-2 mb-3">
+                            <HelpCircle className="w-4 h-4 text-blue-600" />
+                            <h4 className={`${inter.className} text-sm font-bold text-[#0E1B2E]`}>
                               Key Questions to Address
                             </h4>
                           </div>
                           <ul className="space-y-2 ml-6">
                             {task.questions.map((question, idx) => (
-                              <li key={idx} className={`text-sm ${
-                                darkMode ? "text-gray-300" : "text-slate-700"
-                              }`}>
-                                <span className="mr-2">•</span>
+                              <li key={idx} className={`${inter.className} text-sm text-slate-700 leading-relaxed`}>
+                                <span className="mr-2 text-blue-600 font-bold">•</span>
                                 {question}
                               </li>
                             ))}
@@ -452,74 +358,51 @@ export default function EmployeeFinalCallSection({ employeeId, darkMode = false 
                         </div>
                       )}
 
-                      {/* REFERENCE FILES */}
                       {task.reference && (
                         <div>
-                          <div className="flex items-center gap-2 mb-2">
-                            <FileText className={`w-4 h-4 ${
-                              darkMode ? "text-blue-400" : "text-blue-600"
-                            }`} />
-                            <h4 className={`text-sm font-semibold ${
-                              darkMode ? "text-gray-200" : "text-slate-800"
-                            }`}>
+                          <div className="flex items-center gap-2 mb-3">
+                            <FileText className="w-4 h-4 text-indigo-600" />
+                            <h4 className={`${inter.className} text-sm font-bold text-[#0E1B2E]`}>
                               Related Files
                             </h4>
                           </div>
-                          <div className={`text-xs ${
-                            darkMode ? "text-gray-400" : "text-slate-600"
-                          } ml-6`}>
+                          <div className="ml-6 space-y-1">
                             {task.reference.split(', ').map((ref, idx) => (
-                              <div key={idx} className="flex items-center gap-1 mb-1">
-                                <ExternalLink className="w-3 h-3" />
-                                <span className="font-mono">{ref.trim()}</span>
+                              <div key={idx} className={`${jetbrainsMono.className} flex items-center gap-2 text-xs text-slate-600`}>
+                                <ExternalLink className="w-3 h-3 text-indigo-600" />
+                                <span>{ref.trim()}</span>
                               </div>
                             ))}
                           </div>
                         </div>
                       )}
 
-                      {/* KNOWLEDGE CAPTURE METHOD */}
                       {task.knowledge_capture_method && (
                         <div>
-                          <div className="flex items-center gap-2 mb-2">
-                            <Clock className={`w-4 h-4 ${
-                              darkMode ? "text-purple-400" : "text-purple-600"
-                            }`} />
-                            <h4 className={`text-sm font-semibold ${
-                              darkMode ? "text-gray-200" : "text-slate-800"
-                            }`}>
+                          <div className="flex items-center gap-2 mb-3">
+                            <Clock className="w-4 h-4 text-purple-600" />
+                            <h4 className={`${inter.className} text-sm font-bold text-[#0E1B2E]`}>
                               Knowledge Capture Method
                             </h4>
                           </div>
-                          <div className={`text-sm ml-6 ${
-                            darkMode ? "text-gray-300" : "text-slate-700"
-                          }`}>
+                          <div className={`${inter.className} text-sm ml-6 text-slate-700`}>
                             {task.knowledge_capture_method.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}
                           </div>
                         </div>
                       )}
 
-                      {/* SUGGESTED RECIPIENT (for handover tasks) */}
                       {task.suggested_recipient && (
                         <div>
-                          <div className="flex items-center gap-2 mb-2">
-                            <CheckCircle className={`w-4 h-4 ${
-                              darkMode ? "text-green-400" : "text-green-600"
-                            }`} />
-                            <h4 className={`text-sm font-semibold ${
-                              darkMode ? "text-gray-200" : "text-slate-800"
-                            }`}>
+                          <div className="flex items-center gap-2 mb-3">
+                            <CheckCircle className="w-4 h-4 text-green-600" />
+                            <h4 className={`${inter.className} text-sm font-bold text-[#0E1B2E]`}>
                               Suggested Handover Recipient
                             </h4>
                           </div>
-                          <div className={`text-sm ml-6 ${
-                            darkMode ? "text-gray-300" : "text-slate-700"
-                          }`}>
-                            <span className="font-semibold">{task.suggested_recipient}</span>
+                          <div className={`${inter.className} text-sm ml-6 text-slate-700`}>
+                            <span className="font-bold">{task.suggested_recipient}</span>
                             {task.suggested_recipient_reason && (
-                              <span className={`ml-2 text-xs ${
-                                darkMode ? "text-gray-400" : "text-slate-600"
-                              }`}>
+                              <span className="ml-2 text-xs text-slate-600">
                                 ({task.suggested_recipient_reason})
                               </span>
                             )}
@@ -536,21 +419,13 @@ export default function EmployeeFinalCallSection({ employeeId, darkMode = false 
         </div>
       </div>
 
-      {/* ================= FINAL ACK ================= */}
-      <div className={`rounded-2xl border p-5 flex items-center justify-between transition-colors duration-300 ${
-        darkMode
-          ? "border-[#0E1B2E]/70 bg-[#0E1B2E]/30"
-          : "border-[#0E1B2E]/20 bg-[#0E1B2E]/5"
-      }`}>
-        <div>
-          <p className={`font-semibold ${
-            darkMode ? "text-[#0E1B2E]/80" : "text-[#0E1B2E]"
-          }`}>
+      {/* Acknowledgement */}
+      <div className="rounded-2xl border-2 border-slate-200 p-6 flex items-center justify-between transition-all bg-gradient-to-r from-blue-50/50 to-indigo-50/30 shadow-md">
+        <div className="flex-1">
+          <p className={`${inter.className} font-bold text-[#0E1B2E] text-base`}>
             Final Acknowledgement
           </p>
-          <p className={`text-xs mt-1 ${
-            darkMode ? "text-[#0E1B2E]/70" : "text-[#0E1B2E]/90"
-          }`}>
+          <p className={`${inter.className} text-sm mt-1 text-slate-600 font-medium`}>
             Confirm that you have explained all critical knowledge areas
           </p>
         </div>
@@ -558,64 +433,18 @@ export default function EmployeeFinalCallSection({ employeeId, darkMode = false 
         <button
           disabled={acknowledged || summary.remaining > 0}
           onClick={() => setAcknowledged(true)}
-          className={`
-            flex items-center gap-2 px-4 py-2 rounded-xl
-            text-sm font-semibold transition
-            ${
-              acknowledged
-                ? 'bg-green-600 text-white'
-                : summary.remaining > 0
-                ? 'bg-slate-300 text-slate-600 cursor-not-allowed'
-                : 'bg-[#0E1B2E] hover:bg-[#1a2f4d] text-white'
-            }
-          `}
+          className={`${inter.className} flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all shadow-md ${
+            acknowledged
+              ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white'
+              : summary.remaining > 0
+              ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+              : 'bg-gradient-to-r from-[#0E1B2E] to-blue-900 hover:shadow-lg text-white'
+          }`}
         >
-          <CheckCircle className="w-4 h-4" />
+          <CheckCircle className="w-5 h-5" />
           {acknowledged ? 'Acknowledged' : 'Acknowledge Completion'}
         </button>
       </div>
-    </div>
-  );
-}
-
-/* ================= HELPERS ================= */
-
-function SummaryCard({
-  label,
-  value,
-  tone = 'slate',
-  darkMode = false
-}: {
-  label: string;
-  value: number;
-  tone?: 'red' | 'yellow' | 'green' | 'slate';
-  darkMode?: boolean;
-}) {
-  const getTones = (tone: string, darkMode: boolean): string => {
-    if (darkMode) {
-      return tone === 'red'
-        ? 'bg-red-900/30 text-red-300'
-        : tone === 'yellow'
-        ? 'bg-yellow-900/30 text-yellow-300'
-        : tone === 'green'
-        ? 'bg-green-900/30 text-green-300'
-        : 'bg-gray-800 text-gray-100';
-    }
-    return tone === 'red'
-      ? 'bg-red-50 text-red-700'
-      : tone === 'yellow'
-      ? 'bg-yellow-50 text-yellow-800'
-      : tone === 'green'
-      ? 'bg-green-50 text-green-800'
-      : 'bg-slate-50 text-slate-900';
-  };
-
-  return (
-    <div className={`rounded-xl border px-4 py-3 transition-colors duration-300 ${
-      darkMode ? "border-gray-700" : ""
-    } ${getTones(tone, darkMode)}`}>
-      <p className="text-xs">{label}</p>
-      <p className="text-2xl font-bold">{value}</p>
     </div>
   );
 }

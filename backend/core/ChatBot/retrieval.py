@@ -4,19 +4,92 @@ from typing import List, Dict, Any, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 import numpy as np
+import pickle
+import networkx as nx
 from pathlib import Path
 import json
 from .query_type import QueryType
 
-class RetrievalMixin:
-    
-    
-    def _get_repo_filters(self) -> Optional[Dict[str, Any]]:
-        """Get repo-based filters if repo info is available"""
-        if hasattr(self, 'repo_full_name') and self.repo_full_name:
-            return {"repo_name": self.repo_full_name}
+class GraphRetrievalMixin:
+    def load_graph_structure(self):
+        """Lazy load the NetworkX graph structure"""
+        if hasattr(self, 'G') and self.G:
+            return self.G
+            
+        graph_path = Path("../../data/VectorDB") / self.repo_owner / self.repo_name / "graph_structure.pkl"
+        if graph_path.exists():
+            try:
+                with open(graph_path, 'rb') as f:
+                    self.G = pickle.load(f)
+                print(f"🕸️  Graph loaded: {self.G.number_of_nodes()} nodes")
+                return self.G
+            except Exception as e:
+                print(f"⚠️ Failed to load graph structure: {e}")
         return None
 
+    def retrieve_graph_context(self, query_embedding, top_k=5):
+        """
+        1. Search 'graph_nodes' index to find Entry Points.
+        2. Traverse edges in NetworkX to find connected components.
+        """
+        G = self.load_graph_structure()
+        if not G or not self.multi_index_store:
+            return []
+
+        # Step 1: Find Entry Nodes using Vector Search on 'graph_nodes' index
+        entry_nodes = self.multi_index_store.search_by_type(
+            query_embedding, 
+            index_type='graph_nodes', 
+            top_k=top_k
+        )
+        
+        graph_results = []
+        visited = set()
+
+        for node_hit in entry_nodes:
+            node_id = node_hit.get('chunk_id') or node_hit.get('metadata', {}).get('chunk_id')
+            if not node_id or node_id not in G.nodes:
+                continue
+                
+            if node_id in visited: continue
+            visited.add(node_id)
+
+            # Get Node Data
+            node_data = G.nodes[node_id]
+            
+            # Step 2: Get Neighbors (Traverse 1-hop)
+            # Incoming edges (Who calls me?)
+            callers = []
+            for u, v, attr in G.in_edges(node_id, data=True):
+                if attr.get('type') == 'CALLS':
+                    callers.append(u.split('::')[-1]) # Simplify ID to Name
+
+            # Outgoing edges (Who do I call?)
+            callees = []
+            for u, v, attr in G.out_edges(node_id, data=True):
+                if attr.get('type') == 'CALLS':
+                    callees.append(v.split('::')[-1])
+
+            # Format as a Text Chunk for the Context Window
+            context_text = f"Entity: {node_data.get('label')} {node_data.get('name')}\n"
+            if callers: context_text += f"Called By: {', '.join(callers[:5])}\n"
+            if callees: context_text += f"Calls To: {', '.join(callees[:5])}\n"
+            
+            graph_results.append({
+                "content": context_text,
+                "metadata": {
+                    "type": "graph_context",
+                    "source": "dependency_graph",
+                    "node_id": node_id
+                },
+                "score": node_hit.get('score', 1.0)
+            })
+
+        return graph_results
+
+class RetrievalMixin(GraphRetrievalMixin):
+    
+    
     def retrieve_github_first(
         self,
         query_embedding: np.ndarray,
@@ -37,6 +110,15 @@ class RetrievalMixin:
             top_k: Override top_k
             query_text: Original query text (for routing in multi-index mode)
         """
+
+        if query_type == "impact_analysis" and self.multi_index_store:
+            print("Executing Graph Impact Analysis...")
+            
+            vector_results = self._retrieve_multi_index(query_embedding, query_type, entity, keywords, top_k, query_text)
+            
+            graph_results = self.retrieve_graph_context(query_embedding)
+            
+            return graph_results + vector_results
 
         # Multi-index mode → unchanged
         if self.multi_index_store:
@@ -203,6 +285,17 @@ class RetrievalMixin:
                     else:
                         top3_indexes = [('code', 0.7), ('documentation', 0.5), ('pr', 0.4)]
 
+        adjusted_indexes = []
+        for idx_name, conf in top3_indexes:
+            if idx_name == 'impact_analysis':
+                adjusted_indexes.append(('graph_nodes', conf)) # Map logical intent to physical index
+                # Also ensure 'code' is present for context
+                if not any(i[0] == 'code' for i in top3_indexes):
+                    adjusted_indexes.append(('code', conf * 0.8))
+            else:
+                adjusted_indexes.append((idx_name, conf))
+        top3_indexes = adjusted_indexes
+
         
         # Extract index types (ensure we have exactly 3)
         index_types = [idx for idx, _ in top3_indexes[:3]]
@@ -223,16 +316,15 @@ class RetrievalMixin:
         def search_index(index_type: str, top_k_count: int) -> List[Dict[str, Any]]:
             """Search a single index in parallel with specified top_k"""
             try:
-                # Include repo filters in the search
+                target_index = 'graph_nodes' if index_type == 'impact_analysis' else index_type
                 results = self.multi_index_store.search_by_type(
                     query_embedding,
-                    index_type=index_type,
-                    top_k=top_k_count,
-                    filters=repo_filters
+                    index_type=target_index,
+                    top_k=top_k_count
                 )
                 # Add index type and routing confidence
                 for result in results:
-                    result['index_type'] = index_type
+                    result['index_type'] = target_index
                     # Find confidence for this index
                     conf = next((conf for idx, conf in top3_indexes_sorted if idx == index_type), 0.5)
                     result['routing_confidence'] = conf

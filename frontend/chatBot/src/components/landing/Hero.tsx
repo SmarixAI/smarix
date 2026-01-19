@@ -107,8 +107,7 @@ export const Hero = () => {
           <p
             className={`${victorMono.className} text-xl text-[#0E1B2E]/70 leading-relaxed max-w-xl`}
           >
-            AI-powered onboarding and offboarding that understands your codebase
-            — accelerating ramp-up while preserving tribal knowledge.
+            AI-powered onboarding and offboarding that understands your codebase accelerating developer productivity while preserving critical institutional knowledge.
           </p>
 
           <div className="flex items-center gap-6">
@@ -122,12 +121,12 @@ export const Hero = () => {
               <ArrowUpRight className="w-5 h-5 transition-transform duration-300 group-hover:-translate-y-1 group-hover:translate-x-1" />
             </Link>
 
-            <Link
+            {/* <Link
               href="/documentation"
               className={`${firaCode.className} text-sm font-bold text-[#0E1B2E] hover:text-blue-600 transition-colors underline decoration-gray-300 underline-offset-4 hover:decoration-blue-600`}
             >
               View Documentation
-            </Link>
+            </Link> */}
           </div>
         </motion.div>
 

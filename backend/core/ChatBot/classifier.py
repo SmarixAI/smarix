@@ -468,6 +468,7 @@ Feel free to ask me anything about the codebase!"""
         14. pr_issue_coding_question - Requests for coding questions/challenges based on PRs or issues
         15. random_pr_generator - Requests to randomly select/generate a PR with code changes
         16. general - Questions that don't fit above categories or are too vague
+        17. impact_analysis - Questions about dependencies, what breaks if code changes, callers/callees, class hierarchy
 
         Respond with ONLY the category name, nothing else.
 
@@ -517,6 +518,7 @@ Feel free to ask me anything about the codebase!"""
                 QueryType.PR_ISSUE_TUTORIAL,
                 QueryType.PR_ISSUE_CODING_QUESTION,
                 QueryType.RANDOM_PR_GENERATOR,
+                QueryType.IMPACT_ANALYSIS,
                 QueryType.GENERAL
             ]
 
@@ -624,6 +626,16 @@ Feel free to ask me anything about the codebase!"""
         if any(kw in query_lower for kw in ['where is', 'where can i find', 'locate', 'find', 'which file']):
             self.logger.info("CLASSIFICATION | Rule-based: CODE_LOCATION")
             return QueryType.CODE_LOCATION
+        
+        impact_keywords = [
+            'what breaks', 'impact of', 'if i change', 'who uses', 'callers of',
+            'dependencies', 'depend on', 'relies on', 'used by', 'who calls',
+            'change impact', 'consequences of changing', 'call graph', 'hierarchy',
+            'inheritance'
+        ]
+        if any(kw in query_lower for kw in impact_keywords):
+            self.logger.info("CLASSIFICATION | Rule-based: IMPACT_ANALYSIS")
+            return QueryType.IMPACT_ANALYSIS
 
         self.logger.info("CLASSIFICATION | No rule matched, using LLM classification")
         llm_category = self.llm_classify_query(query)

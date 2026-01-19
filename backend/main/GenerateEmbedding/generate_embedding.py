@@ -891,6 +891,57 @@ def _count_lines_and_functions_in_code(content: str, language_hint: str = "") ->
     return line_count, func_count
 
 
+def prepare_graph_nodes(graph_data: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
+    """
+    Convert Graph Nodes into embeddable chunks so we can search the Graph semantically.
+    """
+    nodes = graph_data.get("nodes", [])
+    prepared_chunks = []
+    stats = {'processed': 0, 'skipped': 0}
+    
+    print(f"   Graph contains {len(nodes)} nodes. Preparing for embedding...")
+
+    for node in nodes:
+        # ID Format: REPO::FILE::TYPE::NAME
+        node_id = node.get("id")
+        label = node.get("label") # Function, Class, File
+        props = node.get("properties", {})
+        name = props.get("name", "")
+        
+        # Skip generic nodes if any
+        if not name: 
+            stats['skipped'] += 1
+            continue
+
+        # Create a semantic description for the node
+        # e.g. "Function process_payment defined in payment_service.py"
+        description = f"{label} {name}"
+        if props.get("path"):
+            description += f" defined in {props['path']}"
+        if props.get("args"):
+            description += f" with arguments: {', '.join(props['args'])}"
+        
+        # Create standard chunk structure
+        chunk = {
+            "chunk_id": node_id,
+            "type": "graph_node",
+            "source": "graph",
+            "content": description, # This is what gets embedded
+            "metadata": {
+                "node_label": label,
+                "node_name": name,
+                "file_path": props.get("path"),
+                "lineno": props.get("lineno")
+            },
+            "skip_embedding": False
+        }
+        
+        prepared_chunks.append(chunk)
+        stats['processed'] += 1
+
+    return prepared_chunks, stats
+
+
 def compute_repo_metrics(chunks: List[Dict[str, Any]]) -> Dict[str, Any]:
     metrics = {
         'total_lines': 0,
@@ -1388,6 +1439,9 @@ def batch_generate(args):
             print(f"      {chunk_type}: {file.name}")
     print()
 
+    graph_file = processed_dir.parent / "graph_data.json"
+    has_graph = graph_file.exists()
+
     provider = args.provider
     model = args.model
 
@@ -1500,6 +1554,35 @@ def batch_generate(args):
             except Exception as e:
                 print(f"      Failed to generate combined index: {e}")
                 results.append((repo_name, "all", "Failed", str(e)))
+
+    if has_graph:
+        print(f"\n{'=' * 70}\nProcessing Graph Nodes: {REPO_NAME}\n{'=' * 70}")
+        try:
+            with open(graph_file, 'r', encoding='utf-8') as f:
+                graph_data = json.load(f)
+            
+            # Use the helper we defined earlier
+            prepared_nodes, node_stats = prepare_graph_nodes(graph_data)
+            
+            if prepared_nodes:
+                print(f"      Generating embeddings for {len(prepared_nodes)} graph nodes...")
+                result = generator.generate_embeddings(prepared_nodes)
+                
+                # Save to "graph" directory
+                graph_out_dir = output_dir / "graph"
+                graph_out_dir.mkdir(parents=True, exist_ok=True)
+                
+                generator.save_embeddings(result, str(graph_out_dir / "graph_nodes"))
+                print(f"      Saved -> graph/graph_nodes.npy + graph_nodes.json")
+                
+                results.append((REPO_NAME, "graph_nodes", "Success", result['statistics']))
+            else:
+                print("      No embeddable nodes found.")
+                
+        except Exception as e:
+            print(f"      Failed to embed graph nodes: {e}")
+            import traceback; traceback.print_exc()
+            results.append((REPO_NAME, "graph_nodes", "Failed", str(e)))
 
     # Print summary
     print(f"\n{'=' * 70}")

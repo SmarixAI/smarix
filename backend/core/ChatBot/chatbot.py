@@ -25,6 +25,22 @@ from .llm_embeddings import LLMEmbeddingMixin
 from .query_type import QueryType
 from sentence_transformers import SentenceTransformer
 
+STATE_FILE = Path(__file__).resolve().parents[2] / "data" / "Admin" / "state" / "runtime_state.json"
+
+def load_current_repo_from_state():
+    """Reads the current active repository from state file"""
+    if not STATE_FILE.exists():
+        return None, None
+    try:
+        with open(STATE_FILE, "r", encoding="utf-8") as f:
+            state = json.load(f)
+        curr_repo = state.get("curr_repo")
+        if not curr_repo:
+            return None, None
+        return curr_repo["owner"], curr_repo["name"]
+    except Exception:
+        return None, None
+
 
 class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
 
@@ -45,6 +61,9 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         repo_owner: Optional[str] = None,  # Repository owner for filtering
         repo_name: Optional[str] = None    # Repository name for filtering
     ):
+        self.repo_owner, self.repo_name = load_current_repo_from_state()
+        if not self.repo_owner and verbose:
+            print("Warning: Repository state not found. Graph features (Impact Analysis) will be disabled.")
         self.vector_db_path = vector_db_path
         self.gmail_db_path = gmail_db_path
         self.provider = provider

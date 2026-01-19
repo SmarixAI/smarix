@@ -54,6 +54,13 @@ class QueryRouter:
             'debug', 'investigate', 'troubleshoot', 'why failing',
             'reproduce', 'replication', 'regression'
         ],
+        'impact_analysis': [
+            'what breaks', 'what happens if', 'impact of', 'dependencies',
+            'depend on', 'relies on', 'used by', 'who calls', 'callers of',
+            'where is used', 'change impact', 'consequences of changing',
+            'coupling', 'inheritance', 'hierarchy', 'call graph', 'structure',
+            'relationship', 'connected to'
+        ],
 
         'pr_issue_tutorial': [
             'tutorial', 'guide me', 'teach me', 'show me how',
@@ -147,6 +154,7 @@ class QueryRouter:
             'commit': 0,
             'email': 0,
             'issue': 0,
+            'impact_analysis': 0,
             'pr_issue_tutorial': 0,
             'pr_issue_coding_question': 0,
             'random_pr_generator': 0
@@ -211,6 +219,11 @@ class QueryRouter:
             'from:', 'to:', 'cc:', 'bcc:', 'subject', 'sender', 'recipient', 'attachment',
             'thread', 'conversation', 'mailbox']):
             scores['email'] += 2
+
+        if any(pattern in query_lower for pattern in [
+            'what breaks', 'impact of', 'if i change', 'who uses', 'callers of',
+            'dependencies', 'dependents', 'inheritance', 'call graph', 'hierarchy']):
+            scores['impact_analysis'] += 3
 
 
         # Get max score
@@ -285,6 +298,14 @@ class QueryRouter:
                     "Show thread with attachments",
                     "Retrieve emails from the last week"
                 ],
+                'impact_analysis': [
+                    "What breaks if I change the User class?",
+                    "Show me all functions that call verify_token",
+                    "What are the dependencies of the auth module?",
+                    "Impact of modifying this function",
+                    "Who inherits from BaseController?",
+                    "Show the call graph for login"
+                ],
 
                 'pr_issue_tutorial': [
                     "Create a tutorial from PR #45",
@@ -354,12 +375,14 @@ class QueryRouter:
                 4. 'commit' - Commit history, when changes were made, who made changes, file modification history, timeline
                 5. 'email' — Email messages, Gmail inbox, threads, subjects, senders, recipients, attachments, message bodies, mailbox searches
                 6. 'issue' – Bug discussions, crashes, exceptions, debugging, regression, troubleshooting, tickets
-                7. 'multi' - Questions that clearly need information from multiple index types
+                7. 'impact_analysis' - Questions about breaking changes, dependencies, callers, usages, impact of modifications, inheritance, class hierarchy
+                8. 'multi' - Questions that clearly need information from multiple index types
                 
 
                 EXAMPLES:
                 - "how to install" → documentation
                 - "show me the authentication function" → code
+                - "what calls the login function?" → impact_analysis
                 - "why was this feature added" → pr
                 - "when was chatbot.py modified" → commit
                 - "search inbox for onboarding mail" → email
@@ -369,7 +392,7 @@ class QueryRouter:
                 USER QUERY: "{query}"
 
                 Respond with ONLY a valid JSON object in this exact format:
-                {{"index_type": "documentation|code|pr|commit|email|issue|multi", "confidence": 0.0-1.0, "reasoning": "brief explanation"}}
+                {{"index_type": "documentation|code|pr|commit|email|issue|impact_analysis|multi", "confidence": 0.0-1.0, "reasoning": "brief explanation"}}
 
                 Do not include any other text, only the JSON object."""
                             
@@ -504,7 +527,8 @@ class QueryRouter:
                 4. 'commit' - Commit history, when changes were made, who made changes, file modification history
                 5. 'email' — Email messages, Gmail inbox, subjects, senders, recipients, threads, attachments, message body, mailbox searches
                 6. 'issue' — Bug discussions, crashes, exceptions, debugging, regression, troubleshooting, tickets
-                7. 'multi' - Questions that clearly need information from multiple index types
+                7. 'impact_analysis' - Questions about breaking changes, dependencies, callers, usages, impact of modifications, inheritance, class hierarchy
+                8. 'multi' - Questions that clearly need information from multiple index types
 
                 USER QUERY: "{query}"
 
@@ -594,13 +618,17 @@ class QueryRouter:
             'pr': 0,
             'commit': 0,
             'email': 0,
-            'issue': 0
+            'issue': 0,
+            'impact_analysis': 0,
         }
         
         # Count matches
         for keyword, index_type in self.keyword_lookup.items():
             if keyword in query_lower:
                 scores[index_type] += 1
+
+        if any(p in query_lower for p in ['breaks', 'impact', 'who uses', 'callers', 'dependency']):
+            scores['impact_analysis'] += 2.0
         
         max_score = max(scores.values())
         total_score = sum(scores.values())
@@ -660,6 +688,8 @@ class QueryRouter:
                 4. 'commit' - Commit history, when changes were made, who made changes, file modification history, timeline
                 5. 'issue' — Bug discussions, crashes, exceptions, debugging, regression, troubleshooting, tickets
                 6. 'email' - Email messages (Gmail), subjects, senders, recipients, bodies, attachments, threads, inbox/search
+                7. 'impact_analysis' - Questions about breaking changes, dependencies, callers, usages, impact of modifications, inheritance, class hierarchy
+                8. 'multi' - Questions that clearly need information from multiple index types
 
                 USER QUERY: "{query}"
 
@@ -783,13 +813,17 @@ class QueryRouter:
             'pr': 0.0,
             'commit': 0.0,
             'email': 0.0,
-            'issue': 0.0
+            'issue': 0.0,
+            'impact_analysis': 0.0,
         }
         
         # Count keyword matches
         for keyword, index_type in self.keyword_lookup.items():
             if keyword in query_lower:
                 scores[index_type] += 1.0
+
+        if any(p in query_lower for p in ['breaks', 'impact', 'callers', 'dependency']):
+            scores['impact_analysis'] += 2.0
         
         # Normalize scores to confidence (0.0-1.0)
         max_score = max(scores.values()) if scores.values() else 1.0
