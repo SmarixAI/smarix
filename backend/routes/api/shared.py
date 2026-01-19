@@ -180,6 +180,8 @@ def ensure_chatbot_for_repo(owner: str, repo_name: str) -> bool:
             use_hybrid_retrieval=True,
             verbose=False,
             routing_method="llm",
+            repo_owner=owner,
+            repo_name=repo_name,
         )
 
         # Update config
