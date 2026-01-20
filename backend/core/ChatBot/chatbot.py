@@ -23,7 +23,7 @@ from .classifier import ClassifierMixin
 from .retrieval import RetrievalMixin
 from .llm_embeddings import LLMEmbeddingMixin
 from .query_type import QueryType
-from .handler import PRHandler, IssueHandler, GreetingHandler, CommitHandler, GeneralQueryHandler, ResponseHandler, TraceabilityHandler, MultiQueryHandler
+from .handler import PRHandler, IssueHandler, GreetingHandler, CommitHandler, GeneralQueryHandler, ResponseHandler, TraceabilityHandler, MultiQueryHandler, ChronologicalHandler, CacheHandler
 from sentence_transformers import SentenceTransformer
 
 STATE_FILE = Path(__file__).resolve().parents[2] / "data" / "Admin" / "state" / "runtime_state.json"
@@ -197,9 +197,8 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             self.redis_client,
             embedding_function=self.get_query_embedding
         )
-        self._last_semantic_cache_age_update = time.time()
-
         # Initialize handlers
+        self.cache_handler = CacheHandler(self)
         self.pr_handler = PRHandler(self)
         self.issue_handler = IssueHandler(self)
         self.greeting_handler = GreetingHandler(self)
@@ -207,6 +206,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         self.general_query_handler = GeneralQueryHandler(self)
         self.response_handler = ResponseHandler(self)
         self.traceability_handler = TraceabilityHandler(self)
+        self.chronological_handler = ChronologicalHandler(self)
         self.multi_query_handler = MultiQueryHandler(self)
 
         self.current_session_id: Optional[str] = None
@@ -326,66 +326,20 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         active_session_id = self._ensure_session(session_id)
 
         # STEP 1: UPDATE CACHE AGES (runs periodically)
-        if self.query_rewriter and self.query_rewriter.semantic_cache:
-            current_time = time.time()
-            if current_time - self._last_semantic_cache_age_update > 300:
-                self.query_rewriter.semantic_cache.update_ages()
-                self._last_semantic_cache_age_update = current_time
+        self.cache_handler.update_cache_ages()
 
         # STEP 2: SEMANTIC CACHE CHECK (uses ORIGINAL query)
-        if self.query_rewriter and self.query_rewriter.semantic_cache:
-            cached_result = self.query_rewriter.semantic_cache.get(query, active_session_id)
-
-            if cached_result:
-                # Handle augmentation
-                if cached_result.get('_requires_augmentation'):
-                    self.logger.info("🧩 AUGMENTING cached response with new context")
-                    result = self._augment_cached_response(
-                        cached_result['_cached_response'],
-                        cached_result['_original_query'],
-                        cached_result['_cached_query']
-                    )
-
-                    try:
-                        self.conversation_store.add_message(active_session_id, 'user', query, tokens_used=0)
-                        self.conversation_store.add_message(
-                            active_session_id, 'assistant', result.get('answer', ''), tokens_used=0
-                        )
-                    except Exception as e:
-                        self.logger.error(f"Failed to save augmented response: {e}")
-
-                    return result
-
-                # Handle generation with hints
-                elif cached_result.get('_requires_generation'):
-                    self.logger.info("💡 Will generate response with cache hints (proceeding to full generation)")
-                    # Continue to full generation below
-
-                # Direct cache hit - RETURN IMMEDIATELY
-                else:
-                    confidence = cached_result.get('cache_confidence', 'unknown')
-                    cache_tier = cached_result.get('cache_tier', 'semantic')
-
-                    self.logger.info(
-                        f"✅ SEMANTIC CACHE HIT | confidence={confidence} | tier={cache_tier}"
-                    )
-
-                    try:
-                        self.conversation_store.add_message(active_session_id, 'user', query, tokens_used=0)
-                        self.conversation_store.add_message(
-                            active_session_id, 'assistant', cached_result.get('answer', ''), tokens_used=0
-                        )
-                    except Exception as e:
-                        self.logger.error(f"Failed to save cached exchange: {e}")
-
-                    return cached_result
+        cached_result = self.cache_handler.get_semantic_cache(query, active_session_id)
+        if cached_result:
+            result = self.cache_handler.handle_cached_result(cached_result, query, active_session_id)
+            if result:
+                return result
 
         # STEP 3: OLD CACHE CHECK
-        if self.query_rewriter and self.query_rewriter.response_cache:
-            cached_response = self.query_rewriter.response_cache.get(query, active_session_id)
-            if cached_response:
-                self.logger.info(f"OLD CACHE HIT | Returning cached response (legacy)")
-                return cached_response
+        cached_response = self.cache_handler.get_response_cache(query, active_session_id)
+        if cached_response:
+            self.logger.info(f"OLD CACHE HIT | Returning cached response (legacy)")
+            return cached_response
 
         query_lower = query.lower()
 
@@ -443,14 +397,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
 
                 result = self.pr_handler.handle_pr_issue_tutorial(entity, query, expanded_query)
 
-                if self.query_rewriter and self.query_rewriter.semantic_cache:
-                    quality_score = result.get('context_quality', 0.8)
-                    self.query_rewriter.semantic_cache.set(
-                        query, result, active_session_id, quality_score=quality_score
-                    )
-
-                if self.query_rewriter and self.query_rewriter.response_cache:
-                    self.query_rewriter.response_cache.set(query, result, active_session_id)
+                self.cache_handler.update_caches(query, result, active_session_id)
 
                 try:
                     self.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
@@ -469,14 +416,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
 
                 result = self.pr_handler.handle_pr_issue_coding_question(entity, query, expanded_query)
 
-                if self.query_rewriter and self.query_rewriter.semantic_cache:
-                    quality_score = result.get('context_quality', 0.8)
-                    self.query_rewriter.semantic_cache.set(
-                        query, result, active_session_id, quality_score=quality_score
-                    )
-
-                if self.query_rewriter and self.query_rewriter.response_cache:
-                    self.query_rewriter.response_cache.set(query, result, active_session_id)
+                self.cache_handler.update_caches(query, result, active_session_id)
 
                 try:
                     self.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
@@ -542,11 +482,26 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
                 if result:
                     return result
 
-            # Guaranteed ISSUE direct lookup override
-            if query_type == QueryType.ISSUE_SPECIFIC and raw_num:
+            # Handle Issue override
+            issue_results = None
+            if raw_num and (
+                query_type == QueryType.ISSUE_SPECIFIC
+                or "issue" in query_lower
+                or "bug" in query_lower
+                or "ticket" in query_lower
+                or "report" in query_lower
+            ):
                 result = self.issue_handler.handle_issue_override(
                     raw_num, query, expanded_query, query_type, active_session_id, role=role
                 )
+                if result:
+                    return result
+                # Mark that we tried to find Issue but didn't find it
+                issue_results = False
+
+            # ❗ FINAL STOP: If Issue is not found in metadata, do NOT do semantic search
+            if query_type == QueryType.ISSUE_SPECIFIC and raw_num and issue_results is False:
+                result = self.issue_handler.handle_issue_not_found(raw_num, query_type, query, active_session_id)
                 if result:
                     return result
 
@@ -579,126 +534,10 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         metrics_context = None
 
         if chrono_query:
-            self.logger.info(f"CHRONOLOGICAL QUERY | Type: {chrono_query['type']}, Order: {chrono_query['order']}")
-
-            if self.verbose:
-                print(f"Chronological query detected: {chrono_query}")
-
-            query_embedding = self.get_query_embedding(expanded_query)
-            chrono_result = self.find_chronological_entity(
-                chrono_query['type'],
-                chrono_query['order'],
-                query_embedding
+            result = self.chronological_handler.handle_chronological(
+                chrono_query, query, expanded_query, active_session_id, role=role
             )
-
-            if chrono_result:
-                entity = {'type': chrono_result['type'], 'number': chrono_result['number']}
-                github_results = chrono_result['results']
-
-                self.logger.info(f"CHRONOLOGICAL RESULT | Found {chrono_query['type']} #{chrono_result['number']}")
-                self.logger.info(f"RETRIEVAL | Retrieved {len(github_results)} chunks")
-
-                for i, result in enumerate(github_results[:5], 1):
-                    metadata = result.get('metadata', {})
-                    self.logger.info(
-                        f"CHUNK {i} | File: {metadata.get('file_path', 'N/A')}, Score: {result.get('score', 0):.4f}, Type: {metadata.get('type', 'N/A')}")
-
-                query_type = QueryType.ISSUE_SPECIFIC if chrono_result['type'] == 'issue' else QueryType.PR_SPECIFIC
-
-                if self.verbose:
-                    print(f"Found {chrono_query['order']} {chrono_query['type']}: #{chrono_result['number']}")
-
-                context = self.build_context_from_chunks(github_results, query_type)
-
-                gmail_results = self.retrieve_gmail_correlated(
-                    github_results, query_embedding, []
-                )
-
-                if gmail_results:
-                    self.logger.info(f"EMAIL RETRIEVAL | Found {len(gmail_results)} correlated emails")
-
-                email_context = self.build_email_context(gmail_results) if gmail_results else ""
-
-                system_prompt = self.get_dynamic_system_prompt(query_type, expanded_query, role=role)
-                user_prompt = self.build_user_prompt(
-                    expanded_query, context, email_context, query_type, entity, None
-                )
-
-                if self.verbose:
-                    print("Generating response...")
-
-                self.logger.info("LLM GENERATION | Started")
-                answer = self.call_llm(system_prompt, user_prompt)
-                self.logger.info(f"LLM GENERATION | Completed, Length: {len(answer)} chars")
-
-                self.logger.info("VERIFICATION | Starting response verification")
-                refined_answer = self.verify_and_refine_response(answer, query, query_type)
-
-                sources = []
-                for i, result in enumerate(github_results[:5], 1):
-                    metadata = result.get('metadata', {})
-                    # Handle both file_path and file fields
-                    file_path = metadata.get('file_path') or metadata.get('file') or 'unknown'
-                    # Handle both type and source_type fields
-                    chunk_type = metadata.get('type') or metadata.get('source_type') or metadata.get('chunk_type') or 'unknown'
-                    sources.append({
-                        'rank': i,
-                        'file': file_path,
-                        'type': chunk_type,
-                        'score': result.get('score', 0.0),
-                        'chunk_id': metadata.get('chunk_id', '')
-                    })
-
-                emails = []
-                for email in gmail_results:
-                    metadata = email.get('metadata', {})
-                    emails.append({
-                        'subject': metadata.get('subject', ''),
-                        'from': metadata.get('from', ''),
-                        'date': metadata.get('date', ''),
-                        'relevance': email.get('relevance_score', 0)
-                    })
-
-                self.history.append({'role': 'user', 'content': query})
-                self.history.append({'role': 'assistant', 'content': refined_answer})
-
-                context_quality = min(github_results[0].get('score', 0), 1.0) if github_results else 0.0
-
-                self.logger.info(
-                    f"RESPONSE COMPLETE | Quality: {context_quality:.2f}, Sources: {len(sources)}, Emails: {len(emails)}")
-                self.logger.info("=" * 80)
-
-                # Store conversation to database
-                try:
-                    self.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
-                    self.conversation_store.add_message(active_session_id, "assistant", refined_answer, tokens_used=0)
-                    self.logger.info(
-                        f"CONVERSATION_STORE | Saved chronological response to session {active_session_id[:8]}...")
-                except Exception as e:
-                    self.logger.error(f"CONVERSATION_STORE | Failed to save chrono response: {e}")
-
-                result = {
-                    'answer': refined_answer,
-                    'sources': sources,
-                    'chunks_retrieved': len(github_results),
-                    'query_type': query_type,
-                    'context_quality': context_quality,
-                    'emails': emails,
-                    'has_diagram': bool(re.search(r'```mermaid', refined_answer or '')),
-                    'related_knowledge': None,
-                    'is_metrics_query': False,
-                    'chronological_entity': f"{chrono_query['order']} {chrono_query['type']} #{chrono_result['number']}"
-                }
-
-                if self.query_rewriter and self.query_rewriter.semantic_cache:
-                    quality_score = result.get('context_quality', 0.8)
-                    self.query_rewriter.semantic_cache.set(
-                        query, result, active_session_id, quality_score=quality_score
-                    )
-
-                if self.query_rewriter and self.query_rewriter.response_cache:
-                    self.query_rewriter.response_cache.set(query, result, active_session_id)
-
+            if result:
                 return result
             
         if query_type == QueryType.TRACEABILITY and entity:
@@ -712,54 +551,6 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         return self.general_query_handler.handle_general_query(
             query, expanded_query, query_type, entity, keywords, active_session_id, role=role
         )
-
-    def _augment_cached_response(self,cached_response: Dict[str, Any],new_query: str,original_query: str) -> Dict[str, Any]:
-            """
-            Augment cached response to specifically answer the new query variant
-            """
-            # Extract differences between queries
-            new_words = set(new_query.lower().split())
-            orig_words = set(original_query.lower().split())
-            unique_words = new_words - orig_words
-
-            if not unique_words:
-                # No significant differences, return as-is
-                return cached_response
-
-            query_diff = f"New emphasis on: {', '.join(unique_words)}"
-            cached_answer = cached_response.get('answer', '')
-
-            # Use fast LLM to augment
-            augmentation_prompt = f"""You have a cached response for a similar question. Adjust it slightly to specifically answer the new question.
-
-    Original Question: {original_query}
-    New Question: {new_query}
-    Key Differences: {query_diff}
-
-    Cached Response:
-    {cached_answer}
-
-    Adjusted Response (keep all cached info, just reframe for new question):"""
-
-            try:
-                augmented_answer = self.call_llm(
-                    "You are adjusting a response to better match a slightly different question.",
-                    augmentation_prompt
-                )
-
-                result = cached_response.copy()
-                result['answer'] = augmented_answer
-                result['augmented'] = True
-                result['original_cached_query'] = original_query
-
-                self.logger.info(f"AUGMENTATION | Adjusted response from '{original_query[:40]}' to '{new_query[:40]}'")
-
-                return result
-
-            except Exception as e:
-                self.logger.error(f"Augmentation failed: {e}, returning original cached response")
-                return cached_response
-
 
     def _respond_with_results(
         self,
@@ -850,130 +641,11 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         chrono_query = self.detect_chronological_query(expanded_query)
 
         if chrono_query:
-            self.logger.info(f"CHRONOLOGICAL QUERY | Type: {chrono_query['type']}, Order: {chrono_query['order']}")
-
-            if self.verbose:
-                print(f"Chronological query detected: {chrono_query}")
-
-            yield {'type': 'status', 'content': f'Finding {chrono_query["order"]} {chrono_query["type"]}...'}
-
-            query_embedding = self.get_query_embedding(expanded_query)
-            chrono_result = self.find_chronological_entity(
-                chrono_query['type'],
-                chrono_query['order'],
-                query_embedding
-            )
-
-            if chrono_result:
-                entity = {'type': chrono_result['type'], 'number': chrono_result['number']}
-                github_results = chrono_result['results']
-
-                self.logger.info(f"CHRONOLOGICAL RESULT | Found {chrono_query['type']} #{chrono_result['number']}")
-
-                query_type = QueryType.ISSUE_SPECIFIC if chrono_result['type'] == 'issue' else QueryType.PR_SPECIFIC
-
-                yield {'type': 'status', 'content': f'Found {chrono_query["type"]} #{chrono_result["number"]}'}
-
-                context = self.build_context_from_chunks(github_results, query_type)
-
-                gmail_results = self.retrieve_gmail_correlated(
-                    github_results, query_embedding, []
-                )
-
-                email_context = self.build_email_context(gmail_results) if gmail_results else ""
-                if gmail_results:
-                    yield {'type': 'status', 'content': f'Found {len(gmail_results)} related emails'}
-
-                system_prompt = self.get_dynamic_system_prompt(query_type, expanded_query, role=role)
-                user_prompt = self.build_user_prompt(
-                    expanded_query, context, email_context, query_type, entity, None
-                )
-
-                yield {'type': 'status', 'content': 'Generating response...'}
-
-                full_answer = ""
-                buffer = ""
-                for chunk in self.call_llm_stream(system_prompt, user_prompt):
-                    full_answer += chunk
-                    buffer += chunk
-
-                    if '\n' in buffer or len(buffer) > 150:
-                        yield {'type': 'chunk', 'content': buffer}
-                        buffer = ""
-
-                if buffer:
-                    yield {'type': 'chunk', 'content': buffer}
-
-                self.logger.info(f"LLM GENERATION | Completed streaming, Length: {len(full_answer)} chars")
-
-                yield {'type': 'status', 'content': 'Verifying response...'}
-                refined_answer = self.verify_and_refine_response(full_answer, query, query_type)
-
-                if refined_answer != full_answer:
-                    yield {'type': 'status', 'content': 'Response refined'}
-
-                sources = []
-                for i, result in enumerate(github_results[:5], 1):
-                    metadata = result.get('metadata', {})
-                    # Handle both file_path and file fields
-                    file_path = metadata.get('file_path') or metadata.get('file') or 'unknown'
-                    # Handle both type and source_type fields
-                    chunk_type = metadata.get('type') or metadata.get('source_type') or metadata.get('chunk_type') or 'unknown'
-                    sources.append({
-                        'rank': i,
-                        'file': file_path,
-                        'type': chunk_type,
-                        'score': result.get('score', 0.0),
-                        'chunk_id': metadata.get('chunk_id', '')
-                    })
-
-                emails = []
-                for email in gmail_results:
-                    metadata = email.get('metadata', {})
-                    emails.append({
-                        'subject': metadata.get('subject', ''),
-                        'from': metadata.get('from', ''),
-                        'date': metadata.get('date', ''),
-                        'relevance': email.get('relevance_score', 0)
-                    })
-
-                self.history.append({'role': 'user', 'content': query})
-                self.history.append({'role': 'assistant', 'content': refined_answer})
-
-                context_quality = min(github_results[0].get('score', 0), 1.0) if github_results else 0.0
-
-                self.logger.info(f"RESPONSE COMPLETE | Quality: {context_quality:.2f}")
-                self.logger.info("=" * 80)
-
-                result = {
-                        'answer': refined_answer,
-                        'sources': sources,
-                        'chunks_retrieved': len(github_results),
-                        'query_type': query_type,
-                        'context_quality': context_quality,
-                        'emails': emails,
-                        'has_diagram': bool(re.search(r'```mermaid', refined_answer or '')),
-                        'related_knowledge': None,
-                        'is_metrics_query': False,
-                        'chronological_entity': f"{chrono_query['order']} {chrono_query['type']} #{chrono_result['number']}"
-                    }
-
-                yield {
-                    'type': 'complete',
-                    'content': {
-                        'answer': refined_answer,
-                        'sources': sources,
-                        'chunks_retrieved': len(github_results),
-                        'query_type': query_type,
-                        'context_quality': context_quality,
-                        'emails': emails,
-                        'has_diagram': bool(re.search(r'```mermaid', refined_answer or '')),
-                        'related_knowledge': None,
-                        'is_metrics_query': False,
-                        'chronological_entity': f"{chrono_query['order']} {chrono_query['type']} #{chrono_result['number']}"
-                    }
-                }
-                return
+            for response in self.chronological_handler.handle_chronological_stream(
+                chrono_query, query, expanded_query, active_session_id, role=role
+            ):
+                yield response
+            return
 
         if self.verbose:
             print(f"Query Type: {query_type}")
@@ -1086,8 +758,8 @@ def main():
             print(json.dumps(chatbot.get_stats(), indent=2))
             continue
         if query == 'cache-stats':
-            if chatbot.query_rewriter and chatbot.query_rewriter.semantic_cache:
-                cache_stats = chatbot.query_rewriter.semantic_cache.get_stats()
+            cache_stats = chatbot.cache_handler.get_cache_stats()
+            if cache_stats:
                 print(json.dumps(cache_stats, indent=2))
             else:
                 print("Semantic cache not enabled")

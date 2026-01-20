@@ -336,7 +336,10 @@ class RetrievalMixin(GraphRetrievalMixin):
                 except Exception as e:
                     self.logger.warning(f"ROUTING | Semantic routing failed ({e}), using basic fallback")
                     # previous fallback with no change
-                    if query_type in [QueryType.ISSUE_SPECIFIC, QueryType.PR_SPECIFIC]:
+                    if query_type == QueryType.CODE_STRUCTURE:
+                        # Prioritize repository_overview and analyzed_file for structure queries
+                        top3_indexes = [('repository_overview', 0.9), ('analyzed_file', 0.8), ('code', 0.6)]
+                    elif query_type in [QueryType.ISSUE_SPECIFIC, QueryType.PR_SPECIFIC]:
                         top3_indexes = [('pr', 0.8), ('code', 0.6), ('documentation', 0.4)]
                     elif query_type == QueryType.COMMIT_SPECIFIC:
                         top3_indexes = [('commit', 0.8), ('code', 0.6), ('pr', 0.4)]

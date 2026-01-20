@@ -27,10 +27,18 @@ class MultiQueryHandler:
         query_lower = query_clean.lower()
 
         # 1️⃣ Detect intent overlap first (MOST IMPORTANT)
+        # Check for PR intents
         if self._has_multiple_pr_intents(query_lower):
             subqueries = self._split_by_pr_intent(query_clean)
             if len(subqueries) > 1:
-                self._log_split(query_clean, subqueries, reason="intent_overlap")
+                self._log_split(query_clean, subqueries, reason="pr_intent_overlap")
+                return subqueries
+        
+        # Check for Issue intents
+        if self._has_multiple_issue_intents(query_lower):
+            subqueries = self._split_by_issue_intent(query_clean)
+            if len(subqueries) > 1:
+                self._log_split(query_clean, subqueries, reason="issue_intent_overlap")
                 return subqueries
 
         # 2️⃣ Fallback: sentence-based split (safe + conservative)
@@ -93,6 +101,54 @@ class MultiQueryHandler:
 
         if any(k in ql for k in ["why", "reason"]):
             subs.append(f"Why was {query} created")
+
+        # Limit to 3 to prevent explosion
+        return subs[:3] if subs else [query]
+
+    def _has_multiple_issue_intents(self, query_lower: str) -> bool:
+        """
+        Detect whether query contains multiple Issue-related intents.
+        """
+        intent_groups = {
+            "status": ["status", "open", "closed", "state"],
+            "assignee": ["assignee", "assigned", "who", "owner", "responsible"],
+            "labels": ["label", "labels", "tag", "tags", "category"],
+            "description": ["description", "what", "about", "details"],
+            "comments": ["comment", "comments", "discussion", "conversation"],
+            "timeline": ["timeline", "history", "when", "created", "updated", "closed"]
+        }
+
+        detected = [
+            name for name, keywords in intent_groups.items()
+            if any(k in query_lower for k in keywords)
+        ]
+
+        return len(detected) >= 2
+
+    def _split_by_issue_intent(self, query: str) -> List[str]:
+        """
+        Convert a multi-intent Issue query into focused sub-queries.
+        """
+        ql = query.lower()
+        subs = []
+
+        if any(k in ql for k in ["status", "open", "closed", "state"]):
+            subs.append(f"What is the status of {query}")
+
+        if any(k in ql for k in ["assignee", "assigned", "who", "owner", "responsible"]):
+            subs.append(f"Who is assigned to {query}")
+
+        if any(k in ql for k in ["label", "labels", "tag", "tags", "category"]):
+            subs.append(f"What labels does {query} have")
+
+        if any(k in ql for k in ["description", "what", "about", "details"]):
+            subs.append(f"What is {query} about")
+
+        if any(k in ql for k in ["comment", "comments", "discussion", "conversation"]):
+            subs.append(f"What are the comments on {query}")
+
+        if any(k in ql for k in ["timeline", "history", "when", "created", "updated", "closed"]):
+            subs.append(f"Show me the timeline of {query}")
 
         # Limit to 3 to prevent explosion
         return subs[:3] if subs else [query]

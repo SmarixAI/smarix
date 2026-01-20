@@ -11,6 +11,8 @@ from .general_query_handler import GeneralQueryHandler
 from .response_handler import ResponseHandler
 from .traceability_handler import TraceabilityHandler
 from .multi_query_handler import MultiQueryHandler
+from .chronological_handler import ChronologicalHandler
+from .cache_handler import CacheHandler
 
-__all__ = ['PRHandler', 'IssueHandler', 'GreetingHandler', 'CommitHandler', 'GeneralQueryHandler', 'ResponseHandler', 'TraceabilityHandler', 'MultiQueryHandler']
+__all__ = ['PRHandler', 'IssueHandler', 'GreetingHandler', 'CommitHandler', 'GeneralQueryHandler', 'ResponseHandler', 'TraceabilityHandler', 'MultiQueryHandler', 'ChronologicalHandler', 'CacheHandler']
 

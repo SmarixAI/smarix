@@ -96,6 +96,109 @@ FORMAT:
 """
 }
 
+ISSUE_INTENT_SYSTEM_PROMPTS = {
+    "status": """
+You are answering a GitHub Issue STATUS question.
+
+STRICT RULES:
+- ONLY return the Issue status information.
+- Do NOT describe description, comments, or implementation.
+- Do NOT add overview, summary, or explanation sections.
+- Be concise and factual.
+
+FORMAT (MUST FOLLOW EXACTLY):
+
+Issue #<number> Status:
+- State: <Open | Closed>
+- Created: <date>
+- Closed: <date or N/A>
+- Updated: <date>
+""",
+
+    "summary": """
+You are answering a HIGH-LEVEL SUMMARY of a GitHub Issue.
+
+RULES:
+- Briefly explain what the issue is about and why it exists.
+- Mention the main problem or feature request.
+- Keep it high-level and readable.
+- Do NOT include detailed code or implementation discussions.
+- Do NOT list every comment unless explicitly asked.
+
+FORMAT:
+- 2–4 concise bullet points OR a short paragraph.
+""",
+
+    "assignee": """
+You are answering a question about Issue ASSIGNEE/OWNERSHIP.
+
+RULES:
+- ONLY mention who is assigned to the issue and any contributors if available.
+- Do NOT describe the issue content, status, or comments.
+- Be concise and factual.
+
+FORMAT:
+Issue #<number> Assignee:
+- Assigned to: <assignee or Unassigned>
+- Contributors: <list or N/A>
+""",
+
+    "labels": """
+You are answering a question about Issue LABELS/TAGS.
+
+RULES:
+- ONLY list the labels/tags associated with the issue.
+- Do NOT describe the issue content, status, or other details.
+- Be concise and factual.
+
+FORMAT:
+Issue #<number> Labels:
+- <label1>, <label2>, <label3>
+""",
+
+    "description": """
+You are answering a question about Issue DESCRIPTION/CONTENT.
+
+RULES:
+- Describe WHAT the issue is about and the problem/request.
+- Mention key details from the issue description.
+- Do NOT include all comments or discussion history.
+- Do NOT mention status, assignee, or labels unless relevant.
+
+FORMAT:
+- Short structured explanation or bullet points.
+""",
+
+    "comments": """
+You are answering a question about Issue COMMENTS/DISCUSSION.
+
+RULES:
+- Summarize key discussion points and comments.
+- Mention important updates or resolutions if available.
+- Do NOT include the full issue description.
+- Do NOT mention status, assignee, or labels unless relevant.
+
+FORMAT:
+- Short structured summary of discussion or bullet points.
+""",
+
+    "timeline": """
+You are answering a question about Issue TIMELINE/HISTORY.
+
+RULES:
+- Provide a chronological list of key events (created, updated, closed, major comments).
+- Include dates and important milestones.
+- Do NOT describe the issue content in detail.
+- Be concise and factual.
+
+FORMAT:
+Issue #<number> Timeline:
+- Created: <date> by <author>
+- Updated: <date> - <event>
+- Closed: <date> (if applicable)
+"""
+}
+
 
 class ResponseHandler:
     """Handler for all response packaging and formatting operations."""
@@ -142,6 +245,51 @@ class ResponseHandler:
 
         return chunks
 
+    def _slice_issue_context_by_intent(self, chunks, intent):
+        if not intent:
+            return chunks
+
+        def meta(c):
+            return c.get("metadata", {})
+
+        if intent == "status":
+            return [
+                c for c in chunks
+                if meta(c).get("type") == "issue"
+            ]
+
+        if intent == "assignee":
+            return [
+                c for c in chunks
+                if "assignee" in meta(c) or "assigned" in str(meta(c)).lower()
+            ]
+
+        if intent == "labels":
+            return [
+                c for c in chunks
+                if "label" in str(meta(c)).lower() or "tag" in str(meta(c)).lower()
+            ]
+
+        if intent == "description":
+            return [
+                c for c in chunks
+                if meta(c).get("type") == "issue" and "body" in str(meta(c)).lower()
+            ]
+
+        if intent == "comments":
+            return [
+                c for c in chunks
+                if "comment" in str(meta(c)).lower() or meta(c).get("type") == "comment"
+            ]
+
+        if intent == "timeline":
+            return [
+                c for c in chunks
+                if "created" in str(meta(c)).lower() or "updated" in str(meta(c)).lower() or "closed" in str(meta(c)).lower()
+            ]
+
+        return chunks
+
 
     def respond_with_results(
         self,
@@ -153,9 +301,11 @@ class ResponseHandler:
         intent: Optional[str] = None
     ) -> Dict[str, Any]:
 
-        # 🔒 STEP 1: Slice context HARD by PR intent
+        # 🔒 STEP 1: Slice context HARD by PR/Issue intent
         if query_type == QueryType.PR_SPECIFIC and intent:
             github_results = self._slice_pr_context_by_intent(github_results, intent)
+        elif query_type == QueryType.ISSUE_SPECIFIC and intent:
+            github_results = self._slice_issue_context_by_intent(github_results, intent)
 
         # 🔒 STEP 2: Build context ONLY from sliced chunks
         context = self.chatbot.build_context_from_chunks(github_results, query_type)
@@ -168,7 +318,7 @@ class ResponseHandler:
 
         email_context = self.chatbot.build_email_context(email_results)
 
-        # 🔒 STEP 3: INTENT-AWARE PROMPTING (THIS IS THE FIX)
+        # 🔒 STEP 3: INTENT-AWARE PROMPTING
         if query_type == QueryType.PR_SPECIFIC and intent:
             system_prompt = PR_INTENT_SYSTEM_PROMPTS.get(
                 intent, PR_INTENT_SYSTEM_PROMPTS["summary"]
@@ -185,8 +335,24 @@ class ResponseHandler:
     {context}
     """.strip()
 
+        elif query_type == QueryType.ISSUE_SPECIFIC and intent:
+            system_prompt = ISSUE_INTENT_SYSTEM_PROMPTS.get(
+                intent, ISSUE_INTENT_SYSTEM_PROMPTS["summary"]
+            )
+
+            # 🚫 DO NOT use build_user_prompt here
+            user_prompt = f"""
+    Answer the following strictly according to the instructions.
+
+    Question:
+    {expanded_query}
+
+    Context (may be incomplete; do NOT infer beyond it):
+    {context}
+    """.strip()
+
         else:
-            # Normal non-PR or non-intent flow
+            # Normal non-PR/Issue or non-intent flow
             system_prompt = self.chatbot.get_dynamic_system_prompt(
                 query_type, expanded_query, role=role
             )
