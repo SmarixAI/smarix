@@ -136,9 +136,9 @@ class CacheHandler:
         if not cached_result:
             return None
         
-        # Handle augmentation
+        # Handle augmentation (medium confidence, needs slight adjustment)
         if cached_result.get('_requires_augmentation'):
-            self.chatbot.logger.info("🧩 AUGMENTING cached response with new context")
+            self.chatbot.logger.info("AUGMENTING cached response with new context")
             result = self.augment_cached_response(
                 cached_result['_cached_response'],
                 cached_result['_original_query'],
@@ -155,19 +155,23 @@ class CacheHandler:
             
             return result
         
-        # Handle generation with hints
+        # Handle generation with hints (low confidence or PR-strict)
         elif cached_result.get('_requires_generation'):
-            self.chatbot.logger.info("💡 Will generate response with cache hints (proceeding to full generation)")
-            # Continue to full generation below
-            return None
+            self.chatbot.logger.info(
+                f"LOW CONFIDENCE/PR-STRICT | confidence={cached_result.get('cache_confidence', 'N/A')} | "
+                f"proceeding to full RAG generation with hints"
+            )
+            # Store hints in chatbot context for RAG to use, but CONTINUE to full pipeline
+            self.chatbot.cache_hints = cached_result  # New temp storage
+            return None  # ← CRITICAL: Continue to RAG!
         
-        # Direct cache hit - RETURN IMMEDIATELY
-        else:
+        # DIRECT CACHE HIT - ONLY for high/exact confidence (confidence >= 0.92)
+        elif cached_result.get('cache_confidence', 0) >= 0.92:  # ← NEW STRICT CHECK
             confidence = cached_result.get('cache_confidence', 'unknown')
             cache_tier = cached_result.get('cache_tier', 'semantic')
             
             self.chatbot.logger.info(
-                f"✅ SEMANTIC CACHE HIT | confidence={confidence} | tier={cache_tier}"
+                f"✅ DIRECT CACHE HIT | confidence={confidence} | tier={cache_tier}"
             )
             
             try:
@@ -179,6 +183,16 @@ class CacheHandler:
                 self.chatbot.logger.error(f"Failed to save cached exchange: {e}")
             
             return cached_result
+        
+        else:
+            # Medium/low confidence without _requires_* flag → treat as generation hint
+            self.chatbot.logger.info(
+                f"MEDIUM/LOW CACHE | confidence={cached_result.get('cache_confidence', 'N/A')} | "
+                f"proceeding to full RAG"
+            )
+            self.chatbot.cache_hints = cached_result  # Store for RAG context
+            return None  # Continue to full pipeline
+
     
     def augment_cached_response(
         self,

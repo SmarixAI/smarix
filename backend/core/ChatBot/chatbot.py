@@ -78,6 +78,8 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         # Store repo_name string for filtering
         self.repo_full_name = f"{repo_owner}/{repo_name}" if repo_owner and repo_name else None
 
+        self.cache_hints = None
+
         # Initialize multi-index store or single DB
         self.multi_index_store = None
         
@@ -328,18 +330,37 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         # STEP 1: UPDATE CACHE AGES (runs periodically)
         self.cache_handler.update_cache_ages()
 
-        # STEP 2: SEMANTIC CACHE CHECK (uses ORIGINAL query)
+        # STEP 2: SEMANTIC CACHE CHECK FIRST (RAW QUERY - CRITICAL FIX)
+        self.logger.info(f"CACHE LOOKUP | raw='{query[:60]}...' | session={active_session_id[:8]}")
         cached_result = self.cache_handler.get_semantic_cache(query, active_session_id)
+
         if cached_result:
             result = self.cache_handler.handle_cached_result(cached_result, query, active_session_id)
             if result:
+                self.logger.info(f"DIRECT CACHE HIT | confidence={result.get('cache_confidence', 'N/A')}")
                 return result
-
-        # STEP 3: OLD CACHE CHECK
-        cached_response = self.cache_handler.get_response_cache(query, active_session_id)
-        if cached_response:
-            self.logger.info(f"OLD CACHE HIT | Returning cached response (legacy)")
-            return cached_response
+            # If handle_cached_result returned None, it means requires_generation
+            # Skip old cache and proceed to RAG
+            self.logger.info(f"Semantic cache requires generation, skipping old cache")
+        else:
+            # STEP 3: OLD CACHE CHECK (only if NO semantic cache result)
+            cached_response = self.cache_handler.get_response_cache(query, active_session_id)
+            if cached_response:
+                # Check if this is a failure response (no context found)
+                answer = cached_response.get('answer', '')
+                is_failure = (
+                    len(answer) < 150 or
+                    'no information' in answer.lower() or
+                    'no context' in answer.lower() or
+                    "don't have" in answer.lower() or
+                    'not found' in answer.lower()
+                )
+                
+                if is_failure:
+                    self.logger.info(f"OLD CACHE HIT but response is failure, skipping cache")
+                else:
+                    self.logger.info(f"OLD CACHE HIT | Returning cached response (legacy)")
+                    return cached_response
 
         query_lower = query.lower()
 
@@ -352,173 +373,202 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         if self.is_greeting(query):
             query_type = QueryType.GREETING
             self.logger.info("CLASSIFICATION | Rule-based: GREETING (detected early)")
-        else:
-            # STEP 1: SESSION CONTEXT REWRITING
-            if not self.is_greeting(query) and active_session_id:
-                session_context_query = self.query_rewriter.rewrite(query, active_session_id)
-                if session_context_query and session_context_query != query:
-                    self.logger.info(f"🤖 SESSION REWRITE | '{query}' → '{session_context_query}'")
-                    if self.verbose:
-                        print(f"🤖 Session Context: {session_context_query}")
-                    rewritten_query = session_context_query
-                else:
-                    rewritten_query = query
+            return self.greeting_handler.handle_greeting(query, query_type, active_session_id)
+
+        # Early entity detection to decide if rewriting is needed
+        has_pr = bool(re.search(r'\bPR\s*#?\s*\d+|\bpull request\s*#?\s*\d+', query, re.IGNORECASE))
+        has_issue = bool(re.search(r'\bissue\s*#?\s*\d+|\bbug\s*#?\s*\d+', query, re.IGNORECASE))
+        has_commit = bool(re.search(r'\b[a-f0-9]{7,40}\b', query, re.IGNORECASE))
+
+        skip_rewrite = has_pr or has_issue or has_commit
+
+        # SESSION CONTEXT REWRITING (skip for PR/Issue/Commit queries)
+        if active_session_id and not skip_rewrite:
+            session_context_query = self.query_rewriter.rewrite(query, active_session_id)
+            if session_context_query and session_context_query != query:
+                self.logger.info(f"SESSION REWRITE | '{query}' -> '{session_context_query}'")
+                if self.verbose:
+                    print(f"Session Context: {session_context_query}")
+                rewritten_query = session_context_query
             else:
                 rewritten_query = query
+        else:
+            if skip_rewrite:
+                self.logger.info(f"SKIP REWRITE | Direct entity lookup query (PR/Issue/Commit)")
+            rewritten_query = query
 
-            # STEP 2: Expand query (for context from conversation history)
-            #         Adds context from previous messages if needed
-            expanded_query = self.expand_query(rewritten_query)
-            if expanded_query != rewritten_query:
-                self.logger.info(f"QUERY EXPANSION | Rewritten: '{rewritten_query}' -> Expanded: '{expanded_query}'")
-            else:
-                expanded_query = rewritten_query
+        # STEP 2: Expand query (for context from conversation history)
+        #         Adds context from previous messages if needed
+        expanded_query = self.expand_query(rewritten_query)
+        if expanded_query != rewritten_query:
+            self.logger.info(f"QUERY EXPANSION | Rewritten: '{rewritten_query}' -> Expanded: '{expanded_query}'")
+        else:
+            expanded_query = rewritten_query
 
-            query_lower = expanded_query.lower()
+        query_lower = expanded_query.lower()
 
-            # MULTI-QUESTION DETECTION (run only for main call, not recursive subqueries)
-            if not filters or not filters.get("is_subquery"):
-                if self.enable_multi_query:
-                    subqueries = self.multi_query_handler.split_into_subqueries(query)
-                    if len(subqueries) > 1:
-                        self.logger.info(f"MULTI-QUERY | Detected {len(subqueries)} sub-questions")
-                        return self.multi_query_handler.handle_multi_query(subqueries, query, active_session_id)
+        # MULTI-QUESTION DETECTION (run only for main call, not recursive subqueries)
+        if not filters or not filters.get("is_subquery"):
+            if self.enable_multi_query:
+                subqueries = self.multi_query_handler.split_into_subqueries(query)
+                if len(subqueries) > 1:
+                    self.logger.info(f"MULTI-QUERY | Detected {len(subqueries)} sub-questions")
+                    return self.multi_query_handler.handle_multi_query(subqueries, query, active_session_id)
 
-            # STEP 3: Classify query into QueryType (using rewritten/expanded query)
-            #         Determines query category: HOW_TO, CODE_LOCATION, CONCEPTUAL, etc.
-            query_type = self.classify_query(expanded_query)
+        # STEP 3: Classify query into QueryType (using rewritten/expanded query)
+        #         Determines query category: HOW_TO, CODE_LOCATION, CONCEPTUAL, etc.
+        query_type = self.classify_query(expanded_query)
 
-            # 👇 Direct lookup for Issue / PR numbers (skip semantic search)
-            entity = self.extract_entity_from_query(expanded_query, query_type)
-            if query_type == QueryType.PR_ISSUE_TUTORIAL and entity:
-                self.logger.info(
-                    f"PR-ISSUE TUTORIAL | Detected tutorial request for {entity['type']} #{entity['number']}"
+        # Direct lookup for Issue / PR numbers (skip semantic search)
+        entity = self.extract_entity_from_query(expanded_query, query_type)
+        if query_type == QueryType.PR_ISSUE_TUTORIAL and entity:
+            self.logger.info(
+                f"PR-ISSUE TUTORIAL | Detected tutorial request for {entity['type']} #{entity['number']}"
+            )
+
+            result = self.pr_handler.handle_pr_issue_tutorial(entity, query, expanded_query)
+
+            # CRITICAL: Store RAW query, not expanded
+            self.cache_handler.update_caches(query, result, active_session_id)
+
+            try:
+                self.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
+                self.conversation_store.add_message(
+                    active_session_id, "assistant", result.get("answer", ""), tokens_used=0
                 )
+            except Exception as e:
+                self.logger.error(f"CONVERSATION_STORE | Failed to save tutorial exchange: {e}")
 
-                result = self.pr_handler.handle_pr_issue_tutorial(entity, query, expanded_query)
+            return result
 
+        if query_type == QueryType.PR_ISSUE_CODING_QUESTION and entity:
+            self.logger.info(
+                f"PR-ISSUE CODING QUESTION | Detected coding question request for {entity['type']} #{entity['number']}"
+            )
+
+            result = self.pr_handler.handle_pr_issue_coding_question(entity, query, expanded_query)
+
+            # CRITICAL: Store RAW query
+            self.cache_handler.update_caches(query, result, active_session_id)
+
+            try:
+                self.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
+                self.conversation_store.add_message(
+                    active_session_id, "assistant", result.get("answer", ""), tokens_used=0
+                )
+            except Exception as e:
+                self.logger.error(f"CONVERSATION_STORE | Failed to save coding-question exchange: {e}")
+
+            return result
+
+        # DIRECT LOOKUP - Issue
+        if entity and entity.get("type") == "issue":
+            result = self.issue_handler.handle_issue_direct_lookup(
+                entity, query, expanded_query, query_type, active_session_id, role=role
+            )
+            if result:
+                # Store RAW query if result found
                 self.cache_handler.update_caches(query, result, active_session_id)
-
-                try:
-                    self.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
-                    self.conversation_store.add_message(
-                        active_session_id, "assistant", result.get("answer", ""), tokens_used=0
-                    )
-                except Exception as e:
-                    self.logger.error(f"CONVERSATION_STORE | Failed to save tutorial exchange: {e}")
-
                 return result
 
-            if query_type == QueryType.PR_ISSUE_CODING_QUESTION and entity:
-                self.logger.info(
-                    f"PR-ISSUE CODING QUESTION | Detected coding question request for {entity['type']} #{entity['number']}"
-                )
-
-                result = self.pr_handler.handle_pr_issue_coding_question(entity, query, expanded_query)
-
+        # DIRECT LOOKUP - PR
+        if entity and entity.get("type") == "pr":
+            result = self.pr_handler.handle_pr_direct_lookup(
+                entity, query, expanded_query, active_session_id, role=role
+            )
+            if result:
+                # Store RAW query if result found
                 self.cache_handler.update_caches(query, result, active_session_id)
-
-                try:
-                    self.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
-                    self.conversation_store.add_message(
-                        active_session_id, "assistant", result.get("answer", ""), tokens_used=0
-                    )
-                except Exception as e:
-                    self.logger.error(f"CONVERSATION_STORE | Failed to save coding-question exchange: {e}")
-
                 return result
 
-            # 🔥 DIRECT LOOKUP — Issue
-            if entity and entity.get("type") == "issue":
-                result = self.issue_handler.handle_issue_direct_lookup(
-                    entity, query, expanded_query, query_type, active_session_id, role=role
-                )
-                if result:
-                    return result
+        # DIRECT LOOKUP - Commit
+        if entity and entity.get("type") == "commit":
+            result = self.commit_handler.handle_commit_direct_lookup(
+                entity, query, expanded_query, query_type, active_session_id, role=role
+            )
+            if result:
+                # Store RAW query if result found
+                self.cache_handler.update_caches(query, result, active_session_id)
+                return result
 
-            # 🔥 DIRECT LOOKUP — PR
-            if entity and entity.get("type") == "pr":
-                result = self.pr_handler.handle_pr_direct_lookup(
-                    entity, query, expanded_query, active_session_id, role=role
-                )
-                if result:
-                    return result
+        self.logger.info(f"QUERY TYPE | {query_type}")
 
-            # 🔥 DIRECT LOOKUP — Commit
-            if entity and entity.get("type") == "commit":
-                result = self.commit_handler.handle_commit_direct_lookup(
-                    entity, query, expanded_query, query_type, active_session_id, role=role
-                )
-                if result:
-                    return result
+        if query_type == QueryType.RANDOM_PR_GENERATOR:
+            self.logger.info("RANDOM PR GENERATOR | Will retrieve merged PRs with code changes for LLM selection")
 
-            self.logger.info(f"QUERY TYPE | {query_type}")
+        raw_num = re.search(r'\b(\d+)\b', expanded_query.lower())
+        pr_results = None  
 
-            if query_type == QueryType.RANDOM_PR_GENERATOR:
-                self.logger.info("RANDOM PR GENERATOR | Will retrieve merged PRs with code changes for LLM selection")
+        # Handle PR override
+        if raw_num and (
+            query_type == QueryType.PR_SPECIFIC
+            or "pr" in query_lower
+            or "pull request" in query_lower
+            or "merge request" in query_lower
+            or "mr" in query_lower
+        ):
+            result = self.pr_handler.handle_pr_override(
+                raw_num, query, expanded_query, query_lower, query_type, active_session_id, role=role
+            )
+            if result:
+                # Store RAW query
+                self.cache_handler.update_caches(query, result, active_session_id)
+                return result
+            # Mark that we tried to find PR but didn't find it
+            pr_results = False
 
-            raw_num = re.search(r'\b(\d+)\b', expanded_query.lower())
-            pr_results = None  
+        # FINAL STOP: If PR is not found in metadata, do NOT do semantic search
+        if query_type == QueryType.PR_SPECIFIC and raw_num and pr_results is False:
+            result = self.pr_handler.handle_pr_not_found(raw_num, query_type, query, active_session_id)
+            if result:
+                # Even "not found" gets cached (exact match case)
+                self.cache_handler.update_caches(query, result, active_session_id)
+                return result
 
-            # Handle PR override
-            if raw_num and (
-                query_type == QueryType.PR_SPECIFIC
-                or "pr" in query_lower
-                or "pull request" in query_lower
-                or "merge request" in query_lower
-                or "mr" in query_lower
-            ):
-                result = self.pr_handler.handle_pr_override(
-                    raw_num, query, expanded_query, query_lower, query_type, active_session_id, role=role
-                )
-                if result:
-                    return result
-                # Mark that we tried to find PR but didn't find it
-                pr_results = False
+        # Handle Issue override
+        issue_results = None
+        if raw_num and (
+            query_type == QueryType.ISSUE_SPECIFIC
+            or "issue" in query_lower
+            or "bug" in query_lower
+            or "ticket" in query_lower
+            or "report" in query_lower
+        ):
+            result = self.issue_handler.handle_issue_override(
+                raw_num, query, expanded_query, query_type, active_session_id, role=role
+            )
+            if result:
+                # Store RAW query
+                self.cache_handler.update_caches(query, result, active_session_id)
+                return result
+            # Mark that we tried to find Issue but didn't find it
+            issue_results = False
 
-            # ❗ FINAL STOP: If PR is not found in metadata, do NOT do semantic search
-            if query_type == QueryType.PR_SPECIFIC and raw_num and pr_results is False:
-                result = self.pr_handler.handle_pr_not_found(raw_num, query_type, query, active_session_id)
-                if result:
-                    return result
+        # FINAL STOP: If Issue is not found in metadata, do NOT do semantic search
+        if query_type == QueryType.ISSUE_SPECIFIC and raw_num and issue_results is False:
+            result = self.issue_handler.handle_issue_not_found(raw_num, query_type, query, active_session_id)
+            if result:
+                # Store RAW query
+                self.cache_handler.update_caches(query, result, active_session_id)
+                return result
 
-            # Handle Issue override
-            issue_results = None
-            if raw_num and (
-                query_type == QueryType.ISSUE_SPECIFIC
-                or "issue" in query_lower
-                or "bug" in query_lower
-                or "ticket" in query_lower
-                or "report" in query_lower
-            ):
-                result = self.issue_handler.handle_issue_override(
-                    raw_num, query, expanded_query, query_type, active_session_id, role=role
-                )
-                if result:
-                    return result
-                # Mark that we tried to find Issue but didn't find it
-                issue_results = False
-
-            # ❗ FINAL STOP: If Issue is not found in metadata, do NOT do semantic search
-            if query_type == QueryType.ISSUE_SPECIFIC and raw_num and issue_results is False:
-                result = self.issue_handler.handle_issue_not_found(raw_num, query_type, query, active_session_id)
-                if result:
-                    return result
-
-            # Guaranteed COMMIT direct lookup override
-            raw_sha = re.search(r'\b([a-f0-9]{7,40})\b', expanded_query.lower())
-            if query_type == QueryType.COMMIT_SPECIFIC and raw_sha:
-                result = self.commit_handler.handle_commit_override(
-                    raw_sha, query, expanded_query, query_lower, query_type, active_session_id, role=role
-                )
-                if result:
-                    return result
-                
-                # If commit not found, handle not found case
-                result = self.commit_handler.handle_commit_not_found(raw_sha, query_type, query, active_session_id)
-                if result:
-                    return result
-
+        # Guaranteed COMMIT direct lookup override
+        raw_sha = re.search(r'\b([a-f0-9]{7,40})\b', expanded_query.lower())
+        if query_type == QueryType.COMMIT_SPECIFIC and raw_sha:
+            result = self.commit_handler.handle_commit_override(
+                raw_sha, query, expanded_query, query_lower, query_type, active_session_id, role=role
+            )
+            if result:
+                # Store RAW query
+                self.cache_handler.update_caches(query, result, active_session_id)
+                return result
+            
+            # If commit not found, handle not found case
+            result = self.commit_handler.handle_commit_not_found(raw_sha, query_type, query, active_session_id)
+            if result:
+                # Store RAW query
+                self.cache_handler.update_caches(query, result, active_session_id)
+                return result
 
         # STEP 4: Query routing happens in _retrieve_multi_index() using expanded_query
         #         Routes to appropriate index: docs, code, prs, commits, or combined
@@ -538,6 +588,8 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
                 chrono_query, query, expanded_query, active_session_id, role=role
             )
             if result:
+                # Store RAW query
+                self.cache_handler.update_caches(query, result, active_session_id)
                 return result
             
         if query_type == QueryType.TRACEABILITY and entity:
@@ -545,12 +597,18 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
                 entity, query, expanded_query, active_session_id, role=role
             )
             if result:
+                # Store RAW query
+                self.cache_handler.update_caches(query, result, active_session_id)
                 return result
 
         # Non-chronological / general flow
-        return self.general_query_handler.handle_general_query(
+        result = self.general_query_handler.handle_general_query(
             query, expanded_query, query_type, entity, keywords, active_session_id, role=role
         )
+        # Store RAW query for general queries too
+        self.cache_handler.update_caches(query, result, active_session_id)
+        return result
+
 
     def _respond_with_results(
         self,
