@@ -55,7 +55,6 @@ print(f"\n{'='*70}")
 print(f"GENERATING EMBEDDINGS FOR REPO: {REPO_OWNER}/{REPO_NAME}")
 print(f"{'='*70}\n")
 
-
 def auto_detect_provider():
     if os.getenv('OPENAI_API_KEY'):
         return 'openai', 'text-embedding-3-small'
@@ -63,7 +62,6 @@ def auto_detect_provider():
         return 'cohere', 'embed-english-v3.0'
     else:
         return 'sentence-transformers', 'all-MiniLM-L6-v2'
-
 
 def find_latest_chunks_file():
     processed_dir = Path("../../data/DataProcessing") / REPO_OWNER / REPO_NAME / "chunks"
@@ -74,7 +72,6 @@ def find_latest_chunks_file():
         return None
     latest = max(chunks_files, key=lambda p: p.stat().st_mtime)
     return str(latest)
-
 
 def format_temporal_context(temporal: Dict[str, Any]) -> str:
     if not temporal:
@@ -97,7 +94,6 @@ def format_temporal_context(temporal: Dict[str, Any]) -> str:
     elif temporal.get('merged_at'):
         parts.append("merged")
     return ", ".join(parts) if parts else ""
-
 
 def format_entity_context(entities: Dict[str, Any], chunk_type: str) -> str:
     if not entities:
@@ -158,7 +154,6 @@ def format_entity_context(entities: Dict[str, Any], chunk_type: str) -> str:
         parts.append(f"subject: {entities['subject']}")
     return " | ".join(parts) if parts else ""
 
-
 def format_correlation_context(chunk: Dict[str, Any]) -> str:
     if not chunk.get('is_git_related'):
         return ""
@@ -177,7 +172,6 @@ def format_correlation_context(chunk: Dict[str, Any]) -> str:
         files = correlated['file_paths'][:2]
         parts.append(f"about files: {', '.join(files)}")
     return " | ".join(parts) if parts else ""
-
 
 def extract_commit_data(chunk: Dict[str, Any]) -> Tuple[str, List[str], Dict[str, str]]:
     commit_message = ""
@@ -216,7 +210,6 @@ def extract_commit_data(chunk: Dict[str, Any]) -> Tuple[str, List[str], Dict[str
             if hint_text and 'commit' in hint_text.lower():
                 commit_message = hint_text[:500]
     return commit_message, files_modified, author_info
-
 
 def extract_main_content(chunk: Dict[str, Any]) -> str:
     """
@@ -905,7 +898,6 @@ def _count_lines_and_functions_in_code(content: str, language_hint: str = "") ->
     func_count = min(func_count, line_count)
     return line_count, func_count
 
-
 def prepare_graph_nodes(graph_data: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
     """
     Convert Graph Nodes into embeddable chunks so we can search the Graph semantically.
@@ -956,7 +948,6 @@ def prepare_graph_nodes(graph_data: Dict[str, Any]) -> Tuple[List[Dict[str, Any]
 
     return prepared_chunks, stats
 
-
 def compute_repo_metrics(chunks: List[Dict[str, Any]]) -> Dict[str, Any]:
     metrics = {
         'total_lines': 0,
@@ -998,7 +989,6 @@ def compute_repo_metrics(chunks: List[Dict[str, Any]]) -> Dict[str, Any]:
         if len(repo_struct['files']) < 10:
             repo_struct['files'].append(path)
     return metrics
-
 
 def load_and_inject_aggregated_tech_summary(processed_dir: Path, chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     tech_file = processed_dir / "aggregated_tech_stack_summary.json"
@@ -1043,7 +1033,6 @@ def load_and_inject_aggregated_tech_summary(processed_dir: Path, chunks: List[Di
         'skip_embedding': False,
     }
     return [tech_chunk] + chunks
-
 
 def prepare_enhanced_chunk_for_embedding(chunk: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -1292,9 +1281,6 @@ def prepare_enhanced_chunk_for_embedding(chunk: Dict[str, Any]) -> Dict[str, Any
 
     return prepared
 
-
-
-
 def prepare_chunks_for_embedding(chunks: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
    
     
@@ -1328,8 +1314,8 @@ def prepare_chunks_for_embedding(chunks: List[Dict[str, Any]]) -> Tuple[List[Dic
         prepared = prepare_enhanced_chunk_for_embedding(chunk)
         chunk_type = prepared['type']
 
-        if chunk_type == "issue":
-           print("DEBUG:", prepared["metadata"])
+        # if chunk_type == "issue":
+        #    print("DEBUG:", prepared["metadata"])
 
 
         stats['by_type'][chunk_type] = stats['by_type'].get(chunk_type, 0) + 1
@@ -1346,7 +1332,6 @@ def prepare_chunks_for_embedding(chunks: List[Dict[str, Any]]) -> Tuple[List[Dic
         stats['by_priority'][priority] = stats['by_priority'].get(priority, 0) + 1
     return prepared_chunks, stats
 
-
 def detect_source_type(chunks):
     if not chunks:
         return 'unknown'
@@ -1361,7 +1346,6 @@ def detect_source_type(chunks):
         return 'git'
     return 'unknown'
 
-
 def _get_size(file_path: Path) -> str:
     try:
         size = file_path.stat().st_size
@@ -1373,7 +1357,6 @@ def _get_size(file_path: Path) -> str:
             return f"{size/(1024*1024):.1f} MB"
     except:
         return "unknown"
-
 
 def estimate_cost(provider: str, model: str, num_chunks: int, stats: dict):
     avg_tokens_per_chunk = 800
@@ -1395,7 +1378,6 @@ def estimate_cost(provider: str, model: str, num_chunks: int, stats: dict):
         print(f"\nEstimated Cost:")
         print(f"   Tokens: ~{total_tokens:,}")
         print(f"   Cost: ~${estimated_cost:.3f}")
-
 
 def batch_generate(args):
     processed_dir = Path("../../data/DataProcessing") / REPO_OWNER / REPO_NAME / "chunks"
@@ -1702,7 +1684,6 @@ def batch_generate(args):
     print(f"\nOutput directory: {output_dir}")
     print(f"\nNext Step:")
     print(f"   python core/VectorDB/build_indices.py")
-
 
 def main():
     parser = argparse.ArgumentParser(

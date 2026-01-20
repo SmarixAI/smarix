@@ -16,7 +16,6 @@ from datetime import datetime
 from collections import defaultdict, Counter
 import re
 
-
 STATE_FILE = Path(
     Path(__file__).resolve().parents[2] / "data" / "Admin" / "state" / "runtime_state.json"
 )
@@ -40,9 +39,6 @@ def load_current_repo_from_state():
 
     return owner, name
 
-
-
-
 # Ensure the backend package directory is on sys.path
 _backend_dir = Path(__file__).resolve().parents[2]
 _backend_dir_str = str(_backend_dir)
@@ -51,7 +47,6 @@ if _backend_dir_str not in sys.path:
 
 REPO_OWNER, REPO_NAME = load_current_repo_from_state()
 FULL_REPO_NAME = f"{REPO_OWNER}/{REPO_NAME}"
-
 
 class GraphExtractor:
     """
@@ -507,6 +502,10 @@ class CodeAnalyzer:
     }
 
     def __init__(self):
+        self.reset()
+    
+    def reset(self):
+        """Reset all metrics and state for a new repository analysis"""
         self.metrics = {
             "total_files": 0,
             "total_lines": 0,
@@ -976,12 +975,10 @@ class CodeAnalyzer:
 
         return {k: v for k, v in categories.items() if v}
 
-
 class DataChunker:
     """
     Intelligent chunking with cross-reference tracking, edge case handling, and code analysis
     """
-
     def __init__(self, repo_name):
         self.chunk_registry = {}  # Track all chunks by ID for deduplication
         self.entity_map = defaultdict(set)  # Map entities to chunk IDs
@@ -1180,6 +1177,9 @@ class DataChunker:
         Perform comprehensive code analysis on repository
         """
         print(f"      🔍 Analyzing repository code...")
+        
+        # Reset code analyzer state for this repository
+        self.code_analyzer.reset()
 
         # Collect all file paths for structure analysis
         all_file_paths = []
@@ -1841,7 +1841,6 @@ class DataChunker:
 
         return chunks, entities, techstack
 
-
     def chunk_gmail_data(self, data: Dict[str, Any], repo_name: str, git_entities: Dict[str, Set[str]]) -> List[Dict[str, Any]]:
         """
         Chunk Gmail data with GitHub correlation analysis
@@ -2044,7 +2043,6 @@ class DataChunker:
 
         return chunks
 
-
 def process_multi_source_data(
     data: Dict[str, Any],
     repo_name: str,
@@ -2116,7 +2114,6 @@ def process_multi_source_data(
 
     return all_chunks, entities, tech_stack
 
-
 def process_file(input_file: str, output_dir: str, chunker: 'DataChunker',
                 git_entities: Optional[Dict[str, Set[str]]] = None) -> Dict[str, Any]:
     """
@@ -2175,6 +2172,15 @@ def process_file(input_file: str, output_dir: str, chunker: 'DataChunker',
     repo_name = REPO_NAME
     repo_owner = REPO_OWNER
     source = data.get('source', 'unknown')
+    
+    # Auto-detect source if not explicitly set
+    if source == 'unknown':
+        if "issues" in data or "prs" in data or "commits" in data:
+            source = 'git'
+            print(f"   ℹ️  Auto-detected source as 'git' based on data content")
+        elif "messages" in data:
+            source = 'gmail'
+            print(f"   ℹ️  Auto-detected source as 'gmail' based on data content")
 
     print(f"Source: {source}")
     print(f"File: {repo_name}")
@@ -2319,9 +2325,53 @@ def process_file(input_file: str, output_dir: str, chunker: 'DataChunker',
     # Save tech stack
     if tech_stack and source == 'git':
         techstack_file = repo_output_dir / "techstack.json"
+        
+        # Format tech stack data with repositories and summary structure
+        from collections import Counter
+        
+        # Create repository key (use repo_name or owner/repo_name format)
+        repo_key = f"{repo_owner}_{repo_name}" if repo_owner else repo_name
+        
+        # Aggregate summary data
+        all_languages = Counter(tech_stack.get("languages", {}).get("all", {}))
+        all_frameworks = Counter()
+        all_tools = Counter()
+        
+        # Count frameworks
+        for fw in tech_stack.get("frameworks", {}).get("detected", []):
+            all_frameworks[fw] = 1
+        
+        # Count tools
+        for tool in tech_stack.get("tools", {}).get("detected", []):
+            all_tools[tool] = 1
+        
+        # Build the formatted tech stack structure
+        formatted_tech_stack = {
+            "repositories": {
+                repo_key: tech_stack
+            },
+            "summary": {
+                "total_repositories": 1,
+                "languages": dict(all_languages),
+                "frameworks": dict(all_frameworks),
+                "tools": dict(all_tools),
+                "total_code_lines": tech_stack.get("metrics", {}).get("total_code_lines", 0),
+                "total_functions": tech_stack.get("functions_and_classes", {}).get("total_functions", 0),
+                "total_classes": tech_stack.get("functions_and_classes", {}).get("total_classes", 0)
+            }
+        }
+        
         with open(techstack_file, 'w', encoding='utf-8') as f:
-            json.dump(tech_stack, f, indent=2, ensure_ascii=False)
-        print(f"   Tech stack analysis saved: {techstack_file}")
+            json.dump(formatted_tech_stack, f, indent=2, ensure_ascii=False)
+        print(f"   ✅ Tech stack analysis saved: {techstack_file}")
+        print(f"      - Languages: {len(tech_stack.get('languages', {}).get('all', {}))}")
+        print(f"      - Frameworks: {len(tech_stack.get('frameworks', {}).get('detected', []))}")
+        print(f"      - Tools: {len(tech_stack.get('tools', {}).get('detected', []))}")
+    elif source == 'git' and not tech_stack:
+        print(f"   ⚠️  Warning: Tech stack is None or empty for git source. Skipping techstack.json generation.")
+        print(f"      This may indicate no code files were analyzed.")
+    elif tech_stack and source != 'git':
+        print(f"   ⚠️  Warning: Tech stack exists but source is '{source}' (not 'git'). Skipping techstack.json generation.")
 
     # Save retrieval strategy
     strategy = {
@@ -2401,7 +2451,6 @@ def process_file(input_file: str, output_dir: str, chunker: 'DataChunker',
         'entities': entities,
         'techstack': tech_stack
     }
-
 
 def batch_process():
     """
@@ -2624,8 +2673,6 @@ def batch_process():
             )
         print(f"\n💾 Aggregated tech stack summary saved: {aggregated_summary_file}")
 
-
-
 def main():
     parser = argparse.ArgumentParser(
         description="Enterprise-grade multi-source RAG data processing with code analysis"
@@ -2654,7 +2701,6 @@ def main():
             import traceback
             traceback.print_exc()
             sys.exit(1)
-
 
 if __name__ == "__main__":
     main()
