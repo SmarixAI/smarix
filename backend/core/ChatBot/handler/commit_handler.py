@@ -174,14 +174,7 @@ class CommitHandler:
     
     def _update_caches(self, query: str, result: Dict[str, Any], active_session_id: str):
         """Update semantic and response caches."""
-        if self.chatbot.query_rewriter and self.chatbot.query_rewriter.semantic_cache:
-            quality_score = result.get('context_quality', 0.8)
-            self.chatbot.query_rewriter.semantic_cache.set(
-                query, result, active_session_id, quality_score=quality_score
-            )
-        
-        if self.chatbot.query_rewriter and self.chatbot.query_rewriter.response_cache:
-            self.chatbot.query_rewriter.response_cache.set(query, result, active_session_id)
+        self.chatbot.cache_handler.update_caches(query, result, active_session_id)
     
     def _save_conversation(self, active_session_id: str, query: str, result: Dict[str, Any], context: str = "commit"):
         """Save conversation to conversation store."""

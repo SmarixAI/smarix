@@ -38,6 +38,7 @@ class MultiIndexVectorStore:
         "analyzed_file",
         "workflow",
         "tech_stack_summary",
+        "graph_nodes",  # Graph nodes index (stored in 'graph' folder)
         "all"
     ]
     
@@ -80,6 +81,7 @@ class MultiIndexVectorStore:
         """
         Dynamically discover available index types from directory structure.
         Returns base types + any additional types found in the directory.
+        Handles special mapping: 'graph' folder -> 'graph_nodes' index type.
         """
         discovered_types = set(self.BASE_INDEX_TYPES)
         
@@ -87,9 +89,16 @@ class MultiIndexVectorStore:
         if self.base_dir.exists():
             for item in self.base_dir.iterdir():
                 if item.is_dir():
-                    # Check if it looks like an index directory
-                    if (item / "faiss.index").exists() or (item / "config.json").exists():
-                        discovered_types.add(item.name)
+                    # Special handling: 'graph' folder maps to 'graph_nodes' index type
+                    if item.name == "graph":
+                        # Check if graph_nodes index exists in the graph folder
+                        graph_index_dir = item / "graph_nodes"
+                        if (graph_index_dir / "faiss.index").exists() or (graph_index_dir / "config.json").exists():
+                            discovered_types.add("graph_nodes")
+                    else:
+                        # Check if it looks like an index directory
+                        if (item / "faiss.index").exists() or (item / "config.json").exists():
+                            discovered_types.add(item.name)
         
         return sorted(list(discovered_types))
     
@@ -324,7 +333,11 @@ class MultiIndexVectorStore:
         
         loaded_count = 0
         for index_type in self.available_index_types:
-            index_dir = load_dir / index_type
+            # Special handling: 'graph_nodes' index is stored in 'graph/graph_nodes' folder
+            if index_type == "graph_nodes":
+                index_dir = load_dir / "graph" / "graph_nodes"
+            else:
+                index_dir = load_dir / index_type
             
             if not index_dir.exists():
                 logger.debug(f"Index directory not found: {index_dir}")

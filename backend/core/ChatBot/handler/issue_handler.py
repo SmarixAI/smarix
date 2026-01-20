@@ -20,6 +20,36 @@ class IssueHandler:
         """
         self.chatbot = chatbot
     
+    def detect_issue_intent(self, query_lower: str) -> str:
+        """
+        Detect the intent of an issue query to provide more targeted responses.
+        
+        Args:
+            query_lower: Lowercase query string
+            
+        Returns:
+            Intent string: 'status', 'assignee', 'labels', 'description', 'comments', 'timeline', or 'summary'
+        """
+        if any(k in query_lower for k in ["status", "open", "closed", "state"]):
+            return "status"
+        
+        if any(k in query_lower for k in ["assignee", "assigned", "who", "owner", "responsible"]):
+            return "assignee"
+        
+        if any(k in query_lower for k in ["label", "labels", "tag", "tags", "category"]):
+            return "labels"
+        
+        if any(k in query_lower for k in ["comment", "comments", "discussion", "conversation"]):
+            return "comments"
+        
+        if any(k in query_lower for k in ["timeline", "history", "when", "created", "updated", "closed"]):
+            return "timeline"
+        
+        if any(k in query_lower for k in ["description", "what", "about", "details"]):
+            return "description"
+        
+        return "summary"
+    
     def handle_issue_direct_lookup(
         self,
         entity: Dict[str, Any],
@@ -60,13 +90,16 @@ class IssueHandler:
             else:
                 self.chatbot.logger.info("DIRECT LOOKUP DEBUG | Issue index has no metadata")
         
+        query_lower = query.lower()
+        intent = self.detect_issue_intent(query_lower)
+        
         for key in possible_keys:
             issue_results = self.chatbot.vector_db.find(where={key: num}, top_k=self.chatbot.top_k)
             if issue_results:
                 self.chatbot.logger.info(f"DIRECT LOOKUP | Match via key '{key}' → {len(issue_results)} chunks")
                 
                 result = self.chatbot.response_handler.respond_with_results(
-                    issue_results, query_type, query, expanded_query, role=role
+                    issue_results, query_type, query, expanded_query, role=role, intent=intent
                 )
                 
                 self._update_caches(query, result, active_session_id)
@@ -79,7 +112,9 @@ class IssueHandler:
         if issue_results:
             self.chatbot.logger.info(f"DIRECT LOOKUP | Fallback match in title → {len(issue_results)} chunks")
             
-            result = self.chatbot.response_handler.respond_with_results(issue_results, query_type, query, expanded_query, role=role)
+            result = self.chatbot.response_handler.respond_with_results(
+                issue_results, query_type, query, expanded_query, role=role, intent=intent
+            )
             
             self._update_caches(query, result, active_session_id)
             self._save_conversation(active_session_id, query, result, "issue fallback")
@@ -99,7 +134,8 @@ class IssueHandler:
         role: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
         """
-        Handle Issue override when query type is ISSUE_SPECIFIC and contains issue keywords.
+        Handle Issue override when query contains issue keywords and a number.
+        Similar to PR override logic for consistency.
         
         Args:
             raw_num: Regex match object with Issue number
@@ -112,20 +148,44 @@ class IssueHandler:
         Returns:
             Response dict if Issue found, None otherwise
         """
-        if query_type != QueryType.ISSUE_SPECIFIC or not raw_num:
+        if not raw_num:
             return None
         
-        # Check if query contains issue-related keywords
-        if not any(t in query.lower() for t in ["issue", "bug", "ticket", "report"]):
+        query_lower = query.lower()
+        
+        # Check if query type is ISSUE_SPECIFIC or contains issue-related keywords
+        if not (
+            query_type == QueryType.ISSUE_SPECIFIC
+            or "issue" in query_lower
+            or "bug" in query_lower
+            or "ticket" in query_lower
+            or "report" in query_lower
+        ):
             return None
         
         num = int(raw_num.group(1))
         self.chatbot.logger.info(f"DIRECT LOOKUP (ISSUE override) | Issue #{num}")
-        issue_results = self.chatbot.vector_db.find(where={"issue_number": str(num)}, top_k=self.chatbot.top_k)
+        
+        # Try multiple possible keys for issue lookup
+        possible_keys = ["issue_number", "number", "id", "issue_id"]
+        issue_results = None
+        
+        for key in possible_keys:
+            issue_results = self.chatbot.vector_db.find(where={key: str(num)}, top_k=self.chatbot.top_k)
+            if issue_results:
+                self.chatbot.logger.info(f"DIRECT LOOKUP (ISSUE override) | Match via key '{key}' → {len(issue_results)} chunks")
+                break
         
         if issue_results:
+            try:
+                self.chatbot.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
+            except Exception as e:
+                self.chatbot.logger.error(f"CONVERSATION_STORE | Failed to save user query: {e}")
+            
+            intent = self.detect_issue_intent(query_lower)
+            
             result = self.chatbot.response_handler.respond_with_results(
-                issue_results, QueryType.ISSUE_SPECIFIC, query, expanded_query, role=role
+                issue_results, QueryType.ISSUE_SPECIFIC, query, expanded_query, role=role, intent=intent
             )
             
             self._update_caches(query, result, active_session_id)
@@ -136,16 +196,42 @@ class IssueHandler:
             self.chatbot.logger.warning(f"DIRECT LOOKUP (ISSUE override) | No match for Issue #{num}")
             return None
     
+    def handle_issue_not_found(
+        self,
+        raw_num: re.Match,
+        query_type: str,
+        query: str,
+        active_session_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Handle case when Issue is not found in metadata.
+        Similar to PR not found handling for consistency.
+        
+        Args:
+            raw_num: Regex match object with Issue number
+            query_type: Detected query type
+            query: Original user query
+            active_session_id: Current session ID
+            
+        Returns:
+            Response dict with not found message, None if not applicable
+        """
+        if query_type != QueryType.ISSUE_SPECIFIC or not raw_num:
+            return None
+        
+        num = int(raw_num.group(1))
+        self.chatbot.logger.info(f"DIRECT LOOKUP FINAL | Issue #{num} not found — stopping without semantic search")
+        not_found_answer = f"Issue #{num} was not found in the repository. It may not exist or was not indexed."
+        result = self.chatbot.response_handler.package_response(
+            not_found_answer, [], [], QueryType.ISSUE_SPECIFIC
+        )
+        
+        self._update_caches(query, result, active_session_id)
+        return result
+    
     def _update_caches(self, query: str, result: Dict[str, Any], active_session_id: str):
         """Update semantic and response caches."""
-        if self.chatbot.query_rewriter and self.chatbot.query_rewriter.semantic_cache:
-            quality_score = result.get('context_quality', 0.8)
-            self.chatbot.query_rewriter.semantic_cache.set(
-                query, result, active_session_id, quality_score=quality_score
-            )
-        
-        if self.chatbot.query_rewriter and self.chatbot.query_rewriter.response_cache:
-            self.chatbot.query_rewriter.response_cache.set(query, result, active_session_id)
+        self.chatbot.cache_handler.update_caches(query, result, active_session_id)
     
     def _save_conversation(self, active_session_id: str, query: str, result: Dict[str, Any], context: str = "issue"):
         """Save conversation to conversation store."""
