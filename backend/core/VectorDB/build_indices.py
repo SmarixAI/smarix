@@ -28,17 +28,31 @@ STATE_FILE = Path(
 
 
 def load_current_repo_from_state():
+    """Load current repo from runtime_state.json with better error handling"""
+    if not STATE_FILE.exists():
+        raise RuntimeError(f"❌ State file not found: {STATE_FILE}")
+    
     with open(STATE_FILE, "r", encoding="utf-8") as f:
         state = json.load(f)
 
     curr_repo = state.get("curr_repo")
     if not curr_repo:
-        raise RuntimeError("curr_repo missing in runtime_state.json")
+        raise RuntimeError("❌ curr_repo missing in runtime_state.json")
 
-    return curr_repo["owner"], curr_repo["name"]
+    owner = curr_repo.get("owner")
+    name = curr_repo.get("name")
+    
+    if not owner or not name:
+        raise RuntimeError("❌ curr_repo.owner or curr_repo.name missing in runtime_state.json")
 
+    return owner, name
 
 REPO_OWNER, REPO_NAME = load_current_repo_from_state()
+FULL_REPO_NAME = f"{REPO_OWNER}/{REPO_NAME}"
+
+print(f"\n{'='*70}")
+print(f"BUILDING VECTORDB FOR REPO: {REPO_OWNER}/{REPO_NAME}")
+print(f"{'='*70}\n")
 
 # Use absolute paths from script location (not relative to CWD)
 backend_dir = Path(__file__).resolve().parents[2]
@@ -88,11 +102,18 @@ def load_embeddings(base_path: Path):
 
         if "metadata" in item and isinstance(item["metadata"], dict):
             md = item["metadata"].copy()
+            # Merge top-level fields that might not be in nested metadata
+            for key in ["repo_name", "repo_owner", "source", "type", "chunk_type"]:
+                if key in item and key not in md:
+                    md[key] = item[key]
         else:
             md = item.copy()
 
         md.pop("id", None)
         md.pop("metadata", None)
+        md.pop("vector", None)  # Remove vector data from metadata
+
+        # set canonical id field
         md["chunk_id"] = chunk_id
         flat_metadata.append(md)
 
@@ -253,7 +274,78 @@ def main():
 
         try:
             metadata, vectors = load_embeddings(base_path)
-            print(f"   Loaded {len(vectors)} vectors")
+            print(f"   Loaded {len(vectors)} vectors (dim: {vectors.shape[1]})")
+            
+            # CRITICAL: Filter metadata and vectors to only include current repo
+            # Since embeddings are in repo-specific directory, assume they belong to current repo
+            # if repo_name is missing or empty
+            filtered_metadata = []
+            filtered_indices = []
+            skipped_count = 0
+            fixed_count = 0
+            
+            for i, m in enumerate(metadata):
+                # Get repo_name - check multiple possible locations
+                chunk_repo_raw = m.get("repo_name") or m.get("repository") or m.get("repo") or None
+                chunk_repo = str(chunk_repo_raw).strip() if chunk_repo_raw is not None else ""
+                chunk_owner_raw = m.get("repo_owner") or m.get("owner") or None
+                chunk_owner = str(chunk_owner_raw).strip() if chunk_owner_raw is not None else ""
+                
+                # If repo_name is empty/missing, assume it's for current repo (embeddings are in repo dir)
+                # Since embeddings are in Embeddings/{REPO_OWNER}/{REPO_NAME}/, they belong to current repo
+                if not chunk_repo or chunk_repo == "" or chunk_repo == "None":
+                    # Embeddings are in Embeddings/{REPO_OWNER}/{REPO_NAME}/, so assume current repo
+                    m["repo_name"] = REPO_NAME
+                    m["repo_owner"] = REPO_OWNER
+                    filtered_metadata.append(m)
+                    filtered_indices.append(i)
+                    fixed_count += 1
+                    continue
+                
+                # STRICT matching: BOTH owner AND repo name must match
+                # Accept chunks that match current repo
+                matches_repo = False
+                
+                # Check full format first: "owner/repo"
+                if chunk_repo == FULL_REPO_NAME:
+                    matches_repo = True
+                # Check separate owner and repo name (BOTH must match)
+                elif chunk_owner == REPO_OWNER and chunk_repo == REPO_NAME:
+                    matches_repo = True
+                # If repo_name is stored as just the name, owner must still match
+                elif chunk_repo == REPO_NAME and chunk_owner == REPO_OWNER:
+                    matches_repo = True
+                
+                if matches_repo:
+                    # Ensure repo_name is set correctly
+                    m["repo_name"] = REPO_NAME
+                    m["repo_owner"] = REPO_OWNER
+                    filtered_metadata.append(m)
+                    filtered_indices.append(i)
+                else:
+                    skipped_count += 1
+                    if skipped_count <= 3:  # Print first 3 warnings
+                        print(f"      ⚠️  Skipping chunk with repo: '{chunk_owner}/{chunk_repo}' (expected: '{REPO_OWNER}/{REPO_NAME}')")
+            
+            if fixed_count > 0:
+                print(f"   ✓ Fixed repo_name for {fixed_count} embeddings (assumed current repo)")
+                # Filter vectors to match filtered metadata
+                vectors = vectors[filtered_indices]
+                metadata = filtered_metadata
+            
+            if skipped_count > 0:
+                print(f"   ⚠️  Filtered out {skipped_count} embeddings from other repositories")
+                # Filter vectors to match filtered metadata (if not already filtered)
+                if fixed_count == 0:
+                    vectors = vectors[filtered_indices]
+                    metadata = filtered_metadata
+            
+            if fixed_count > 0 or skipped_count > 0:
+                print(f"   ✓ Using {len(metadata)} embeddings for {REPO_OWNER}/{REPO_NAME}")
+            
+            if len(metadata) == 0:
+                print(f"   ⚠️  No embeddings found for current repo - skipping {index_name}")
+                continue
 
             if index_name.lower() == "issue":
                 for m in metadata:

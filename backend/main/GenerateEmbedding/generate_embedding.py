@@ -29,17 +29,31 @@ STATE_FILE = Path(
 )
 
 def load_current_repo_from_state():
+    """Load current repo from runtime_state.json with better error handling"""
+    if not STATE_FILE.exists():
+        raise RuntimeError(f"❌ State file not found: {STATE_FILE}")
+    
     with open(STATE_FILE, "r", encoding="utf-8") as f:
         state = json.load(f)
 
     curr_repo = state.get("curr_repo")
     if not curr_repo:
-        raise RuntimeError("curr_repo missing in runtime_state.json")
+        raise RuntimeError("❌ curr_repo missing in runtime_state.json")
 
-    return curr_repo["owner"], curr_repo["name"]
+    owner = curr_repo.get("owner")
+    name = curr_repo.get("name")
+    
+    if not owner or not name:
+        raise RuntimeError("❌ curr_repo.owner or curr_repo.name missing in runtime_state.json")
+
+    return owner, name
 
 REPO_OWNER, REPO_NAME = load_current_repo_from_state()
+FULL_REPO_NAME = f"{REPO_OWNER}/{REPO_NAME}"
 
+print(f"\n{'='*70}")
+print(f"GENERATING EMBEDDINGS FOR REPO: {REPO_OWNER}/{REPO_NAME}")
+print(f"{'='*70}\n")
 
 def auto_detect_provider():
     if os.getenv('OPENAI_API_KEY'):
@@ -48,7 +62,6 @@ def auto_detect_provider():
         return 'cohere', 'embed-english-v3.0'
     else:
         return 'sentence-transformers', 'all-MiniLM-L6-v2'
-
 
 def find_latest_chunks_file():
     processed_dir = Path("../../data/DataProcessing") / REPO_OWNER / REPO_NAME / "chunks"
@@ -59,7 +72,6 @@ def find_latest_chunks_file():
         return None
     latest = max(chunks_files, key=lambda p: p.stat().st_mtime)
     return str(latest)
-
 
 def format_temporal_context(temporal: Dict[str, Any]) -> str:
     if not temporal:
@@ -82,7 +94,6 @@ def format_temporal_context(temporal: Dict[str, Any]) -> str:
     elif temporal.get('merged_at'):
         parts.append("merged")
     return ", ".join(parts) if parts else ""
-
 
 def format_entity_context(entities: Dict[str, Any], chunk_type: str) -> str:
     if not entities:
@@ -143,7 +154,6 @@ def format_entity_context(entities: Dict[str, Any], chunk_type: str) -> str:
         parts.append(f"subject: {entities['subject']}")
     return " | ".join(parts) if parts else ""
 
-
 def format_correlation_context(chunk: Dict[str, Any]) -> str:
     if not chunk.get('is_git_related'):
         return ""
@@ -162,7 +172,6 @@ def format_correlation_context(chunk: Dict[str, Any]) -> str:
         files = correlated['file_paths'][:2]
         parts.append(f"about files: {', '.join(files)}")
     return " | ".join(parts) if parts else ""
-
 
 def extract_commit_data(chunk: Dict[str, Any]) -> Tuple[str, List[str], Dict[str, str]]:
     commit_message = ""
@@ -201,7 +210,6 @@ def extract_commit_data(chunk: Dict[str, Any]) -> Tuple[str, List[str], Dict[str
             if hint_text and 'commit' in hint_text.lower():
                 commit_message = hint_text[:500]
     return commit_message, files_modified, author_info
-
 
 def extract_main_content(chunk: Dict[str, Any]) -> str:
     """
@@ -890,7 +898,6 @@ def _count_lines_and_functions_in_code(content: str, language_hint: str = "") ->
     func_count = min(func_count, line_count)
     return line_count, func_count
 
-
 def prepare_graph_nodes(graph_data: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
     """
     Convert Graph Nodes into embeddable chunks so we can search the Graph semantically.
@@ -957,7 +964,6 @@ def prepare_graph_nodes(graph_data: Dict[str, Any]) -> Tuple[List[Dict[str, Any]
 
     return prepared_chunks, stats
 
-
 def compute_repo_metrics(chunks: List[Dict[str, Any]]) -> Dict[str, Any]:
     metrics = {
         'total_lines': 0,
@@ -999,7 +1005,6 @@ def compute_repo_metrics(chunks: List[Dict[str, Any]]) -> Dict[str, Any]:
         if len(repo_struct['files']) < 10:
             repo_struct['files'].append(path)
     return metrics
-
 
 def load_and_inject_aggregated_tech_summary(processed_dir: Path, chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     tech_file = processed_dir / "aggregated_tech_stack_summary.json"
@@ -1044,7 +1049,6 @@ def load_and_inject_aggregated_tech_summary(processed_dir: Path, chunks: List[Di
         'skip_embedding': False,
     }
     return [tech_chunk] + chunks
-
 
 def prepare_enhanced_chunk_for_embedding(chunk: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -1192,12 +1196,18 @@ def prepare_enhanced_chunk_for_embedding(chunk: Dict[str, Any]) -> Dict[str, Any
             derived_directory = None
 
     # --- Metadata object used in RAG + vector DB ---
+    # CRITICAL: Always set repo_name to current repo (chunks are already filtered by repo)
+    chunk_repo = chunk.get("repo_name", "").strip()
+    if not chunk_repo or chunk_repo != REPO_NAME:
+        # Use current repo - chunks are already filtered to current repo
+        chunk_repo = REPO_NAME
+    
     storage_metadata = {
         "chunk_id": chunk_id,
         "chunk_type": chunk_type,   # <-- CRITICAL for retriever & embedding
         "type": chunk_type,
         "source": source,
-        "repo_name": chunk.get("repo_name") or f"{REPO_OWNER}/{REPO_NAME}",  # Use current repo as fallback
+        "repo_name": chunk_repo,  # Always use current repo name
         "repo_owner": REPO_OWNER,
         "file_path": file_path_val,
         "language": entities.get("language") or chunk.get("language"),
@@ -1278,7 +1288,7 @@ def prepare_enhanced_chunk_for_embedding(chunk: Dict[str, Any]) -> Dict[str, Any
     for field in [
         "chunk_type", "category", "importance_score", "file_path",
         "function_name", "class_name", "semantic_tags", "keywords",
-        "language"
+        "language", "repo_name", "repo_owner", "source", "type", "retrieval_priority"
     ]:
         if field in chunk:                       # if raw chunk carried these
             prepared[field] = chunk[field]
@@ -1286,9 +1296,6 @@ def prepare_enhanced_chunk_for_embedding(chunk: Dict[str, Any]) -> Dict[str, Any
             prepared[field] = storage_metadata[field]
 
     return prepared
-
-
-
 
 def prepare_chunks_for_embedding(chunks: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
    
@@ -1323,8 +1330,8 @@ def prepare_chunks_for_embedding(chunks: List[Dict[str, Any]]) -> Tuple[List[Dic
         prepared = prepare_enhanced_chunk_for_embedding(chunk)
         chunk_type = prepared['type']
 
-        if chunk_type == "issue":
-           print("DEBUG:", prepared["metadata"])
+        # if chunk_type == "issue":
+        #    print("DEBUG:", prepared["metadata"])
 
 
         stats['by_type'][chunk_type] = stats['by_type'].get(chunk_type, 0) + 1
@@ -1341,7 +1348,6 @@ def prepare_chunks_for_embedding(chunks: List[Dict[str, Any]]) -> Tuple[List[Dic
         stats['by_priority'][priority] = stats['by_priority'].get(priority, 0) + 1
     return prepared_chunks, stats
 
-
 def detect_source_type(chunks):
     if not chunks:
         return 'unknown'
@@ -1356,7 +1362,6 @@ def detect_source_type(chunks):
         return 'git'
     return 'unknown'
 
-
 def _get_size(file_path: Path) -> str:
     try:
         size = file_path.stat().st_size
@@ -1368,7 +1373,6 @@ def _get_size(file_path: Path) -> str:
             return f"{size/(1024*1024):.1f} MB"
     except:
         return "unknown"
-
 
 def estimate_cost(provider: str, model: str, num_chunks: int, stats: dict):
     avg_tokens_per_chunk = 800
@@ -1390,7 +1394,6 @@ def estimate_cost(provider: str, model: str, num_chunks: int, stats: dict):
         print(f"\nEstimated Cost:")
         print(f"   Tokens: ~{total_tokens:,}")
         print(f"   Cost: ~${estimated_cost:.3f}")
-
 
 def batch_generate(args):
     processed_dir = Path("../../data/DataProcessing") / REPO_OWNER / REPO_NAME / "chunks"
@@ -1448,12 +1451,20 @@ def batch_generate(args):
         print(f"Error: No valid chunk files found after parsing")
         return
 
-    print(f"Repositories found: {len(by_repo)}\n")
+    # CRITICAL: Filter to only process current repo
+    # The parsed repo_name from filename might not match, so we'll filter chunks instead
+    expected_repo_key = f"{REPO_OWNER}_{REPO_NAME}".replace("/", "_")
+    
+    print(f"Repositories found in filenames: {len(by_repo)}\n")
     for repo_name, types in by_repo.items():
         print(f"   {repo_name}:")
         for chunk_type, file in types.items():
             print(f"      {chunk_type}: {file.name}")
     print()
+    
+    # Filter: Only process files that are in the current repo's directory structure
+    # Since files are already in processed_dir which is repo-specific, we can process them
+    # But we'll filter chunks by repo_name when loading
 
     graph_file = processed_dir.parent / "graph_data.json"
     has_graph = graph_file.exists()
@@ -1513,6 +1524,40 @@ def batch_generate(args):
                     continue
 
                 print(f"      Raw chunks: {len(chunks)}")
+                
+                # CRITICAL: Filter chunks to only include current repo
+                filtered_chunks = []
+                skipped_count = 0
+                for chunk in chunks:
+                    chunk_repo = chunk.get('repo_name', '')
+                    chunk_owner = chunk.get('repo_owner', '')
+                    
+                    # Accept chunks that match current repo
+                    matches_repo = (
+                        chunk_repo == REPO_NAME or 
+                        chunk_repo == FULL_REPO_NAME or
+                        (chunk_owner == REPO_OWNER and chunk_repo == REPO_NAME)
+                    )
+                    
+                    if matches_repo:
+                        # Ensure repo_name is set correctly
+                        chunk['repo_name'] = REPO_NAME
+                        chunk['repo_owner'] = REPO_OWNER
+                        filtered_chunks.append(chunk)
+                    else:
+                        skipped_count += 1
+                
+                if skipped_count > 0:
+                    print(f"      ⚠️  Filtered out {skipped_count} chunks from other repositories")
+                
+                chunks = filtered_chunks
+                
+                if not chunks:
+                    print(f"      Warning: No chunks for current repo after filtering, skipping...")
+                    results.append((repo_name, chunk_type, "Skipped", "No chunks for current repo"))
+                    continue
+                
+                print(f"      Chunks for {REPO_OWNER}/{REPO_NAME}: {len(chunks)}")
 
                 # Prepare chunks for embedding
                 prepared_chunks, prep_stats = prepare_chunks_for_embedding(chunks)
@@ -1541,7 +1586,7 @@ def batch_generate(args):
 
                 results.append((repo_name, chunk_type, "Success", result['statistics']))
 
-                # Collect for combined index
+                # Collect for combined index (chunks are already filtered above)
                 all_chunks_for_repo.extend(chunks)
 
             except Exception as e:
@@ -1551,14 +1596,25 @@ def batch_generate(args):
                 results.append((repo_name, chunk_type, "Failed", str(e)))
 
         # Generate combined "all" index for this repository
-        if all_chunks_for_repo:
-            print(f"\n   Generating combined 'all' index for {repo_name}...")
+        # Double-check: Filter again to ensure only current repo chunks
+        final_all_chunks = []
+        for chunk in all_chunks_for_repo:
+            chunk_repo = chunk.get('repo_name', '')
+            chunk_owner = chunk.get('repo_owner', '')
+            if (chunk_repo == REPO_NAME or chunk_repo == FULL_REPO_NAME or
+                (chunk_owner == REPO_OWNER and chunk_repo == REPO_NAME)):
+                chunk['repo_name'] = REPO_NAME
+                chunk['repo_owner'] = REPO_OWNER
+                final_all_chunks.append(chunk)
+        
+        if final_all_chunks:
+            print(f"\n   Generating combined 'all' index for {REPO_OWNER}/{REPO_NAME}...")
 
             try:
-                print(f"      Total chunks: {len(all_chunks_for_repo)}")
+                print(f"      Total chunks: {len(final_all_chunks)}")
 
-                # Prepare all chunks
-                prepared_all, prep_all_stats = prepare_chunks_for_embedding(all_chunks_for_repo)
+                # Prepare all chunks (use filtered chunks)
+                prepared_all, prep_all_stats = prepare_chunks_for_embedding(final_all_chunks)
 
                 print(f"      Enhanced: {prep_all_stats['processed']}")
 
@@ -1658,7 +1714,6 @@ def batch_generate(args):
     print(f"\nOutput directory: {output_dir}")
     print(f"\nNext Step:")
     print(f"   python core/VectorDB/build_indices.py")
-
 
 def main():
     parser = argparse.ArgumentParser(

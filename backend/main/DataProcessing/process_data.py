@@ -16,7 +16,6 @@ from datetime import datetime
 from collections import defaultdict, Counter
 import re
 
-
 STATE_FILE = Path(
     Path(__file__).resolve().parents[2]
     / "data"
@@ -54,7 +53,6 @@ if _backend_dir_str not in sys.path:
 
 REPO_OWNER, REPO_NAME = load_current_repo_from_state()
 FULL_REPO_NAME = f"{REPO_OWNER}/{REPO_NAME}"
-
 
 class GraphExtractor:
     """
@@ -627,6 +625,10 @@ class CodeAnalyzer:
     }
 
     def __init__(self):
+        self.reset()
+    
+    def reset(self):
+        """Reset all metrics and state for a new repository analysis"""
         self.metrics = {
             "total_files": 0,
             "total_lines": 0,
@@ -1110,12 +1112,10 @@ class CodeAnalyzer:
 
         return {k: v for k, v in categories.items() if v}
 
-
 class DataChunker:
     """
     Intelligent chunking with cross-reference tracking, edge case handling, and code analysis
     """
-
     def __init__(self, repo_name):
         self.chunk_registry = {}  # Track all chunks by ID for deduplication
         self.entity_map = defaultdict(set)  # Map entities to chunk IDs
@@ -1316,6 +1316,9 @@ class DataChunker:
         Perform comprehensive code analysis on repository
         """
         print(f"      🔍 Analyzing repository code...")
+        
+        # Reset code analyzer state for this repository
+        self.code_analyzer.reset()
 
         # Collect all file paths for structure analysis
         all_file_paths = []
@@ -1431,26 +1434,27 @@ class DataChunker:
 
         # Repository overview chunk
         repo_overview = {
-            "chunk_id": f"{reponame}_overview",
-            "type": "repository_overview",
-            "source": "git",
-            "repo_name": reponame,
-            "retrieval_priority": 0,
-            "techstack": techstack,
-            "summary": {
-                "total_issues": len(data.get("issues", [])),
-                "total_prs": len(data.get("prs", [])),
-                "total_commits": len(data.get("commits", [])),
-                "total_code_files": len(data.get("code_files", [])),
-                "total_documentation": len(data.get("documentation", [])),
-                "total_workflows": len(data.get("workflows", [])),
-                "entities_summary": {
-                    "unique_authors": len(entities["authors"]),
-                    "unique_issues": len(entities["issue_numbers"]),
-                    "unique_prs": len(entities["pr_numbers"]),
-                    "unique_commits": len(entities["commit_shas"]),
-                    "unique_files": len(entities["file_paths"]),
-                },
+            'chunk_id': f"{reponame}_overview",
+            'type': 'repository_overview',
+            'source': 'git',
+            'repo_name': reponame,
+            'repo_owner': REPO_OWNER,  # Add owner for strict filtering
+            'retrieval_priority': 0,
+            'techstack': techstack,
+            'summary': {
+                'total_issues': len(data.get('issues', [])),
+                'total_prs': len(data.get('prs', [])),
+                'total_commits': len(data.get('commits', [])),
+                'total_code_files': len(data.get('code_files', [])),
+                'total_documentation': len(data.get('documentation', [])),
+                'total_workflows': len(data.get('workflows', [])),
+                'entities_summary': {
+                    'unique_authors': len(entities['authors']),
+                    'unique_issues': len(entities['issue_numbers']),
+                    'unique_prs': len(entities['pr_numbers']),
+                    'unique_commits': len(entities['commit_shas']),
+                    'unique_files': len(entities['file_paths'])
+                }
             },
             "search_hints": {
                 "text": f"{reponame} repository overview tech stack languages frameworks tools structure metrics",
@@ -1524,28 +1528,22 @@ class DataChunker:
                     ]
 
             chunk = {
-                "chunk_id": chunk_id,
-                "type": "issue",
-                "source": "git",
-                "repo_name": reponame,
-                "retrieval_priority": 1,
-                "entities": {
-                    "issue_number": issue.get("number"),
-                    "author": (
-                        issue.get("user", {}).get("login")
-                        if isinstance(issue.get("user"), dict)
-                        else None
-                    ),
-                    "labels": labels,
-                    "assignees": assignees,
-                    "milestone": (
-                        issue.get("milestone", {}).get("title")
-                        if isinstance(issue.get("milestone"), dict)
-                        else None
-                    ),
-                    "linked_prs": linked_prs,
-                    "is_truly_resolved": is_truly_resolved,
-                    "resolution_status": resolution_status,
+                'chunk_id': chunk_id,
+                'type': 'issue',
+                'source': 'git',
+                'repo_name': reponame,  # Ensure this matches current repo
+                'repo_owner': REPO_OWNER,  # Add owner for consistency
+                'retrieval_priority': 1,
+                'entities': {
+                    'issue_number': issue.get('number'),
+                    'author': issue.get('user', {}).get('login') if isinstance(issue.get('user'), dict) else None,
+                    'labels': labels,
+                    'assignees': assignees,
+                    'milestone': issue.get('milestone', {}).get('title') if isinstance(issue.get('milestone'),
+                                                                                       dict) else None,
+                    'linked_prs': linked_prs,
+                    'is_truly_resolved': is_truly_resolved,
+                    'resolution_status': resolution_status
                 },
                 "temporal": {
                     "created_at": issue.get("created_at"),
@@ -1689,33 +1687,22 @@ class DataChunker:
                     merged_by = str(pr["merged_by"])
 
             chunk = {
-                "chunk_id": chunk_id,
-                "type": "pr",
-                "source": "git",
-                "repo_name": reponame,
-                "retrieval_priority": 1,
-                "entities": {
-                    "pr_number": pr.get("number"),
-                    "author": (
-                        pr.get("user", {}).get("login")
-                        if isinstance(pr.get("user"), dict)
-                        else None
-                    ),
-                    "reviewers": reviewers,
-                    "merged_by": merged_by,
-                    "base_branch": (
-                        pr.get("base", {}).get("ref")
-                        if isinstance(pr.get("base"), dict)
-                        else None
-                    ),
-                    "head_branch": (
-                        pr.get("head", {}).get("ref")
-                        if isinstance(pr.get("head"), dict)
-                        else None
-                    ),
-                    "linked_issues": linked_issues,
-                    "pr_status": pr_status,
-                    "is_merged": is_merged,
+                'chunk_id': chunk_id,
+                'type': 'pr',
+                'source': 'git',
+                'repo_name': reponame,
+                'repo_owner': REPO_OWNER,  # Add owner for strict filtering
+                'retrieval_priority': 1,
+                'entities': {
+                    'pr_number': pr.get('number'),
+                    'author': pr.get('user', {}).get('login') if isinstance(pr.get('user'), dict) else None,
+                    'reviewers': reviewers,
+                    'merged_by': merged_by,
+                    'base_branch': pr.get('base', {}).get('ref') if isinstance(pr.get('base'), dict) else None,
+                    'head_branch': pr.get('head', {}).get('ref') if isinstance(pr.get('head'), dict) else None,
+                    'linked_issues': linked_issues,
+                    'pr_status': pr_status,
+                    'is_merged': is_merged
                 },
                 "temporal": {
                     "created_at": pr.get("created_at"),
@@ -1801,18 +1788,19 @@ class DataChunker:
             )
 
             chunk = {
-                "chunk_id": chunk_id,
-                "type": "commit",
-                "source": "git",
-                "repo_name": reponame,
-                "retrieval_priority": 2,
-                "entities": {
-                    "sha": commit.get("sha"),
-                    "sha_short": (commit.get("sha") or "")[:7],
-                    "author": author_info.get("name"),
-                    "author_email": author_info.get("email"),
-                    "committer": committer_info.get("name"),
-                    "committer_email": committer_info.get("email"),
+                'chunk_id': chunk_id,
+                'type': 'commit',
+                'source': 'git',
+                'repo_name': reponame,
+                'repo_owner': REPO_OWNER,  # Add owner for strict filtering
+                'retrieval_priority': 2,
+                'entities': {
+                    'sha': commit.get('sha'),
+                    'sha_short': (commit.get('sha') or '')[:7],
+                    'author': author_info.get('name'),
+                    'author_email': author_info.get('email'),
+                    'committer': committer_info.get('name'),
+                    'committer_email': committer_info.get('email')
                 },
                 "temporal": {
                     "date": author_info.get("date"),
@@ -1874,16 +1862,17 @@ class DataChunker:
                 self.graph_extractor.process_analysis(path, ast_analysis, content)
 
             chunk = {
-                "chunk_id": chunk_id,
-                "type": "code",
-                "source": "git",
-                "repo_name": reponame,
-                "retrieval_priority": 2,
-                "entities": {
-                    "path": path,
-                    "language": language,
-                    "directory": str(Path(path).parent) if path else "",
-                    "filename": Path(path).name if path else "",
+                'chunk_id': chunk_id,
+                'type': 'code',
+                'source': 'git',
+                'repo_name': reponame,
+                'repo_owner': REPO_OWNER,  # Add owner for strict filtering
+                'retrieval_priority': 2,
+                'entities': {
+                    'path': path,
+                    'language': language,
+                    'directory': str(Path(path).parent) if path else '',
+                    'filename': Path(path).name if path else ''
                 },
                 "content": {"content": content, "size": size, "analysis": ast_analysis},
                 "search_hints": {
@@ -1912,14 +1901,15 @@ class DataChunker:
             content_text = doc.get("content", "") or ""
 
             chunk = {
-                "chunk_id": chunk_id,
-                "type": "documentation",
-                "source": "git",
-                "repo_name": reponame,
-                "retrieval_priority": 1,
-                "entities": {
-                    "path": doc.get("path", ""),
-                    "title": doc.get("title", ""),
+                'chunk_id': chunk_id,
+                'type': 'documentation',
+                'source': 'git',
+                'repo_name': reponame,
+                'repo_owner': REPO_OWNER,  # Add owner for strict filtering
+                'retrieval_priority': 1,
+                'entities': {
+                    'path': doc.get('path', ''),
+                    'title': doc.get('title', '')
                 },
                 "content": {
                     "content": content_text,
@@ -1977,16 +1967,19 @@ class DataChunker:
             chunk_id = self.generate_chunk_id(analyzed, f"{reponame}_analyzed", idx)
 
             chunk = {
-                "chunk_id": chunk_id,
-                "type": "analyzed_file",
-                "source": "git",
-                "repo_name": reponame,
-                "retrieval_priority": 2,
-                "entities": {"path": analyzed.get("path", "")},
-                "content": analyzed,
-                "search_hints": {
-                    "text": json.dumps(analyzed),
-                    "keywords": list(entities["keywords"]),
+                'chunk_id': chunk_id,
+                'type': 'analyzed_file',
+                'source': 'git',
+                'repo_name': reponame,
+                'repo_owner': REPO_OWNER,  # Add owner for strict filtering
+                'retrieval_priority': 2,
+                'entities': {
+                    'path': analyzed.get('path', '')
+                },
+                'content': analyzed,
+                'search_hints': {
+                    'text': json.dumps(analyzed),
+                    'keywords': list(entities['keywords'])
                 },
                 "raw_data": analyzed,
             }
@@ -1997,15 +1990,17 @@ class DataChunker:
         # CHUNK ONBOARDING (single document)
         if "onboarding" in data and data["onboarding"]:
             chunk = {
-                "chunk_id": f"{reponame}_onboarding_all",
-                "type": "onboarding",
-                "source": "git",
-                "repo_name": reponame,
-                "retrieval_priority": 1,
-                "content": data["onboarding"],
-                "search_hints": {
-                    "text": json.dumps(data["onboarding"]),
-                    "keywords": list(entities["keywords"]),
+                'chunk_id': f"{reponame}_onboarding_all",
+                'type': 'onboarding',
+                'source': 'git',
+                'repo_name': reponame,
+                'repo_owner': REPO_OWNER,  # Add owner for strict filtering
+                'repo_name': reponame,
+                'retrieval_priority': 1,
+                'content': data['onboarding'],
+                'search_hints': {
+                    'text': json.dumps(data['onboarding']),
+                    'keywords': list(entities['keywords'])
                 },
                 "raw_data": data["onboarding"],
             }
@@ -2015,15 +2010,17 @@ class DataChunker:
         # CHUNK OFFBOARDING (single document)
         if "offboarding" in data and data["offboarding"]:
             chunk = {
-                "chunk_id": f"{reponame}_offboarding_all",
-                "type": "offboarding",
-                "source": "git",
-                "repo_name": reponame,
-                "retrieval_priority": 1,
-                "content": data["offboarding"],
-                "search_hints": {
-                    "text": json.dumps(data["offboarding"]),
-                    "keywords": list(entities["keywords"]),
+                'chunk_id': f"{reponame}_offboarding_all",
+                'type': 'offboarding',
+                'source': 'git',
+                'repo_name': reponame,
+                'repo_owner': REPO_OWNER,  # Add owner for strict filtering
+                'repo_name': reponame,
+                'retrieval_priority': 1,
+                'content': data['offboarding'],
+                'search_hints': {
+                    'text': json.dumps(data['offboarding']),
+                    'keywords': list(entities['keywords'])
                 },
                 "raw_data": data["offboarding"],
             }
@@ -2236,7 +2233,6 @@ class DataChunker:
 
         return chunks
 
-
 def process_multi_source_data(
     data: Dict[str, Any],
     repo_name: str,
@@ -2316,11 +2312,53 @@ def process_file(
     git_entities: Optional[Dict[str, Set[str]]] = None,
 ) -> Dict[str, Any]:
     """
-    Load JSON, Chunk with dual indexing, Save SPLIT BY TYPE + GRAPH DATA
+    Load JSON, Chunk with dual indexing, Save SPLIT BY TYPE
+    Only processes data for the current repo specified in runtime_state.json
     """
     print("=" * 70)
     print("ENTERPRISE-GRADE MULTI-SOURCE PROCESSING WITH GRAPH EXTRACTION")
     print("=" * 70)
+
+    # Validate input file path matches current repo
+    input_path = Path(input_file).resolve()
+    
+    # Check if the file path matches the expected repo structure
+    # Expected structure: .../DataCollectionFromGit/{owner}/{repo}/{repo}.json
+    path_parts = list(input_path.parts)
+    
+    # Find DataCollectionFromGit in the path
+    try:
+        git_dir_idx = path_parts.index('DataCollectionFromGit')
+        if git_dir_idx >= 0 and len(path_parts) >= git_dir_idx + 4:
+            file_owner = path_parts[git_dir_idx + 1]
+            file_repo = path_parts[git_dir_idx + 2]
+            file_name = path_parts[git_dir_idx + 3]
+            
+            # Validate owner and repo match
+            if file_owner != REPO_OWNER or file_repo != REPO_NAME:
+                print(f"⚠️  WARNING: File path indicates different repo: {file_owner}/{file_repo}")
+                print(f"   Expected: {REPO_OWNER}/{REPO_NAME}")
+                print(f"   File: {input_file}")
+                print(f"   Skipping this file to prevent cross-repo contamination")
+                return {
+                    'output_files': [],
+                    'chunk_count': 0,
+                    'processed_count': 0,
+                    'raw_count': 0,
+                    'repo_name': REPO_NAME,
+                    'source': 'unknown',
+                    'entities': {},
+                    'techstack': None
+                }
+            
+            # Also validate filename matches repo name
+            if file_name != f"{REPO_NAME}.json":
+                print(f"⚠️  WARNING: Filename mismatch: {file_name} (expected: {REPO_NAME}.json)")
+    except (ValueError, IndexError):
+        # If we can't parse the path structure, log a warning but continue
+        # (some files might be in different locations)
+        print(f"⚠️  WARNING: Could not validate file path structure for: {input_file}")
+        print(f"   Proceeding with caution - will filter chunks by repo_name")
 
     print(f"Loading {input_file}")
     with open(input_file, "r", encoding="utf-8") as f:
@@ -2328,10 +2366,20 @@ def process_file(
 
     repo_name = REPO_NAME
     repo_owner = REPO_OWNER
-    source = data.get("source", "unknown")
+    source = data.get('source', 'unknown')
+    
+    # Auto-detect source if not explicitly set
+    if source == 'unknown':
+        if "issues" in data or "prs" in data or "commits" in data:
+            source = 'git'
+            print(f"   ℹ️  Auto-detected source as 'git' based on data content")
+        elif "messages" in data:
+            source = 'gmail'
+            print(f"   ℹ️  Auto-detected source as 'gmail' based on data content")
 
     print(f"Source: {source}")
     print(f"File: {repo_name}")
+    print(f"Processing for repo: {repo_owner}/{repo_name}")
 
     if source == "git":
         print(f"Issues: {len(data.get('issues', []))}")
@@ -2348,14 +2396,59 @@ def process_file(
         print(f"Messages with attachments: {messages_with_attachments}")
 
     print("Processing...")
-    chunks, entities, tech_stack = process_multi_source_data(
-        data, repo_name, chunker, git_entities
-    )
+    chunks, entities, tech_stack = process_multi_source_data(data, repo_name, chunker, git_entities)
+
+    # CRITICAL: Filter chunks to ensure they only belong to the current repo
+    # Also ensure all chunks have the correct repo_name set
+    expected_repo_full = f"{repo_owner}/{repo_name}"
+    filtered_chunks = []
+    skipped_count = 0
+    fixed_count = 0
+    
+    for chunk in chunks:
+        chunk_repo = chunk.get('repo_name', '').strip()
+        chunk_owner = chunk.get('repo_owner', '').strip()
+        
+        # STRICT matching: BOTH owner AND repo name must match
+        matches_repo = False
+        
+        # Check full format first: "owner/repo"
+        if chunk_repo == expected_repo_full:
+            matches_repo = True
+        # Check separate owner and repo name (BOTH must match)
+        elif chunk_owner == repo_owner and chunk_repo == repo_name:
+            matches_repo = True
+        # If repo_name is stored as just the name, owner must still match
+        elif chunk_repo == repo_name and chunk_owner == repo_owner:
+            matches_repo = True
+        
+        if matches_repo:
+            # Ensure repo_name is set correctly (use just repo_name, not full format)
+            if chunk.get('repo_name') != repo_name:
+                chunk['repo_name'] = repo_name
+                fixed_count += 1
+            # Ensure repo_owner is set
+            if chunk.get('repo_owner') != repo_owner:
+                chunk['repo_owner'] = repo_owner
+                fixed_count += 1
+            filtered_chunks.append(chunk)
+        else:
+            skipped_count += 1
+            if skipped_count <= 5:  # Only print first 5 warnings
+                print(f"   ⚠️  Skipping chunk with mismatched repo: '{chunk_owner}/{chunk_repo}' (expected: '{repo_owner}/{repo_name}')")
+                print(f"      Chunk ID: {chunk.get('chunk_id', 'unknown')}, Type: {chunk.get('type', 'unknown')}")
+    
+    if skipped_count > 0:
+        print(f"   ⚠️  Filtered out {skipped_count} chunks from other repositories")
+    if fixed_count > 0:
+        print(f"   ✓ Fixed repo_name for {fixed_count} chunks")
+    
+    chunks = filtered_chunks  # Use filtered chunks from now on
 
     processed_chunks = [c for c in chunks if not c.get("is_raw_data", False)]
     raw_chunks = [c for c in chunks if c.get("is_raw_data", False)]
 
-    print(f"Total chunks: {len(chunks)}")
+    print(f"Total chunks (after filtering): {len(chunks)}")
     print(f" - Processed chunks: {len(processed_chunks)}")
     print(f" - Raw data references: {len(raw_chunks)}")
 
@@ -2375,7 +2468,11 @@ def process_file(
     chunks_by_type = defaultdict(list)
 
     for chunk in chunks:
-        chunk_type = chunk.get("type", "unknown")
+        # Double-check repo_name before grouping
+        chunk_repo = chunk.get('repo_name', '')
+        if chunk_repo != repo_name and chunk_repo != expected_repo_full:
+            continue  # Skip chunks that don't match
+        chunk_type = chunk.get('type', 'unknown')
         chunks_by_type[chunk_type].append(chunk)
 
     saved_files = []
@@ -2430,9 +2527,53 @@ def process_file(
     # Save tech stack
     if tech_stack and source == "git":
         techstack_file = repo_output_dir / "techstack.json"
-        with open(techstack_file, "w", encoding="utf-8") as f:
-            json.dump(tech_stack, f, indent=2, ensure_ascii=False)
-        print(f"   Tech stack analysis saved: {techstack_file}")
+        
+        # Format tech stack data with repositories and summary structure
+        from collections import Counter
+        
+        # Create repository key (use repo_name or owner/repo_name format)
+        repo_key = f"{repo_owner}_{repo_name}" if repo_owner else repo_name
+        
+        # Aggregate summary data
+        all_languages = Counter(tech_stack.get("languages", {}).get("all", {}))
+        all_frameworks = Counter()
+        all_tools = Counter()
+        
+        # Count frameworks
+        for fw in tech_stack.get("frameworks", {}).get("detected", []):
+            all_frameworks[fw] = 1
+        
+        # Count tools
+        for tool in tech_stack.get("tools", {}).get("detected", []):
+            all_tools[tool] = 1
+        
+        # Build the formatted tech stack structure
+        formatted_tech_stack = {
+            "repositories": {
+                repo_key: tech_stack
+            },
+            "summary": {
+                "total_repositories": 1,
+                "languages": dict(all_languages),
+                "frameworks": dict(all_frameworks),
+                "tools": dict(all_tools),
+                "total_code_lines": tech_stack.get("metrics", {}).get("total_code_lines", 0),
+                "total_functions": tech_stack.get("functions_and_classes", {}).get("total_functions", 0),
+                "total_classes": tech_stack.get("functions_and_classes", {}).get("total_classes", 0)
+            }
+        }
+        
+        with open(techstack_file, 'w', encoding='utf-8') as f:
+            json.dump(formatted_tech_stack, f, indent=2, ensure_ascii=False)
+        print(f"   ✅ Tech stack analysis saved: {techstack_file}")
+        print(f"      - Languages: {len(tech_stack.get('languages', {}).get('all', {}))}")
+        print(f"      - Frameworks: {len(tech_stack.get('frameworks', {}).get('detected', []))}")
+        print(f"      - Tools: {len(tech_stack.get('tools', {}).get('detected', []))}")
+    elif source == 'git' and not tech_stack:
+        print(f"   ⚠️  Warning: Tech stack is None or empty for git source. Skipping techstack.json generation.")
+        print(f"      This may indicate no code files were analyzed.")
+    elif tech_stack and source != 'git':
+        print(f"   ⚠️  Warning: Tech stack exists but source is '{source}' (not 'git'). Skipping techstack.json generation.")
 
     # Save retrieval strategy
     strategy = {
@@ -2519,18 +2660,38 @@ def process_file(
 def batch_process():
     """
     Batch process with Git-first → Gmail correlation strategy
+    Only processes files for the current repo specified in runtime_state.json
     """
     git_dir = "../../data/DataCollectionFromGit"
     gmail_dir = "../../data/DataCollectionFromGmail"
     output_dir = "../../data/DataProcessing"
 
+    # Display current repo being processed
+    print(f"\n{'=' * 70}")
+    print(f"PROCESSING DATA FOR CURRENT REPO: {REPO_OWNER}/{REPO_NAME}")
+    print(f"{'=' * 70}\n")
+
     # Initialize shared chunker
     chunker = DataChunker(REPO_NAME)
 
+    # Filter Git files to only include the current repo
     git_files = []
     if os.path.exists(git_dir):
-        git_files = list(Path(git_dir).glob("*/*/*.json"))
-        print(f"📂 Found {len(git_files)} Git files")
+        # Build the expected path for the current repo
+        expected_repo_path = Path(git_dir) / REPO_OWNER / REPO_NAME / f"{REPO_NAME}.json"
+        
+        # Find all Git files first
+        all_git_files = list(Path(git_dir).glob("*/*/*.json"))
+        print(f"📂 Found {len(all_git_files)} Git files (total)")
+        
+        # Filter to only the current repo
+        git_files = [f for f in all_git_files if f == expected_repo_path]
+        
+        if git_files:
+            print(f"📂 Processing Git file for current repo: {REPO_OWNER}/{REPO_NAME}")
+        else:
+            print(f"⚠️  No Git file found for current repo: {REPO_OWNER}/{REPO_NAME}")
+            print(f"   Expected path: {expected_repo_path}")
 
     gmail_files = []
     if os.path.exists(gmail_dir):
@@ -2721,20 +2882,6 @@ def batch_process():
             )
         print(f"\n💾 Aggregated tech stack summary saved: {aggregated_summary_file}")
 
-    print(f"\n💡 Next Steps:")
-    print(
-        f"   1. Review generated retrieval strategies in {output_dir}/*_retrieval_strategy.json"
-    )
-    print(f"   2. Review tech stack analysis in {output_dir}/*_tech_stack.json")
-    print(
-        f"   3. Review aggregated summary in {output_dir}/aggregated_tech_stack_summary.json"
-    )
-    print(f"   4. Use chunks for vector embedding and indexing")
-    print(f"   5. Implement chatbot with GitHub-first → Gmail correlation logic")
-    print(f"   6. Set up hybrid search (semantic + keyword) for optimal retrieval")
-    print(f"   7. Integrate tech stack awareness in chatbot responses")
-
-
 def main():
     parser = argparse.ArgumentParser(
         description="Enterprise-grade multi-source RAG data processing with code analysis"
@@ -2764,7 +2911,6 @@ def main():
 
             traceback.print_exc()
             sys.exit(1)
-
 
 if __name__ == "__main__":
     main()

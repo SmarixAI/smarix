@@ -26,6 +26,58 @@ class GraphRetrievalMixin:
             except Exception as e:
                 print(f"⚠️ Failed to load graph structure: {e}")
         return None
+    
+    def _get_repo_filters(self) -> Optional[Dict[str, Any]]:
+        """Get repo-based filters for VectorDB search - STRICT filtering by both owner and repo name"""
+        repo_owner = getattr(self, 'repo_owner', None)
+        repo_name = getattr(self, 'repo_name', None)
+        
+        if not repo_owner or not repo_name:
+            return None
+        
+        # Return filter that matches BOTH owner and repo name
+        return {"repo_name": repo_name, "repo_owner": repo_owner}
+    
+    def _filter_by_repo(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Post-retrieval filtering to ensure only current repo chunks are returned - STRICT filtering"""
+        repo_owner = getattr(self, 'repo_owner', None)
+        repo_name = getattr(self, 'repo_name', None)
+        
+        # If repo info not available, return empty (don't return results from unknown repos)
+        if not repo_owner or not repo_name:
+            if results:
+                self.logger.warning(f"FILTER | No repo info available, filtering out {len(results)} results")
+            return []
+        
+        filtered = []
+        for result in results:
+            metadata = result.get('metadata', {})
+            chunk_repo = metadata.get('repo_name', '').strip()
+            chunk_owner = metadata.get('repo_owner', '').strip()
+            
+            # STRICT matching: BOTH owner AND repo name must match
+            # Accept if:
+            # 1. Full format matches: "owner/repo" == "owner/repo"
+            # 2. Both owner and repo name match separately
+            matches = False
+            
+            # Check full format first
+            if chunk_repo == f"{repo_owner}/{repo_name}":
+                matches = True
+            # Check separate owner and repo name (both must match)
+            elif chunk_owner == repo_owner and chunk_repo == repo_name:
+                matches = True
+            # If repo_name is stored as just the name (without owner), check owner separately
+            elif chunk_repo == repo_name and chunk_owner == repo_owner:
+                matches = True
+            
+            if matches:
+                filtered.append(result)
+        
+        if len(filtered) < len(results):
+            self.logger.info(f"FILTER | Filtered {len(results)} -> {len(filtered)} results for repo {repo_owner}/{repo_name}")
+        
+        return filtered
 
     def retrieve_graph_context(self, query_embedding, top_k=5):
         """
@@ -213,6 +265,9 @@ class RetrievalMixin(GraphRetrievalMixin):
         # Regular similarity search
         repo_filters = self._get_repo_filters()
         results = self.db.search(query_embedding, top_k=retrieve_k, filters=repo_filters)
+        
+        # CRITICAL: Post-filter to ensure only current repo (safeguard)
+        results = self._filter_by_repo(results)
 
         # Hybrid metadata boost (unchanged)
         if self.use_hybrid_retrieval:
@@ -384,6 +439,9 @@ class RetrievalMixin(GraphRetrievalMixin):
                 seen_ids.add(chunk_id)
                 unique_results.append(result)
         
+        # CRITICAL: Filter by repo after deduplication
+        unique_results = self._filter_by_repo(unique_results)
+        
         self.logger.info(f"RETRIEVAL | Total unique chunks retrieved: {len(unique_results)} (target: 15+)")
         
         if not unique_results:
@@ -436,6 +494,9 @@ class RetrievalMixin(GraphRetrievalMixin):
         
         # STEP 4: Context Fusion - Select TOP-8 diverse chunks
         final_results = self._select_diverse_chunks(unique_results, query_text or "", final_k)
+        
+        # CRITICAL: Post-filter to ensure only current repo (safeguard)
+        final_results = self._filter_by_repo(final_results)
         
         self.logger.info(f"FINAL | Returning {len(final_results)} diverse chunks (requested: {retrieve_k})")
 
@@ -887,11 +948,23 @@ class RetrievalMixin(GraphRetrievalMixin):
         if not repositories:
             return ""
 
-        repo_name = list(repositories.keys())[0]
-        repo_data = repositories[repo_name]
+        # Use current repo if available, otherwise use first repo in dict
+        repo_owner = getattr(self, 'repo_owner', None)
+        repo_name = getattr(self, 'repo_name', None)
+        repo_key = f"{repo_owner}/{repo_name}" if repo_owner and repo_name else None
+        
+        # Try to get current repo data first
+        if repo_key and repo_key in repositories:
+            repo_data = repositories[repo_key]
+            display_name = repo_key
+        else:
+            # Fallback to first repo (for backward compatibility)
+            repo_key = list(repositories.keys())[0]
+            repo_data = repositories[repo_key]
+            display_name = repo_key
 
         context_parts: List[str] = ["## REPOSITORY METRICS DATA\n"]
-        context_parts.append(f"Repository: {repo_name}\n")
+        context_parts.append(f"Repository: {display_name}\n")
 
         metrics = repo_data.get('metrics', {})
         if metrics:
@@ -1216,65 +1289,76 @@ class RetrievalMixin(GraphRetrievalMixin):
         }
 
     def load_repository_metrics(self) -> Optional[Dict[str, Any]]:
-        # Allow environment override first (explicit path)
-        env_path = os.getenv("AGGREGATED_TECH_STACK_PATH")
-        if env_path:
-            env_file = Path(env_path)
-            if env_file.exists():
-                try:
-                    with open(env_file, 'r', encoding='utf-8') as f:
-                        metrics = json.load(f)
+        """
+        Load repository metrics/tech stack for the CURRENT repo.
+        Uses ONLY repo-specific files from the standard location.
+        No hardcoded paths, no fallbacks, no environment overrides.
+        
+        Location: DataProcessing/{owner}/{repo}/techstack.json
+        Repo info comes from chatbot attributes or runtime_state.json
+        
+        Returns None if repo-specific file not found.
+        """
+        # Get current repo info
+        repo_owner = getattr(self, 'repo_owner', None)
+        repo_name = getattr(self, 'repo_name', None)
+        
+        # Try to load from runtime_state.json if repo info not available
+        if not repo_owner or not repo_name:
+            try:
+                possible_state_files = [
+                    Path(__file__).resolve().parents[3] / "data" / "Admin" / "state" / "runtime_state.json",
+                    Path("../../data/Admin/state/runtime_state.json"),
+                    Path("data/Admin/state/runtime_state.json"),
+                    Path("backend/data/Admin/state/runtime_state.json"),
+                ]
+                
+                for state_file in possible_state_files:
+                    if state_file.exists():
+                        with open(state_file, 'r', encoding='utf-8') as f:
+                            state = json.load(f)
+                            curr_repo = state.get("curr_repo", {})
+                            repo_owner = curr_repo.get("owner") or repo_owner
+                            repo_name = curr_repo.get("name") or repo_name
+                            if repo_owner and repo_name:
+                                break
+            except Exception as e:
+                if self.verbose:
+                    print(f"Could not load repo from runtime_state.json: {e}")
+        
+        # PRIORITY 1: Repo-specific techstack.json file
+        if repo_owner and repo_name:
+            repo_specific_paths = [
+                Path(__file__).resolve().parents[3] / "data" / "DataProcessing" / repo_owner / repo_name / "techstack.json",
+                Path("../../data/DataProcessing") / repo_owner / repo_name / "techstack.json",
+                Path("data/DataProcessing") / repo_owner / repo_name / "techstack.json",
+                Path("backend/data/DataProcessing") / repo_owner / repo_name / "techstack.json",
+            ]
+            
+            for path in repo_specific_paths:
+                if path.exists():
+                    try:
+                        with open(path, 'r', encoding='utf-8') as f:
+                            metrics = json.load(f)
+                            # Wrap in expected format
+                            result = {
+                                'repositories': {f"{repo_owner}/{repo_name}": metrics},
+                                'summary': metrics  # Use repo-specific metrics as summary
+                            }
+                            if self.verbose:
+                                print(f"✅ Loaded repo-specific metrics from: {path}")
+                            return result
+                    except Exception as e:
                         if self.verbose:
-                            print(f"Loaded repository metrics from (env): {env_file}")
-                        return metrics
-                except Exception as e:
-                    if self.verbose:
-                        print(f"Error loading metrics from env path {env_file}: {e}")
-
-        possible_paths = [
-            Path("../../data/DataProcessing/aggregated_tech_stack_summary.json"),
-            Path("data/DataProcessing/aggregated_tech_stack_summary.json"),
-            Path("DataProcessing/aggregated_tech_stack_summary.json"),
-            Path("aggregated_tech_stack_summary.json"),
-        ]
-
-        # Try common relative locations first
-        for path in possible_paths:
-            if path.exists():
-                try:
-                    with open(path, 'r', encoding='utf-8') as f:
-                        metrics = json.load(f)
-                        if self.verbose:
-                            print(f"Loaded repository metrics from: {path}")
-                        return metrics
-                except Exception as e:
-                    if self.verbose:
-                        print(f"Error loading metrics from {path}: {e}")
-                    continue
-
-        # Fallback: search the repository for the file (repo-root rglob)
-        try:
-            repo_root = Path(__file__).resolve().parents[3]
-            if self.verbose:
-                print(f"Searching repository root for aggregated_tech_stack_summary.json: {repo_root}")
-            for found in repo_root.rglob("aggregated_tech_stack_summary.json"):
-                try:
-                    with open(found, 'r', encoding='utf-8') as f:
-                        metrics = json.load(f)
-                        if self.verbose:
-                            print(f"Loaded repository metrics from: {found}")
-                        return metrics
-                except Exception as e:
-                    if self.verbose:
-                        print(f"Error loading metrics from {found}: {e}")
-                    continue
-        except Exception:
-            # Guard: if anything goes wrong during search, continue to return None
-            if self.verbose:
-                print("Repository-wide search failed for aggregated_tech_stack_summary.json")
-
+                            print(f"Error loading repo-specific metrics from {path}: {e}")
+                        continue
+        
+        # No fallbacks - only use repo-specific files from the standard location
         if self.verbose:
-            print("No repository metrics file found")
+            repo_display = f"{repo_owner}/{repo_name}" if repo_owner and repo_name else "unknown"
+            print(f"❌ No repository metrics file found for repo: {repo_display}")
+            print(f"   Expected location: data/DataProcessing/{repo_owner}/{repo_name}/techstack.json")
+            print(f"   Run data processing to generate this file for the current repo.")
 
         return None
 
