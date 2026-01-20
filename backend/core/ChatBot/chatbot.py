@@ -23,6 +23,7 @@ from .classifier import ClassifierMixin
 from .retrieval import RetrievalMixin
 from .llm_embeddings import LLMEmbeddingMixin
 from .query_type import QueryType
+from .handler import PRHandler, IssueHandler, GreetingHandler, CommitHandler, GeneralQueryHandler, ResponseHandler, TraceabilityHandler, MultiQueryHandler
 from sentence_transformers import SentenceTransformer
 
 STATE_FILE = Path(__file__).resolve().parents[2] / "data" / "Admin" / "state" / "runtime_state.json"
@@ -197,6 +198,16 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             embedding_function=self.get_query_embedding
         )
         self._last_semantic_cache_age_update = time.time()
+
+        # Initialize handlers
+        self.pr_handler = PRHandler(self)
+        self.issue_handler = IssueHandler(self)
+        self.greeting_handler = GreetingHandler(self)
+        self.commit_handler = CommitHandler(self)
+        self.general_query_handler = GeneralQueryHandler(self)
+        self.response_handler = ResponseHandler(self)
+        self.traceability_handler = TraceabilityHandler(self)
+        self.multi_query_handler = MultiQueryHandler(self)
 
         self.current_session_id: Optional[str] = None
 
@@ -414,10 +425,10 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             # MULTI-QUESTION DETECTION (run only for main call, not recursive subqueries)
             if not filters or not filters.get("is_subquery"):
                 if self.enable_multi_query:
-                    subqueries = self.split_into_subqueries(expanded_query)
+                    subqueries = self.multi_query_handler.split_into_subqueries(query)
                     if len(subqueries) > 1:
                         self.logger.info(f"MULTI-QUERY | Detected {len(subqueries)} sub-questions")
-                        return self.handle_multi_query(subqueries, expanded_query, active_session_id)
+                        return self.multi_query_handler.handle_multi_query(subqueries, query, active_session_id)
 
             # STEP 3: Classify query into QueryType (using rewritten/expanded query)
             #         Determines query category: HOW_TO, CODE_LOCATION, CONCEPTUAL, etc.
@@ -430,7 +441,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
                     f"PR-ISSUE TUTORIAL | Detected tutorial request for {entity['type']} #{entity['number']}"
                 )
 
-                result = self.handle_pr_issue_tutorial(entity, query, expanded_query)
+                result = self.pr_handler.handle_pr_issue_tutorial(entity, query, expanded_query)
 
                 if self.query_rewriter and self.query_rewriter.semantic_cache:
                     quality_score = result.get('context_quality', 0.8)
@@ -440,8 +451,6 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
 
                 if self.query_rewriter and self.query_rewriter.response_cache:
                     self.query_rewriter.response_cache.set(query, result, active_session_id)
-
-                return result
 
                 try:
                     self.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
@@ -458,7 +467,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
                     f"PR-ISSUE CODING QUESTION | Detected coding question request for {entity['type']} #{entity['number']}"
                 )
 
-                result = self.handle_pr_issue_coding_question(entity, query, expanded_query)
+                result = self.pr_handler.handle_pr_issue_coding_question(entity, query, expanded_query)
 
                 if self.query_rewriter and self.query_rewriter.semantic_cache:
                     quality_score = result.get('context_quality', 0.8)
@@ -468,8 +477,6 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
 
                 if self.query_rewriter and self.query_rewriter.response_cache:
                     self.query_rewriter.response_cache.set(query, result, active_session_id)
-
-                return result
 
                 try:
                     self.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
@@ -481,132 +488,29 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
 
                 return result
 
+            # 🔥 DIRECT LOOKUP — Issue
             if entity and entity.get("type") == "issue":
-                num = str(entity["number"]).strip()
-                self.logger.info(f"DIRECT LOOKUP | Searching issue metadata for #{num}")
-
-                possible_keys = ["issue_number", "number", "id", "issue_id"]
-                issue_results = []
-
-                # Pick the ISSUE index metadata directly for debugging
-                issue_index = self.vector_db.indices.get("issue")
-                if issue_index and issue_index.metadata:
-                    self.logger.info(f"DIRECT LOOKUP DEBUG | Issue metadata keys: {list(issue_index.metadata[0].keys())}")
-                else:
-                    self.logger.info("DIRECT LOOKUP DEBUG | Issue index has no metadata")
-
-                for key in possible_keys:
-                    issue_results = self.vector_db.find(where={key: num}, top_k=self.top_k)
-                    if issue_results:
-                        self.logger.info(f"DIRECT LOOKUP | Match via key '{key}' → {len(issue_results)} chunks")
-
-                        result = self._respond_with_results(issue_results, query_type, query, expanded_query, role=role)
-
-                        if self.query_rewriter and self.query_rewriter.semantic_cache:
-                            quality_score = result.get('context_quality', 0.8)
-                            self.query_rewriter.semantic_cache.set(
-                                query, result, active_session_id, quality_score=quality_score
-                            )
-
-                        if self.query_rewriter and self.query_rewriter.response_cache:
-                            self.query_rewriter.response_cache.set(query, result, active_session_id)
-
-                        try:
-                            self.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
-                            self.conversation_store.add_message(
-                                active_session_id, "assistant", result.get("answer", ""), tokens_used=0
-                            )
-                        except Exception as e:
-                            self.logger.error(f"CONVERSATION_STORE | Failed to save issue direct-lookup exchange: {e}")
-
-                        return result
-
-                    # if issue_results:
-                    #     self.logger.info(f"DIRECT LOOKUP | Match via key '{key}' → {len(issue_results)} chunks")
-                    #     return self._respond_with_results(issue_results, query_type, query, expanded_query)
-
-                # FINAL FALLBACK: substring match inside title
-                issue_results = self.vector_db.find(where={"title": f"contains: {num}"}, top_k=self.top_k)
-                if issue_results:
-                    self.logger.info(f"DIRECT LOOKUP | Fallback match in title → {len(issue_results)} chunks")
-
-                    result = self._respond_with_results(issue_results, query_type, query, expanded_query)
-
-                    if self.query_rewriter and self.query_rewriter.semantic_cache:
-                        quality_score = result.get('context_quality', 0.8)
-                        self.query_rewriter.semantic_cache.set(
-                            query, result, active_session_id, quality_score=quality_score
-                        )
-
-                    if self.query_rewriter and self.query_rewriter.response_cache:
-                        self.query_rewriter.response_cache.set(query, result, active_session_id)
-
-                    try:
-                        self.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
-                        self.conversation_store.add_message(
-                            active_session_id, "assistant", result.get("answer", ""), tokens_used=0
-                        )
-                    except Exception as e:
-                        self.logger.error(f"CONVERSATION_STORE | Failed to save issue fallback exchange: {e}")
-
+                result = self.issue_handler.handle_issue_direct_lookup(
+                    entity, query, expanded_query, query_type, active_session_id, role=role
+                )
+                if result:
                     return result
-
-                self.logger.warning(f"DIRECT LOOKUP | No match for Issue #{num} across all metadata keys")
 
             # 🔥 DIRECT LOOKUP — PR
             if entity and entity.get("type") == "pr":
-                num = str(entity["number"]).strip()
-
-                possible_keys = ["pr_number", "number", "id", "pr_id"]
-                for key in possible_keys:
-                    pr_results = self.vector_db.find(where={key: num}, top_k=self.top_k)
-                    if pr_results:
-                        self.logger.info(f"DIRECT LOOKUP | Match via key '{key}' → {len(pr_results)} chunks")
-                        result = self._respond_with_results(pr_results, QueryType.PR_SPECIFIC, query, expanded_query, role=role)
-
-                        if self.query_rewriter and self.query_rewriter.semantic_cache:
-                            quality_score = result.get('context_quality', 0.8)
-                            self.query_rewriter.semantic_cache.set(
-                                query, result, active_session_id, quality_score=quality_score
-                            )
-
-                        if self.query_rewriter and self.query_rewriter.response_cache:
-                            self.query_rewriter.response_cache.set(query, result, active_session_id)
-
-                        try:
-                            self.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
-                            self.conversation_store.add_message(
-                                active_session_id, "assistant", result.get("answer", ""), tokens_used=0
-                            )
-                        except Exception as e:
-                            self.logger.error(f"CONVERSATION_STORE | Failed to save user query: {e}")
-                        return result
-
-                # Fallback — match numeric substring inside title
-                pr_results = self.vector_db.find(where={"title": f"contains: {num}"}, top_k=self.top_k)
-                if pr_results:
-                    self.logger.info(f"DIRECT LOOKUP | Fallback match in title → {len(pr_results)} chunks")
-                    result = self._respond_with_results(pr_results, QueryType.PR_SPECIFIC, query, expanded_query, role=role)
-                    if self.query_rewriter and self.query_rewriter.semantic_cache:
-                        quality_score = result.get('context_quality', 0.8)
-                        self.query_rewriter.semantic_cache.set(
-                            query, result, active_session_id, quality_score=quality_score
-                        )
-
-                    if self.query_rewriter and self.query_rewriter.response_cache:
-                        self.query_rewriter.response_cache.set(query, result, active_session_id)
-
-                    try:
-                        self.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
-                        self.conversation_store.add_message(
-                            active_session_id, "assistant", result.get("answer", ""), tokens_used=0
-                        )
-                    except Exception as e:
-                        self.logger.error(f"CONVERSATION_STORE | Failed to save user query: {e}")
-
+                result = self.pr_handler.handle_pr_direct_lookup(
+                    entity, query, expanded_query, active_session_id, role=role
+                )
+                if result:
                     return result
 
-                self.logger.warning(f"DIRECT LOOKUP | No match for PR #{num} across metadata keys")
+            # 🔥 DIRECT LOOKUP — Commit
+            if entity and entity.get("type") == "commit":
+                result = self.commit_handler.handle_commit_direct_lookup(
+                    entity, query, expanded_query, query_type, active_session_id, role=role
+                )
+                if result:
+                    return result
 
             self.logger.info(f"QUERY TYPE | {query_type}")
 
@@ -616,6 +520,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             raw_num = re.search(r'\b(\d+)\b', expanded_query.lower())
             pr_results = None  
 
+            # Handle PR override
             if raw_num and (
                 query_type == QueryType.PR_SPECIFIC
                 or "pr" in query_lower
@@ -623,124 +528,48 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
                 or "merge request" in query_lower
                 or "mr" in query_lower
             ):
-                num = int(raw_num.group(1))
-                self.logger.info(f"DIRECT LOOKUP (PR override) | PR #{num}")
-                pr_results = self.vector_db.find(where={"pr_number": str(num)}, top_k=self.top_k)
-
-                if pr_results:
-                    self.logger.info(f"DIRECT LOOKUP (PR override) | {len(pr_results)} chunks returned")
-
-                    try:
-                        self.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
-                    except Exception as e:
-                        self.logger.error(f"CONVERSATION_STORE | Failed to save user query: {e}")
-
-                    result = self._respond_with_results(pr_results, QueryType.PR_SPECIFIC, query, expanded_query, role=role)
-                    if self.query_rewriter and self.query_rewriter.semantic_cache:
-                        quality_score = result.get('context_quality', 0.8)
-                        self.query_rewriter.semantic_cache.set(
-                            query, result, active_session_id, quality_score=quality_score
-                        )
-                    if self.query_rewriter and self.query_rewriter.response_cache:
-                        self.query_rewriter.response_cache.set(query, result, active_session_id)
-
+                result = self.pr_handler.handle_pr_override(
+                    raw_num, query, expanded_query, query_lower, query_type, active_session_id, role=role
+                )
+                if result:
                     return result
-                else:
-                    self.logger.warning(f"DIRECT LOOKUP (PR override) | No match for PR #{num}")
+                # Mark that we tried to find PR but didn't find it
+                pr_results = False
 
             # ❗ FINAL STOP: If PR is not found in metadata, do NOT do semantic search
-            if query_type == QueryType.PR_SPECIFIC and raw_num and not pr_results:
-                num = int(raw_num.group(1))
-                self.logger.info(f"DIRECT LOOKUP FINAL | PR #{num} not found — stopping without semantic search")
-                not_found_answer = f"PR #{num} was not found in the repository. It may not exist or was not indexed."
-                result = self._package_response(not_found_answer, [], [], QueryType.PR_SPECIFIC)
-
-                if self.query_rewriter and self.query_rewriter.semantic_cache:
-                    quality_score = result.get('context_quality', 0.8)
-                    self.query_rewriter.semantic_cache.set(
-                        query, result, active_session_id, quality_score=quality_score
-                    )
-
-                if self.query_rewriter and self.query_rewriter.response_cache:
-                    self.query_rewriter.response_cache.set(query, result, active_session_id)
-
-                return result
+            if query_type == QueryType.PR_SPECIFIC and raw_num and pr_results is False:
+                result = self.pr_handler.handle_pr_not_found(raw_num, query_type, query, active_session_id)
+                if result:
+                    return result
 
             # Guaranteed ISSUE direct lookup override
             if query_type == QueryType.ISSUE_SPECIFIC and raw_num:
-                num = int(raw_num.group(1))
-                if any(t in query.lower() for t in ["issue", "bug", "ticket", "report"]):
-                    self.logger.info(f"DIRECT LOOKUP (ISSUE override) | Issue #{num}")
-                    issue_results = self.vector_db.find(where={"issue_number": str(num)}, top_k=self.top_k)
-                    if issue_results:
-                        result = self._respond_with_results(issue_results, QueryType.ISSUE_SPECIFIC, query,
-                                                            expanded_query, role=role)
-                        if self.query_rewriter and self.query_rewriter.semantic_cache:
-                            quality_score = result.get('context_quality', 0.8)
-                            self.query_rewriter.semantic_cache.set(
-                                query, result, active_session_id, quality_score=quality_score
-                            )
+                result = self.issue_handler.handle_issue_override(
+                    raw_num, query, expanded_query, query_type, active_session_id, role=role
+                )
+                if result:
+                    return result
 
-                        if self.query_rewriter and self.query_rewriter.response_cache:
-                            self.query_rewriter.response_cache.set(query, result, active_session_id)
-                        try:
-                            self.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
-                            self.conversation_store.add_message(
-                                active_session_id, "assistant", result.get("answer", ""), tokens_used=0
-                            )
-                        except Exception as e:
-                            self.logger.error(f"CONVERSATION_STORE | Failed to save user query: {e}")
-
-                        return result
-                    else:
-                        self.logger.warning(f"DIRECT LOOKUP (ISSUE override) | No match for Issue #{num}")
+            # Guaranteed COMMIT direct lookup override
+            raw_sha = re.search(r'\b([a-f0-9]{7,40})\b', expanded_query.lower())
+            if query_type == QueryType.COMMIT_SPECIFIC and raw_sha:
+                result = self.commit_handler.handle_commit_override(
+                    raw_sha, query, expanded_query, query_lower, query_type, active_session_id, role=role
+                )
+                if result:
+                    return result
+                
+                # If commit not found, handle not found case
+                result = self.commit_handler.handle_commit_not_found(raw_sha, query_type, query, active_session_id)
+                if result:
+                    return result
 
 
         # STEP 4: Query routing happens in _retrieve_multi_index() using expanded_query
         #         Routes to appropriate index: docs, code, prs, commits, or combined
         #         Then searches both routed index AND combined index, merges results
         if query_type == QueryType.GREETING:
-            greeting_response = ""
-            for chunk in self.generate_greeting_response_streaming():
-                greeting_response += chunk
-                # printing is optional; caller may handle streaming
-                try:
-                    print(chunk, end='', flush=True)
-                except Exception:
-                    pass
-
-            self.history.append({'role': 'user', 'content': query})
-            self.history.append({'role': 'assistant', 'content': greeting_response})
-
-            try:
-                self.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
-                self.conversation_store.add_message(active_session_id, "assistant", greeting_response, tokens_used=0)
-                self.logger.info(f"CONVERSATION_STORE | Saved greeting exchange to session {active_session_id[:8]}...")
-            except Exception as e:
-                self.logger.error(f"CONVERSATION_STORE | Failed to save greeting: {e}")
-
-            result = {
-                'answer': greeting_response,
-                'sources': [],
-                'chunks_retrieved': 0,
-                'query_type': query_type,
-                'context_quality': 1.0,
-                'emails': [],
-                'has_diagram': False,
-                'related_knowledge': None,
-                'is_metrics_query': False
-            }
-
-            if self.query_rewriter and self.query_rewriter.semantic_cache:
-                quality_score = result.get('context_quality', 0.8)
-                self.query_rewriter.semantic_cache.set(
-                    query, result, active_session_id, quality_score=quality_score
-                )
-
-            if self.query_rewriter and self.query_rewriter.response_cache:
-                self.query_rewriter.response_cache.set(query, result, active_session_id)
-
-            return result
+            return self.greeting_handler.handle_greeting(query, query_type, active_session_id)
 
         chrono_query = self.detect_chronological_query(expanded_query)
 
@@ -873,248 +702,16 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
                 return result
             
         if query_type == QueryType.TRACEABILITY and entity:
-                self.logger.info(f"TRACEABILITY | Handling trace for {entity['type']} #{entity['number']}")
-                
-                target_key = "pr_number" if entity['type'] == 'pr' else "issue_number"
-                # Use vector_db directly or multi_index search
-                # Since vector_db is aliased to multi_index_store, this works if find() is implemented there
-                # Otherwise, use search_by_metadata on the specific index
-                if self.multi_index_store:
-                    idx_type = 'pr' if entity['type'] == 'pr' else 'issue'
-                    results = self.multi_index_store.search_by_metadata(filters={target_key: str(entity['number'])}, index_type=idx_type, top_k=self.top_k)
-                else:
-                    results = self.vector_db.find(where={target_key: str(entity['number'])}, top_k=self.top_k)
-                
-                if results:
-                    self.logger.info(f"TRACEABILITY | Found {len(results)} chunks")
-                    result = self._respond_with_results(results, QueryType.TRACEABILITY, query, expanded_query, role=role)
-                    
-                    # Update Caches
-                    if self.query_rewriter and self.query_rewriter.semantic_cache:
-                        self.query_rewriter.semantic_cache.set(query, result, active_session_id, quality_score=result.get('context_quality', 0.8))
-                    if self.query_rewriter and self.query_rewriter.response_cache:
-                        self.query_rewriter.response_cache.set(query, result, active_session_id)
-
-                    # Save conversation
-                    try:
-                        self.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
-                        self.conversation_store.add_message(active_session_id, "assistant", result.get("answer", ""), tokens_used=0)
-                    except Exception as e:
-                        self.logger.error(f"CONVERSATION_STORE | Failed to save: {e}")
-
-                    return result
-                else:
-                    self.logger.warning(f"TRACEABILITY | No match for {entity['type']} #{entity['number']}")
-
-        # Non-chronological / general flow
-        metrics_context = None
-        if query_type in [QueryType.REPOSITORY_METRICS, QueryType.TECH_STACK, QueryType.CODE_STRUCTURE]:
-            if self.repo_metrics:
-                metrics_context = self.build_metrics_context()
-                self.logger.info("METRICS | Using repository metrics context")
-                if self.verbose:
-                    print("Including metrics context")
-                # For metrics queries, skip VectorDB retrieval and use only metrics_context
-                # Build empty context since we're using metrics_context instead
-                context = ""
-                email_context = ""
-                github_results = []
-                gmail_results = []
-            else:
-                # Get repo info for error message
-                repo_owner = getattr(self, 'repo_owner', 'unknown')
-                repo_name = getattr(self, 'repo_name', 'unknown')
-                repo_path = f"{repo_owner}/{repo_name}" if repo_owner != 'unknown' and repo_name != 'unknown' else "current repository"
-                
-                error_msg = (
-                    f"Repository metrics are not available for {repo_path}.\n\n"
-                    f"To enable metrics-based queries, ensure techstack.json exists at:\n"
-                    f"  data/DataProcessing/{repo_owner}/{repo_name}/techstack.json\n\n"
-                    f"This file is automatically generated when you run data processing."
-                )
-                
-                try:
-                    self.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
-                    self.conversation_store.add_message(
-                        active_session_id, "assistant",
-                        error_msg,
-                        tokens_used=0
-                    )
-                    self.logger.info(f"CONVERSATION_STORE | Saved metrics error to session {active_session_id[:8]}...")
-                except Exception as e:
-                    self.logger.error(f"CONVERSATION_STORE | Failed to save metrics error: {e}")
-                result = {
-                    'answer': error_msg,
-                    'sources': [],
-                    'chunks_retrieved': 0,
-                    'query_type': query_type,
-                    'context_quality': 0.0,
-                    'has_diagram': False,
-                    'emails': [],
-                    'is_metrics_query': True
-                }
-
-                if self.query_rewriter and self.query_rewriter.semantic_cache:
-                    quality_score = result.get('context_quality', 0.8)
-                    self.query_rewriter.semantic_cache.set(
-                        query, result, active_session_id, quality_score=quality_score
-                    )
-
-                if self.query_rewriter and self.query_rewriter.response_cache:
-                    self.query_rewriter.response_cache.set(query, result, active_session_id)
-
+            result = self.traceability_handler.handle_traceability(
+                entity, query, expanded_query, active_session_id, role=role
+            )
+            if result:
                 return result
 
-        # retrieval (multi-query optional) - SKIP if using metrics_context
-        if metrics_context is None:
-            if self.enable_multi_query and query_type not in [QueryType.REPOSITORY_METRICS, QueryType.TECH_STACK,
-                                                              QueryType.CODE_STRUCTURE]:
-                self.logger.info("MULTI-QUERY | Generating optimized query variations")
-                queries = self.generate_multi_queries(expanded_query, query_type)
-
-                github_results = self.retrieve_with_multi_query(
-                    queries, query_type, entity, keywords
-                )
-            else:
-                query_embedding = self.get_query_embedding(expanded_query)
-                github_results = self.retrieve_github_first(
-                    query_embedding, query_type, entity, keywords, query_text=expanded_query
-                )
-
-            self.logger.info(f"RETRIEVAL | Retrieved {len(github_results)} chunks from GitHub")
-        for i, result in enumerate(github_results[:5], 1):
-            metadata = result.get('metadata', {})
-            # Handle both file_path and file fields
-            file_path = metadata.get('file_path') or metadata.get('file') or 'N/A'
-            # Handle both type and source_type fields
-            chunk_type = metadata.get('type') or metadata.get('source_type') or metadata.get('chunk_type') or 'N/A'
-            self.logger.info(
-                f"CHUNK {i} | File: {file_path}, Score: {result.get('score', 0):.4f}, Type: {chunk_type}")
-
-            if self.verbose:
-                print(f"GitHub: {len(github_results)} chunks")
-
-            # gmail correlated retrieval (use same query embedding)
-            query_embedding = self.get_query_embedding(expanded_query)
-            gmail_results = self.retrieve_gmail_correlated(
-                github_results, query_embedding, keywords
-            )
-
-            if gmail_results:
-                self.logger.info(f"EMAIL RETRIEVAL | Found {len(gmail_results)} correlated emails")
-
-            if self.verbose:
-                print(f"Gmail: {len(gmail_results)} emails")
-
-            # Log context quality
-            if not github_results:
-                self.logger.warning(f"RETRIEVAL | No results retrieved for query type: {query_type}")
-                self.logger.warning(f"RETRIEVAL | Consider checking if the routed index has content")
-            elif len(github_results) < 3:
-                self.logger.warning(f"RETRIEVAL | Only {len(github_results)} results retrieved, may be insufficient")
-
-            context = self.build_context_from_chunks(github_results, query_type) if github_results else ""
-            email_context = self.build_email_context(gmail_results) if gmail_results else ""
-        else:
-            # Using metrics_context - skip VectorDB retrieval
-            self.logger.info("METRICS | Skipping VectorDB retrieval, using metrics_context only")
-            context = ""
-            email_context = ""
-            github_results = []
-            gmail_results = []
-
-        # Log context length for debugging
-        if context:
-            self.logger.info(f"CONTEXT | Built context: {len(context)} characters from {len(github_results)} chunks")
-        else:
-            self.logger.warning(f"CONTEXT | Empty context - no information available to answer query")
-
-        system_prompt = self.get_dynamic_system_prompt(query_type, expanded_query, role=role)
-        user_prompt = self.build_user_prompt(
-            expanded_query, context, email_context, query_type, entity, metrics_context
+        # Non-chronological / general flow
+        return self.general_query_handler.handle_general_query(
+            query, expanded_query, query_type, entity, keywords, active_session_id, role=role
         )
-
-        if self.verbose:
-            print("Generating response...")
-
-        self.logger.info("LLM GENERATION | Started")
-        answer = self.call_llm(system_prompt, user_prompt)
-        self.logger.info(f"LLM GENERATION | Completed, Length: {len(answer)} chars")
-
-        self.logger.info("VERIFICATION | Starting response verification")
-        refined_answer = self.verify_and_refine_response(answer, query, query_type)
-
-        sources = []
-        if github_results:
-            for i, result in enumerate(github_results[:5], 1):
-                metadata = result.get('metadata', {})
-                sources.append({
-                    'rank': i,
-                    'file': metadata.get('file_path', 'unknown'),
-                    'type': metadata.get('type', 'unknown'),
-                    'score': result.get('score', 0.0),
-                    'chunk_id': metadata.get('chunk_id', '')
-                })
-
-        emails = []
-        for email in gmail_results:
-            metadata = email.get('metadata', {})
-            emails.append({
-                'subject': metadata.get('subject', ''),
-                'from': metadata.get('from', ''),
-                'date': metadata.get('date', ''),
-                'relevance': email.get('relevance_score', 0)
-            })
-
-        self.history.append({'role': 'user', 'content': query})
-        self.history.append({'role': 'assistant', 'content': refined_answer})
-
-        if metrics_context:
-            context_quality = 1.0
-        elif github_results and len(github_results) > 0:
-            # github_results is a list; pick top score
-            top_score = max((r.get('score', 0) for r in github_results), default=0.0)
-            context_quality = min(top_score, 1.0)
-        else:
-            context_quality = 0.0
-
-        self.logger.info(
-            f"RESPONSE COMPLETE | Quality: {context_quality:.2f}, Sources: {len(sources)}, Emails: {len(emails)}")
-        self.logger.info("=" * 80)
-
-        try:
-            self.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
-            self.conversation_store.add_message(active_session_id, "assistant", refined_answer, tokens_used=0)
-            self.logger.info(f"CONVERSATION_STORE | Saved main response to session {active_session_id[:8]}...")
-        except Exception as e:
-            self.logger.error(f"CONVERSATION_STORE | Failed to save main response: {e}")
-
-        result = {
-            'answer': refined_answer,
-            'sources': sources,
-            'chunks_retrieved': len(github_results) if github_results else 0,
-            'query_type': query_type,
-            'context_quality': context_quality,
-            'emails': emails,
-            'has_diagram': bool(re.search(r'```mermaid', str(refined_answer or ''))),
-            'related_knowledge': None,
-            'is_metrics_query': query_type in [
-                QueryType.REPOSITORY_METRICS,
-                QueryType.TECH_STACK,
-                QueryType.CODE_STRUCTURE
-            ]
-        }
-
-        if self.query_rewriter and self.query_rewriter.semantic_cache:
-            quality_score = result.get('context_quality', 0.8)
-            self.query_rewriter.semantic_cache.set(
-                query, result, active_session_id, quality_score=quality_score
-            )
-
-        if self.query_rewriter and self.query_rewriter.response_cache:
-            self.query_rewriter.response_cache.set(query, result, active_session_id)
-
-        return result
 
     def _augment_cached_response(self,cached_response: Dict[str, Any],new_query: str,original_query: str) -> Dict[str, Any]:
             """
@@ -1163,433 +760,91 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
                 self.logger.error(f"Augmentation failed: {e}, returning original cached response")
                 return cached_response
 
-    def handle_pr_issue_tutorial(
-            self,
-            entity: Dict[str, Any],
-            original_query: str,
-            expanded_query: str
-    ) -> Dict[str, Any]:
-        """
-                Generate a step-by-step tutorial based on a specific PR or Issue.
-                Retrieves comprehensive context about the PR/Issue and creates educational content.
-                """
-        entity_type = entity['type']
-        entity_number = entity['number']
 
-        self.logger.info(f"TUTORIAL GENERATION | Starting for {entity_type} #{entity_number}")
+    def _respond_with_results(
+        self,
+        github_results,
+        query_type,
+        query,
+        expanded_query,
+        role: Optional[str] = None
+    ):
+        query_lower = query.lower()
 
-        # Retrieve comprehensive context (use higher top_k for tutorials)
-        query_embedding = self.get_query_embedding(expanded_query)
+        intent = None
+        if query_type == QueryType.PR_SPECIFIC:
+            intent = self._detect_pr_intent(query_lower)
 
-        if entity_type == 'pr':
-            github_results = self.vector_db.find(where={"pr_number": str(entity_number)}, top_k=20)
-        else:  # issue
-            github_results = self.vector_db.find(where={"issue_number": str(entity_number)}, top_k=20)
+        return self.response_handler.respond_with_results(
+            github_results,
+            query_type,
+            query,
+            expanded_query,
+            role=role,
+            intent=intent  # optional
+        )
 
-        if not github_results:
-            self.logger.warning(f"TUTORIAL GENERATION | No data found for {entity_type} #{entity_number}")
-            return self._package_response(
-                f"I couldn't find any information about {entity_type} #{entity_number} in the repository.",
-                [], [], QueryType.PR_ISSUE_TUTORIAL
-            )
-
-        self.logger.info(f"TUTORIAL GENERATION | Retrieved {len(github_results)} chunks")
-
-        # Build comprehensive context
-        context = self.build_context_from_chunks(github_results, QueryType.PR_ISSUE_TUTORIAL)
-
-        # Create specialized tutorial prompt
-        system_prompt = f"""You are an expert technical educator creating step-by-step tutorials from code changes.
-
-        Your task: Create a comprehensive, beginner-friendly tutorial based on {entity_type.upper()} #{entity_number}.
-
-        TUTORIAL STRUCTURE:
-        1. **Overview** - What was changed and why
-        2. **Problem Context** - What issue/challenge this addresses
-        3. **Step-by-Step Implementation** - Detailed walkthrough of each change
-        4. **Code Explanation** - Explain key code sections with inline comments
-        5. **Testing** - How to test these changes
-        6. **Key Takeaways** - Important concepts learned
-        7. **Practice Exercises** - 2-3 exercises for learners to try
-
-        GUIDELINES:
-        - Use clear, simple language suitable for intermediate developers
-        - Include code snippets with explanations
-        - Explain the "why" behind each decision
-        - Provide context about the broader system
-        - Add helpful tips and best practices
-        - Use markdown formatting with headers, code blocks, and lists
-        - Be thorough but concise
-
-        Generate a complete tutorial now."""
-
-        user_prompt = f"""Generate a tutorial based on this {entity_type}:
-
-        {context}
-
-        Create a comprehensive, educational tutorial following the structure provided."""
-
-        # Generate tutorial
-        self.logger.info("TUTORIAL GENERATION | Calling LLM for tutorial content")
-        tutorial_answer = self.call_llm(system_prompt, user_prompt)
-
-        self.logger.info(f"TUTORIAL GENERATION | Completed, Length: {len(tutorial_answer)} chars")
-
-        # Extract sources
-        sources = []
-        for i, result in enumerate(github_results[:10], 1):
-            metadata = result.get('metadata', {})
-            sources.append({
-                'rank': i,
-                'file': metadata.get('file_path') or metadata.get('file') or 'unknown',
-                'type': metadata.get('type') or 'unknown',
-                'score': result.get('score', 0.0),
-                'chunk_id': metadata.get('chunk_id', '')
-            })
-
-        self.history.append({'role': 'user', 'content': original_query})
-        self.history.append({'role': 'assistant', 'content': tutorial_answer})
-
-        return {
-            'answer': tutorial_answer,
-            'sources': sources,
-            'chunks_retrieved': len(github_results),
-            'query_type': QueryType.PR_ISSUE_TUTORIAL,
-            'context_quality': min(github_results[0].get('score', 0), 1.0) if github_results else 0.0,
-            'emails': [],
-            'has_diagram': False,
-            'related_knowledge': None,
-            'is_metrics_query': False,
-            'entity': f"{entity_type} #{entity_number}"
-        }
-
-    def handle_pr_issue_coding_question(
-            self,
-            entity: Dict[str, Any],
-            original_query: str,
-            expanded_query: str
-    ) -> Dict[str, Any]:
-        """
-                Generate a coding challenge/question based on a specific PR or Issue.
-                Creates practice problems that help learners understand the concepts.
-                """
-        entity_type = entity['type']
-        entity_number = entity['number']
-
-        self.logger.info(f"CODING QUESTION GENERATION | Starting for {entity_type} #{entity_number}")
-
-        # Retrieve comprehensive context
-        query_embedding = self.get_query_embedding(expanded_query)
-
-        if entity_type == 'pr':
-            github_results = self.vector_db.find(where={"pr_number": str(entity_number)}, top_k=20)
-        else:  # issue
-            github_results = self.vector_db.find(where={"issue_number": str(entity_number)}, top_k=20)
-
-        if not github_results:
-            self.logger.warning(f"CODING QUESTION GENERATION | No data found for {entity_type} #{entity_number}")
-            return self._package_response(
-                f"I couldn't find any information about {entity_type} #{entity_number} in the repository.",
-                [], [], QueryType.PR_ISSUE_CODING_QUESTION
-            )
-
-        self.logger.info(f"CODING QUESTION GENERATION | Retrieved {len(github_results)} chunks")
-
-        # Build comprehensive context
-        context = self.build_context_from_chunks(github_results, QueryType.PR_ISSUE_CODING_QUESTION)
-
-        # Create specialized coding question prompt
-        system_prompt = f"""You are an expert technical interviewer creating coding challenges based on real-world code changes.
-
-        Your task: Create a coding question/challenge inspired by {entity_type.upper()} #{entity_number}.
-
-        QUESTION STRUCTURE:
-        1. **Problem Statement** - Clear description of what to build/fix
-        2. **Background Context** - Why this problem matters
-        3. **Requirements** - Specific functional requirements
-        4. **Constraints** - Technical constraints and limitations
-        5. **Input/Output Examples** - 2-3 test cases with expected results
-        6. **Hints** (Optional) - Helpful hints for solving the problem
-        7. **Solution Outline** - High-level approach (spoiler-protected with markdown)
-        8. **Follow-up Questions** - 2-3 deeper thinking questions
-
-        GUIDELINES:
-        - Make the question realistic and practical
-        - Base it on the concepts/patterns from the PR/Issue
-        - Make it challenging but solvable
-        - Include clear examples and edge cases
-        - Provide hints without giving away the solution
-        - Use markdown formatting
-        - Focus on understanding, not memorization
-
-        Generate a complete coding challenge now."""
-
-        user_prompt = f"""Generate a coding question based on this {entity_type}:
-
-        {context}
-
-        Create a comprehensive coding challenge following the structure provided."""
-
-        # Generate coding question
-        self.logger.info("CODING QUESTION GENERATION | Calling LLM for question content")
-        question_answer = self.call_llm(system_prompt, user_prompt)
-
-        self.logger.info(f"CODING QUESTION GENERATION | Completed, Length: {len(question_answer)} chars")
-
-        # Extract sources
-        sources = []
-        for i, result in enumerate(github_results[:10], 1):
-            metadata = result.get('metadata', {})
-            sources.append({
-                'rank': i,
-                'file': metadata.get('file_path') or metadata.get('file') or 'unknown',
-                'type': metadata.get('type') or 'unknown',
-                'score': result.get('score', 0.0),
-                'chunk_id': metadata.get('chunk_id', '')
-            })
-
-        self.history.append({'role': 'user', 'content': original_query})
-        self.history.append({'role': 'assistant', 'content': question_answer})
-
-        return {
-            'answer': question_answer,
-            'sources': sources,
-            'chunks_retrieved': len(github_results),
-            'query_type': QueryType.PR_ISSUE_CODING_QUESTION,
-            'context_quality': min(github_results[0].get('score', 0), 1.0) if github_results else 0.0,
-            'emails': [],
-            'has_diagram': False,
-            'related_knowledge': None,
-            'is_metrics_query': False,
-            'entity': f"{entity_type} #{entity_number}"
-        }
-
-    def _respond_with_results(self, github_results, query_type, query, expanded_query, role: Optional[str] = None):
-        context = self.build_context_from_chunks(github_results, query_type)
-        email_results = self.retrieve_gmail_correlated(github_results, self.get_query_embedding(expanded_query), [])
-        email_context = self.build_email_context(email_results)
-        system_prompt = self.get_dynamic_system_prompt(query_type, expanded_query, role=role)
-        user_prompt = self.build_user_prompt(expanded_query, context, email_context, query_type)
-        answer = self.call_llm(system_prompt, user_prompt)
-        refined = self.verify_and_refine_response(answer, query, query_type)
-        return self._package_response(refined, github_results, email_results, query_type)
 
     def split_into_subqueries(self, query: str) -> List[str]:
         """
         Split query into sub-questions ONLY if clearly multi-part.
         Returns list with 2-3 questions, or single-item list.
         """
-        # Skip splitting for short queries
-        if len(query.strip()) < 40:
-            return [query]
-
-        parts = re.split(r'\?\s+|[.]\s+(?=(?:and|also|then|plus|what|how|where|when|why|tell)\b)', query,
-                         flags=re.IGNORECASE)
-        subqueries = [p.strip() for p in parts if p.strip() and len(p.strip()) > 10]
-
-        if 2 <= len(subqueries) <= 3:
-            self.logger.info(f"MULTI-QUERY SPLIT | '{query}' → {len(subqueries)} parts")
-            for i, sq in enumerate(subqueries, 1):
-                self.logger.info(f"  Sub-query {i}: {sq[:60]}...")
-            return subqueries
-
-            # Default: keep as single query
-        return [query]
+        return self.multi_query_handler.split_into_subqueries(query)
 
     def handle_multi_query(self, subqueries: List[str], original_query: str, session_id: str) -> Dict[str, Any]:
         """
         Process multiple sub-queries and merge results into SINGLE response.
         CRITICAL: Pass filters={'is_subquery': True} to skip rewrite/multi-query recursion.
         """
-        self.logger.info(f"MULTI-QUERY | Processing {len(subqueries)} sub-queries for: '{original_query[:50]}...'")
-
-        answers = []
-        for i, sq in enumerate(subqueries, 1):
-            self.logger.info(f"MULTI-QUERY | Sub-query {i}/{len(subqueries)}: '{sq[:60]}...'")
-
-            # CRITICAL: Pass filters AND session_id to prevent:
-            # 1. Recursive multi-query splitting
-            # 2. Cache misses from new rewrites
-            # 3. Session context loss
-            result = self.chat(
-                sq,
-                filters={'is_subquery': True},  # Skip rewrite + multi-query
-                session_id=session_id  # Preserve session context
-            )
-            answers.append(result)
-            self.logger.info(f"MULTI-QUERY | Sub-query {i} completed: {len(result.get('answer', ''))} chars")
-
-        # Merge into single response
-        merged = self.merge_multi_answers(answers, original_query)
-
-        # Save merged response to conversation store
-        try:
-            self.conversation_store.add_message(session_id, "user", original_query, tokens_used=0)
-            self.conversation_store.add_message(session_id, "assistant", merged['answer'], tokens_used=0)
-            self.logger.info(f"CONVERSATION_STORE | Saved multi-query merged response to session {session_id[:8]}...")
-        except Exception as e:
-            self.logger.error(f"CONVERSATION_STORE | Failed to save multi-query response: {e}")
-
-        return merged
+        return self.multi_query_handler.handle_multi_query(subqueries, original_query, session_id)
 
     def merge_multi_answers(self, results: List[Dict[str, Any]], original_query: str) -> Dict[str, Any]:
         """
         Merge multiple sub-query results into a SINGLE coherent response.
         Returns a properly formatted response dict (not fragmented UI messages).
         """
-        if not results:
-            return self._package_response(
-                "No results found for your query.",
-                [], [], QueryType.GENERAL
-            )
-
-        # If only ONE result, return it directly
-        if len(results) == 1:
-            return results[0]
-
-        self.logger.info(f"MULTI-QUERY MERGE | Merging {len(results)} responses into single answer")
-
-        # Collect all sources and emails
-        all_sources = []
-        all_emails = []
-        total_chunks = 0
-        avg_quality = 0.0
-
-        for r in results:
-            all_sources.extend(r.get('sources', []))
-            all_emails.extend(r.get('emails', []))
-            total_chunks += r.get('chunks_retrieved', 0)
-            avg_quality += r.get('context_quality', 0.0)
-
-        avg_quality = avg_quality / len(results) if results else 0.0
-
-        # Deduplicate sources by chunk_id
-        seen_chunks = set()
-        unique_sources = []
-        for src in all_sources:
-            chunk_id = src.get('chunk_id', '')
-            if chunk_id and chunk_id not in seen_chunks:
-                seen_chunks.add(chunk_id)
-                unique_sources.append(src)
-
-        # Build merged answer (keep it concise, not repetitive)
-        merged_answer_parts = []
-
-        for i, result in enumerate(results, 1):
-            answer_text = result.get('answer', '').strip()
-            if answer_text:
-                # Remove redundant headers if they exist
-                answer_text = re.sub(r'^#+\s*(Combined Response|Answer|Response)\s*\n+', '', answer_text,
-                                     flags=re.IGNORECASE)
-                merged_answer_parts.append(answer_text)
-
-        # Join with proper spacing
-        final_answer = "\n\n".join(merged_answer_parts)
-
-        self.logger.info(
-            f"MULTI-QUERY MERGE | Final answer: {len(final_answer)} chars, {len(unique_sources)} unique sources")
-
-        return {
-            'answer': final_answer,
-            'sources': unique_sources[:10],  # Top 10 sources
-            'chunks_retrieved': total_chunks,
-            'query_type': 'multi_query',
-            'context_quality': avg_quality,
-            'emails': all_emails[:5],  # Top 5 emails
-            'has_diagram': any(r.get('has_diagram', False) for r in results),
-            'related_knowledge': None,
-            'is_metrics_query': False
-        }
+        return self.response_handler.merge_multi_answers(results, original_query)
 
     def _package_response(self, answer, github_results, email_results, query_type):
-        # Build GitHub sources list
-        sources = []
-        if github_results:
-            for i, result in enumerate(github_results[:5], 1):
-                meta = result.get("metadata", {})
-                sources.append({
-                    "rank": i,
-                    "file": meta.get("file_path", "unknown"),
-                    "type": meta.get("type", "unknown"),
-                    "score": result.get("score", 0.0),
-                    "chunk_id": meta.get("chunk_id", "")
-                })
-
-        # Build email list (optional)
-        emails = []
-        if email_results:
-            for email in email_results:
-                meta = email.get("metadata", {})
-                emails.append({
-                    "subject": meta.get("subject", ""),
-                    "from": meta.get("from", ""),
-                    "date": meta.get("date", ""),
-                    "relevance": email.get("relevance_score", 0)
-                })
-
-        context_quality = (
-            min(github_results[0].get("score", 0), 1.0)
-            if github_results else 0.0
-        )
-
-        return {
-            "answer": answer,
-            "sources": sources,
-            "chunks_retrieved": len(github_results) if github_results else 0,
-            "query_type": query_type,
-            "context_quality": context_quality,
-            "emails": emails,
-            "has_diagram": False,
-            "related_knowledge": None,
-            "is_metrics_query": False
-        }
+        return self.response_handler.package_response(answer, github_results, email_results, query_type)
 
 
     def chat_stream(self, query: str, filters: Optional[Dict] = None, role: Optional[str] = None) -> Iterator[Dict[str, Any]]:
         self.logger.info("=" * 80)
         self.logger.info(f"NEW STREAM QUERY | {query}")
 
+        active_session_id = self._ensure_session(None)
+
         if self.verbose:
             print(f"\n{'=' * 70}")
             print(f"Query (streaming): {query}")
             print(f"{'=' * 70}")
 
-        expanded_query = self.expand_query(query)
-        if expanded_query != query:
-            self.logger.info(f"QUERY EXPANSION | Original: '{query}' -> Expanded: '{expanded_query}'")
+        # MULTI-QUERY DETECTION (EARLY)
+        if not filters or not filters.get("is_subquery"):
+            if self.enable_multi_query:
+                subqueries = self.multi_query_handler.split_into_subqueries(query)
+                if len(subqueries) > 1:
+                    self.logger.info(f"MULTI-QUERY | Detected {len(subqueries)} sub-questions")
+                    return self.multi_query_handler.handle_multi_query(
+                        subqueries, query, active_session_id
+                    )
+
 
         yield {'type': 'status', 'content': 'Analyzing query...'}
+        expanded_query = self.expand_query(query)
 
         query_type = self.classify_query(expanded_query)
-        self.logger.info(f"QUERY TYPE | {query_type}")
+        entity = self.extract_entity_from_query(expanded_query, query_type)
+
 
         if query_type == QueryType.RANDOM_PR_GENERATOR:
             self.logger.info("RANDOM PR GENERATOR | Will retrieve merged PRs with code changes for LLM selection")
 
         if query_type == QueryType.GREETING:
-            self.history.append({'role': 'user', 'content': query})
-            greeting_response = ""
-
-            for chunk in self.generate_greeting_response_streaming():
-                greeting_response += chunk
-                yield {'type': 'chunk', 'content': chunk}
-
-            self.history.append({'role': 'assistant', 'content': greeting_response})
-
-            yield {
-                'type': 'complete',
-                'content': {
-                    'answer': greeting_response,
-                    'sources': [],
-                    'chunks_retrieved': 0,
-                    'query_type': query_type,
-                    'context_quality': 1.0,
-                    'emails': [],
-                    'has_diagram': False,
-                    'related_knowledge': None,
-                    'is_metrics_query': False
-                }
-            }
+            for response in self.greeting_handler.handle_greeting_stream(query, query_type):
+                yield response
             return
 
         chrono_query = self.detect_chronological_query(expanded_query)
@@ -1723,145 +978,14 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         if self.verbose:
             print(f"Query Type: {query_type}")
 
-        yield {'type': 'status', 'content': 'Searching codebase...'}
-
         entity = self.extract_entity_from_query(expanded_query, query_type)
         keywords = self.extract_keywords(expanded_query)
 
-        metrics_context = None
-        if query_type in [QueryType.REPOSITORY_METRICS, QueryType.TECH_STACK, QueryType.CODE_STRUCTURE]:
-            if self.repo_metrics:
-                metrics_context = self.build_metrics_context()
-                yield {'type': 'status', 'content': 'Loading repository metrics...'}
-            else:
-                yield {
-                    'type': 'complete',
-                    'content': {
-                        'answer': (f"Repository metrics are not available for {getattr(self, 'repo_owner', 'unknown')}/{getattr(self, 'repo_name', 'unknown')}.\n\n"
-                                   f"To enable metrics-based queries, ensure techstack.json exists at:\n"
-                                   f"  data/DataProcessing/{getattr(self, 'repo_owner', 'unknown')}/{getattr(self, 'repo_name', 'unknown')}/techstack.json\n\n"
-                                   f"This file is automatically generated when you run data processing."),
-                        'sources': [],
-                        'chunks_retrieved': 0,
-                        'query_type': query_type,
-                        'context_quality': 0.0,
-                        'has_diagram': False,
-                        'emails': [],
-                        'is_metrics_query': True
-                    }
-                }
-                return
-
-        if self.enable_multi_query and query_type not in [QueryType.REPOSITORY_METRICS, QueryType.TECH_STACK,
-                                                          QueryType.CODE_STRUCTURE]:
-            yield {'type': 'status', 'content': 'Optimizing search queries...'}
-            queries = self.generate_multi_queries(expanded_query, query_type)
-
-            github_results = self.retrieve_with_multi_query(
-                queries, query_type, entity, keywords
-            )
-        else:
-            query_embedding = self.get_query_embedding(expanded_query)
-            github_results = self.retrieve_github_first(
-                query_embedding, query_type, entity, keywords, query_text=expanded_query
-            )
-
-        if github_results:
-            yield {'type': 'status', 'content': f'Found {len(github_results)} relevant code chunks'}
-
-        query_embedding = self.get_query_embedding(expanded_query)
-        gmail_results = self.retrieve_gmail_correlated(
-            github_results, query_embedding, keywords
-        )
-
-        if gmail_results:
-            yield {'type': 'status', 'content': f'Found {len(gmail_results)} related emails'}
-
-        context = self.build_context_from_chunks(github_results, query_type) if github_results else ""
-        email_context = self.build_email_context(gmail_results) if gmail_results else ""
-
-        system_prompt = self.get_dynamic_system_prompt(query_type, expanded_query, role=role)
-        user_prompt = self.build_user_prompt(
-            expanded_query, context, email_context, query_type, entity, metrics_context
-        )
-
-        yield {'type': 'status', 'content': 'Generating response...'}
-
-        full_answer = ""
-        buffer = ""
-        for chunk in self.call_llm_stream(system_prompt, user_prompt):
-            full_answer += chunk
-            buffer += chunk
-
-            if '\n' in buffer or len(buffer) > 150:
-                yield {'type': 'chunk', 'content': buffer}
-                buffer = ""
-
-        if buffer:
-            yield {'type': 'chunk', 'content': buffer}
-
-        self.logger.info(f"LLM GENERATION | Completed streaming, Length: {len(full_answer)} chars")
-
-        yield {'type': 'status', 'content': 'Verifying response...'}
-        refined_answer = self.verify_and_refine_response(full_answer, query, query_type)
-
-        if refined_answer != full_answer:
-            yield {'type': 'status', 'content': 'Response refined'}
-
-        sources = []
-        if github_results:
-            for i, result in enumerate(github_results[:5], 1):
-                metadata = result.get('metadata', {})
-                sources.append({
-                    'rank': i,
-                    'file': metadata.get('file_path', 'unknown'),
-                    'type': metadata.get('type', 'unknown'),
-                    'score': result.get('score', 0.0),
-                    'chunk_id': metadata.get('chunk_id', '')
-                })
-
-        emails = []
-        for email in gmail_results:
-            metadata = email.get('metadata', {})
-            emails.append({
-                'subject': metadata.get('subject', ''),
-                'from': metadata.get('from', ''),
-                'date': metadata.get('date', ''),
-                'relevance': email.get('relevance_score', 0)
-            })
-
-        self.history.append({'role': 'user', 'content': query})
-        self.history.append({'role': 'assistant', 'content': refined_answer})
-
-        if metrics_context:
-            context_quality = 1.0
-        elif github_results and len(github_results) > 0:
-            top_score = max((r.get('score', 0) for r in github_results), default=0.0)
-            context_quality = min(top_score, 1.0)
-        else:
-            context_quality = 0.0
-
-        self.logger.info(f"RESPONSE COMPLETE | Quality: {context_quality:.2f}")
-        self.logger.info("=" * 80)
-
-        yield {
-            'type': 'complete',
-            'content': {
-                'answer': refined_answer,
-                'sources': sources,
-                'chunks_retrieved': len(github_results) if github_results else 0,
-                'query_type': query_type,
-                'context_quality': context_quality,
-                'emails': emails,
-                'has_diagram': bool(re.search(r'```mermaid', str(refined_answer or ''))),
-                'related_knowledge': None,
-                'is_metrics_query': query_type in [
-                    QueryType.REPOSITORY_METRICS,
-                    QueryType.TECH_STACK,
-                    QueryType.CODE_STRUCTURE
-                ]
-            }
-        }
+        # Use general query handler for streaming
+        for response in self.general_query_handler.handle_general_query_stream(
+            query, expanded_query, query_type, entity, keywords, role=role
+        ):
+            yield response
 
 
     def clear_history(self):
