@@ -6,26 +6,27 @@ import numpy as np
 from .query_type import QueryType
 
 
-
 class LLMEmbeddingMixin:
-   
+
     def initialize_embeddings(self):
         """Initialize embedding model based on loaded index dimension"""
         # Detect dimension from loaded index
         index_dimension = None
-        
+
         if self.multi_index_store:
             index_dimension = self.multi_index_store.dimension
         elif self.db:
             index_dimension = self.db.dimension
-        
+
         # Use appropriate embedding model based on dimension
         if index_dimension == 384:
             # Multi-index uses sentence-transformers (384 dims)
             self.embedding_provider = "sentence-transformers"
             self.embedding_model = "all-MiniLM-L6-v2"
             if self.verbose:
-                print(f"Using sentence-transformers (384 dims) to match index dimension")
+                print(
+                    f"Using sentence-transformers (384 dims) to match index dimension"
+                )
         elif index_dimension == 1536:
             # Multi-index or single-index uses OpenAI (1536 dims)
             self.embedding_provider = "openai"
@@ -37,43 +38,47 @@ class LLMEmbeddingMixin:
             self.embedding_provider = "openai"
             self.embedding_model = "text-embedding-3-small"
             if self.verbose and index_dimension:
-                print(f"Using OpenAI (1536 dims) for index dimension {index_dimension} (default)")
-
+                print(
+                    f"Using OpenAI (1536 dims) for index dimension {index_dimension} (default)"
+                )
 
     def get_default_model(self) -> str:
         defaults = {
-            'openai': 'gpt-4o-mini',
-            'anthropic': 'claude-3-5-sonnet-20241022',
-            'ollama': 'llama3.2'
+            "openai": "gpt-4o-mini",
+            "anthropic": "claude-3-5-sonnet-20241022",
+            "ollama": "llama3.2",
         }
-        return defaults.get(self.provider, 'gpt-4o-mini')
+        return defaults.get(self.provider, "gpt-4o-mini")
 
     def initialize_llm(self):
-        if self.provider == 'openai':
+        if self.provider == "openai":
             try:
                 from openai import OpenAI
-                api_key = os.getenv('OPENAI_API_KEY')
+
+                api_key = os.getenv("OPENAI_API_KEY")
                 if not api_key:
                     raise ValueError("OPENAI_API_KEY not found")
-                
+
                 self.client = OpenAI(api_key=api_key)
             except ImportError:
                 raise ImportError("Install OpenAI: pip install openai")
 
-        elif self.provider == 'anthropic':
+        elif self.provider == "anthropic":
             try:
                 from anthropic import Anthropic
-                api_key = os.getenv('ANTHROPIC_API_KEY')
+
+                api_key = os.getenv("ANTHROPIC_API_KEY")
                 if not api_key:
                     raise ValueError("ANTHROPIC_API_KEY not found")
                 self.client = Anthropic(api_key=api_key)
             except ImportError:
                 raise ImportError("Install Anthropic: pip install anthropic")
 
-        elif self.provider == 'ollama':
+        elif self.provider == "ollama":
             try:
                 import requests
-                response = requests.get('http://localhost:11434/api/tags', timeout=5)
+
+                response = requests.get("http://localhost:11434/api/tags", timeout=5)
                 if response.status_code != 200:
                     raise ConnectionError("Ollama not running")
                 self.client = None
@@ -84,28 +89,33 @@ class LLMEmbeddingMixin:
 
     def get_query_embedding(self, query: str) -> np.ndarray:
         """Generate query embedding using the configured provider"""
-        if self.embedding_provider == 'openai':
+        if self.embedding_provider == "openai":
             # Reuse existing client if available
-            if hasattr(self, 'client') and self.client is not None and self.provider == 'openai':
+            if (
+                hasattr(self, "client")
+                and self.client is not None
+                and self.provider == "openai"
+            ):
                 client = self.client
             else:
                 # Create new client
                 from openai import OpenAI
-                client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
-            
-            response = client.embeddings.create(
-                model=self.embedding_model,
-                input=query
-            )
+
+                client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+            response = client.embeddings.create(model=self.embedding_model, input=query)
             return np.array(response.data[0].embedding, dtype=np.float32)
-        elif self.embedding_provider == 'sentence-transformers':
+        elif self.embedding_provider == "sentence-transformers":
             # Lazy load sentence-transformers
-            if not hasattr(self, '_sentence_model'):
+            if not hasattr(self, "_sentence_model"):
                 try:
                     from sentence_transformers import SentenceTransformer
+
                     self._sentence_model = SentenceTransformer(self.embedding_model)
                     if self.verbose:
-                        print(f"Loaded sentence-transformers model: {self.embedding_model}")
+                        print(
+                            f"Loaded sentence-transformers model: {self.embedding_model}"
+                        )
                 except ImportError:
                     raise ImportError(
                         "sentence-transformers not installed. Install with: pip install sentence-transformers"
@@ -113,9 +123,13 @@ class LLMEmbeddingMixin:
             embedding = self._sentence_model.encode(query, convert_to_numpy=True)
             return embedding.astype(np.float32)
         else:
-            raise ValueError(f"Unsupported embedding provider: {self.embedding_provider}")
+            raise ValueError(
+                f"Unsupported embedding provider: {self.embedding_provider}"
+            )
 
-    def get_dynamic_system_prompt(self, query_type: str, query: str, role: Optional[str] = "general") -> str:
+    def get_dynamic_system_prompt(
+        self, query_type: str, query: str, role: Optional[str] = "general"
+    ) -> str:
         base_rules = """You are an expert software engineer and technical documentation specialist.
 
         CRITICAL RULES - ZERO TOLERANCE:
@@ -141,7 +155,6 @@ class LLMEmbeddingMixin:
         - Highlight key statistics
         - Add insights about what metrics mean
         - Use markdown for clear formatting""",
-
             QueryType.TECH_STACK: """
         TECH STACK QUERY:
         - Use Languages, Frameworks, Tools from REPOSITORY METRICS DATA
@@ -149,7 +162,6 @@ class LLMEmbeddingMixin:
         - Explain what each technology is for
         - Organize by category
         - Use markdown sections""",
-
             QueryType.CODE_STRUCTURE: """
                 CODE STRUCTURE QUERY:
                 - Use Repository Structure from REPOSITORY_METRICS DATA
@@ -163,7 +175,6 @@ class LLMEmbeddingMixin:
                 - Explain file separation
                 - Use markdown with proper indentation for hierarchy
                 - Keep the diagram clear and well-formatted""",
-
             QueryType.ISSUE_SPECIFIC: """
                 ISSUE QUERY:
                 - Provide complete issue details from context
@@ -174,7 +185,6 @@ class LLMEmbeddingMixin:
                 - Comments and discussion if present
                 - Use clear markdown formatting
                 - If this is the first/oldest issue, mention that fact""",
-
             QueryType.PR_SPECIFIC: """
                 PULL REQUEST QUERY - COMPREHENSIVE CODE ANALYSIS:
 
@@ -347,7 +357,6 @@ class LLMEmbeddingMixin:
 
                 ================================================================================
                         """,
-
             QueryType.FLOW_ARCHITECTURE: """
         ARCHITECTURE/FLOW QUERY:
         MANDATORY: Create a mermaid flowchart diagram showing:
@@ -380,7 +389,6 @@ class LLMEmbeddingMixin:
         C --> D[Final Component]
         - Use markdown for diagram and explanations
         """,
-
             QueryType.HOW_TO: """
         HOW-TO QUERY:
         - Step-by-step guide from actual code with COMPLETE implementations
@@ -390,7 +398,6 @@ class LLMEmbeddingMixin:
         - ABSOLUTELY ZERO HALLUCINATIONS. Use only context info
         - Numbered steps with extensive code blocks
         - Include complete function/class definitions, not just snippets""",
-
             QueryType.TROUBLESHOOTING: """
         TROUBLESHOOTING QUERY:
         - Related issues from context with code examples
@@ -400,7 +407,6 @@ class LLMEmbeddingMixin:
         - ABSOLUTELY ZERO HALLUCINATIONS. Use only context info
         - Format: Problem -> Solution -> Prevention
         - Include 30-50 lines of relevant code""",
-
             QueryType.CODE_LOCATION: """
         CODE LOCATION QUERY:
         - Exact file paths with line numbers
@@ -410,7 +416,6 @@ class LLMEmbeddingMixin:
         - Brief descriptions
         - ABSOLUTELY ZERO HALLUCINATIONS. Use only context info
         - Related functions/classes""",
-
             QueryType.CONCEPTUAL: """
         CONCEPTUAL QUERY:
         - Explanation from documentation with CODE EXAMPLES
@@ -419,7 +424,6 @@ class LLMEmbeddingMixin:
         - ABSOLUTELY ZERO HALLUCINATIONS. Use only context info
         - Clear explanation with extensive code examples
         - Include full class/function definitions""",
-
             QueryType.COMMIT_SPECIFIC: """
         COMMIT QUERY:
         - Commit SHA, author, date
@@ -427,7 +431,6 @@ class LLMEmbeddingMixin:
         - Files changed with code snippets
         - Related issues/PRs
         - Clear summary""",
-
             QueryType.QUESTION_GENERATION: """
         QUESTION GENERATION QUERY:
         TASK: Generate educational questions from the provided codebase context with complete, detailed answers.
@@ -479,7 +482,6 @@ class LLMEmbeddingMixin:
         **Answer:** [Comprehensive answer with code examples from context]
 
         Continue this pattern for all questions.""",
-
             QueryType.PR_ISSUE_TUTORIAL: """
             PR-ISSUE TUTORIAL GENERATION:
             TASK: Create a step-by-step educational TUTORIAL showing how a real GitHub issue was solved through a PR.
@@ -608,7 +610,6 @@ class LLMEmbeddingMixin:
             - Build the solution incrementally across all steps
             - Guide the learner through each piece of the implementation
             - Show progression from setup to complete solution""",
-
             QueryType.PR_ISSUE_CODING_QUESTION: """
                 PR-ISSUE CODING QUESTION GENERATION:
                 TASK: Create an educational CODING QUESTION/CHALLENGE based on a RANDOMLY SELECTED real GitHub issue or PR, where the learner must implement the solution themselves.
@@ -766,148 +767,212 @@ class LLMEmbeddingMixin:
                 CRITICAL: If user specifies difficulty, the generated question MUST match that difficulty. Do not return intermediate when user asks for easy, or easy when user asks for hard.
 
                 Remember: The goal is to provide VARIETY while RESPECTING DIFFICULTY CONSTRAINTS - each question should be based on a DIFFERENT randomly selected PR with real code changes that MATCHES the requested difficulty level.""",
+            QueryType.IMPACT_ANALYSIS: """
+        IMPACT & DEPENDENCY ANALYSIS QUERY:
+        
+        TASK: Analyze dependencies, call graphs, and historical impact using the Knowledge Graph.
 
+        MANDATORY SECTIONS:
+        1. **Dependency Diagram**: Create a mermaid flowchart showing:
+           - The entity in question (File/Function)
+           - Callers/Callees (Code Structure)
+           - **Related PRs/Issues** (Historical Context)
+
+        2. **Impact Assessment**:
+           - **Code Impact**: List files/functions that break if this changes.
+           - **Process Impact**: List open PRs or Issues that might be affected (check 'related_to' edges).
+           - **Expertise**: List users who have modified this code recently (check 'modified_by' edges).
+
+        3. **Code Context**:
+           - Show actual code snippets for dependencies.
+
+        STRICT RULES:
+        - Use "Graph Context" for both code dependencies (CALLS) and metadata (MODIFIES, CLOSES).
+        - Highlight if a file is "Hot" (modified by many PRs).
+        """,
             QueryType.GENERAL: """
         GENERAL QUERY:
         - Direct answer from context
         - Supporting documentation
         - Code examples where relevant
-        - Clear, concise response"""
+        - Clear, concise response""",
+            QueryType.TRACEABILITY: """
+        TRACEABILITY QUERY (History & Authorship):
+        
+        TASK: Trace the history of code changes, identify authors, and link code to Pull Requests.
+
+        MANDATORY:
+        1. **Timeline**: Show a chronological list of changes based on PRs and Commits in context.
+        2. **Attribution**: Identify the "User" or "Author" nodes from the graph context.
+        3. **Linkage**: Connect specific files to the PRs that modified them (MODIFIES edge).
+
+        STRICT RULES:
+        - Use "Graph Context" to find 'CREATED_BY' and 'MODIFIES' edges.
+        - If the graph shows User X created PR Y which modified File Z, state: "User X modified File Z in PR Y".
+        - Do not guess authors; use only the explicit graph data.
+        """,
         }
 
         specific_prompt = prompts.get(query_type, prompts[QueryType.GENERAL])
 
-        needs_diagram = any(kw in query.lower() for kw in [
-            'architecture', 'flow', 'diagram', 'structure of', 'how does', 'service'
-        ])
+        needs_diagram = any(
+            kw in query.lower()
+            for kw in [
+                "architecture",
+                "flow",
+                "diagram",
+                "structure of",
+                "how does",
+                "service",
+                "call graph",
+                "dependencies",
+                "impact",
+            ]
+        )
 
-        if needs_diagram and query_type not in [QueryType.CODE_STRUCTURE, QueryType.QUESTION_GENERATION]:
+        if needs_diagram and query_type not in [
+            QueryType.CODE_STRUCTURE,
+            QueryType.QUESTION_GENERATION,
+        ]:
             specific_prompt += "\n\nIMPORTANT: This query requires a mermaid flowchart diagram. Include it first in your response."
+
+            if query_type == QueryType.IMPACT_ANALYSIS:
+                specific_prompt += ""
 
         return f"{base_rules}\n\n{specific_prompt}"
 
     def call_llm(self, system_prompt: str, user_prompt: str) -> str:
         try:
-            if self.provider == 'openai':
+            if self.provider == "openai":
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
+                        {"role": "user", "content": user_prompt},
                     ],
                     temperature=self.temperature,
-                    max_tokens=4000
+                    max_tokens=4000,
                 )
                 return response.choices[0].message.content
 
-            elif self.provider == 'anthropic':
+            elif self.provider == "anthropic":
                 response = self.client.messages.create(
                     model=self.model,
                     max_tokens=4000,
                     temperature=self.temperature,
                     system=system_prompt,
-                    messages=[{"role": "user", "content": user_prompt}]
+                    messages=[{"role": "user", "content": user_prompt}],
                 )
                 return response.content[0].text
 
-            elif self.provider == 'ollama':
+            elif self.provider == "ollama":
                 import requests
+
                 response = requests.post(
-                    'http://localhost:11434/api/chat',
+                    "http://localhost:11434/api/chat",
                     json={
-                        'model': self.model,
-                        'messages': [
-                            {'role': 'system', 'content': system_prompt},
-                            {'role': 'user', 'content': user_prompt}
+                        "model": self.model,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
                         ],
-                        'stream': False,
-                        'options': {'temperature': self.temperature}
+                        "stream": False,
+                        "options": {"temperature": self.temperature},
                     },
-                    timeout=120
+                    timeout=120,
                 )
                 response.raise_for_status()
-                return response.json()['message']['content']
+                return response.json()["message"]["content"]
 
         except Exception as e:
             error_msg = f"Error generating response: {str(e)}"
             print(f"{error_msg}")
             import traceback
+
             traceback.print_exc()
             return f"Error: {error_msg}\n\nPlease check your API configuration."
 
     def call_llm_stream(self, system_prompt: str, user_prompt: str) -> Iterator[str]:
         try:
-            if self.provider == 'openai':
+            if self.provider == "openai":
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
+                        {"role": "user", "content": user_prompt},
                     ],
                     temperature=self.temperature,
                     max_tokens=4000,
-                    stream=True
+                    stream=True,
                 )
 
                 for chunk in response:
                     # openai streaming chunk structure may vary; guard access
                     try:
-                        delta = getattr(chunk.choices[0], 'delta', None)
-                        if delta and getattr(delta, 'content', None):
+                        delta = getattr(chunk.choices[0], "delta", None)
+                        if delta and getattr(delta, "content", None):
                             yield delta.content
-                        elif 'choices' in chunk and chunk['choices'][0].get('delta', {}).get('content'):
-                            yield chunk['choices'][0]['delta']['content']
+                        elif "choices" in chunk and chunk["choices"][0].get(
+                            "delta", {}
+                        ).get("content"):
+                            yield chunk["choices"][0]["delta"]["content"]
                     except Exception:
                         # fallback: try to extract content
-                        if hasattr(chunk, 'choices') and chunk.choices:
+                        if hasattr(chunk, "choices") and chunk.choices:
                             choice = chunk.choices[0]
-                            content = getattr(choice, 'text', None) or getattr(choice, 'message', {}).get('content', None)
+                            content = getattr(choice, "text", None) or getattr(
+                                choice, "message", {}
+                            ).get("content", None)
                             if content:
                                 yield content
 
-            elif self.provider == 'anthropic':
+            elif self.provider == "anthropic":
                 with self.client.messages.stream(
-                        model=self.model,
-                        max_tokens=4000,
-                        temperature=self.temperature,
-                        system=system_prompt,
-                        messages=[{"role": "user", "content": user_prompt}]
+                    model=self.model,
+                    max_tokens=4000,
+                    temperature=self.temperature,
+                    system=system_prompt,
+                    messages=[{"role": "user", "content": user_prompt}],
                 ) as stream:
                     for text in stream.text_stream:
                         yield text
 
-            elif self.provider == 'ollama':
+            elif self.provider == "ollama":
                 import requests
+
                 response = requests.post(
-                    'http://localhost:11434/api/chat',
+                    "http://localhost:11434/api/chat",
                     json={
-                        'model': self.model,
-                        'messages': [
-                            {'role': 'system', 'content': system_prompt},
-                            {'role': 'user', 'content': user_prompt}
+                        "model": self.model,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
                         ],
-                        'stream': True,
-                        'options': {'temperature': self.temperature}
+                        "stream": True,
+                        "options": {"temperature": self.temperature},
                     },
                     timeout=120,
-                    stream=True
+                    stream=True,
                 )
                 response.raise_for_status()
 
                 for line in response.iter_lines():
                     if line:
                         data = json.loads(line)
-                        if 'message' in data and 'content' in data['message']:
-                            yield data['message']['content']
+                        if "message" in data and "content" in data["message"]:
+                            yield data["message"]["content"]
 
         except Exception as e:
             error_msg = f"Error generating response: {str(e)}"
             print(f"{error_msg}")
             import traceback
+
             traceback.print_exc()
             yield f"Error: {error_msg}\n\nPlease check your API configuration."
 
-    def verify_and_refine_response(self, answer: str, query: str, query_type: str) -> str:
+    def verify_and_refine_response(
+        self, answer: str, query: str, query_type: str
+    ) -> str:
         verification_prompt = f"""Review the following response and identify any unnecessary or irrelevant content that should be removed.
 
         QUERY: {query}
@@ -928,42 +993,51 @@ class LLMEmbeddingMixin:
         Return ONLY the refined response, no explanations."""
 
         try:
-            if self.provider == 'openai':
+            if self.provider == "openai":
                 response = self.client.chat.completions.create(
-                    model='gpt-4o-mini',
+                    model="gpt-4o-mini",
                     messages=[
-                        {"role": "system",
-                         "content": "You are a response quality verifier. Remove only unnecessary content, keep all relevant information."},
-                        {"role": "user", "content": verification_prompt}
+                        {
+                            "role": "system",
+                            "content": "You are a response quality verifier. Remove only unnecessary content, keep all relevant information.",
+                        },
+                        {"role": "user", "content": verification_prompt},
                     ],
                     temperature=0.3,
-                    max_tokens=4000
+                    max_tokens=4000,
                 )
                 refined = response.choices[0].message.content
 
                 if len(refined) < len(answer) * 0.3:
                     self.logger.warning(
-                        f"VERIFICATION | Refined response too short ({len(refined)} vs {len(answer)}), keeping original")
+                        f"VERIFICATION | Refined response too short ({len(refined)} vs {len(answer)}), keeping original"
+                    )
                     return answer
 
-                self.logger.info(f"VERIFICATION | Response refined: {len(answer)} -> {len(refined)} chars")
+                self.logger.info(
+                    f"VERIFICATION | Response refined: {len(answer)} -> {len(refined)} chars"
+                )
                 return refined
 
-            elif self.provider == 'anthropic':
+            elif self.provider == "anthropic":
                 response = self.client.messages.create(
                     model=self.model,
                     max_tokens=4000,
                     temperature=0.3,
                     system="You are a response quality verifier. Remove only unnecessary content, keep all relevant information.",
-                    messages=[{"role": "user", "content": verification_prompt}]
+                    messages=[{"role": "user", "content": verification_prompt}],
                 )
                 refined = response.content[0].text
 
                 if len(refined) < len(answer) * 0.3:
-                    self.logger.warning(f"VERIFICATION | Refined response too short, keeping original")
+                    self.logger.warning(
+                        f"VERIFICATION | Refined response too short, keeping original"
+                    )
                     return answer
 
-                self.logger.info(f"VERIFICATION | Response refined: {len(answer)} -> {len(refined)} chars")
+                self.logger.info(
+                    f"VERIFICATION | Response refined: {len(answer)} -> {len(refined)} chars"
+                )
                 return refined
 
             else:
@@ -975,20 +1049,20 @@ class LLMEmbeddingMixin:
             return answer
 
     def build_user_prompt(
-            self,
-            query: str,
-            context: str,
-            email_context: str,
-            query_type: str,
-            entity: Optional[Dict[str, Any]] = None,
-            metrics_context: Optional[str] = None
+        self,
+        query: str,
+        context: str,
+        email_context: str,
+        query_type: str,
+        entity: Optional[Dict[str, Any]] = None,
+        metrics_context: Optional[str] = None,
     ) -> str:
         prompt_parts: List[str] = []
 
         if metrics_context and query_type in [
             QueryType.REPOSITORY_METRICS,
             QueryType.TECH_STACK,
-            QueryType.CODE_STRUCTURE
+            QueryType.CODE_STRUCTURE,
         ]:
             prompt_parts.append(metrics_context)
             prompt_parts.append("\n" + "=" * 70 + "\n")
@@ -1003,9 +1077,9 @@ class LLMEmbeddingMixin:
         if entity:
             prompt_parts.append(f"\n\n# QUERY TARGET\n")
             prompt_parts.append(f"Entity Type: {entity.get('type')}")
-            if entity.get('number'):
+            if entity.get("number"):
                 prompt_parts.append(f"Entity Number: {entity.get('number')}")
-            if entity.get('sha'):
+            if entity.get("sha"):
                 prompt_parts.append(f"Commit SHA: {entity.get('sha')}")
 
         prompt_parts.extend(["\n\n# USER QUESTION\n", query])
@@ -1015,7 +1089,7 @@ class LLMEmbeddingMixin:
         prompt_parts.append("Generate a natural, well-formatted response.")
         prompt_parts.append("Ensure proper grammar and clarity.")
         prompt_parts.append("Use markdown for readability.")
-        
+
         # Query-type specific instructions
         if query_type == QueryType.QUESTION_GENERATION:
             prompt_parts.append(
@@ -1027,42 +1101,114 @@ class LLMEmbeddingMixin:
             )
         elif query_type in [QueryType.HOW_TO, QueryType.CONCEPTUAL]:
             # For documentation queries, allow documentation text, not just code
-            prompt_parts.append("Include documentation, instructions, and code examples from context when relevant.")
+            prompt_parts.append(
+                "Include documentation, instructions, and code examples from context when relevant."
+            )
             prompt_parts.append("\n# STRICT RULES - MANDATORY:")
-            prompt_parts.append("1. Use information from documentation/context, even if it's not code")
-            prompt_parts.append("2. If context contains installation/setup instructions, provide them step-by-step")
+            prompt_parts.append(
+                "1. Use information from documentation/context, even if it's not code"
+            )
+            prompt_parts.append(
+                "2. If context contains installation/setup instructions, provide them step-by-step"
+            )
             prompt_parts.append("3. If context contains code examples, include them")
-            prompt_parts.append("4. NEVER use: 'is likely', 'probably', 'might be', 'appears to', 'seems to'")
-            prompt_parts.append("5. If no relevant information exists in context, write: 'No information found in context for [topic]'")
-            prompt_parts.append("6. Provide clear, actionable steps based on the context provided")
+            prompt_parts.append(
+                "4. NEVER use: 'is likely', 'probably', 'might be', 'appears to', 'seems to'"
+            )
+            prompt_parts.append(
+                "5. If no relevant information exists in context, write: 'No information found in context for [topic]'"
+            )
+            prompt_parts.append(
+                "6. Provide clear, actionable steps based on the context provided"
+            )
         elif query_type in [QueryType.CODE_LOCATION, QueryType.FLOW_ARCHITECTURE]:
             # For code queries, require actual code
-            prompt_parts.append("Include extensive code examples from context when relevant.")
-            prompt_parts.append("\n# STRICT RULES - MANDATORY:")
-            prompt_parts.append("1. Every component/class/function mentioned MUST have actual code shown")
-            prompt_parts.append("2. NEVER use: 'is likely', 'probably', 'might be', 'appears to', 'seems to'")
             prompt_parts.append(
-                "3. If no code exists for something, write: 'No implementation found in context for [Name]'")
-            prompt_parts.append("4. Do NOT describe what a component 'might do' or 'is likely involved in'")
-            prompt_parts.append("5. ONLY describe functionality that has actual code in the context above")
-            prompt_parts.append("6. Minimum 20 lines of actual code per component explanation")
+                "Include extensive code examples from context when relevant."
+            )
+            prompt_parts.append("\n# STRICT RULES - MANDATORY:")
+            prompt_parts.append(
+                "1. Every component/class/function mentioned MUST have actual code shown"
+            )
+            prompt_parts.append(
+                "2. NEVER use: 'is likely', 'probably', 'might be', 'appears to', 'seems to'"
+            )
+            prompt_parts.append(
+                "3. If no code exists for something, write: 'No implementation found in context for [Name]'"
+            )
+            prompt_parts.append(
+                "4. Do NOT describe what a component 'might do' or 'is likely involved in'"
+            )
+            prompt_parts.append(
+                "5. ONLY describe functionality that has actual code in the context above"
+            )
+            prompt_parts.append(
+                "6. Minimum 20 lines of actual code per component explanation"
+            )
+        elif query_type == QueryType.IMPACT_ANALYSIS:
+            prompt_parts.append("\n# STRICT IMPACT ANALYSIS RULES:")
+            prompt_parts.append(
+                "1. Use the 'Graph Context' to identify callers, callees, and related PRs."
+            )
+            prompt_parts.append("2. Trace dependencies explicitly.")
+            prompt_parts.append(
+                "3. If a function is listed as 'Called By' X, then X depends on it."
+            )
+            prompt_parts.append(
+                "4. If a file was modified by PR Y, mention that history."
+            )
+            prompt_parts.append("5. Generate a dependency diagram (Mermaid) first.")
+        elif query_type == QueryType.TRACEABILITY:
+            prompt_parts.append("\n# STRICT TRACEABILITY RULES:")
+            prompt_parts.append(
+                "1. Focus on the 'Who' (User) and 'How' (PR/Commit) aspects."
+            )
+            prompt_parts.append("2. Use graph edges: CREATED_BY, MODIFIES, CLOSES.")
+            prompt_parts.append("3. Present a clear timeline of changes.")
         else:
             # For other queries, be flexible
-            prompt_parts.append("Include code examples, documentation, or relevant information from context when available.")
+            prompt_parts.append(
+                "Include code examples, documentation, or relevant information from context when available."
+            )
             prompt_parts.append("\n# STRICT RULES - MANDATORY:")
-            prompt_parts.append("1. Use information from context (code, documentation, or other content)")
-            prompt_parts.append("2. NEVER use: 'is likely', 'probably', 'might be', 'appears to', 'seems to'")
-            prompt_parts.append("3. If no relevant information exists in context, write: 'No information found in context for [topic]'")
-            prompt_parts.append("4. Provide accurate information based only on what's in the context")
+            prompt_parts.append(
+                "1. Use information from context (code, documentation, or other content)"
+            )
+            prompt_parts.append(
+                "2. NEVER use: 'is likely', 'probably', 'might be', 'appears to', 'seems to'"
+            )
+            prompt_parts.append(
+                "3. If no relevant information exists in context, write: 'No information found in context for [topic]'"
+            )
+            prompt_parts.append(
+                "4. Provide accurate information based only on what's in the context"
+            )
 
-        needs_diagram = any(kw in query.lower() for kw in [
-            'architecture', 'flow', 'diagram', 'how does', 'service'
-        ]) and query_type not in [QueryType.CODE_STRUCTURE, QueryType.QUESTION_GENERATION]
+        needs_diagram = any(
+            kw in query.lower()
+            for kw in [
+                "architecture",
+                "flow",
+                "diagram",
+                "how does",
+                "service",
+                "impact",
+                "dependency",
+            ]
+        ) and query_type not in [
+            QueryType.CODE_STRUCTURE,
+            QueryType.QUESTION_GENERATION,
+        ]
 
         if needs_diagram:
-            prompt_parts.append("\nMANDATORY: Include a mermaid flowchart diagram in your response.")
-            prompt_parts.append("After diagram, show ACTUAL CODE for each component from context above.")
-            prompt_parts.append("If no code exists for a component, state: 'Code not found in context'")
+            prompt_parts.append(
+                "\nMANDATORY: Include a mermaid flowchart diagram in your response."
+            )
+            prompt_parts.append(
+                "After diagram, show ACTUAL CODE for each component from context above."
+            )
+            prompt_parts.append(
+                "If no code exists for a component, state: 'Code not found in context'"
+            )
 
         return "\n".join(prompt_parts)
-

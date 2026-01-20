@@ -181,7 +181,9 @@ class EmbeddingGenerator:
             chunk_ids.append(chunk.get('chunk_id', f"chunk_{len(texts)}"))
             texts.append(enriched_text)
             
-            # Store important metadata
+            # Store important metadata (including repo info)
+            # Check both top-level and nested metadata for repo info
+            nested_metadata = chunk.get('metadata', {})
             metadata_list.append({
                 'chunk_id': chunk.get('chunk_id'),
                 'chunk_type': chunk.get('chunk_type'),
@@ -193,7 +195,14 @@ class EmbeddingGenerator:
                 'semantic_tags': chunk.get('semantic_tags', []),
                 'keywords': chunk.get('keywords', [])[:10],
                 'language': chunk.get('language', ''),
-                'content': chunk.get('content', '')  # Store original content
+                'content': chunk.get('content', ''),  # Store original content
+                # CRITICAL: Include repo info for filtering
+                'repo_name': chunk.get('repo_name') or nested_metadata.get('repo_name', ''),
+                'repo_owner': chunk.get('repo_owner') or nested_metadata.get('repo_owner', ''),
+                # Include other important metadata fields
+                'source': chunk.get('source') or nested_metadata.get('source', ''),
+                'type': chunk.get('type') or chunk.get('chunk_type', ''),
+                'retrieval_priority': chunk.get('retrieval_priority') or nested_metadata.get('retrieval_priority', 3),
             })
             # compute a small metadata hash to detect metadata-only changes
             meta_for_hash = {

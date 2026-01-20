@@ -12,9 +12,17 @@ from dotenv import load_dotenv
 import importlib
 import importlib.util
 
+# Calculate BACKEND_ROOT - go up 4 levels from this file
+# File: backend/main/Onboarding/generators/reading/generate_tech_stacks.py
+# Up 4: reading -> generators -> Onboarding -> main -> backend
 BACKEND_ROOT = Path(__file__).resolve().parents[4]  # backend/
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
+
+# Also add the parent directory in case we need it
+PARENT_DIR = BACKEND_ROOT.parent
+if str(PARENT_DIR) not in sys.path:
+    sys.path.insert(0, str(PARENT_DIR))
 
 from utils.repo_context import get_repo_context
 
@@ -43,7 +51,35 @@ def _load_rag_chatbot_class():
             mod = importlib.import_module(cand)
             if hasattr(mod, "RAGChatbot"):
                 return mod.RAGChatbot
-        except Exception:
+        except Exception as e:
+            # Debug: uncomment to see import errors
+            # print(f"Failed to import {cand}: {e}")
+            pass
+
+    # Fallback: try direct path to chatbot.py
+    chatbot_path = BACKEND_ROOT / "core" / "ChatBot" / "chatbot.py"
+    if chatbot_path.exists():
+        try:
+            # Ensure BACKEND_ROOT is in sys.path for imports to work
+            if str(BACKEND_ROOT) not in sys.path:
+                sys.path.insert(0, str(BACKEND_ROOT))
+            
+            # Try importing using the module path
+            try:
+                from core.ChatBot.chatbot import RAGChatbot
+                return RAGChatbot
+            except ImportError:
+                # If that fails, try loading directly
+                spec = importlib.util.spec_from_file_location("core.ChatBot.chatbot", str(chatbot_path))
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)  # type: ignore
+                if hasattr(mod, "RAGChatbot"):
+                    return mod.RAGChatbot
+        except Exception as e:
+            # Print error for debugging
+            print(f"Warning: Failed to load from direct path {chatbot_path}: {e}")
+            import traceback
+            traceback.print_exc()
             pass
 
     # Fallback: search the repo for a file named chatbot.py and load it dynamically
@@ -51,21 +87,30 @@ def _load_rag_chatbot_class():
         try:
             spec = importlib.util.spec_from_file_location("rag_chatbot_dynamic", str(path))
             mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(mod)
+            spec.loader.exec_module(mod)  # type: ignore
             if hasattr(mod, "RAGChatbot"):
                 return getattr(mod, "RAGChatbot")
-        except Exception:
+        except Exception as e:
+            # Debug: uncomment to see load errors
+            # print(f"Failed to load from path {path}: {e}")
             pass
 
     raise ImportError(
-        "Could not import RAGChatbot. Tried import paths: "
-        + ", ".join(candidates)
-        + ". Also searched repository for chatbot.py. "
-        "Make sure project is on PYTHONPATH and package markers (__init__.py) exist where needed."
+        f"Could not import RAGChatbot. Tried import paths: {', '.join(candidates)}. "
+        f"Also searched repository for chatbot.py. BACKEND_ROOT: {BACKEND_ROOT}. "
+        f"Make sure project is on PYTHONPATH and package markers (__init__.py) exist where needed."
     )
 
 
-RAGChatbot = _load_rag_chatbot_class()
+def get_rag_chatbot_class():
+    """Get RAGChatbot class, loading it if not already loaded."""
+    global RAGChatbot
+    if RAGChatbot is None:
+        RAGChatbot = _load_rag_chatbot_class()
+    return RAGChatbot
+
+# Initialize as None, will be loaded on first use
+RAGChatbot = None
 
 
 def parse_single_mcq_from_response(response_text: str) -> dict:
@@ -191,48 +236,52 @@ def parse_single_mcq_from_response(response_text: str) -> dict:
 
 def generate_section_qna(tech_stack_data, chatbot, gmail_db_path=None, provider='openai', model=None):
     """
-    Generate MCQ questions for each section based on subsections
-    Adds a 'qna' array to each section with one MCQ per subsection
+    Generate MCQ questions for each section in tech stack data
+    Adds a 'qna' array to each section
     """
     print("\n" + "=" * 80)
-    print("GENERATING MCQ QUESTIONS FOR EACH SECTION")
+    print("GENERATING MCQ QUESTIONS FOR TECH STACK SECTIONS")
     print("=" * 80 + "\n")
     
     sections = tech_stack_data.get("sections", {})
     total_qnas = 0
     
     for section_name, section_content in sections.items():
-        if section_name == "qna":  # Skip if qna key exists
+        if not isinstance(section_content, dict):
             continue
             
         print(f"Processing section: {section_name}")
         
-        # Get all subsections (excluding 'qna' if it exists)
-        subsections = {k: v for k, v in section_content.items() if k != "qna" and isinstance(v, dict) and "question" in v and "answer" in v}
+        # Get teaching_content array from section
+        teaching_content = section_content.get("teaching_content", [])
         
-        if not subsections:
-            print(f"  ⚠ No subsections found, skipping...\n")
+        if not teaching_content:
+            print(f"  ⚠ No teaching_content found, skipping...\n")
             continue
         
         qna_list = []
         
-        for idx, (subsection_name, subsection_data) in enumerate(subsections.items(), 1):
-            question_text = subsection_data.get("question", "")
-            answer_text = subsection_data.get("answer", "")
+        for idx, item_data in enumerate(teaching_content, 1):
+            if not isinstance(item_data, dict):
+                continue
+                
+            topic_text = item_data.get("topic", "")
+            content_text = item_data.get("content", "")
+            title = item_data.get("title", f"Item {idx}")
             
-            if not question_text or not answer_text or str(answer_text).startswith("Error:"):
-                print(f"  [{idx}/{len(subsections)}] ⚠ Skipping '{subsection_name}' (invalid data)")
+            if not topic_text or not content_text or str(content_text).startswith("Error:"):
+                print(f"  [{idx}/{len(teaching_content)}] ⚠ Skipping '{title}' (invalid data)")
                 continue
             
-            print(f"  [{idx}/{len(subsections)}] Generating MCQ for '{subsection_name}'...")
+            print(f"  [{idx}/{len(teaching_content)}] Generating MCQ for '{title}'...")
             
             # Create prompt for generating MCQ
             mcq_prompt = f"""Based on the following topic information, generate ONE multiple-choice question (MCQ) for new employee onboarding.
 
-TOPIC: {subsection_name}
+TOPIC: {title}
 
 INFORMATION ABOUT THIS TOPIC:
-{answer_text[:2000]}
+{content_text[:2000]}
 
 CRITICAL REQUIREMENTS:
 - Generate EXACTLY ONE multiple-choice question (MCQ format)
@@ -259,7 +308,7 @@ Generate the MCQ question now."""
                 if answer:
                     mcq = parse_single_mcq_from_response(answer)
                     if mcq:
-                        mcq['subsection'] = subsection_name
+                        mcq['subsection'] = title
                         qna_list.append(mcq)
                         print(f"    ✓ Generated MCQ successfully")
                     else:
@@ -292,7 +341,8 @@ def generate_tech_stack_data(gmail_db_path=None, provider='openai', model=None):
 
     # Initialize chatbot
     print("Loading chatbot...")
-    chatbot = RAGChatbot(
+    RAGChatbotClass = get_rag_chatbot_class()
+    chatbot = RAGChatbotClass(
         vector_db_path=VECTOR_DB_PATH,
         gmail_db_path=gmail_db_path,
         provider=provider,
@@ -451,11 +501,21 @@ def generate_tech_stack_data(gmail_db_path=None, provider='openai', model=None):
             "model": getattr(chatbot, "model", None)
         },
         "sections": {
-            "complete_tech_stack_overview": {},
-            "application_flow_tech_stack": {},
-            "module_wise_tech_breakdown": {},
-            "technology_rationale": {},
-            "reference_summary": {}
+            "complete_tech_stack_overview": {
+                "teaching_content": []
+            },
+            "application_flow_tech_stack": {
+                "teaching_content": []
+            },
+            "module_wise_tech_breakdown": {
+                "teaching_content": []
+            },
+            "technology_rationale": {
+                "teaching_content": []
+            },
+            "reference_summary": {
+                "teaching_content": []
+            }
         }
     }
 
@@ -494,19 +554,21 @@ def generate_tech_stack_data(gmail_db_path=None, provider='openai', model=None):
             quality = response.get('context_quality', 1.0) if isinstance(response, dict) else getattr(response, 'context_quality', 1.0)
 
             section = section_mapping.get(idx - 1, "reference_summary")
-            tech_stack_data["sections"][section][key] = {
-                "question": question,
-                "answer": answer,
+            tech_stack_data["sections"][section]["teaching_content"].append({
+                "title": key,
+                "topic": question,
+                "content": answer,
                 "quality": quality
-            }
+            })
         except Exception as e:
             print(f"Error: {e}")
             section = section_mapping.get(idx - 1, "reference_summary")
-            tech_stack_data["sections"][section][key] = {
-                "question": question,
-                "answer": f"Error: {str(e)}",
+            tech_stack_data["sections"][section]["teaching_content"].append({
+                "title": key,
+                "topic": question,
+                "content": f"Error: {str(e)}",
                 "quality": 0.0
-            }
+            })
 
     # Save to file
     output_dir = ONBOARDING_ROOT / "reading"
@@ -518,18 +580,19 @@ def generate_tech_stack_data(gmail_db_path=None, provider='openai', model=None):
         json.dump(tech_stack_data, f, indent=2, ensure_ascii=False)
 
     # Calculate success stats
-    total_answers = sum(len(section) for section in tech_stack_data["sections"].values())
+    total_answers = sum(len(section.get("teaching_content", [])) for section in tech_stack_data["sections"].values())
     successful_answers = sum(
         1 for section in tech_stack_data["sections"].values()
-        for item in section.values()
-        if not str(item.get('answer', '')).startswith('Error:')
+        for item in section.get("teaching_content", [])
+        if not str(item.get('content', '')).startswith('Error:')
     )
 
     print(f"\nDone! Saved to: {json_file}")
     print(f"📊 Answered {successful_answers}/{total_answers} questions successfully")
     print(f"\nData organized into {len(tech_stack_data['sections'])} sections:")
     for section_name, section_data in tech_stack_data["sections"].items():
-        print(f"   - {section_name}: {len(section_data)} questions")
+        teaching_count = len(section_data.get("teaching_content", []))
+        print(f"   - {section_name}: {teaching_count} teaching content items")
 
     # Generate MCQ questions for each section
     print("\n" + "=" * 80)
@@ -587,7 +650,8 @@ def add_qna_to_existing_tech_stack(
     # Initialize chatbot
     print("⚙  Initializing chatbot...")
     try:
-        chatbot = RAGChatbot(
+        RAGChatbotClass = get_rag_chatbot_class()
+        chatbot = RAGChatbotClass(
             vector_db_path=VECTOR_DB_PATH,
             gmail_db_path=gmail_db_path,
             provider=provider,

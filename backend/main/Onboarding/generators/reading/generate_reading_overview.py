@@ -196,41 +196,45 @@ def parse_single_mcq_from_response(response_text: str) -> dict:
 
 def generate_data_qna(reading_overview_data, chatbot, gmail_db_path=None, provider='openai', model=None):
     """
-    Generate MCQ questions for data items in reading overview
-    Adds a 'qna' array at the root level with one MCQ per data item
+    Generate MCQ questions for teaching_content items in reading overview
+    Adds a 'qna' array to the data section
     """
     print("\n" + "=" * 80)
     print("GENERATING MCQ QUESTIONS FOR READING OVERVIEW")
     print("=" * 80 + "\n")
     
-    data_items = reading_overview_data.get("data", {})
+    # Get the data section with teaching_content
+    sections = reading_overview_data.get("sections", {})
+    data_section = sections.get("data", {})
+    teaching_content = data_section.get("teaching_content", [])
     
-    if not data_items:
-        print("  ⚠ No data items found, skipping...\n")
+    if not teaching_content:
+        print("  ⚠ No teaching_content items found, skipping...\n")
         return reading_overview_data
     
     qna_list = []
     
-    for idx, (item_name, item_data) in enumerate(data_items.items(), 1):
-        if not isinstance(item_data, dict) or "question" not in item_data or "answer" not in item_data:
+    for idx, item_data in enumerate(teaching_content, 1):
+        if not isinstance(item_data, dict) or "topic" not in item_data or "content" not in item_data:
             continue
         
-        question_text = item_data.get("question", "")
-        answer_text = item_data.get("answer", "")
+        topic_text = item_data.get("topic", "")
+        content_text = item_data.get("content", "")
+        title = item_data.get("title", f"Item {idx}")
         
-        if not question_text or not answer_text or str(answer_text).startswith("Error:"):
-            print(f"  [{idx}/{len(data_items)}] ⚠ Skipping '{item_name}' (invalid data)")
+        if not topic_text or not content_text or str(content_text).startswith("Error:"):
+            print(f"  [{idx}/{len(teaching_content)}] ⚠ Skipping '{title}' (invalid data)")
             continue
         
-        print(f"  [{idx}/{len(data_items)}] Generating MCQ for '{item_name}'...")
+        print(f"  [{idx}/{len(teaching_content)}] Generating MCQ for '{title}'...")
         
         # Create prompt for generating MCQ
         mcq_prompt = f"""Based on the following topic information, generate ONE multiple-choice question (MCQ) for new employee onboarding.
 
-TOPIC: {item_name}
+TOPIC: {title}
 
 INFORMATION ABOUT THIS TOPIC:
-{answer_text[:2000]}
+{content_text[:2000]}
 
 CRITICAL REQUIREMENTS:
 - Generate EXACTLY ONE multiple-choice question (MCQ format)
@@ -257,7 +261,9 @@ Generate the MCQ question now."""
             if answer:
                 mcq = parse_single_mcq_from_response(answer)
                 if mcq:
-                    mcq['topic'] = item_name
+                    # Use title as subsection if available
+                    if title:
+                        mcq['subsection'] = title
                     qna_list.append(mcq)
                     print(f"    ✓ Generated MCQ successfully")
                 else:
@@ -269,9 +275,12 @@ Generate the MCQ question now."""
             print(f"    ✗ Error: {e}")
             continue
     
-    # Add qna list to root level
+    # Add qna list to data section
     if qna_list:
-        reading_overview_data["qna"] = qna_list
+        if "data" not in sections:
+            sections["data"] = {}
+        sections["data"]["qna"] = qna_list
+        reading_overview_data["sections"] = sections
         print(f"\n✓ Added {len(qna_list)} MCQ questions to reading overview\n")
     else:
         print(f"\n⚠ No MCQ questions generated\n")
@@ -404,7 +413,11 @@ def generate_reading_overview( gmail_db_path=None, provider='openai', model=None
             "provider": provider,
             "model": getattr(chatbot, "model", None)
         },
-        "data": {}
+        "sections": {
+            "data": {
+                "teaching_content": []
+            }
+        }
     }
 
     total = len(questions)
@@ -419,18 +432,20 @@ def generate_reading_overview( gmail_db_path=None, provider='openai', model=None
             # adapt the keys ('answer', 'context_quality') if needed.
             answer = response.get('answer') if isinstance(response, dict) else getattr(response, 'answer', str(response))
             quality = response.get('context_quality', 1.0) if isinstance(response, dict) else getattr(response, 'context_quality', 1.0)
-            reading_overview_data["data"][key] = {
-                "question": question,
-                "answer": answer,
+            reading_overview_data["sections"]["data"]["teaching_content"].append({
+                "title": key,
+                "topic": question,
+                "content": answer,
                 "quality": quality
-            }
+            })
         except Exception as e:
             print(f"Error: {e}")
-            reading_overview_data["data"][key] = {
-                "question": question,
-                "answer": f"Error: {str(e)}",
+            reading_overview_data["sections"]["data"]["teaching_content"].append({
+                "title": key,
+                "topic": question,
+                "content": f"Error: {str(e)}",
                 "quality": 0.0
-            }
+            })
 
     # Save to file
     output_dir = ONBOARDING_ROOT / "reading"
@@ -442,7 +457,8 @@ def generate_reading_overview( gmail_db_path=None, provider='openai', model=None
         json.dump(reading_overview_data, f, indent=2, ensure_ascii=False)
 
     print(f"\nDone! Saved to: {json_file}")
-    print(f"Answered {len([d for d in reading_overview_data['data'].values() if not str(d.get('answer')).startswith('Error:')])}/{total} questions successfully")
+    successful_count = len([d for d in reading_overview_data['sections']['data']['teaching_content'] if not str(d.get('content')).startswith('Error:')])
+    print(f"Answered {successful_count}/{total} questions successfully")
 
     # Generate MCQ questions for data items
     print("\n" + "=" * 80)

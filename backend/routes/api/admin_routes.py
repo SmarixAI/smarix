@@ -419,6 +419,54 @@ async def validate_repository(request: ValidateRepositoryRequest):
 
 # ==================== HELPER FUNCTIONS FOR PIPELINE STEPS ====================
 
+def update_runtime_state(owner: str, repo_name: str) -> Dict[str, Any]:
+    """
+    Update runtime_state.json with the current repository information.
+    This must be called before running pipeline steps that read from state.
+    """
+    try:
+        from .chatbot_api import get_runtime_state_file_path
+        
+        state_file = get_runtime_state_file_path()
+        
+        # Create directory if it doesn't exist
+        state_file.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Read existing state or create new
+        if state_file.exists():
+            with open(state_file, 'r', encoding='utf-8') as f:
+                state = json.load(f)
+        else:
+            state = {}
+        
+        # Update curr_repo and user_default_repo
+        state["curr_repo"] = {
+            "owner": owner,
+            "name": repo_name
+        }
+        state["user_default_repo"] = {
+            "owner": owner,
+            "name": repo_name
+        }
+        
+        # Write updated state
+        with open(state_file, 'w', encoding='utf-8') as f:
+            json.dump(state, f, indent=2, ensure_ascii=False)
+        
+        return {
+            "success": True,
+            "message": f"Updated runtime_state.json with {owner}/{repo_name}",
+            "state_file": str(state_file)
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "error": f"Failed to update runtime_state.json: {str(e)}"
+        }
+
+
 def run_data_collection(owner: str, repo: str) -> Dict[str, Any]:
     """Run data collection for a repository"""
     try:
@@ -806,6 +854,12 @@ def verify_employee_exists(employee_name: str) -> Dict[str, Any]:
 async def admin_data_collection(request: SetupRequest):
     """Step 1: Data Collection"""
     try:
+        # First update runtime_state.json
+        state_result = update_runtime_state(request.organization, request.repo_name)
+        if not state_result["success"]:
+            raise HTTPException(status_code=500, detail=state_result.get("error", "Failed to update state"))
+        
+        # Then run data collection
         result = run_data_collection(request.organization, request.repo_name)
         if result["success"]:
             return SetupResponse(
@@ -816,6 +870,8 @@ async def admin_data_collection(request: SetupRequest):
             )
         else:
             raise HTTPException(status_code=500, detail=result.get("error", "Data collection failed"))
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -824,6 +880,12 @@ async def admin_data_collection(request: SetupRequest):
 async def admin_data_processing(request: SetupRequest):
     """Step 2: Data Processing"""
     try:
+        # First update runtime_state.json
+        state_result = update_runtime_state(request.organization, request.repo_name)
+        if not state_result["success"]:
+            raise HTTPException(status_code=500, detail=state_result.get("error", "Failed to update state"))
+        
+        # Then run data processing
         result = run_data_processing()
         if result["success"]:
             return SetupResponse(
@@ -834,6 +896,8 @@ async def admin_data_processing(request: SetupRequest):
             )
         else:
             raise HTTPException(status_code=500, detail=result.get("error", "Data processing failed"))
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -842,6 +906,12 @@ async def admin_data_processing(request: SetupRequest):
 async def admin_embedding(request: SetupRequest):
     """Step 3: Embedding Generation"""
     try:
+        # First update runtime_state.json
+        state_result = update_runtime_state(request.organization, request.repo_name)
+        if not state_result["success"]:
+            raise HTTPException(status_code=500, detail=state_result.get("error", "Failed to update state"))
+        
+        # Then run embedding generation
         result = run_embedding_generation()
         if result["success"]:
             return SetupResponse(
@@ -852,6 +922,8 @@ async def admin_embedding(request: SetupRequest):
             )
         else:
             raise HTTPException(status_code=500, detail=result.get("error", "Embedding generation failed"))
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -860,6 +932,12 @@ async def admin_embedding(request: SetupRequest):
 async def admin_vectordb(request: SetupRequest):
     """Step 4: VectorDB Building"""
     try:
+        # First update runtime_state.json
+        state_result = update_runtime_state(request.organization, request.repo_name)
+        if not state_result["success"]:
+            raise HTTPException(status_code=500, detail=state_result.get("error", "Failed to update state"))
+        
+        # Then run vectordb build
         result = run_vectordb_build()
         if result["success"]:
             return SetupResponse(
@@ -870,6 +948,8 @@ async def admin_vectordb(request: SetupRequest):
             )
         else:
             raise HTTPException(status_code=500, detail=result.get("error", "VectorDB building failed"))
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1254,6 +1334,31 @@ async def websocket_pipeline(websocket: WebSocket):
             await websocket.send_json({"type": "error", "message": "Missing organization or repo_name"})
             await websocket.close()
             return
+        
+        # Step 0: Update runtime_state.json BEFORE running any pipeline steps
+        await websocket.send_json({
+            "type": "step_start",
+            "step": "state-update",
+            "message": "Updating repository state..."
+        })
+        await asyncio.sleep(0.1)
+        
+        state_update_result = update_runtime_state(organization, repo_name)
+        if not state_update_result["success"]:
+            await websocket.send_json({
+                "type": "step_error",
+                "step": "state-update",
+                "message": state_update_result.get("error", "Failed to update state")
+            })
+            await websocket.close()
+            return
+        
+        await websocket.send_json({
+            "type": "step_complete",
+            "step": "state-update",
+            "message": state_update_result.get("message", "State updated successfully")
+        })
+        await asyncio.sleep(0.1)
         
         # Reset cancellation flag
         pipeline_cancelled.clear()

@@ -207,41 +207,41 @@ class ClassifierMixin:
         repo_name = self.repo_info.get('name', 'this repository')
         total_chunks = self.repo_info.get('total_chunks', 0)
 
-        greeting = f"""Hello! I'm your AI-powered codebase assistant for **{repo_name}**.
+        greeting = f"""Hello! I'm your AI-powered codebase assistant.
 
-            ## What I Can Help You With
+## What I Can Help You With
 
-            I have indexed **{total_chunks:,} code chunks** and can help you with:
+I have indexed **{total_chunks:,} code chunks** and can help you with:
 
-            ### Code Architecture & Flow
-            - **Architecture diagrams**: "What is the architecture of the notification service?"
-            - **Flow explanations**: "Explain the authentication flow with a diagram"
-            - **Component interactions**: "How do services communicate?"
+### Code Architecture & Flow
+- **Architecture diagrams**: "What is the architecture of the notification service?"
+- **Flow explanations**: "Explain the authentication flow with a diagram"
+- **Component interactions**: "How do services communicate?"
 
-            ### Code Search & Understanding
-            - **Find code**: "Where is the login functionality?"
-            - **Understand implementations**: "How does the task manager work?"
-            - **Class/function details**: "Show me the TaskService class implementation"
+### Code Search & Understanding
+- **Find code**: "Where is the login functionality?"
+- **Understand implementations**: "How does the task manager work?"
+- **Class/function details**: "Show me the TaskService class implementation"
 
-            ### Issues & Pull Requests
-            - **Specific queries**: "Tell me about issue #123" or "Show me PR #45"
-            - **Browse history**: "What is the first issue?" or "Show me the latest PR"
-            - **Search by topic**: "Show me notification-related issues"
+### Issues & Pull Requests
+- **Specific queries**: "Tell me about issue #123" or "Show me PR #45"
+- **Browse history**: "What is the first issue?" or "Show me the latest PR"
+- **Search by topic**: "Show me notification-related issues"
 
-            ### Repository Insights
-            - **Metrics**: "Show me repository metrics"
-            - **Tech stack**: "What technologies are used?"
-            - **Structure**: "Show me the repository structure"
+### Repository Insights
+- **Metrics**: "Show me repository metrics"
+- **Tech stack**: "What technologies are used?"
+- **Structure**: "Show me the repository structure"
 
-            ### Development Guidance
-            - **How-to guides**: "How do I add a new feature?"
-            - **Troubleshooting**: "How to fix authentication errors?"
-            - **Best practices**: "How is error handling implemented?"
+### Development Guidance
+- **How-to guides**: "How do I add a new feature?"
+- **Troubleshooting**: "How to fix authentication errors?"
+- **Best practices**: "How is error handling implemented?"
 
-            ### Learning & Practice
-            - **Tutorials**: "Create a tutorial from PR #45" or "Guide me through issue #23"
-            - **Coding questions**: "Generate a coding challenge from issue #67"
-            """
+### Learning & Practice
+- **Tutorials**: "Create a tutorial from PR #45" or "Guide me through issue #23"
+- **Coding questions**: "Generate a coding challenge from issue #67"
+"""
 
         if self.gmail_db:
             try:
@@ -251,18 +251,18 @@ class ClassifierMixin:
                 greeting += "\nI also have access to related emails for additional context.\n"
 
         greeting += """
-            ## Example Questions
+## Example Questions
 
-            - "What is the architecture of the authentication service?"
-            - "Show me the first issue"
-            - "Where is the notification logic implemented?"
-            - "Tell me about PR #28"
-            - "What tech stack is used?"
-            - "How does the profile switching work?"
-            - "Create a tutorial from PR #45"
-            - "Generate a coding question based on issue #23"
+- "What is the architecture of the authentication service?"
+- "Show me the first issue"
+- "Where is the notification logic implemented?"
+- "Tell me about PR #28"
+- "What tech stack is used?"
+- "How does the profile switching work?"
+- "Create a tutorial from PR #45"
+- "Generate a coding question based on issue #23"
 
-            Feel free to ask me anything about the codebase!"""
+Feel free to ask me anything about the codebase!"""
 
         self.logger.info("GREETING | Generated greeting response")
 
@@ -468,6 +468,8 @@ class ClassifierMixin:
         14. pr_issue_coding_question - Requests for coding questions/challenges based on PRs or issues
         15. random_pr_generator - Requests to randomly select/generate a PR with code changes
         16. general - Questions that don't fit above categories or are too vague
+        17. impact_analysis - Questions about dependencies, what breaks if code changes, callers/callees, class hierarchy
+        18. traceability - Questions about history, authorship, who changed code, evolution, timeline of changes, and linking users to code.
 
         Respond with ONLY the category name, nothing else.
 
@@ -517,7 +519,9 @@ class ClassifierMixin:
                 QueryType.PR_ISSUE_TUTORIAL,
                 QueryType.PR_ISSUE_CODING_QUESTION,
                 QueryType.RANDOM_PR_GENERATOR,
-                QueryType.GENERAL
+                QueryType.IMPACT_ANALYSIS,
+                QueryType.GENERAL,
+                QueryType.TRACEABILITY
             ]
 
             if category in valid_categories:
@@ -624,6 +628,26 @@ class ClassifierMixin:
         if any(kw in query_lower for kw in ['where is', 'where can i find', 'locate', 'find', 'which file']):
             self.logger.info("CLASSIFICATION | Rule-based: CODE_LOCATION")
             return QueryType.CODE_LOCATION
+        
+        impact_keywords = [
+            'what breaks', 'impact of', 'if i change', 'who uses', 'callers of',
+            'dependencies', 'depend on', 'relies on', 'used by', 'who calls',
+            'change impact', 'consequences of changing', 'call graph', 'hierarchy',
+            'inheritance'
+        ]
+        if any(kw in query_lower for kw in impact_keywords):
+            self.logger.info("CLASSIFICATION | Rule-based: IMPACT_ANALYSIS")
+            return QueryType.IMPACT_ANALYSIS
+        
+        traceability_keywords = [
+            'who changed', 'who modified', 'who updated', 'who wrote',
+            'who created', 'author of', 'creator of', 'history of',
+            'evolution of', 'timeline of', 'changes to', 'past versions',
+            'who is the expert', 'who knows about'
+        ]
+        if any(kw in query_lower for kw in traceability_keywords):
+            self.logger.info("CLASSIFICATION | Rule-based: TRACEABILITY")
+            return QueryType.TRACEABILITY
 
         self.logger.info("CLASSIFICATION | No rule matched, using LLM classification")
         llm_category = self.llm_classify_query(query)

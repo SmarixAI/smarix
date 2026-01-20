@@ -6,6 +6,7 @@ import { useAuth } from '@/components/auth/AuthContext';
 import { Fira_Code, Space_Grotesk } from 'next/font/google';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
+import { MarkdownRenderer } from './utils/MarkdownRenderer';
 
 const firaCode = Fira_Code({ subsets: ['latin'] });
 const spaceGrotesk = Space_Grotesk({ subsets: ['latin'] });
@@ -703,7 +704,11 @@ export default function Chatbot({ role = 'onboarding' }: ChatbotProps) {
                         : 'bg-white/90 backdrop-blur-sm text-[#0E1B2E] border border-gray-200/50 shadow-sm'
                     }`}
                   >
-                    <p className={`${spaceGrotesk.className} ${isFullscreen ? 'text-base' : 'text-sm'} whitespace-pre-wrap break-words leading-relaxed`}>{message.content}</p>
+                    {message.role === 'user' ? (
+                      <p className={`${spaceGrotesk.className} ${isFullscreen ? 'text-base' : 'text-sm'} whitespace-pre-wrap break-words leading-relaxed`}>{message.content}</p>
+                    ) : (
+                      <MarkdownRenderer content={message.content} isFullscreen={isFullscreen} />
+                    )}
                     <p
                       className={`${firaCode.className} text-xs mt-2 ${
                         message.role === 'user'

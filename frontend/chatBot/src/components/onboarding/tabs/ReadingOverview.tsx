@@ -141,6 +141,8 @@ export default function ReadingOverview({
           title={selectedModule.title}
           moduleId={selectedModule.id}
           activeRepos={activeRepos}
+          employeeId={employeeId}
+          onProgressUpdate={onUpdateProgress}
         />
       )}
     </>

@@ -25,6 +25,22 @@ from .llm_embeddings import LLMEmbeddingMixin
 from .query_type import QueryType
 from sentence_transformers import SentenceTransformer
 
+STATE_FILE = Path(__file__).resolve().parents[2] / "data" / "Admin" / "state" / "runtime_state.json"
+
+def load_current_repo_from_state():
+    """Reads the current active repository from state file"""
+    if not STATE_FILE.exists():
+        return None, None
+    try:
+        with open(STATE_FILE, "r", encoding="utf-8") as f:
+            state = json.load(f)
+        curr_repo = state.get("curr_repo")
+        if not curr_repo:
+            return None, None
+        return curr_repo["owner"], curr_repo["name"]
+    except Exception:
+        return None, None
+
 
 class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
 
@@ -41,8 +57,13 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         verbose: bool = False,
         log_file: Optional[str] = None,
         enable_multi_query: bool = False,
-        routing_method: str = "llm"  # Default to LLM-based routing for better accuracy
+        routing_method: str = "llm",  # Default to LLM-based routing for better accuracy
+        repo_owner: Optional[str] = None,  # Repository owner for filtering
+        repo_name: Optional[str] = None    # Repository name for filtering
     ):
+        self.repo_owner, self.repo_name = load_current_repo_from_state()
+        if not self.repo_owner and verbose:
+            print("Warning: Repository state not found. Graph features (Impact Analysis) will be disabled.")
         self.vector_db_path = vector_db_path
         self.gmail_db_path = gmail_db_path
         self.provider = provider
@@ -51,6 +72,10 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         self.use_hybrid_retrieval = use_hybrid_retrieval
         self.verbose = verbose
         self.enable_multi_query = enable_multi_query
+        self.repo_owner = repo_owner
+        self.repo_name = repo_name
+        # Store repo_name string for filtering
+        self.repo_full_name = f"{repo_owner}/{repo_name}" if repo_owner and repo_name else None
 
         # Initialize multi-index store or single DB
         self.multi_index_store = None
@@ -846,29 +871,80 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
                     self.query_rewriter.response_cache.set(query, result, active_session_id)
 
                 return result
+            
+        if query_type == QueryType.TRACEABILITY and entity:
+                self.logger.info(f"TRACEABILITY | Handling trace for {entity['type']} #{entity['number']}")
+                
+                target_key = "pr_number" if entity['type'] == 'pr' else "issue_number"
+                # Use vector_db directly or multi_index search
+                # Since vector_db is aliased to multi_index_store, this works if find() is implemented there
+                # Otherwise, use search_by_metadata on the specific index
+                if self.multi_index_store:
+                    idx_type = 'pr' if entity['type'] == 'pr' else 'issue'
+                    results = self.multi_index_store.search_by_metadata(filters={target_key: str(entity['number'])}, index_type=idx_type, top_k=self.top_k)
+                else:
+                    results = self.vector_db.find(where={target_key: str(entity['number'])}, top_k=self.top_k)
+                
+                if results:
+                    self.logger.info(f"TRACEABILITY | Found {len(results)} chunks")
+                    result = self._respond_with_results(results, QueryType.TRACEABILITY, query, expanded_query, role=role)
+                    
+                    # Update Caches
+                    if self.query_rewriter and self.query_rewriter.semantic_cache:
+                        self.query_rewriter.semantic_cache.set(query, result, active_session_id, quality_score=result.get('context_quality', 0.8))
+                    if self.query_rewriter and self.query_rewriter.response_cache:
+                        self.query_rewriter.response_cache.set(query, result, active_session_id)
+
+                    # Save conversation
+                    try:
+                        self.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
+                        self.conversation_store.add_message(active_session_id, "assistant", result.get("answer", ""), tokens_used=0)
+                    except Exception as e:
+                        self.logger.error(f"CONVERSATION_STORE | Failed to save: {e}")
+
+                    return result
+                else:
+                    self.logger.warning(f"TRACEABILITY | No match for {entity['type']} #{entity['number']}")
 
         # Non-chronological / general flow
+        metrics_context = None
         if query_type in [QueryType.REPOSITORY_METRICS, QueryType.TECH_STACK, QueryType.CODE_STRUCTURE]:
             if self.repo_metrics:
                 metrics_context = self.build_metrics_context()
                 self.logger.info("METRICS | Using repository metrics context")
                 if self.verbose:
                     print("Including metrics context")
+                # For metrics queries, skip VectorDB retrieval and use only metrics_context
+                # Build empty context since we're using metrics_context instead
+                context = ""
+                email_context = ""
+                github_results = []
+                gmail_results = []
             else:
+                # Get repo info for error message
+                repo_owner = getattr(self, 'repo_owner', 'unknown')
+                repo_name = getattr(self, 'repo_name', 'unknown')
+                repo_path = f"{repo_owner}/{repo_name}" if repo_owner != 'unknown' and repo_name != 'unknown' else "current repository"
+                
+                error_msg = (
+                    f"Repository metrics are not available for {repo_path}.\n\n"
+                    f"To enable metrics-based queries, ensure techstack.json exists at:\n"
+                    f"  data/DataProcessing/{repo_owner}/{repo_name}/techstack.json\n\n"
+                    f"This file is automatically generated when you run data processing."
+                )
+                
                 try:
                     self.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
                     self.conversation_store.add_message(
                         active_session_id, "assistant",
-                        "Repository metrics are not available.\n\nTo enable metrics-based queries, ensure aggregated_tech_stack_summary.json exists in the DataProcessing directory.",
+                        error_msg,
                         tokens_used=0
                     )
                     self.logger.info(f"CONVERSATION_STORE | Saved metrics error to session {active_session_id[:8]}...")
                 except Exception as e:
                     self.logger.error(f"CONVERSATION_STORE | Failed to save metrics error: {e}")
                 result = {
-                    'answer': ("Repository metrics are not available.\n\n"
-                               "To enable metrics-based queries, ensure aggregated_tech_stack_summary.json "
-                               "exists in the DataProcessing directory."),
+                    'answer': error_msg,
                     'sources': [],
                     'chunks_retrieved': 0,
                     'query_type': query_type,
@@ -889,22 +965,23 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
 
                 return result
 
-        # retrieval (multi-query optional)
-        if self.enable_multi_query and query_type not in [QueryType.REPOSITORY_METRICS, QueryType.TECH_STACK,
-                                                          QueryType.CODE_STRUCTURE]:
-            self.logger.info("MULTI-QUERY | Generating optimized query variations")
-            queries = self.generate_multi_queries(expanded_query, query_type)
+        # retrieval (multi-query optional) - SKIP if using metrics_context
+        if metrics_context is None:
+            if self.enable_multi_query and query_type not in [QueryType.REPOSITORY_METRICS, QueryType.TECH_STACK,
+                                                              QueryType.CODE_STRUCTURE]:
+                self.logger.info("MULTI-QUERY | Generating optimized query variations")
+                queries = self.generate_multi_queries(expanded_query, query_type)
 
-            github_results = self.retrieve_with_multi_query(
-                queries, query_type, entity, keywords
-            )
-        else:
-            query_embedding = self.get_query_embedding(expanded_query)
-            github_results = self.retrieve_github_first(
-                query_embedding, query_type, entity, keywords, query_text=expanded_query
-            )
+                github_results = self.retrieve_with_multi_query(
+                    queries, query_type, entity, keywords
+                )
+            else:
+                query_embedding = self.get_query_embedding(expanded_query)
+                github_results = self.retrieve_github_first(
+                    query_embedding, query_type, entity, keywords, query_text=expanded_query
+                )
 
-        self.logger.info(f"RETRIEVAL | Retrieved {len(github_results)} chunks from GitHub")
+            self.logger.info(f"RETRIEVAL | Retrieved {len(github_results)} chunks from GitHub")
         for i, result in enumerate(github_results[:5], 1):
             metadata = result.get('metadata', {})
             # Handle both file_path and file fields
@@ -914,30 +991,37 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             self.logger.info(
                 f"CHUNK {i} | File: {file_path}, Score: {result.get('score', 0):.4f}, Type: {chunk_type}")
 
-        if self.verbose:
-            print(f"GitHub: {len(github_results)} chunks")
+            if self.verbose:
+                print(f"GitHub: {len(github_results)} chunks")
 
-        # gmail correlated retrieval (use same query embedding)
-        query_embedding = self.get_query_embedding(expanded_query)
-        gmail_results = self.retrieve_gmail_correlated(
-            github_results, query_embedding, keywords
-        )
+            # gmail correlated retrieval (use same query embedding)
+            query_embedding = self.get_query_embedding(expanded_query)
+            gmail_results = self.retrieve_gmail_correlated(
+                github_results, query_embedding, keywords
+            )
 
-        if gmail_results:
-            self.logger.info(f"EMAIL RETRIEVAL | Found {len(gmail_results)} correlated emails")
+            if gmail_results:
+                self.logger.info(f"EMAIL RETRIEVAL | Found {len(gmail_results)} correlated emails")
 
-        if self.verbose:
-            print(f"Gmail: {len(gmail_results)} emails")
+            if self.verbose:
+                print(f"Gmail: {len(gmail_results)} emails")
 
-        # Log context quality
-        if not github_results:
-            self.logger.warning(f"RETRIEVAL | No results retrieved for query type: {query_type}")
-            self.logger.warning(f"RETRIEVAL | Consider checking if the routed index has content")
-        elif len(github_results) < 3:
-            self.logger.warning(f"RETRIEVAL | Only {len(github_results)} results retrieved, may be insufficient")
+            # Log context quality
+            if not github_results:
+                self.logger.warning(f"RETRIEVAL | No results retrieved for query type: {query_type}")
+                self.logger.warning(f"RETRIEVAL | Consider checking if the routed index has content")
+            elif len(github_results) < 3:
+                self.logger.warning(f"RETRIEVAL | Only {len(github_results)} results retrieved, may be insufficient")
 
-        context = self.build_context_from_chunks(github_results, query_type) if github_results else ""
-        email_context = self.build_email_context(gmail_results) if gmail_results else ""
+            context = self.build_context_from_chunks(github_results, query_type) if github_results else ""
+            email_context = self.build_email_context(gmail_results) if gmail_results else ""
+        else:
+            # Using metrics_context - skip VectorDB retrieval
+            self.logger.info("METRICS | Skipping VectorDB retrieval, using metrics_context only")
+            context = ""
+            email_context = ""
+            github_results = []
+            gmail_results = []
 
         # Log context length for debugging
         if context:
@@ -1653,9 +1737,10 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
                 yield {
                     'type': 'complete',
                     'content': {
-                        'answer': ("Repository metrics are not available.\n\n"
-                                   "To enable metrics-based queries, ensure aggregated_tech_stack_summary.json "
-                                   "exists in the DataProcessing directory."),
+                        'answer': (f"Repository metrics are not available for {getattr(self, 'repo_owner', 'unknown')}/{getattr(self, 'repo_name', 'unknown')}.\n\n"
+                                   f"To enable metrics-based queries, ensure techstack.json exists at:\n"
+                                   f"  data/DataProcessing/{getattr(self, 'repo_owner', 'unknown')}/{getattr(self, 'repo_name', 'unknown')}/techstack.json\n\n"
+                                   f"This file is automatically generated when you run data processing."),
                         'sources': [],
                         'chunks_retrieved': 0,
                         'query_type': query_type,

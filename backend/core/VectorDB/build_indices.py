@@ -13,40 +13,59 @@ import numpy as np
 from pathlib import Path
 import faiss
 import pickle
+import networkx as nx
 from collections import defaultdict
 import re
 
 
 STATE_FILE = Path(
-    Path(__file__).resolve().parents[2] / "data" / "Admin" / "state" / "runtime_state.json"
+    Path(__file__).resolve().parents[2]
+    / "data"
+    / "Admin"
+    / "state"
+    / "runtime_state.json"
 )
 
+
 def load_current_repo_from_state():
+    """Load current repo from runtime_state.json with better error handling"""
+    if not STATE_FILE.exists():
+        raise RuntimeError(f"❌ State file not found: {STATE_FILE}")
+    
     with open(STATE_FILE, "r", encoding="utf-8") as f:
         state = json.load(f)
 
     curr_repo = state.get("curr_repo")
     if not curr_repo:
-        raise RuntimeError("curr_repo missing in runtime_state.json")
+        raise RuntimeError("❌ curr_repo missing in runtime_state.json")
 
-    return curr_repo["owner"], curr_repo["name"]
+    owner = curr_repo.get("owner")
+    name = curr_repo.get("name")
+    
+    if not owner or not name:
+        raise RuntimeError("❌ curr_repo.owner or curr_repo.name missing in runtime_state.json")
+
+    return owner, name
 
 REPO_OWNER, REPO_NAME = load_current_repo_from_state()
+FULL_REPO_NAME = f"{REPO_OWNER}/{REPO_NAME}"
 
-EMBEDDINGS_DIR = Path("../../data/Embeddings") / REPO_OWNER / REPO_NAME
-VECTORDB_ROOT = Path("../../data/VectorDB") / REPO_OWNER / REPO_NAME
+print(f"\n{'='*70}")
+print(f"BUILDING VECTORDB FOR REPO: {REPO_OWNER}/{REPO_NAME}")
+print(f"{'='*70}\n")
+
+# Use absolute paths from script location (not relative to CWD)
+backend_dir = Path(__file__).resolve().parents[2]
+EMBEDDINGS_DIR = backend_dir / "data" / "Embeddings" / REPO_OWNER / REPO_NAME
+VECTORDB_ROOT = backend_dir / "data" / "VectorDB" / REPO_OWNER / REPO_NAME
+PROCESSED_DATA_DIR = backend_dir / "data" / "DataProcessing" / REPO_OWNER / REPO_NAME
 
 VECTORDB_ROOT.mkdir(parents=True, exist_ok=True)
-
-
-
-
 
 
 def load_embeddings(base_path: Path):
     """
     Load vectors + metadata and convert to FLAT legacy format used by chatbot.
-    Fixed: Handles flat list format used by your embedding generator.
     """
     npy_path = base_path.with_suffix(".npy")
     json_path = base_path.with_suffix(".json")
@@ -59,45 +78,40 @@ def load_embeddings(base_path: Path):
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    # 🔥 FIXED: Handle your actual JSON format (flat list of dicts)
     if isinstance(data, list):
         items = data
-    # Case A — ChatGPT format: {"items": [...]}
     elif isinstance(data, dict) and "items" in data:
         items = data["items"]
-    # Case B — OpenAI/local format: {"embeddings": [...], "metadata": [...]}
-    elif isinstance(data, dict) and "metadata" in data and isinstance(data["metadata"], list):
+    elif (
+        isinstance(data, dict)
+        and "metadata" in data
+        and isinstance(data["metadata"], list)
+    ):
         items = data["metadata"]
     else:
-        # Debug info
-        print(f"DEBUG JSON structure for {base_path}:")
-        print(f"  Type: {type(data)}")
-        if isinstance(data, dict):
-            print(f"  Keys: {list(data.keys())}")
-        elif isinstance(data, list):
-            print(f"  List length: {len(data)}")
-            if data:
-                print(f"  First item keys: {list(data[0].keys()) if isinstance(data[0], dict) else 'not dict'}")
         raise ValueError("Embedding JSON missing metadata or items field")
 
     if len(items) != len(vectors):
-        raise ValueError(f"❌ Mismatch: {len(vectors)} vectors vs {len(items)} metadata records")
+        raise ValueError(
+            f"❌ Mismatch: {len(vectors)} vectors vs {len(items)} metadata records"
+        )
 
-    # 🔥 convert into FLAT format expected by MultiIndexVectorStore
     flat_metadata = []
     for i, item in enumerate(items):
-        # get id
         chunk_id = item.get("chunk_id") or item.get("id") or str(i)
 
-        # nested metadata case: {"id":..., "metadata":{...}}
         if "metadata" in item and isinstance(item["metadata"], dict):
             md = item["metadata"].copy()
+            # Merge top-level fields that might not be in nested metadata
+            for key in ["repo_name", "repo_owner", "source", "type", "chunk_type"]:
+                if key in item and key not in md:
+                    md[key] = item[key]
         else:
             md = item.copy()
 
-        # remove nested keys that should not exist
         md.pop("id", None)
         md.pop("metadata", None)
+        md.pop("vector", None)  # Remove vector data from metadata
 
         # set canonical id field
         md["chunk_id"] = chunk_id
@@ -119,29 +133,34 @@ def save_index_and_metadata(index_name: str, index, metadata):
     index_dir = VECTORDB_ROOT / index_name
     index_dir.mkdir(parents=True, exist_ok=True)
 
-    # --- Save FAISS index ---
     faiss.write_index(index, str(index_dir / "faiss.index"))
 
-    # --- Save metadata in .pkl (new format: dict with config) ---
-    # ---- ENRICH metadata before saving ----
     for m in metadata:
         m["chunk_type"] = m.get("chunk_type") or m.get("type")
         m["file_path"] = m.get("file_path") or m.get("path") or m.get("repo_file_path")
-        m["repo_name"] = m.get("repo_name") or m.get("repository") or m.get("repo")
+        # Ensure repo_name is set - fallback to current repo
+        m["repo_name"] = m.get("repo_name") or m.get("repository") or m.get("repo") or f"{REPO_OWNER}/{REPO_NAME}"
+        m["repo_owner"] = m.get("repo_owner") or REPO_OWNER
         m["language"] = m.get("language") or m.get("entities", {}).get("language")
         m["pr_number"] = m.get("pr_number") or m.get("metadata", {}).get("pr_number")
-        m["issue_number"] = m.get("issue_number") or m.get("metadata", {}).get("issue_number")
+        m["issue_number"] = m.get("issue_number") or m.get("metadata", {}).get(
+            "issue_number"
+        )
 
     with open(index_dir / "metadata.pkl", "wb") as f:
-        pickle.dump({
-            'metadata': metadata,
-            'chunk_ids': [m.get('chunk_id', str(i)) for i, m in enumerate(metadata)],
-            'dimension': index.d,
-            'index_type': 'flat',
-            'metric': 'l2'
-        }, f)
+        pickle.dump(
+            {
+                "metadata": metadata,
+                "chunk_ids": [
+                    m.get("chunk_id", str(i)) for i, m in enumerate(metadata)
+                ],
+                "dimension": index.d,
+                "index_type": "flat",
+                "metric": "l2",
+            },
+            f,
+        )
 
-    # --- Save config ---
     config = {
         "index_name": index_name,
         "dimension": index.d,
@@ -150,31 +169,76 @@ def save_index_and_metadata(index_name: str, index, metadata):
         "metric": "l2",
         "total_records": len(metadata),
         "index_file": "faiss.index",
-        "metadata_file": "metadata.pkl"
+        "metadata_file": "metadata.pkl",
     }
     with open(index_dir / "config.json", "w", encoding="utf-8") as f:
         json.dump(config, f, indent=2)
 
-    print(f"   ✓ Stored {index_name} → faiss.index + metadata.pkl + config.json ({len(metadata)} vectors)")
+    print(
+        f"   ✓ Stored {index_name} → faiss.index + metadata.pkl + config.json ({len(metadata)} vectors)"
+    )
+
+
+def build_graph_structure():
+    """
+    Load graph_data.json and build a NetworkX graph object.
+    """
+    graph_file = PROCESSED_DATA_DIR / "graph_data.json"
+
+    if not graph_file.exists():
+        print(
+            f"   ⚠️ No graph_data.json found at {graph_file}. Skipping Graph Structure."
+        )
+        return
+
+    print(f"\n🕸️  Building NetworkX Graph Structure...")
+    try:
+        with open(graph_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        G = nx.DiGraph()
+
+        for node in data.get("nodes", []):
+            G.add_node(
+                node["id"], **node.get("properties", {}), label=node.get("label")
+            )
+
+        for edge in data.get("edges", []):
+            G.add_edge(edge["source"], edge["target"], type=edge.get("type"))
+
+        output_path = VECTORDB_ROOT / "graph_structure.pkl"
+        with open(output_path, "wb") as f:
+            pickle.dump(G, f)
+
+        print(
+            f"   ✓ Graph Saved: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges"
+        )
+        print(f"   ✓ Location: {output_path}")
+
+    except Exception as e:
+        print(f"   ❌ Failed to build graph structure: {e}")
 
 
 def main():
-    """
-    Build indices from type-specific embedding files.
-    Expects: Embeddings/<type>/<type>.npy + <type>.json
-    """
-
-    # Skip cache directories
     skip_dirs = {"embeddings_cache"}
 
-    # List subfolders inside Embeddings directory
+    # Check if embeddings directory exists
+    if not EMBEDDINGS_DIR.exists():
+        print(f"❌ Embeddings directory not found: {EMBEDDINGS_DIR}")
+        print(f"\nPlease run the embedding generation step first:")
+        print(f"   python main/GenerateEmbedding/generate_embedding.py")
+        return
+
+    # 🟢 FIX: Removed the .npy exists check here.
+    # We will validate the file existence inside the loop.
     type_dirs = [
-        d for d in EMBEDDINGS_DIR.iterdir()
-        if d.is_dir() and (d / f"{d.name}.npy").exists()
+        d for d in EMBEDDINGS_DIR.iterdir() if d.is_dir() and d.name not in skip_dirs
     ]
 
     if not type_dirs:
         print("❌ No folders found in Embeddings/. Expected: Embeddings/<type>/<type>.npy")
+        print(f"\nEmbeddings directory path: {EMBEDDINGS_DIR}")
+        print(f"Contents: {list(EMBEDDINGS_DIR.iterdir()) if EMBEDDINGS_DIR.exists() else 'directory does not exist'}")
         return
 
     print(f"📦 Found {len(type_dirs)} embedding types:")
@@ -183,85 +247,132 @@ def main():
 
     print()
 
-    # Track successful builds
     built_indices = []
     all_metadata = []
     all_vectors = []
 
     for type_dir in type_dirs:
-        index_name = type_dir.name
-        base_path = type_dir / index_name   # e.g., code/code.npy + code/code.json
+        folder_name = type_dir.name
+
+        # 🟢 Handle 'graph' -> 'graph_nodes' mapping
+        if folder_name == "graph":
+            index_name = "graph_nodes"
+            base_path = type_dir / "graph_nodes"
+        else:
+            index_name = folder_name
+            base_path = type_dir / index_name
 
         print(f"🔹 Building index: {index_name}")
 
-        if not base_path.with_suffix(".npy").exists() or not base_path.with_suffix(".json").exists():
-            print(f"   ⚠️  Missing .npy or .json — skipping {index_name}")
+        # Check for existence here
+        if (
+            not base_path.with_suffix(".npy").exists()
+            or not base_path.with_suffix(".json").exists()
+        ):
+            print(f"   ⚠️  Missing .npy or .json at {base_path} — skipping")
             continue
 
         try:
             metadata, vectors = load_embeddings(base_path)
             print(f"   Loaded {len(vectors)} vectors (dim: {vectors.shape[1]})")
+            
+            # CRITICAL: Filter metadata and vectors to only include current repo
+            # Since embeddings are in repo-specific directory, assume they belong to current repo
+            # if repo_name is missing or empty
+            filtered_metadata = []
+            filtered_indices = []
+            skipped_count = 0
+            fixed_count = 0
+            
+            for i, m in enumerate(metadata):
+                # Get repo_name - check multiple possible locations
+                chunk_repo_raw = m.get("repo_name") or m.get("repository") or m.get("repo") or None
+                chunk_repo = str(chunk_repo_raw).strip() if chunk_repo_raw is not None else ""
+                chunk_owner_raw = m.get("repo_owner") or m.get("owner") or None
+                chunk_owner = str(chunk_owner_raw).strip() if chunk_owner_raw is not None else ""
+                
+                # If repo_name is empty/missing, assume it's for current repo (embeddings are in repo dir)
+                # Since embeddings are in Embeddings/{REPO_OWNER}/{REPO_NAME}/, they belong to current repo
+                if not chunk_repo or chunk_repo == "" or chunk_repo == "None":
+                    # Embeddings are in Embeddings/{REPO_OWNER}/{REPO_NAME}/, so assume current repo
+                    m["repo_name"] = REPO_NAME
+                    m["repo_owner"] = REPO_OWNER
+                    filtered_metadata.append(m)
+                    filtered_indices.append(i)
+                    fixed_count += 1
+                    continue
+                
+                # STRICT matching: BOTH owner AND repo name must match
+                # Accept chunks that match current repo
+                matches_repo = False
+                
+                # Check full format first: "owner/repo"
+                if chunk_repo == FULL_REPO_NAME:
+                    matches_repo = True
+                # Check separate owner and repo name (BOTH must match)
+                elif chunk_owner == REPO_OWNER and chunk_repo == REPO_NAME:
+                    matches_repo = True
+                # If repo_name is stored as just the name, owner must still match
+                elif chunk_repo == REPO_NAME and chunk_owner == REPO_OWNER:
+                    matches_repo = True
+                
+                if matches_repo:
+                    # Ensure repo_name is set correctly
+                    m["repo_name"] = REPO_NAME
+                    m["repo_owner"] = REPO_OWNER
+                    filtered_metadata.append(m)
+                    filtered_indices.append(i)
+                else:
+                    skipped_count += 1
+                    if skipped_count <= 3:  # Print first 3 warnings
+                        print(f"      ⚠️  Skipping chunk with repo: '{chunk_owner}/{chunk_repo}' (expected: '{REPO_OWNER}/{REPO_NAME}')")
+            
+            if fixed_count > 0:
+                print(f"   ✓ Fixed repo_name for {fixed_count} embeddings (assumed current repo)")
+                # Filter vectors to match filtered metadata
+                vectors = vectors[filtered_indices]
+                metadata = filtered_metadata
+            
+            if skipped_count > 0:
+                print(f"   ⚠️  Filtered out {skipped_count} embeddings from other repositories")
+                # Filter vectors to match filtered metadata (if not already filtered)
+                if fixed_count == 0:
+                    vectors = vectors[filtered_indices]
+                    metadata = filtered_metadata
+            
+            if fixed_count > 0 or skipped_count > 0:
+                print(f"   ✓ Using {len(metadata)} embeddings for {REPO_OWNER}/{REPO_NAME}")
+            
+            if len(metadata) == 0:
+                print(f"   ⚠️  No embeddings found for current repo - skipping {index_name}")
+                continue
 
-            # --------------------------------------------
-            # ENRICH METADATA FOR ISSUE INDEX
-            # --------------------------------------------
             if index_name.lower() == "issue":
                 for m in metadata:
-                    # 1) Prefer top-level issue_number if already present
                     if "issue_number" not in m:
-                        # 2) Try to pull from nested entities
                         entities = m.get("entities", {})
-                        if isinstance(entities, dict) and entities.get("issue_number") is not None:
+                        if (
+                            isinstance(entities, dict)
+                            and entities.get("issue_number") is not None
+                        ):
                             try:
                                 m["issue_number"] = int(entities["issue_number"])
                             except Exception:
                                 m["issue_number"] = str(entities["issue_number"])
-
-                    # 3) Fallback: parse from content text
                     content = m.get("content", "") or ""
                     if content and "issue_number" not in m:
-                        match = re.search(r'issue\s*#\s*(\d+)', content, re.IGNORECASE)
+                        match = re.search(r"issue\s*#\s*(\d+)", content, re.IGNORECASE)
                         if match:
                             m["issue_number"] = int(match.group(1))
-
-                    # 4) Title extraction
-                    if content:
-                        lines = content.split("\n")
-                        for line in lines:
-                            line = line.strip()
-                            if line.lower().startswith("issue:"):
-                                m["title"] = line.replace("Issue:", "").strip()
-                                break
-
                     m["chunk_type"] = "issue"
                     m["type"] = "issue"
 
-                # Debug issue_number presence
-                print("\n   🔍 DEBUG — Checking issue_number values for ISSUE index")
-                missing = [m.get("chunk_id", "UNKNOWN_ID") for m in metadata if "issue_number" not in m]
-                print(f"   ➤ Total issue chunks: {len(metadata)}")
-                print(f"   ➤ Missing issue_number: {len(missing)}")
-
-            # --------------------------------------------
-            # ENRICH METADATA FOR PR INDEX
-            # --------------------------------------------
             if index_name.lower() == "pr":
                 for m in metadata:
                     content = m.get("content", "") or ""
-
-                    # PR number
-                    match = re.search(r'pr\s*#(\d+)', content, re.IGNORECASE)
+                    match = re.search(r"pr\s*#(\d+)", content, re.IGNORECASE)
                     if match:
                         m["pr_number"] = int(match.group(1))
-
-                    # title
-                    lines = content.split("\n")
-                    for line in lines:
-                        line = line.strip()
-                        if line.lower().startswith("pull request:"):
-                            m["title"] = line.replace("Pull Request:", "").strip()
-                            break
-
                     m["chunk_type"] = "pr"
                     m["type"] = "pr"
 
@@ -275,34 +386,26 @@ def main():
             print(f"   ❌ Failed to build FAISS index: {e}")
             continue
 
-        # Save type-specific index
         save_index_and_metadata(index_name, index, metadata)
-
         built_indices.append(index_name)
 
-        # Collect for "all" index
-        if index_name != "all":
+        if index_name != "all" and index_name != "graph_nodes":
             for m in metadata:
-                m['source_index'] = index_name
-
+                m["source_index"] = index_name
             all_metadata.extend(metadata)
             all_vectors.append(vectors)
 
-    # Build combined "all" index
     if all_vectors:
         print(f"\n🔹 Building combined 'all' index...")
-
         try:
             combined_vectors = np.vstack(all_vectors)
-            print(f"   Combined {len(combined_vectors)} vectors from {len(built_indices)} types")
-
             all_index = build_faiss_index(combined_vectors)
             save_index_and_metadata("all", all_index, all_metadata)
-
             built_indices.append("all")
-
         except Exception as e:
             print(f"   ❌ Failed to build combined index: {e}")
+
+    build_graph_structure()
 
     print(f"\n{'='*70}")
     print("🎉 Multi-Index VectorDB Build Complete!")

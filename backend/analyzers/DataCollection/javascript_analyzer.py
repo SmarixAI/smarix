@@ -4,224 +4,148 @@ import re
 from typing import Dict, Any, List
 from analyzers.base_analyzer import BaseAnalyzer
 
+
 class JavaScriptAnalyzer(BaseAnalyzer):
     """Analyzes JavaScript/TypeScript source code"""
-    
+
     def __init__(self):
         super().__init__()
+        # 1. Regex for DEFINITIONS (Nodes)
         self.function_patterns = [
-            r'function\s+(\w+)\s*\(',                           # function name()
-            r'(?:const|let|var)\s+(\w+)\s*=\s*function',        # const name = function
-            r'(?:const|let|var)\s+(\w+)\s*=\s*\([^)]*\)\s*=>', # const name = () =>
-            r'(\w+):\s*function\s*\(',                          # name: function()
-            r'(\w+)\s*\([^)]*\)\s*{',                          # name() { (method)
-            r'(?:async\s+)?(\w+)\s*\([^)]*\)\s*=>',            # async name() =>
+            r"function\s+(\w+)\s*\(",  # function name()
+            r"(?:const|let|var)\s+(\w+)\s*=\s*function",  # const name = function
+            r"(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[^=]+)\s*=>",  # const name = () =>
+            r"(?:async\s+)?(\w+)\s*\([^)]*\)\s*{",  # method() {
         ]
-        self.class_pattern = r'class\s+(\w+)(?:\s+extends\s+(\w+))?'
+
+        # 2. Regex for CALLS (Edges) - Simple heuristic to find "func()" patterns
+        self.call_pattern = r"(\w+)\s*\("
+
+        # 3. Regex for IMPORTS (Dependencies)
         self.import_patterns = [
-            r'import\s+.*?\s+from\s+[\'"]([^\'"]+)[\'"]',       # import ... from 'module'
-            r'import\s+[\'"]([^\'"]+)[\'"]',                    # import 'module'
-            r'require\([\'"]([^\'"]+)[\'"]\)',                  # require('module')
-            r'import\s*\(\s*[\'"]([^\'"]+)[\'"]\s*\)',         # dynamic import()
+            r'import\s+.*?\s+from\s+[\'"]([^\'"]+)[\'"]',  # standard import
+            r'require\([\'"]([^\'"]+)[\'"]\)',  # require
+            r'import\s+[\'"]([^\'"]+)[\'"]',  # side-effect import
         ]
+
+        # 4. Regex for JSX Components (React Edges)
+        # Finds <Button ... /> or <Button>
+        self.jsx_pattern = r"<([A-Z][a-zA-Z0-9]*)"
+
+        # 5. Class Pattern
+        self.class_pattern = r"class\s+(\w+)(?:\s+extends\s+(\w+))?"
+
+        # 6. Regex for EXPORTS
         self.export_patterns = [
-            r'export\s+(?:default\s+)?(?:class|function|const|let|var)\s+(\w+)',
-            r'export\s*{\s*([^}]+)\s*}',
-            r'module\.exports\s*=\s*(\w+)',
+            r"export\s+(?:default\s+)?(?:class|function|const|let|var)\s+(\w+)",
+            r"export\s*{\s*([^}]+)\s*}",
+            r"module\.exports\s*=\s*(\w+)",
         ]
-    
+
     def analyze(self, content: str, file_path: str) -> Dict[str, Any]:
-        """Extract JavaScript/TypeScript information"""
+        """Extract Nodes and Edges from JS/TS files"""
+
+        # Initialize basic stats (optional, but good for compatibility)
         base_analysis = self.basic_analysis(content, file_path)
-        
-        # Update language detection
-        language = 'typescript' if file_path.endswith(('.ts', '.tsx')) else 'javascript'
-        is_react = file_path.endswith(('.jsx', '.tsx'))
-        
-        js_analysis = {
+
+        analysis = {
             **base_analysis,
-            'language': language,
-            'is_react': is_react,
-            'analysis_type': 'javascript',
-            'functions': self._extract_functions(content),
-            'classes': self._extract_classes(content),
-            'imports': self._extract_imports(content),
-            'exports': self._extract_exports(content),
-            'react_components': self._extract_react_components(content) if is_react else [],
-            'async_functions': self._count_async_functions(content),
-            'promises': self._count_promises(content),
-            'dom_usage': self._detect_dom_usage(content),
-            'frameworks': self._detect_frameworks(content),
+            "file_path": file_path,
+            "language": (
+                "typescript" if file_path.endswith(("ts", "tsx")) else "javascript"
+            ),
+            # -- Graph Nodes --
+            "functions": [],  # {name, type, args, calls, jsx_calls}
+            "classes": [],  # {name, methods}
+            "imports": [],  # {module, alias}
+            # -- Graph Edges --
+            "dependencies": set(),
+            "exports": [],
         }
-        
-        return js_analysis
-    
-    def _extract_functions(self, content: str) -> List[Dict[str, Any]]:
-        """Extract function information with more details"""
-        functions = []
-        
+
+        # A. Extract Imports (File -> Module Edges)
+        self._extract_imports(content, analysis)
+
+        # B. Extract Functions & Calls (Function -> Function Edges)
+        self._extract_functions_and_calls(content, analysis)
+
+        # C. Extract Classes (Class -> Method Edges)
+        self._extract_classes(content, analysis)
+
+        # Clean up sets for JSON serialization
+        analysis["dependencies"] = list(analysis["dependencies"])
+
+        return analysis
+
+    def _extract_imports(self, content: str, analysis: Dict[str, Any]):
+        """Populate imports and dependencies"""
+        for pattern in self.import_patterns:
+            matches = re.finditer(pattern, content, re.MULTILINE)
+            for match in matches:
+                module = match.group(1)
+                analysis["imports"].append({"module": module})
+                analysis["dependencies"].add(
+                    module.split("/")[-1]
+                )  # Simplify 'utils/auth' -> 'auth'
+
+    def _extract_functions_and_calls(self, content: str, analysis: Dict[str, Any]):
+        """Find functions and what they call (including JSX components)"""
+
+        # We need to slice the content to find the "body" of the function.
+        # Since we don't have a real AST parser, we use a heuristic:
+        # We assume indentation or braces define the body roughly.
+
         for pattern in self.function_patterns:
             matches = re.finditer(pattern, content, re.MULTILINE)
             for match in matches:
-                func_name = match.group(1)
-                line_number = content[:match.start()].count('\n') + 1
-                
-                # Check if it's async
-                is_async = 'async' in content[max(0, match.start()-20):match.start()]
-                
-                functions.append({
-                    'name': func_name,
-                    'line': line_number,
-                    'is_async': is_async,
-                    'type': self._determine_function_type(match.group(0))
-                })
-        
-        return functions
-    
-    def _extract_classes(self, content: str) -> List[Dict[str, Any]]:
-        """Extract class information"""
-        classes = []
-        matches = re.finditer(self.class_pattern, content, re.MULTILINE)
-        
+                name = match.group(1)
+                start_idx = match.end()
+
+                # Heuristic: Extract next 50 lines or up to next function definition as "body"
+                # This is imperfect but better than nothing for GraphRAG
+                body_snippet = content[start_idx : start_idx + 2000]
+
+                # Find outgoing edges (Calls)
+                calls = set(re.findall(self.call_pattern, body_snippet))
+
+                # Find UI edges (JSX Components)
+                jsx_calls = set(re.findall(self.jsx_pattern, body_snippet))
+
+                # Filter out standard language keywords from "calls"
+                keywords = {
+                    "if",
+                    "for",
+                    "while",
+                    "switch",
+                    "catch",
+                    "function",
+                    "return",
+                    "await",
+                }
+                calls = list(calls - keywords)
+
+                analysis["functions"].append(
+                    {
+                        "name": name,
+                        "lineno": content[: match.start()].count("\n") + 1,
+                        "calls": calls,  # Edge: Function -> Calls -> Function
+                        "components_used": list(
+                            jsx_calls
+                        ),  # Edge: Component -> Renders -> Component
+                    }
+                )
+
+    def _extract_classes(self, content: str, analysis: Dict[str, Any]):
+        """Extract classes"""
+        matches = re.finditer(self.class_pattern, content)
+
         for match in matches:
-            class_name = match.group(1)
-            extends_class = match.group(2) if match.lastindex > 1 else None
-            line_number = content[:match.start()].count('\n') + 1
-            
-            classes.append({
-                'name': class_name,
-                'line': line_number,
-                'extends': extends_class,
-                'methods': self._extract_class_methods(content, match.end())
-            })
-        
-        return classes
-    
-    def _extract_imports(self, content: str) -> List[str]:
-        """Extract import statements"""
-        return self.extract_imports_generic(content, self.import_patterns)
-    
-    def _extract_exports(self, content: str) -> List[str]:
-        """Extract export statements"""
-        exports = []
-        
-        for pattern in self.export_patterns:
-            matches = re.findall(pattern, content, re.MULTILINE)
-            exports.extend(matches)
-        
-        # Handle export lists like "export { a, b, c }"
-        export_list_pattern = r'export\s*{\s*([^}]+)\s*}'
-        export_lists = re.findall(export_list_pattern, content)
-        for export_list in export_lists:
-            items = [item.strip() for item in export_list.split(',')]
-            exports.extend(items)
-        
-        return list(set(exports))
-    
-    def _extract_react_components(self, content: str) -> List[Dict[str, Any]]:
-        """Extract React component information"""
-        components = []
-        
-        # Function components
-        func_component_pattern = r'(?:const|let|var)\s+(\w+)\s*=\s*\([^)]*\)\s*=>\s*{[^}]*return\s*\('
-        matches = re.finditer(func_component_pattern, content, re.MULTILINE | re.DOTALL)
-        
-        for match in matches:
-            component_name = match.group(1)
-            # Check if it starts with uppercase (React component convention)
-            if component_name[0].isupper():
-                line_number = content[:match.start()].count('\n') + 1
-                components.append({
-                    'name': component_name,
-                    'type': 'functional',
-                    'line': line_number
-                })
-        
-        # Class components
-        class_component_pattern = r'class\s+(\w+)\s+extends\s+(?:React\.)?Component'
-        matches = re.finditer(class_component_pattern, content)
-        
-        for match in matches:
-            component_name = match.group(1)
-            line_number = content[:match.start()].count('\n') + 1
-            components.append({
-                'name': component_name,
-                'type': 'class',
-                'line': line_number
-            })
-        
-        return components
-    
-    def _count_async_functions(self, content: str) -> int:
-        """Count async functions in the code"""
-        return len(re.findall(r'async\s+(?:function|\w+\s*=>)', content))
-    
-    def _count_promises(self, content: str) -> int:
-        """Count Promise usage"""
-        promise_patterns = [
-            r'new\s+Promise\s*\(',
-            r'\.then\s*\(',
-            r'\.catch\s*\(',
-            r'\.finally\s*\(',
-            r'Promise\.(?:all|race|resolve|reject)',
-            r'await\s+',
-        ]
-        
-        count = 0
-        for pattern in promise_patterns:
-            count += len(re.findall(pattern, content))
-        
-        return count
-    
-    def _detect_dom_usage(self, content: str) -> bool:
-        """Detect if code uses DOM APIs"""
-        dom_patterns = [
-            r'document\.',
-            r'window\.',
-            r'getElementById',
-            r'querySelector',
-            r'addEventListener',
-            r'createElement',
-        ]
-        
-        return any(re.search(pattern, content) for pattern in dom_patterns)
-    
-    def _detect_frameworks(self, content: str) -> List[str]:
-        """Detect JavaScript frameworks being used"""
-        frameworks = []
-        
-        framework_patterns = {
-            'React': [r'import.*React', r'from\s+[\'"]react[\'"]', r'JSX'],
-            'Vue': [r'import.*Vue', r'from\s+[\'"]vue[\'"]', r'\.vue[\'"]'],
-            'Angular': [r'@Component', r'@Injectable', r'from\s+[\'"]@angular'],
-            'Express': [r'express\(\)', r'from\s+[\'"]express[\'"]'],
-            'jQuery': [r'\$\(', r'jQuery', r'from\s+[\'"]jquery[\'"]'],
-            'Lodash': [r'from\s+[\'"]lodash[\'"]', r'_\.'],
-            'Axios': [r'from\s+[\'"]axios[\'"]', r'axios\.'],
-        }
-        
-        for framework, patterns in framework_patterns.items():
-            if any(re.search(pattern, content) for pattern in patterns):
-                frameworks.append(framework)
-        
-        return frameworks
-    
-    def _determine_function_type(self, function_declaration: str) -> str:
-        """Determine the type of function declaration"""
-        if 'function' in function_declaration:
-            return 'function_declaration'
-        elif '=>' in function_declaration:
-            return 'arrow_function'
-        elif ':' in function_declaration:
-            return 'method'
-        else:
-            return 'unknown'
-    
-    def _extract_class_methods(self, content: str, class_start: int) -> List[str]:
-        """Extract method names from a class (simplified)"""
-        # This is a simplified implementation
-        # In practice, you'd want more sophisticated parsing
-        class_content = content[class_start:class_start+1000]  # Look ahead 1000 chars
-        method_pattern = r'(\w+)\s*\([^)]*\)\s*{'
-        methods = re.findall(method_pattern, class_content)
-        return methods[:10]  # Limit to first 10 methods found
+            name = match.group(1)
+            base = match.group(2)
+            analysis["classes"].append(
+                {
+                    "name": name,
+                    "bases": [base] if base else [],
+                    "lineno": content[: match.start()].count("\n") + 1,
+                }
+            )

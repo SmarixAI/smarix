@@ -16,3 +16,5 @@ class QueryType:
     PR_ISSUE_TUTORIAL = "pr_issue_tutorial"
     PR_ISSUE_CODING_QUESTION = "pr_issue_coding_question"
     RANDOM_PR_GENERATOR = "random_pr_generator"
+    IMPACT_ANALYSIS = "impact_analysis"
+    TRACEABILITY = "traceability"

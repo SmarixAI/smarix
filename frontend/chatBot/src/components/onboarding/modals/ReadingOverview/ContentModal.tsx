@@ -17,6 +17,7 @@ import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { ContentParser } from "../../utils/ReadingOverview/contentParser";
 import { MermaidRenderer } from "../../utils/ReadingOverview/mermaidRenderer";
 import ContentRenderer from "./ContentRenderer";
+import QnATest from "./QnATest";
 import { ContentService } from "../../services/ReadingOverview/contentService";
 import type { ModuleContent } from "../../../../../types/onboarding";
 import { Inter, JetBrains_Mono } from 'next/font/google';
@@ -27,6 +28,8 @@ interface ContentModalProps {
   title: string;
   moduleId: string;
   activeRepos?: string[];
+  employeeId?: string | null;
+  onProgressUpdate?: () => void;
 }
 
 interface ModuleWithContent {
@@ -47,6 +50,8 @@ export default function OverviewModal({
   title,
   moduleId,
   activeRepos = [],
+  employeeId,
+  onProgressUpdate,
 }: ContentModalProps) {
   const [moduleContent, setModuleContent] = useState<ModuleWithContent[]>([]);
   const [renderedMermaid, setRenderedMermaid] = useState<{
@@ -75,6 +80,35 @@ export default function OverviewModal({
       };
     }
   }, [isOpen, onClose]);
+
+  // Track reading section progress when modal opens
+  useEffect(() => {
+    if (isOpen && employeeId && moduleId) {
+      // Mark reading module as in-progress when opened
+      const trackReadingProgress = async () => {
+        try {
+          await fetch('/api/onboarding/progress', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              employeeId,
+              section: 'reading',
+              itemId: moduleId,
+              updates: {
+                status: 'in-progress',
+                progress: 0,
+              },
+            }),
+          });
+        } catch (error) {
+          console.error('Error tracking reading progress:', error);
+        }
+      };
+      trackReadingProgress();
+    }
+  }, [isOpen, employeeId, moduleId]);
 
   useEffect(() => {
     if (isOpen && moduleId) {
@@ -115,6 +149,27 @@ export default function OverviewModal({
           setModuleContent(content);
           setCurrentSectionIndex(0);
           setIsLoading(false);
+          
+          // Track initial progress when content is loaded
+          if (employeeId && moduleId && content.length > 0) {
+            fetch('/api/onboarding/progress', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                employeeId,
+                section: 'reading',
+                itemId: moduleId,
+                updates: {
+                  status: 'in-progress',
+                  progress: Math.round((1 / content.length) * 100),
+                },
+              }),
+            }).catch((error) => {
+              console.error('Error tracking initial reading progress:', error);
+            });
+          }
         } catch (error) {
           console.error("Error fetching module content:", error);
           setIsLoading(false);
@@ -205,12 +260,36 @@ export default function OverviewModal({
 
   const handleNextSection = useCallback(() => {
     setCurrentSectionIndex((prev) => {
-      if (prev < moduleContent.length - 1) {
-        return prev + 1;
+      const nextIndex = prev < moduleContent.length - 1 ? prev + 1 : prev;
+      
+      // Track progress when moving to next section
+      if (employeeId && moduleId && nextIndex > prev) {
+        const progress = Math.round(((nextIndex + 1) / moduleContent.length) * 100);
+        const isLastSection = nextIndex === moduleContent.length - 1;
+        
+        fetch('/api/onboarding/progress', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            employeeId,
+            section: 'reading',
+            itemId: moduleId,
+            updates: {
+              status: isLastSection ? 'completed' : 'in-progress',
+              progress: isLastSection ? 100 : progress,
+              ...(isLastSection ? { completedAt: new Date().toISOString() } : {}),
+            },
+          }),
+        }).catch((error) => {
+          console.error('Error updating reading progress:', error);
+        });
       }
-      return prev;
+      
+      return nextIndex;
     });
-  }, [moduleContent.length]);
+  }, [moduleContent.length, employeeId, moduleId]);
 
   const handlePreviousSection = useCallback(() => {
     setCurrentSectionIndex((prev) => {
@@ -358,14 +437,6 @@ export default function OverviewModal({
             <div className="flex items-center gap-3">
               <button
                 onClick={onClose}
-                className={`${inter.className} flex items-center gap-2 px-5 py-2.5 rounded-xl transition-all bg-white/80 backdrop-blur-sm border border-slate-200 hover:bg-[#0E1B2E] hover:border-[#0E1B2E] hover:text-white group shadow-sm hover:shadow-md`}
-                aria-label="Go back"
-              >
-                <ArrowLeft className="w-4 h-4 transition-colors text-[#0E1B2E] group-hover:text-white" />
-                <span className="text-sm font-semibold text-[#0E1B2E] group-hover:text-white">Back</span>
-              </button>
-              <button
-                onClick={onClose}
                 className="flex items-center justify-center w-10 h-10 rounded-xl transition-all bg-white/80 backdrop-blur-sm border border-red-200 hover:bg-red-500 hover:border-red-500 group shadow-sm hover:shadow-md"
                 aria-label="Close modal"
                 title="Close (Esc)"
@@ -456,123 +527,36 @@ export default function OverviewModal({
 
                       <div className="px-6 py-6">
                         {moduleData.isQnASection ? (
-                          <div className="space-y-6">
-                            {moduleData.content?.questions && Array.isArray(moduleData.content.questions) ? (
-                              moduleData.content.questions.map((qnaItem: any, qnaIndex: number) => (
-                                <div key={qnaIndex} className="border-b border-slate-200/60 pb-6 last:border-b-0 last:pb-0">
-                                  <div className="mb-4">
-                                    <div className="flex items-center space-x-2 mb-3">
-                                      <span className={`${jetbrainsMono.className} text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200`}>
-                                        Question {qnaIndex + 1}
-                                      </span>
-                                      {qnaItem.subsection && (
-                                        <span className={`${inter.className} text-xs text-slate-500 italic`}>
-                                          {qnaItem.subsection}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <h4 className={`${inter.className} text-base font-semibold text-[#0E1B2E] mb-4 leading-relaxed`}>
-                                      {qnaItem.question}
-                                    </h4>
-                                  </div>
-                                  {qnaItem.options && (
-                                    <div className="mb-5">
-                                      <div className="space-y-3">
-                                        {Object.entries(qnaItem.options).map(([key, value]) => (
-                                          <div
-                                            key={key}
-                                            className={`p-4 rounded-xl border-2 transition-all ${
-                                              key === qnaItem.correct_answer
-                                                ? 'bg-green-50 border-green-300 shadow-sm'
-                                                : 'bg-slate-50 border-slate-200'
-                                            }`}
-                                          >
-                                            <span className={`${inter.className} font-bold text-[#0E1B2E] mr-2`}>
-                                              {key}:
-                                            </span>
-                                            <span className={`${inter.className} text-sm text-slate-700`}>
-                                              {value as string}
-                                            </span>
-                                            {key === qnaItem.correct_answer && (
-                                              <span className={`${inter.className} ml-3 text-xs font-bold text-green-700 bg-green-100 px-2 py-1 rounded-md`}>
-                                                ✓ Correct
-                                              </span>
-                                            )}
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )}
-                                  {qnaItem.explanation && (
-                                    <div className="mt-5 p-5 rounded-xl border-2 bg-gradient-to-br from-blue-50 to-indigo-50/50 border-blue-200">
-                                      <h5 className={`${inter.className} text-sm font-bold text-blue-900 mb-3 flex items-center gap-2`}>
-                                        <FileText className="w-4 h-4" />
-                                        Explanation:
-                                      </h5>
-                                      <p className={`${inter.className} text-sm text-blue-800 leading-relaxed`}>
-                                        {qnaItem.explanation}
-                                      </p>
-                                    </div>
-                                  )}
-                                </div>
-                              ))
-                            ) : (
-                              <>
-                                {moduleData.content?.question && (
-                                  <div className="mb-4">
-                                    <h4 className={`${inter.className} text-sm font-semibold text-[#0E1B2E] mb-3`}>
-                                      Question:
-                                    </h4>
-                                    <p className={`${inter.className} text-sm text-slate-700 leading-relaxed`}>
-                                      {moduleData.content.question}
-                                    </p>
-                                  </div>
-                                )}
-                                {moduleData.content?.options && (
-                                  <div className="mb-4">
-                                    <h4 className={`${inter.className} text-sm font-semibold text-[#0E1B2E] mb-3`}>
-                                      Options:
-                                    </h4>
-                                    <div className="space-y-2">
-                                      {Object.entries(moduleData.content.options).map(([key, value]) => (
-                                        <div
-                                          key={key}
-                                          className={`p-3 rounded-lg border ${
-                                            key === moduleData.content.correct_answer
-                                              ? 'bg-green-50 border-green-200'
-                                              : 'bg-slate-50 border-slate-200'
-                                          }`}
-                                        >
-                                          <span className={`${inter.className} font-semibold text-[#0E1B2E] mr-2`}>
-                                            {key}:
-                                          </span>
-                                          <span className={`${inter.className} text-sm text-slate-700`}>
-                                            {value as string}
-                                          </span>
-                                          {key === moduleData.content.correct_answer && (
-                                            <span className={`${inter.className} ml-2 text-xs font-semibold text-green-700`}>
-                                              ✓ Correct
-                                            </span>
-                                          )}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-                                {moduleData.content?.explanation && (
-                                  <div className="mt-4 p-3 rounded-lg bg-blue-50 border border-blue-200">
-                                    <h4 className={`${inter.className} text-sm font-semibold text-blue-900 mb-2`}>
-                                      Explanation:
-                                    </h4>
-                                    <p className={`${inter.className} text-sm text-blue-800 leading-relaxed`}>
-                                      {moduleData.content.explanation}
-                                    </p>
-                                  </div>
-                                )}
-                              </>
-                            )}
-                          </div>
+                          // Use QnATest component for ALL QnA sections
+                          moduleData.content?.questions && Array.isArray(moduleData.content.questions) ? (
+                            <QnATest
+                              questions={moduleData.content.questions}
+                              sectionTitle={moduleData.moduleTitle}
+                              employeeId={employeeId}
+                              moduleId={moduleId}
+                              onProgressUpdate={onProgressUpdate}
+                            />
+                          ) : moduleData.content?.question ? (
+                            // Handle single question format
+                            <QnATest
+                              questions={[{
+                                question: moduleData.content.question,
+                                options: moduleData.content.options || {},
+                                correct_answer: moduleData.content.correct_answer || '',
+                                explanation: moduleData.content.explanation || '',
+                              }]}
+                              sectionTitle={moduleData.moduleTitle}
+                              employeeId={employeeId}
+                              moduleId={moduleId}
+                              onProgressUpdate={onProgressUpdate}
+                            />
+                          ) : (
+                            <div className="text-center py-8 text-slate-500">
+                              No questions available for this test.
+                            </div>
+                          )
                         ) : (
+                          // Regular content display for non-QnA sections
                           <ContentRenderer
                             sections={moduleData.sections}
                             renderedMermaid={renderedMermaid[moduleData.moduleId] || {}}

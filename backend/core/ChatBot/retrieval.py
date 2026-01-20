@@ -4,11 +4,147 @@ from typing import List, Dict, Any, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 import numpy as np
+import pickle
+import networkx as nx
 from pathlib import Path
 import json
 from .query_type import QueryType
 
-class RetrievalMixin:
+class GraphRetrievalMixin:
+    def load_graph_structure(self):
+        """Lazy load the NetworkX graph structure"""
+        if hasattr(self, 'G') and self.G:
+            return self.G
+            
+        graph_path = Path("../../data/VectorDB") / self.repo_owner / self.repo_name / "graph_structure.pkl"
+        if graph_path.exists():
+            try:
+                with open(graph_path, 'rb') as f:
+                    self.G = pickle.load(f)
+                print(f"🕸️  Graph loaded: {self.G.number_of_nodes()} nodes")
+                return self.G
+            except Exception as e:
+                print(f"⚠️ Failed to load graph structure: {e}")
+        return None
+    
+    def _get_repo_filters(self) -> Optional[Dict[str, Any]]:
+        """Get repo-based filters for VectorDB search - STRICT filtering by both owner and repo name"""
+        repo_owner = getattr(self, 'repo_owner', None)
+        repo_name = getattr(self, 'repo_name', None)
+        
+        if not repo_owner or not repo_name:
+            return None
+        
+        # Return filter that matches BOTH owner and repo name
+        return {"repo_name": repo_name, "repo_owner": repo_owner}
+    
+    def _filter_by_repo(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Post-retrieval filtering to ensure only current repo chunks are returned - STRICT filtering"""
+        repo_owner = getattr(self, 'repo_owner', None)
+        repo_name = getattr(self, 'repo_name', None)
+        
+        # If repo info not available, return empty (don't return results from unknown repos)
+        if not repo_owner or not repo_name:
+            if results:
+                self.logger.warning(f"FILTER | No repo info available, filtering out {len(results)} results")
+            return []
+        
+        filtered = []
+        for result in results:
+            metadata = result.get('metadata', {})
+            chunk_repo = metadata.get('repo_name', '').strip()
+            chunk_owner = metadata.get('repo_owner', '').strip()
+            
+            # STRICT matching: BOTH owner AND repo name must match
+            # Accept if:
+            # 1. Full format matches: "owner/repo" == "owner/repo"
+            # 2. Both owner and repo name match separately
+            matches = False
+            
+            # Check full format first
+            if chunk_repo == f"{repo_owner}/{repo_name}":
+                matches = True
+            # Check separate owner and repo name (both must match)
+            elif chunk_owner == repo_owner and chunk_repo == repo_name:
+                matches = True
+            # If repo_name is stored as just the name (without owner), check owner separately
+            elif chunk_repo == repo_name and chunk_owner == repo_owner:
+                matches = True
+            
+            if matches:
+                filtered.append(result)
+        
+        if len(filtered) < len(results):
+            self.logger.info(f"FILTER | Filtered {len(results)} -> {len(filtered)} results for repo {repo_owner}/{repo_name}")
+        
+        return filtered
+
+    def retrieve_graph_context(self, query_embedding, top_k=5):
+        """
+        1. Search 'graph_nodes' index to find Entry Points.
+        2. Traverse edges in NetworkX to find connected components.
+        """
+        G = self.load_graph_structure()
+        if not G or not self.multi_index_store:
+            return []
+
+        # Step 1: Find Entry Nodes using Vector Search on 'graph_nodes' index
+        entry_nodes = self.multi_index_store.search_by_type(
+            query_embedding, 
+            index_type='graph_nodes', 
+            top_k=top_k
+        )
+        
+        graph_results = []
+        visited = set()
+
+        for node_hit in entry_nodes:
+            node_id = node_hit.get('chunk_id') or node_hit.get('metadata', {}).get('chunk_id')
+            if not node_id or node_id not in G.nodes:
+                continue
+                
+            if node_id in visited: continue
+            visited.add(node_id)
+
+            # Get Node Data
+            node_data = G.nodes[node_id]
+            
+            # Step 2: Get Neighbors (Traverse 1-hop)
+            # Incoming edges (Who calls me?)
+            relationships = []
+            
+            # Incoming edges (e.g., Who calls me? Who modifies me?)
+            for u, v, attr in G.in_edges(node_id, data=True):
+                edge_type = attr.get('type', 'RELATED')
+                source_name = u.split('::')[-1] # Simplify ID to Name
+                relationships.append(f"<- [{edge_type}] -- {source_name}")
+
+            # Outgoing edges (e.g., Who do I call? Who did I create?)
+            for u, v, attr in G.out_edges(node_id, data=True):
+                edge_type = attr.get('type', 'RELATED')
+                target_name = v.split('::')[-1]
+                relationships.append(f"-- [{edge_type}] -> {target_name}")
+
+            # Format as a Text Chunk for the Context Window
+            context_text = f"Entity: {node_data.get('label')} {node_data.get('name')}\n"
+            
+            if relationships:
+                # Limit to 15 relationships to prevent context overflow
+                context_text += "Relationships:\n" + "\n".join(relationships[:15]) + "\n"
+            
+            graph_results.append({
+                "content": context_text,
+                "metadata": {
+                    "type": "graph_context",
+                    "source": "dependency_graph",
+                    "node_id": node_id
+                },
+                "score": node_hit.get('score', 1.0)
+            })
+
+        return graph_results
+
+class RetrievalMixin(GraphRetrievalMixin):
     
     
     def retrieve_github_first(
@@ -32,6 +168,15 @@ class RetrievalMixin:
             query_text: Original query text (for routing in multi-index mode)
         """
 
+        if query_type in ["impact_analysis", "traceability"] and self.multi_index_store:
+            print(f"Executing Graph-Enhanced Retrieval ({query_type})...")
+            
+            vector_results = self._retrieve_multi_index(query_embedding, query_type, entity, keywords, top_k, query_text)
+            
+            graph_results = self.retrieve_graph_context(query_embedding)
+            
+            return graph_results + vector_results
+
         # Multi-index mode → unchanged
         if self.multi_index_store:
             return self._retrieve_multi_index(query_embedding, query_type, entity, keywords, top_k, query_text)
@@ -43,13 +188,24 @@ class RetrievalMixin:
                 target_id = int(match.group(1))
 
                 # Direct hit lookup (no embedding required)
+                repo_filters = self._get_repo_filters()
                 direct_results = []
-                direct_results += self.db.search_by_metadata(filters={"issue_number": target_id}, top_k=20) or []
-                direct_results += self.db.search_by_metadata(filters={"pr_number": target_id}, top_k=20) or []
-                direct_results += self.db.search_by_metadata(filters={"ticket_number": target_id}, top_k=20) or []
+                # Add repo filter to each search
+                issue_filter = {"issue_number": target_id}
+                pr_filter = {"pr_number": target_id}
+                ticket_filter = {"ticket_number": target_id}
+                
+                if repo_filters:
+                    issue_filter.update(repo_filters)
+                    pr_filter.update(repo_filters)
+                    ticket_filter.update(repo_filters)
+                
+                direct_results += self.db.search_by_metadata(filters=issue_filter, top_k=20) or []
+                direct_results += self.db.search_by_metadata(filters=pr_filter, top_k=20) or []
+                direct_results += self.db.search_by_metadata(filters=ticket_filter, top_k=20) or []
 
-                # Semantic similarity for more context
-                semantic_results = self.db.search(query_embedding, top_k=self.top_k * 2)
+                # Semantic similarity for more context (with repo filtering)
+                semantic_results = self.db.search(query_embedding, top_k=self.top_k * 2, filters=repo_filters)
 
                 # Merge → direct hits should dominate
                 merged = {}
@@ -83,13 +239,23 @@ class RetrievalMixin:
 
         # If entity extracted (existing behaviour)
         if entity:
+            repo_filters = self._get_repo_filters()
             entity_type = entity.get('type')
             if entity_type == 'issue':
-                results = self.db.search_by_metadata(query_embedding, filters={'issue_number': entity['number']}, top_k=10)
+                filters = {'issue_number': entity['number']}
+                if repo_filters:
+                    filters.update(repo_filters)
+                results = self.db.search_by_metadata(query_embedding, filters=filters, top_k=10)
             elif entity_type == 'pr':
-                results = self.db.search_by_metadata(query_embedding, filters={'pr_number': entity['number']}, top_k=10)
+                filters = {'pr_number': entity['number']}
+                if repo_filters:
+                    filters.update(repo_filters)
+                results = self.db.search_by_metadata(query_embedding, filters=filters, top_k=10)
             elif entity_type == 'commit':
-                results = self.db.search_by_metadata(query_embedding, filters={'sha': entity['sha']}, top_k=10)
+                filters = {'sha': entity['sha']}
+                if repo_filters:
+                    filters.update(repo_filters)
+                results = self.db.search_by_metadata(query_embedding, filters=filters, top_k=10)
             else:
                 results = []
 
@@ -97,7 +263,11 @@ class RetrievalMixin:
                 return results
 
         # Regular similarity search
-        results = self.db.search(query_embedding, top_k=retrieve_k)
+        repo_filters = self._get_repo_filters()
+        results = self.db.search(query_embedding, top_k=retrieve_k, filters=repo_filters)
+        
+        # CRITICAL: Post-filter to ensure only current repo (safeguard)
+        results = self._filter_by_repo(results)
 
         # Hybrid metadata boost (unchanged)
         if self.use_hybrid_retrieval:
@@ -175,6 +345,22 @@ class RetrievalMixin:
                     else:
                         top3_indexes = [('code', 0.7), ('documentation', 0.5), ('pr', 0.4)]
 
+        adjusted_indexes = []
+        for idx_name, conf in top3_indexes:
+            if idx_name == 'impact_analysis':
+                adjusted_indexes.append(('graph_nodes', conf)) # Map logical intent to physical index
+                # Also ensure 'code' is present for context
+                if not any(i[0] == 'code' for i in top3_indexes):
+                    adjusted_indexes.append(('code', conf * 0.8))
+            elif idx_name == 'traceability':
+                adjusted_indexes.append(('graph_nodes', conf))
+                # Ensure we also look at PR text for context
+                if not any(i[0] == 'pr' for i in top3_indexes):
+                    adjusted_indexes.append(('pr', conf * 0.9))
+            else:
+                adjusted_indexes.append((idx_name, conf))
+        top3_indexes = adjusted_indexes
+
         
         # Extract index types (ensure we have exactly 3)
         index_types = [idx for idx, _ in top3_indexes[:3]]
@@ -190,18 +376,20 @@ class RetrievalMixin:
         top3_indexes_sorted = sorted(top3_indexes, key=lambda x: x[1], reverse=True)[:3]
         
         all_results = []
+        repo_filters = self._get_repo_filters()
         
         def search_index(index_type: str, top_k_count: int) -> List[Dict[str, Any]]:
             """Search a single index in parallel with specified top_k"""
             try:
+                target_index = 'graph_nodes' if index_type == 'impact_analysis' else index_type
                 results = self.multi_index_store.search_by_type(
                     query_embedding,
-                    index_type=index_type,
+                    index_type=target_index,
                     top_k=top_k_count
                 )
                 # Add index type and routing confidence
                 for result in results:
-                    result['index_type'] = index_type
+                    result['index_type'] = target_index
                     # Find confidence for this index
                     conf = next((conf for idx, conf in top3_indexes_sorted if idx == index_type), 0.5)
                     result['routing_confidence'] = conf
@@ -231,7 +419,8 @@ class RetrievalMixin:
         try:
             combined_results = self.multi_index_store.search_all(
                 query_embedding,
-                top_k=5  # Fixed 5 for fallback
+                top_k=5,  # Fixed 5 for fallback
+                filters=repo_filters
             )
             for result in combined_results:
                 result['index_type'] = result.get('index_type', 'all')
@@ -249,6 +438,9 @@ class RetrievalMixin:
             if chunk_id and chunk_id not in seen_ids:
                 seen_ids.add(chunk_id)
                 unique_results.append(result)
+        
+        # CRITICAL: Filter by repo after deduplication
+        unique_results = self._filter_by_repo(unique_results)
         
         self.logger.info(f"RETRIEVAL | Total unique chunks retrieved: {len(unique_results)} (target: 15+)")
         
@@ -302,6 +494,9 @@ class RetrievalMixin:
         
         # STEP 4: Context Fusion - Select TOP-8 diverse chunks
         final_results = self._select_diverse_chunks(unique_results, query_text or "", final_k)
+        
+        # CRITICAL: Post-filter to ensure only current repo (safeguard)
+        final_results = self._filter_by_repo(final_results)
         
         self.logger.info(f"FINAL | Returning {len(final_results)} diverse chunks (requested: {retrieve_k})")
 
@@ -753,11 +948,23 @@ class RetrievalMixin:
         if not repositories:
             return ""
 
-        repo_name = list(repositories.keys())[0]
-        repo_data = repositories[repo_name]
+        # Use current repo if available, otherwise use first repo in dict
+        repo_owner = getattr(self, 'repo_owner', None)
+        repo_name = getattr(self, 'repo_name', None)
+        repo_key = f"{repo_owner}/{repo_name}" if repo_owner and repo_name else None
+        
+        # Try to get current repo data first
+        if repo_key and repo_key in repositories:
+            repo_data = repositories[repo_key]
+            display_name = repo_key
+        else:
+            # Fallback to first repo (for backward compatibility)
+            repo_key = list(repositories.keys())[0]
+            repo_data = repositories[repo_key]
+            display_name = repo_key
 
         context_parts: List[str] = ["## REPOSITORY METRICS DATA\n"]
-        context_parts.append(f"Repository: {repo_name}\n")
+        context_parts.append(f"Repository: {display_name}\n")
 
         metrics = repo_data.get('metrics', {})
         if metrics:
@@ -890,11 +1097,11 @@ class RetrievalMixin:
         db = getattr(self, "db", None)
 
         if db is None:
-            # Multi-index mode → chronological queries not ƒsupported
+            # Multi-index mode → chronological queries not supported
             return None
 
-
-        results = self.db.search(query_embedding, top_k=100)
+        repo_filters = self._get_repo_filters()
+        results = self.db.search(query_embedding, top_k=100, filters=repo_filters)
 
         matching_entities = []
         for result in results:
@@ -929,15 +1136,21 @@ class RetrievalMixin:
         target_number = target['number']
 
         if entity_type == 'issue':
+            filters = {'issue_number': target_number}
+            if repo_filters:
+                filters.update(repo_filters)
             specific_results = self.db.search_by_metadata(
                 query_embedding,
-                filters={'issue_number': target_number},
+                filters=filters,
                 top_k=5
             )
         else:
+            filters = {'pr_number': target_number}
+            if repo_filters:
+                filters.update(repo_filters)
             specific_results = self.db.search_by_metadata(
                 query_embedding,
-                filters={'pr_number': target_number},
+                filters=filters,
                 top_k=5
             )
 
@@ -1076,65 +1289,76 @@ class RetrievalMixin:
         }
 
     def load_repository_metrics(self) -> Optional[Dict[str, Any]]:
-        # Allow environment override first (explicit path)
-        env_path = os.getenv("AGGREGATED_TECH_STACK_PATH")
-        if env_path:
-            env_file = Path(env_path)
-            if env_file.exists():
-                try:
-                    with open(env_file, 'r', encoding='utf-8') as f:
-                        metrics = json.load(f)
+        """
+        Load repository metrics/tech stack for the CURRENT repo.
+        Uses ONLY repo-specific files from the standard location.
+        No hardcoded paths, no fallbacks, no environment overrides.
+        
+        Location: DataProcessing/{owner}/{repo}/techstack.json
+        Repo info comes from chatbot attributes or runtime_state.json
+        
+        Returns None if repo-specific file not found.
+        """
+        # Get current repo info
+        repo_owner = getattr(self, 'repo_owner', None)
+        repo_name = getattr(self, 'repo_name', None)
+        
+        # Try to load from runtime_state.json if repo info not available
+        if not repo_owner or not repo_name:
+            try:
+                possible_state_files = [
+                    Path(__file__).resolve().parents[3] / "data" / "Admin" / "state" / "runtime_state.json",
+                    Path("../../data/Admin/state/runtime_state.json"),
+                    Path("data/Admin/state/runtime_state.json"),
+                    Path("backend/data/Admin/state/runtime_state.json"),
+                ]
+                
+                for state_file in possible_state_files:
+                    if state_file.exists():
+                        with open(state_file, 'r', encoding='utf-8') as f:
+                            state = json.load(f)
+                            curr_repo = state.get("curr_repo", {})
+                            repo_owner = curr_repo.get("owner") or repo_owner
+                            repo_name = curr_repo.get("name") or repo_name
+                            if repo_owner and repo_name:
+                                break
+            except Exception as e:
+                if self.verbose:
+                    print(f"Could not load repo from runtime_state.json: {e}")
+        
+        # PRIORITY 1: Repo-specific techstack.json file
+        if repo_owner and repo_name:
+            repo_specific_paths = [
+                Path(__file__).resolve().parents[3] / "data" / "DataProcessing" / repo_owner / repo_name / "techstack.json",
+                Path("../../data/DataProcessing") / repo_owner / repo_name / "techstack.json",
+                Path("data/DataProcessing") / repo_owner / repo_name / "techstack.json",
+                Path("backend/data/DataProcessing") / repo_owner / repo_name / "techstack.json",
+            ]
+            
+            for path in repo_specific_paths:
+                if path.exists():
+                    try:
+                        with open(path, 'r', encoding='utf-8') as f:
+                            metrics = json.load(f)
+                            # Wrap in expected format
+                            result = {
+                                'repositories': {f"{repo_owner}/{repo_name}": metrics},
+                                'summary': metrics  # Use repo-specific metrics as summary
+                            }
+                            if self.verbose:
+                                print(f"✅ Loaded repo-specific metrics from: {path}")
+                            return result
+                    except Exception as e:
                         if self.verbose:
-                            print(f"Loaded repository metrics from (env): {env_file}")
-                        return metrics
-                except Exception as e:
-                    if self.verbose:
-                        print(f"Error loading metrics from env path {env_file}: {e}")
-
-        possible_paths = [
-            Path("../../data/DataProcessing/aggregated_tech_stack_summary.json"),
-            Path("data/DataProcessing/aggregated_tech_stack_summary.json"),
-            Path("DataProcessing/aggregated_tech_stack_summary.json"),
-            Path("aggregated_tech_stack_summary.json"),
-        ]
-
-        # Try common relative locations first
-        for path in possible_paths:
-            if path.exists():
-                try:
-                    with open(path, 'r', encoding='utf-8') as f:
-                        metrics = json.load(f)
-                        if self.verbose:
-                            print(f"Loaded repository metrics from: {path}")
-                        return metrics
-                except Exception as e:
-                    if self.verbose:
-                        print(f"Error loading metrics from {path}: {e}")
-                    continue
-
-        # Fallback: search the repository for the file (repo-root rglob)
-        try:
-            repo_root = Path(__file__).resolve().parents[3]
-            if self.verbose:
-                print(f"Searching repository root for aggregated_tech_stack_summary.json: {repo_root}")
-            for found in repo_root.rglob("aggregated_tech_stack_summary.json"):
-                try:
-                    with open(found, 'r', encoding='utf-8') as f:
-                        metrics = json.load(f)
-                        if self.verbose:
-                            print(f"Loaded repository metrics from: {found}")
-                        return metrics
-                except Exception as e:
-                    if self.verbose:
-                        print(f"Error loading metrics from {found}: {e}")
-                    continue
-        except Exception:
-            # Guard: if anything goes wrong during search, continue to return None
-            if self.verbose:
-                print("Repository-wide search failed for aggregated_tech_stack_summary.json")
-
+                            print(f"Error loading repo-specific metrics from {path}: {e}")
+                        continue
+        
+        # No fallbacks - only use repo-specific files from the standard location
         if self.verbose:
-            print("No repository metrics file found")
+            repo_display = f"{repo_owner}/{repo_name}" if repo_owner and repo_name else "unknown"
+            print(f"❌ No repository metrics file found for repo: {repo_display}")
+            print(f"   Expected location: data/DataProcessing/{repo_owner}/{repo_name}/techstack.json")
+            print(f"   Run data processing to generate this file for the current repo.")
 
         return None
 
