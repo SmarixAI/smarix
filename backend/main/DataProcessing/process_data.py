@@ -18,8 +18,13 @@ import re
 
 
 STATE_FILE = Path(
-    Path(__file__).resolve().parents[2] / "data" / "Admin" / "state" / "runtime_state.json"
+    Path(__file__).resolve().parents[2]
+    / "data"
+    / "Admin"
+    / "state"
+    / "runtime_state.json"
 )
+
 
 def load_current_repo_from_state():
     if not STATE_FILE.exists():
@@ -41,8 +46,6 @@ def load_current_repo_from_state():
     return owner, name
 
 
-
-
 # Ensure the backend package directory is on sys.path
 _backend_dir = Path(__file__).resolve().parents[2]
 _backend_dir_str = str(_backend_dir)
@@ -59,95 +62,104 @@ class GraphExtractor:
     Prepares data for Neo4j/NetworkX.
     Supports AST for Python/JS and Regex Fallback for C/C++/Java/Go/Rust/Ruby/PHP etc.
     """
-    
+
     # Regex patterns for fallback extraction
     # Format: "language": {"function": r"pattern", "class": r"pattern", "import": r"pattern"}
     LANGUAGE_REGEX = {
         # C-family (C, C++, Java, C#, Dart, Kotlin, Scala, Swift)
         "c": {
-            "function": r'(?:[\w\[\]\*]+\s+)+(\w+)\s*\([^)]*\)\s*\{',
-            "class": r'(?:struct|enum)\s+(\w+)',
-            "import": r'#include\s*[<"]([^>"]+)[>"]'
+            "function": r"(?:[\w\[\]\*]+\s+)+(\w+)\s*\([^)]*\)\s*\{",
+            "class": r"(?:struct|enum)\s+(\w+)",
+            "import": r'#include\s*[<"]([^>"]+)[>"]',
         },
         "cpp": {
-            "function": r'(?:[\w\[\]\*:<>]+\s+)+(\w+)\s*\([^)]*\)\s*\{', 
-            "class": r'(?:class|struct|enum|namespace)\s+(\w+)',
-            "import": r'#include\s*[<"]([^>"]+)[>"]'
+            "function": r"(?:[\w\[\]\*:<>]+\s+)+(\w+)\s*\([^)]*\)\s*\{",
+            "class": r"(?:class|struct|enum|namespace)\s+(\w+)",
+            "import": r'#include\s*[<"]([^>"]+)[>"]',
         },
         "java": {
-            "function": r'(?:public|protected|private|static|\s)+[\w\[\]<>]+\s+(\w+)\s*\([^)]*\)\s*(?:throws\s+[\w,\s]+)?\s*\{',
-            "class": r'(?:class|interface|enum)\s+(\w+)',
-            "import": r'import\s+([\w\.]+);'
+            "function": r"(?:public|protected|private|static|\s)+[\w\[\]<>]+\s+(\w+)\s*\([^)]*\)\s*(?:throws\s+[\w,\s]+)?\s*\{",
+            "class": r"(?:class|interface|enum)\s+(\w+)",
+            "import": r"import\s+([\w\.]+);",
         },
         "csharp": {
-            "function": r'(?:public|protected|private|static|virtual|override|\s)+[\w\[\]<>]+\s+(\w+)\s*\([^)]*\)\s*\{',
-            "class": r'(?:class|interface|struct|enum)\s+(\w+)',
-            "import": r'using\s+([\w\.]+);'
+            "function": r"(?:public|protected|private|static|virtual|override|\s)+[\w\[\]<>]+\s+(\w+)\s*\([^)]*\)\s*\{",
+            "class": r"(?:class|interface|struct|enum)\s+(\w+)",
+            "import": r"using\s+([\w\.]+);",
         },
         "dart": {
-            "function": r'(?:[\w\[\]<>]+\s+)?(\w+)\s*\([^)]*\)\s*\{',
-            "class": r'(?:class|mixin|enum)\s+(\w+)',
-            "import": r"import\s+['\"]([^'\"]+)['\"];"
+            "function": r"(?:[\w\[\]<>]+\s+)?(\w+)\s*\([^)]*\)\s*\{",
+            "class": r"(?:class|mixin|enum)\s+(\w+)",
+            "import": r"import\s+['\"]([^'\"]+)['\"];",
         },
-        
         # Modern Compiled (Go, Rust)
         "go": {
-            "function": r'func\s+(?:\([^)]+\)\s+)?(\w+)\s*\(', # Matches func Name() and func (r *Receiver) Name()
-            "class": r'type\s+(\w+)\s+(?:struct|interface)',
-            "import": r'import\s+(?:\(([^)]+)\)|"([^"]+)")' # Handles block and single imports
+            "function": r"func\s+(?:\([^)]+\)\s+)?(\w+)\s*\(",  # Matches func Name() and func (r *Receiver) Name()
+            "class": r"type\s+(\w+)\s+(?:struct|interface)",
+            "import": r'import\s+(?:\(([^)]+)\)|"([^"]+)")',  # Handles block and single imports
         },
         "rust": {
-            "function": r'fn\s+(\w+)\s*(?:<[^>]+>)?\s*\(',
-            "class": r'(?:struct|enum|trait|impl)\s+(\w+)',
-            "import": r'use\s+([\w:{}]+);'
+            "function": r"fn\s+(\w+)\s*(?:<[^>]+>)?\s*\(",
+            "class": r"(?:struct|enum|trait|impl)\s+(\w+)",
+            "import": r"use\s+([\w:{}]+);",
         },
-
         # Scripting (Ruby, PHP, Shell)
         "ruby": {
-            "function": r'def\s+(\w+)',
-            "class": r'(?:class|module)\s+(\w+)',
-            "import": r'require\s+[\'"]([^\'"]+)[\'"]'
+            "function": r"def\s+(\w+)",
+            "class": r"(?:class|module)\s+(\w+)",
+            "import": r'require\s+[\'"]([^\'"]+)[\'"]',
         },
         "php": {
-            "function": r'function\s+(\w+)\s*\(',
-            "class": r'(?:class|interface|trait)\s+(\w+)',
-            "import": r'(?:require|include)(?:_once)?\s*[\'"]([^\'"]+)[\'"]'
+            "function": r"function\s+(\w+)\s*\(",
+            "class": r"(?:class|interface|trait)\s+(\w+)",
+            "import": r'(?:require|include)(?:_once)?\s*[\'"]([^\'"]+)[\'"]',
         },
         "shell": {
-            "function": r'(\w+)\s*\(\)\s*\{', # function_name() {
+            "function": r"(\w+)\s*\(\)\s*\{",  # function_name() {
             "class": None,
-            "import": r'source\s+([^\s]+)'
-        }
+            "import": r"source\s+([^\s]+)",
+        },
     }
 
     def __init__(self, repo_name):
         self.repo_name = repo_name
-        self.nodes = {} 
-        self.edges = [] 
+        self.nodes = {}
+        self.edges = []
 
     def _make_id(self, _type, name, parent_file):
         """Create deterministic Node IDs"""
         clean_path = parent_file.replace("/", "_").replace(".", "_")
         return f"{self.repo_name}::{clean_path}::{_type}::{name}"
 
-    def process_analysis(self, file_path: str, analysis: Dict[str, Any], content: str = ""):
+    def process_analysis(
+        self, file_path: str, analysis: Dict[str, Any], content: str = ""
+    ):
         """Convert analysis into Nodes and Edges. Uses AST if available, else Regex."""
-        
-        if not analysis: analysis = {}
-        
+
+        if not analysis:
+            analysis = {}
+
         # 1. Always create the File Node
         file_id = f"{self.repo_name}::{file_path}"
-        lang = analysis.get('language') or 'text'
-        
+        lang = analysis.get("language") or "text"
+
         self.nodes[file_id] = {
             "id": file_id,
             "label": "File",
-            "properties": {"name": Path(file_path).name, "path": file_path, "lang": lang}
+            "properties": {
+                "name": Path(file_path).name,
+                "path": file_path,
+                "lang": lang,
+            },
         }
 
         # 2. Check for Rich AST Data (Python/JS)
-        has_ast = (isinstance(analysis.get('classes'), list) and len(analysis['classes']) > 0) or \
-                  (isinstance(analysis.get('functions'), list) and len(analysis['functions']) > 0)
+        has_ast = (
+            isinstance(analysis.get("classes"), list) and len(analysis["classes"]) > 0
+        ) or (
+            isinstance(analysis.get("functions"), list)
+            and len(analysis["functions"]) > 0
+        )
 
         if has_ast:
             self._process_ast(file_path, file_id, analysis)
@@ -155,75 +167,100 @@ class GraphExtractor:
             # 3. Fallback: Use Regex for other languages
             # Normalize lang string (e.g., "c++" -> "cpp")
             norm_lang = lang.lower()
-            if norm_lang == "c++": norm_lang = "cpp"
-            
+            if norm_lang == "c++":
+                norm_lang = "cpp"
+
             self._process_generic(file_path, file_id, content, norm_lang)
 
     def _process_ast(self, file_path, file_id, analysis):
         """Handle rich data from Python/JS analyzers"""
         # Extract Classes
-        for cls in analysis.get('classes', []):
-            class_id = self._make_id("CLASS", cls['name'], file_path)
+        for cls in analysis.get("classes", []):
+            class_id = self._make_id("CLASS", cls["name"], file_path)
             self.nodes[class_id] = {
-                "id": class_id, "label": "Class",
-                "properties": {"name": cls['name'], "lineno": cls.get('lineno')}
+                "id": class_id,
+                "label": "Class",
+                "properties": {"name": cls["name"], "lineno": cls.get("lineno")},
             }
-            self.edges.append({"source": class_id, "target": file_id, "type": "DEFINED_IN"})
-            
-            for base in cls.get('bases', []):
-                base_id = self._make_id("CLASS", base, "EXTERNAL") 
-                self.edges.append({"source": class_id, "target": base_id, "type": "INHERITS"})
+            self.edges.append(
+                {"source": class_id, "target": file_id, "type": "DEFINED_IN"}
+            )
+
+            for base in cls.get("bases", []):
+                base_id = self._make_id("CLASS", base, "EXTERNAL")
+                self.edges.append(
+                    {"source": class_id, "target": base_id, "type": "INHERITS"}
+                )
 
         # Extract Functions
-        for func in analysis.get('functions', []):
-            func_id = self._make_id("FUNCTION", func['name'], file_path)
+        for func in analysis.get("functions", []):
+            func_id = self._make_id("FUNCTION", func["name"], file_path)
             self.nodes[func_id] = {
-                "id": func_id, "label": "Function",
-                "properties": {"name": func['name'], "args": func.get('args', []), "lineno": func.get('lineno')}
+                "id": func_id,
+                "label": "Function",
+                "properties": {
+                    "name": func["name"],
+                    "args": func.get("args", []),
+                    "lineno": func.get("lineno"),
+                },
             }
-            self.edges.append({"source": func_id, "target": file_id, "type": "DEFINED_IN"})
+            self.edges.append(
+                {"source": func_id, "target": file_id, "type": "DEFINED_IN"}
+            )
 
-            for call in func.get('calls', []):
-                call_target_id = f"CONCEPT::{call}" 
-                self.edges.append({"source": func_id, "target": call_target_id, "type": "CALLS"})
+            for call in func.get("calls", []):
+                call_target_id = f"CONCEPT::{call}"
+                self.edges.append(
+                    {"source": func_id, "target": call_target_id, "type": "CALLS"}
+                )
 
         # Extract Imports
-        for imp in analysis.get('imports', []):
-            module_name = imp.get('module') if isinstance(imp, dict) else imp
+        for imp in analysis.get("imports", []):
+            module_name = imp.get("module") if isinstance(imp, dict) else imp
             if module_name:
                 mod_id = f"MODULE::{module_name}"
-                self.edges.append({"source": file_id, "target": mod_id, "type": "IMPORTS"})
+                self.edges.append(
+                    {"source": file_id, "target": mod_id, "type": "IMPORTS"}
+                )
 
     def _process_generic(self, file_path, file_id, content, lang):
         """Fallback: Regex extraction for various languages"""
         import re
-        
+
         # Get patterns for this language, or default to empty
         patterns = self.LANGUAGE_REGEX.get(lang)
-        
+
         # If language not found, try to map based on extension logic or defaults
         if not patterns:
             # Simple fallback for C-like languages if exact match missing
-            if lang in ['h', 'hpp', 'cxx', 'cc']: patterns = self.LANGUAGE_REGEX['cpp']
-            elif lang in ['kt', 'kotlin']: patterns = self.LANGUAGE_REGEX['java'] # Close enough
-            elif lang in ['ts', 'tsx', 'js', 'jsx']: patterns = self.LANGUAGE_REGEX['dart'] # Close enough structure
-            else: return # Unknown language, skip extraction
+            if lang in ["h", "hpp", "cxx", "cc"]:
+                patterns = self.LANGUAGE_REGEX["cpp"]
+            elif lang in ["kt", "kotlin"]:
+                patterns = self.LANGUAGE_REGEX["java"]  # Close enough
+            elif lang in ["ts", "tsx", "js", "jsx"]:
+                patterns = self.LANGUAGE_REGEX["dart"]  # Close enough structure
+            else:
+                return  # Unknown language, skip extraction
 
         # 1. Extract Functions
         if patterns.get("function"):
             for match in re.finditer(patterns["function"], content, re.MULTILINE):
                 # Some patterns return groups, we want the name group (usually last one)
                 func_name = match.group(1) if match.lastindex >= 1 else match.group(0)
-                
+
                 # Filter common keywords to avoid false positives
-                if func_name in ['if', 'for', 'while', 'switch', 'catch', 'return']: continue
-                
+                if func_name in ["if", "for", "while", "switch", "catch", "return"]:
+                    continue
+
                 func_id = self._make_id("FUNCTION", func_name, file_path)
                 self.nodes[func_id] = {
-                    "id": func_id, "label": "Function",
-                    "properties": {"name": func_name, "lang": lang}
+                    "id": func_id,
+                    "label": "Function",
+                    "properties": {"name": func_name, "lang": lang},
                 }
-                self.edges.append({"source": func_id, "target": file_id, "type": "DEFINED_IN"})
+                self.edges.append(
+                    {"source": func_id, "target": file_id, "type": "DEFINED_IN"}
+                )
 
         # 2. Extract Classes/Structs
         if patterns.get("class"):
@@ -231,28 +268,103 @@ class GraphExtractor:
                 class_name = match.group(1)
                 class_id = self._make_id("CLASS", class_name, file_path)
                 self.nodes[class_id] = {
-                    "id": class_id, "label": "Class",
-                    "properties": {"name": class_name, "lang": lang}
+                    "id": class_id,
+                    "label": "Class",
+                    "properties": {"name": class_name, "lang": lang},
                 }
-                self.edges.append({"source": class_id, "target": file_id, "type": "DEFINED_IN"})
+                self.edges.append(
+                    {"source": class_id, "target": file_id, "type": "DEFINED_IN"}
+                )
 
         # 3. Extract Imports/Includes
         if patterns.get("import"):
             for match in re.finditer(patterns["import"], content, re.MULTILINE):
                 # Handles Go block imports slightly differently, but generally group 1 or 2 is the name
-                module_name = match.group(1) if match.group(1) else match.group(2) if match.lastindex >= 2 else None
-                
+                module_name = (
+                    match.group(1)
+                    if match.group(1)
+                    else match.group(2) if match.lastindex >= 2 else None
+                )
+
                 if module_name:
                     # Clean up quotes/newlines
-                    module_name = module_name.strip().strip('"').strip("'").replace('\n', '')
+                    module_name = (
+                        module_name.strip().strip('"').strip("'").replace("\n", "")
+                    )
                     mod_id = f"MODULE::{module_name}"
-                    self.edges.append({"source": file_id, "target": mod_id, "type": "IMPORTS"})
+                    self.edges.append(
+                        {"source": file_id, "target": mod_id, "type": "IMPORTS"}
+                    )
 
     def get_graph_data(self):
-        return {
-            "nodes": list(self.nodes.values()),
-            "edges": self.edges
+        return {"nodes": list(self.nodes.values()), "edges": self.edges}
+
+    def process_pr(self, pr: Dict[str, Any]):
+        """Add PR nodes and link them to modified files and authors"""
+        if not pr: return
+        
+        pr_number = pr.get("number")
+        if not pr_number: return
+        
+        # Create PR Node
+        pr_id = f"{self.repo_name}::PR::{pr_number}"
+        self.nodes[pr_id] = {
+            "id": pr_id,
+            "label": "PullRequest",
+            "properties": {
+                "number": pr_number,
+                "title": pr.get("title", ""),
+                "state": pr.get("state", ""),
+                "merged": pr.get("merged", False) or pr.get("is_merged", False)
+            }
         }
+        
+        # Link PR -> Files (MODIFIES edge)
+        files = pr.get("files", []) or pr.get("changed_files", [])
+        for file in files:
+            filename = file.get("filename") if isinstance(file, dict) else file
+            if filename:
+                file_id = f"{self.repo_name}::{filename}"
+                self.edges.append({"source": pr_id, "target": file_id, "type": "MODIFIES"})
+
+        # Link PR -> User (CREATED_BY edge)
+        user = pr.get("user", {})
+        if user and isinstance(user, dict):
+            author_name = user.get("login")
+            if author_name:
+                author_id = f"User::{author_name}"
+                if author_id not in self.nodes:
+                    self.nodes[author_id] = {
+                        "id": author_id, "label": "User", "properties": {"name": author_name}
+                    }
+                self.edges.append({"source": pr_id, "target": author_id, "type": "CREATED_BY"})
+
+    def process_issue(self, issue: Dict[str, Any], linked_prs: List[str] = None):
+        """Add Issue nodes and link to PRs"""
+        if not issue: return
+        
+        issue_number = issue.get("number")
+        if not issue_number: return
+        
+        # Create Issue Node
+        issue_id = f"{self.repo_name}::Issue::{issue_number}"
+        self.nodes[issue_id] = {
+            "id": issue_id,
+            "label": "Issue",
+            "properties": {
+                "number": issue_number,
+                "title": issue.get("title", ""),
+                "state": issue.get("state", "")
+            }
+        }
+        
+        # Link Issue -> PR (CLOSES edge)
+        if linked_prs:
+            for pr_num_str in linked_prs:
+                clean_num = str(pr_num_str).replace("#", "").strip()
+                if clean_num:
+                    pr_id = f"{self.repo_name}::PR::{clean_num}"
+                    self.edges.append({"source": pr_id, "target": issue_id, "type": "CLOSES"})
 
 class CodeAnalyzer:
     """
@@ -270,7 +382,6 @@ class CodeAnalyzer:
         "scala": [".scala"],
         "groovy": [".groovy"],
         "groovy-xml": [".gvy"],
-
         # C-family
         "c": [".c", ".h"],
         "cpp": [".cpp", ".cc", ".cxx", ".c++", ".hpp", ".hh", ".hxx"],
@@ -279,7 +390,6 @@ class CodeAnalyzer:
         "swift": [".swift"],
         "rust": [".rs"],
         "go": [".go"],
-
         # Web / markup / styles
         "html": [".html", ".htm"],
         "css": [".css", ".scss", ".sass", ".less", ".styl"],
@@ -287,7 +397,6 @@ class CodeAnalyzer:
         "json": [".json"],
         "yaml": [".yml", ".yaml"],
         "markdown": [".md", ".markdown"],
-
         # Scripting / shells
         "shell": [".sh", ".bash", ".zsh", ".ksh"],
         "powershell": [".ps1", ".psm1"],
@@ -295,7 +404,6 @@ class CodeAnalyzer:
         "ruby": [".rb"],
         "php": [".php"],
         "r": [".r", ".R"],
-
         # Functional / less common
         "haskell": [".hs"],
         "ocaml": [".ml", ".mli"],
@@ -303,16 +411,13 @@ class CodeAnalyzer:
         "clojure": [".clj", ".cljs", ".cljc"],
         "elixir": [".ex", ".exs"],
         "erlang": [".erl", ".hrl"],
-
         # Data / numeric / domain-specific
         "matlab": [".m"],
         "fortran": [".f90", ".f", ".f95"],
         "julia": [".jl"],
-
         # Mobile / Dart
         "dart": [".dart"],
         "flutter": [".dart"],
-
         # Build / configuration / misc
         "dockerfile": ["dockerfile", ".dockerfile"],
         "sql": [".sql"],
@@ -330,25 +435,38 @@ class CodeAnalyzer:
 
     FRAMEWORK_PATTERNS = {
         # JavaScript / Frontend
-        "react": [r"from\s+[\'\"]react[\'\"]", r"ReactDOM\.render", r"\bcreateRoot\(", r"\buseState\b",
-                  r"\buseEffect\b", r"react-native"],
+        "react": [
+            r"from\s+[\'\"]react[\'\"]",
+            r"ReactDOM\.render",
+            r"\bcreateRoot\(",
+            r"\buseState\b",
+            r"\buseEffect\b",
+            r"react-native",
+        ],
         "react-native": [r"from\s+[\'\"]react-native[\'\"]", r"react-native"],
-        "vue": [r"from\s+[\'\"]vue[\'\"]", r"<template>", r"export\s+default\s+{", r"vue-router"],
+        "vue": [
+            r"from\s+[\'\"]vue[\'\"]",
+            r"<template>",
+            r"export\s+default\s+{",
+            r"vue-router",
+        ],
         "svelte": [r"<script\s+lang=", r"svelte", r"from\s+[\'\"]svelte[\'\"]"],
         "angular": [r"@angular/", r"@Component", r"@NgModule", r"bootstrapModule"],
         "ember": [r"ember", r"@ember/"],
         "backbone": [r"Backbone\.Model", r"Backbone\.View"],
-
         # Fullstack / Node
         "express": [r"require\([\'\"]express[\'\"]\)", r"express\(\)"],
         "koa": [r"require\([\'\"]koa[\'\"]\)", r"new\s+Koa\("],
         "hapi": [r"@hapi/"],
-
         # Static site / meta frameworks
-        "nextjs": [r"next(/|\\\w+)?", r"getStaticProps", r"getServerSideProps", r"next.config"],
+        "nextjs": [
+            r"next(/|\\\w+)?",
+            r"getStaticProps",
+            r"getServerSideProps",
+            r"next.config",
+        ],
         "nuxt": [r"nuxt", r"nuxt.config"],
         "gatsby": [r"gatsby-\w+", r"export\s+const\s+query"],
-
         # Python web frameworks
         "django": [r"from\s+django", r"import\s+django", r"Django"],
         "flask": [r"from\s+flask\s+import", r"Flask\("],
@@ -356,67 +474,68 @@ class CodeAnalyzer:
         "tornado": [r"tornado.web", r"tornado."],
         "bottle": [r"from\s+bottle\s+import", r"bottle\."],
         "aiohttp": [r"from\s+aiohttp", r"aiohttp\."],
-
         # Java frameworks
-        "spring": [r"@SpringBootApplication", r"@RestController", r"org\.springframework", r"SpringApplication.run"],
+        "spring": [
+            r"@SpringBootApplication",
+            r"@RestController",
+            r"org\.springframework",
+            r"SpringApplication.run",
+        ],
         "quarkus": [r"io\.quarkus", r"@ApplicationScoped"],
         "micronaut": [r"io\.micronaut", r"Micronaut"],
-
         # JVM / others
         "playframework": [r"play.mvc", r"@Singleton"],
         "vertx": [r"io\.vertx"],
-
         # PHP frameworks
         "laravel": [r"use\s+Illuminate\\", r"extends\s+Controller", r"artisan"],
         "symfony": [r"Symfony\\Component", r"bin/console"],
         "cakephp": [r"CakePHP", r"Configure::write"],
-
         # Ruby
-        "rails": [r"class\s+\w+\s+<\s+ApplicationController", r"Rails\.application", r"bundle exec rails"],
-
+        "rails": [
+            r"class\s+\w+\s+<\s+ApplicationController",
+            r"Rails\.application",
+            r"bundle exec rails",
+        ],
         # .NET
         "aspnet": [r"using\s+Microsoft\.AspNetCore", r"Startup\.cs", r"Program\.cs"],
-
         # Mobile
-        "flutter": [r"import\s+['\"]package:flutter\/", r"\bStatelessWidget\b", r"\bStatefulWidget\b", r"\brunApp\s*\(",
-                    r"\bMaterialApp\b", r"\bCupertinoApp\b"],
+        "flutter": [
+            r"import\s+['\"]package:flutter\/",
+            r"\bStatelessWidget\b",
+            r"\bStatefulWidget\b",
+            r"\brunApp\s*\(",
+            r"\bMaterialApp\b",
+            r"\bCupertinoApp\b",
+        ],
         "ionic": [r"@ionic/", r"ionic-angular"],
-
         # Go
         "gin": [r"github\.com\/gin-gonic\/gin", r"gin\.Default\("],
         "echo": [r"github\.com\/labstack\/echo", r"echo\.New\("],
         "beego": [r"github\.com\/astaxie\/beego"],
-
         # Rust
         "actix": [r"actix_web", r"actix::"],
         "rocket": [r"rocket::", r"#\s*\[launch\]"],
-
         # Databases / ORMs
         "sequelize": [r"sequelize", r"Sequelize\("],
         "typeorm": [r"from\s+[\'\"]typeorm[\'\"]", r"TypeORM"],
         "hibernate": [r"org\.hibernate", r"hibernate"],
-
         # Data / ML
         "tensorflow": [r"import\s+tensorflow", r"from\s+tensorflow", r"tf\."],
         "pytorch": [r"import\s+torch", r"from\s+torch"],
         "keras": [r"from\s+keras", r"import\s+keras"],
         "jax": [r"import\s+jax"],
-
         # Python data libs (useful to detect data projects)
         "pandas": [r"import\s+pandas", r"pd\.DataFrame"],
         "numpy": [r"import\s+numpy", r"np\.array"],
         "scikit-learn": [r"from\s+sklearn", r"import\s+sklearn"],
-
         # Testing / infra frameworks
         "pytest": [r"pytest", r"def\s+test_"],
         "jest": [r"jest", r"describe\(", r"test\("],
         "mocha": [r"mocha", r"describe\(", r"it\("],
         "junit": [r"@Test", r"org\.junit"],
-
         # Static site generators / CMS
         "wordpress": [r"wp-content", r"WordPress", r"wp-admin"],
         "ghost": [r"Ghost", r"ghost-cli"],
-
         # Misc / catch-alls
         "docker": [r"FROM\s+\w+", r"Dockerfile"],
         "kubernetes": [r"kind:\s*(Deployment|Service|Ingress)", r"apiVersion:.*k8s"],
@@ -426,14 +545,17 @@ class CodeAnalyzer:
 
     TOOL_PATTERNS = {
         # CI / CD
-        "github-actions": [".github/workflows/", "actions/setup-node", "actions/checkout"],
+        "github-actions": [
+            ".github/workflows/",
+            "actions/setup-node",
+            "actions/checkout",
+        ],
         "gitlab-ci": [".gitlab-ci.yml"],
         "azure-pipelines": ["azure-pipelines.yml"],
         "jenkins": ["Jenkinsfile"],
         "travis": [".travis.yml"],
         "circleci": [".circleci/config.yml"],
         "argo": ["argo", "argo-cd"],
-
         # Build / package managers
         "npm": ["package.json", "package-lock.json"],
         "yarn": ["yarn.lock", "yarn.lock"],
@@ -449,19 +571,22 @@ class CodeAnalyzer:
         "cargo": ["Cargo.toml"],
         "go-mod": ["go.mod"],
         "bundler": ["Gemfile", "Gemfile.lock"],
-
         # Containers / orchestration
         "docker": ["Dockerfile", "docker-compose.yml", ".dockerignore"],
-        "kubernetes": ["deployment.yaml", "service.yaml", "ingress.yaml", "k8s/", "kustomization.yaml"],
+        "kubernetes": [
+            "deployment.yaml",
+            "service.yaml",
+            "ingress.yaml",
+            "k8s/",
+            "kustomization.yaml",
+        ],
         "helm": ["Chart.yaml", "values.yaml"],
         "kustomize": ["kustomization.yaml"],
-
         # IaC
         "terraform": [".tf", ".tfvars"],
         "cloudformation": ["AWSTemplateFormatVersion", "Resources:", "cloudformation"],
         "serverless": ["serverless.yml", "serverless.yaml"],
         "packer": ["packer", "templates.json"],
-
         # Testing / linting / quality
         "pytest": ["pytest.ini", "conftest.py", "test_*.py"],
         "jest": ["jest.config.js", ".spec.js", ".test.js"],
@@ -470,32 +595,27 @@ class CodeAnalyzer:
         "eslint": [".eslintrc", ".eslintrc.js", ".eslintrc.json"],
         "tslint": ["tslint.json"],
         "stylelint": [".stylelintrc"],
-
         # Bundlers / transpilers / tooling
         "webpack": ["webpack.config.js"],
         "rollup": ["rollup.config.js"],
         "babel": [".babelrc", "babel.config.js"],
         "parcel": ["parcel", "parcel.config.js"],
-
         # Infra / orchestration / cloud tools
         "ansible": ["playbook.yml", "ansible.cfg", "roles/"],
         "helm": ["Chart.yaml"],
         "istio": ["istio", "istioctl"],
         "prometheus": ["prometheus.yml", "prometheus"],
         "grafana": ["grafana", "grafana.ini"],
-
         # Package managers / lockfiles (repeated intentionally to capture whichever is present)
         "npm": ["package.json"],
         "yarn": ["yarn.lock"],
         "pnpm": ["pnpm-lock.yaml"],
         "pip": ["requirements.txt", "setup.py", "pyproject.toml"],
         "poetry": ["poetry.lock"],
-
         # Mobile / SDK tools
         "flutter": ["pubspec.yaml", ".flutter-plugins"],
         "android-gradle": ["gradlew", "gradlew.bat", "android", "app/build.gradle"],
         "ios-cocoapods": ["Podfile", "Podfile.lock"],
-
         # Misc
         "make": ["Makefile"],
         "cmake": ["CMakeLists.txt"],
@@ -580,7 +700,7 @@ class CodeAnalyzer:
 
         in_multiline = False
         multiline_start_tokens = ('"""', "'''", "/*")
-        multiline_end_map = {'"""': '"""', "'''": "'''", "/*": '*/'}
+        multiline_end_map = {'"""': '"""', "'''": "'''", "/*": "*/"}
 
         # We attempt a robust toggle: if a line contains a start token without end token, toggle.
         for line in lines:
@@ -591,7 +711,11 @@ class CodeAnalyzer:
             # Check for inline multiline start+end on same line
             inline_multistart = None
             for t in multiline_start_tokens:
-                if t in stripped and multiline_end_map[t] in stripped and stripped.index(t) < stripped.rindex(multiline_end_map[t]):
+                if (
+                    t in stripped
+                    and multiline_end_map[t] in stripped
+                    and stripped.index(t) < stripped.rindex(multiline_end_map[t])
+                ):
                     # start and end on same line — count as comment line but do not toggle
                     comments += 1
                     inline_multistart = t
@@ -604,7 +728,9 @@ class CodeAnalyzer:
             for t in multiline_start_tokens:
                 if t in stripped and multiline_end_map[t] not in stripped:
                     # start of multiline comment
-                    in_multiline = not in_multiline if not in_multiline else in_multiline
+                    in_multiline = (
+                        not in_multiline if not in_multiline else in_multiline
+                    )
                     comments += 1
                     started = True
                     break
@@ -640,7 +766,9 @@ class CodeAnalyzer:
             "blank": blank,
         }
 
-    def count_functions_and_classes(self, content: str, language: str) -> Dict[str, int]:
+    def count_functions_and_classes(
+        self, content: str, language: str
+    ) -> Dict[str, int]:
         """Count functions and classes in code (simple regex heuristics)"""
         functions = 0
         classes = 0
@@ -734,7 +862,9 @@ class CodeAnalyzer:
             # - Nesting levels (count of indentation)
             non_empty_lines = [line for line in content.splitlines() if line.strip()]
             if non_empty_lines:
-                nesting_level = max(len(line) - len(line.lstrip()) for line in non_empty_lines)
+                nesting_level = max(
+                    len(line) - len(line.lstrip()) for line in non_empty_lines
+                )
             else:
                 nesting_level = 0
 
@@ -757,8 +887,12 @@ class CodeAnalyzer:
             self.function_metrics["total_functions"] += func_class_metrics["functions"]
             self.function_metrics["total_classes"] += func_class_metrics["classes"]
             if language:
-                self.function_metrics["functions_by_language"][language] += func_class_metrics["functions"]
-                self.function_metrics["classes_by_language"][language] += func_class_metrics["classes"]
+                self.function_metrics["functions_by_language"][
+                    language
+                ] += func_class_metrics["functions"]
+                self.function_metrics["classes_by_language"][
+                    language
+                ] += func_class_metrics["classes"]
 
             for fw in frameworks:
                 self.metrics["frameworks"][fw] += 1
@@ -989,7 +1123,9 @@ class DataChunker:
         self.code_analyzer = CodeAnalyzer()  # Initialize code analyzer
         self.graph_extractor = GraphExtractor(repo_name)
 
-    def generate_chunk_id(self, data: Dict[str, Any], chunk_type: str, index: int) -> str:
+    def generate_chunk_id(
+        self, data: Dict[str, Any], chunk_type: str, index: int
+    ) -> str:
         """Generate deterministic, collision-resistant chunk IDs"""
         try:
             # Use stable serialization for hashing
@@ -1244,7 +1380,9 @@ class DataChunker:
 
         return tech_stack
 
-    def create_raw_data_reference(self, data: Dict[str, Any], source: str, repo_name: str) -> Dict[str, Any]:
+    def create_raw_data_reference(
+        self, data: Dict[str, Any], source: str, repo_name: str
+    ) -> Dict[str, Any]:
         """
         Create comprehensive raw data reference for edge case fallback
         """
@@ -1280,53 +1418,59 @@ class DataChunker:
             "search_hints": {"text": json.dumps(data_summary), "keywords": []},
         }
 
-    def chunk_git_data(self, data: Dict[str, Any], reponame: str) -> Tuple[
-        List[Dict[str, Any]], Dict[str, Set[str]], Dict[str, Any]]:
+    def chunk_git_data(
+        self, data: Dict[str, Any], reponame: str
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, Set[str]], Dict[str, Any]]:
         """Chunk Git data with enhanced metadata, entity extraction, bidirectional linking, and code analysis"""
 
         chunks = []
         entities = self.extract_git_entities(data)
         techstack = self.analyze_repository_code(data)
 
-        self.git_keywords.update(entities['keywords'])
+        self.git_keywords.update(entities["keywords"])
 
         # Repository overview chunk
         repo_overview = {
-            'chunk_id': f"{reponame}_overview",
-            'type': 'repository_overview',
-            'source': 'git',
-            'repo_name': reponame,
-            'retrieval_priority': 0,
-            'techstack': techstack,
-            'summary': {
-                'total_issues': len(data.get('issues', [])),
-                'total_prs': len(data.get('prs', [])),
-                'total_commits': len(data.get('commits', [])),
-                'total_code_files': len(data.get('code_files', [])),
-                'total_documentation': len(data.get('documentation', [])),
-                'total_workflows': len(data.get('workflows', [])),
-                'entities_summary': {
-                    'unique_authors': len(entities['authors']),
-                    'unique_issues': len(entities['issue_numbers']),
-                    'unique_prs': len(entities['pr_numbers']),
-                    'unique_commits': len(entities['commit_shas']),
-                    'unique_files': len(entities['file_paths'])
-                }
+            "chunk_id": f"{reponame}_overview",
+            "type": "repository_overview",
+            "source": "git",
+            "repo_name": reponame,
+            "retrieval_priority": 0,
+            "techstack": techstack,
+            "summary": {
+                "total_issues": len(data.get("issues", [])),
+                "total_prs": len(data.get("prs", [])),
+                "total_commits": len(data.get("commits", [])),
+                "total_code_files": len(data.get("code_files", [])),
+                "total_documentation": len(data.get("documentation", [])),
+                "total_workflows": len(data.get("workflows", [])),
+                "entities_summary": {
+                    "unique_authors": len(entities["authors"]),
+                    "unique_issues": len(entities["issue_numbers"]),
+                    "unique_prs": len(entities["pr_numbers"]),
+                    "unique_commits": len(entities["commit_shas"]),
+                    "unique_files": len(entities["file_paths"]),
+                },
             },
-            'search_hints': {
-                'text': f"{reponame} repository overview tech stack languages frameworks tools structure metrics",
-                'keywords': ['overview', 'summary', 'tech', 'stack', 'structure', 'metrics', 'statistics']
+            "search_hints": {
+                "text": f"{reponame} repository overview tech stack languages frameworks tools structure metrics",
+                "keywords": [
+                    "overview",
+                    "summary",
+                    "tech",
+                    "stack",
+                    "structure",
+                    "metrics",
+                    "statistics",
+                ],
             },
-            'raw_data': {
-                'repo_name': reponame,
-                'techstack': techstack
-            }
+            "raw_data": {"repo_name": reponame, "techstack": techstack},
         }
         chunks.append(repo_overview)
-        self.chunk_registry[repo_overview['chunk_id']] = repo_overview
+        self.chunk_registry[repo_overview["chunk_id"]] = repo_overview
 
         # CHUNK ISSUES - ONE CHUNK PER ISSUE
-        issues = data.get('issues', [])
+        issues = data.get("issues", [])
         print(f"   Processing {len(issues)} issues...")
 
         for idx, issue in enumerate(issues):
@@ -1337,90 +1481,103 @@ class DataChunker:
 
             # Extract comments
             comments = []
-            if 'comments' in issue and isinstance(issue['comments'], list):
+            if "comments" in issue and isinstance(issue["comments"], list):
                 comments = [
                     {
-                        'author': c.get('user', {}).get('login') if isinstance(c.get('user'), dict) else None,
-                        'body': c.get('body', ''),
-                        'created_at': c.get('created_at', ''),
-                        'updated_at': c.get('updated_at', '')
+                        "author": (
+                            c.get("user", {}).get("login")
+                            if isinstance(c.get("user"), dict)
+                            else None
+                        ),
+                        "body": c.get("body", ""),
+                        "created_at": c.get("created_at", ""),
+                        "updated_at": c.get("updated_at", ""),
                     }
-                    for c in issue['comments']
+                    for c in issue["comments"]
                     if isinstance(c, dict)
                 ]
 
             # Bidirectional linking
-            linked_prs = issue.get('linked_prs', [])
-            is_truly_resolved = issue.get('is_truly_resolved', False)
-            resolution_status = issue.get('resolution_status', 'unknown')
-            body_text = issue.get('body', '') or ''
+            linked_prs = issue.get("linked_prs", [])
+            is_truly_resolved = issue.get("is_truly_resolved", False)
+            resolution_status = issue.get("resolution_status", "unknown")
+            body_text = issue.get("body", "") or ""
 
             # Extract labels properly
             labels = []
-            if 'labels' in issue:
-                if isinstance(issue['labels'], list):
+            if "labels" in issue:
+                if isinstance(issue["labels"], list):
                     labels = [
-                        l.get('name') if isinstance(l, dict) else str(l)
-                        for l in issue['labels']
+                        l.get("name") if isinstance(l, dict) else str(l)
+                        for l in issue["labels"]
                         if l
                     ]
 
             # Extract assignees properly
             assignees = []
-            if 'assignees' in issue:
-                if isinstance(issue['assignees'], list):
+            if "assignees" in issue:
+                if isinstance(issue["assignees"], list):
                     assignees = [
-                        a.get('login') if isinstance(a, dict) else str(a)
-                        for a in issue['assignees']
+                        a.get("login") if isinstance(a, dict) else str(a)
+                        for a in issue["assignees"]
                         if a
                     ]
 
             chunk = {
-                'chunk_id': chunk_id,
-                'type': 'issue',
-                'source': 'git',
-                'repo_name': reponame,
-                'retrieval_priority': 1,
-                'entities': {
-                    'issue_number': issue.get('number'),
-                    'author': issue.get('user', {}).get('login') if isinstance(issue.get('user'), dict) else None,
-                    'labels': labels,
-                    'assignees': assignees,
-                    'milestone': issue.get('milestone', {}).get('title') if isinstance(issue.get('milestone'),
-                                                                                       dict) else None,
-                    'linked_prs': linked_prs,
-                    'is_truly_resolved': is_truly_resolved,
-                    'resolution_status': resolution_status
+                "chunk_id": chunk_id,
+                "type": "issue",
+                "source": "git",
+                "repo_name": reponame,
+                "retrieval_priority": 1,
+                "entities": {
+                    "issue_number": issue.get("number"),
+                    "author": (
+                        issue.get("user", {}).get("login")
+                        if isinstance(issue.get("user"), dict)
+                        else None
+                    ),
+                    "labels": labels,
+                    "assignees": assignees,
+                    "milestone": (
+                        issue.get("milestone", {}).get("title")
+                        if isinstance(issue.get("milestone"), dict)
+                        else None
+                    ),
+                    "linked_prs": linked_prs,
+                    "is_truly_resolved": is_truly_resolved,
+                    "resolution_status": resolution_status,
                 },
-                'temporal': {
-                    'created_at': issue.get('created_at'),
-                    'updated_at': issue.get('updated_at'),
-                    'closed_at': issue.get('closed_at')
+                "temporal": {
+                    "created_at": issue.get("created_at"),
+                    "updated_at": issue.get("updated_at"),
+                    "closed_at": issue.get("closed_at"),
                 },
-                'content': {
-                    'title': issue.get('title', ''),
-                    'body': body_text,
-                    'state': issue.get('state', ''),
-                    'comments_count': len(comments),
-                    'labels': labels
+                "content": {
+                    "title": issue.get("title", ""),
+                    "body": body_text,
+                    "state": issue.get("state", ""),
+                    "comments_count": len(comments),
+                    "labels": labels,
                 },
-                'comments': comments,
-                'search_hints': {
-                    'text': f"{issue.get('title', '')} {body_text}",
-                    'keywords': list(entities['keywords']),
-                    'linked_prs': [f"#{pr}" for pr in linked_prs]
+                "comments": comments,
+                "search_hints": {
+                    "text": f"{issue.get('title', '')} {body_text}",
+                    "keywords": list(entities["keywords"]),
+                    "linked_prs": [f"#{pr}" for pr in linked_prs],
                 },
-                'raw_data': issue
+                "raw_data": issue,
             }
 
             chunks.append(chunk)
             self.chunk_registry[chunk_id] = chunk
 
-            if issue.get('number'):
+            if issue.get("number"):
                 self.entity_map[f"issue_{issue['number']}"].add(chunk_id)
 
+            self.graph_extractor.process_issue(issue, linked_prs)
+
         # CHUNK PRS - ONE CHUNK PER PR
-        prs = data.get('prs', [])
+        prs = data.get("prs", [])
         print(f"   Processing {len(prs)} PRs...")
 
         for idx, pr in enumerate(prs):
@@ -1431,29 +1588,37 @@ class DataChunker:
 
             # Extract reviews
             reviews = []
-            if 'review_comments' in pr and isinstance(pr['review_comments'], list):
+            if "review_comments" in pr and isinstance(pr["review_comments"], list):
                 reviews = [
                     {
-                        'author': r.get('user', {}).get('login') if isinstance(r.get('user'), dict) else None,
-                        'body': r.get('body', ''),
-                        'state': r.get('state', ''),
-                        'submitted_at': r.get('submitted_at', ''),
-                        'commit_id': r.get('commit_id', '')
+                        "author": (
+                            r.get("user", {}).get("login")
+                            if isinstance(r.get("user"), dict)
+                            else None
+                        ),
+                        "body": r.get("body", ""),
+                        "state": r.get("state", ""),
+                        "submitted_at": r.get("submitted_at", ""),
+                        "commit_id": r.get("commit_id", ""),
                     }
-                    for r in pr['review_comments']
+                    for r in pr["review_comments"]
                     if isinstance(r, dict)
                 ]
             # Also check for 'reviews' key (some APIs use this)
-            elif 'reviews' in pr and isinstance(pr['reviews'], list):
+            elif "reviews" in pr and isinstance(pr["reviews"], list):
                 reviews = [
                     {
-                        'author': r.get('user', {}).get('login') if isinstance(r.get('user'), dict) else None,
-                        'body': r.get('body', ''),
-                        'state': r.get('state', ''),
-                        'submitted_at': r.get('submitted_at', ''),
-                        'commit_id': r.get('commit_id', '')
+                        "author": (
+                            r.get("user", {}).get("login")
+                            if isinstance(r.get("user"), dict)
+                            else None
+                        ),
+                        "body": r.get("body", ""),
+                        "state": r.get("state", ""),
+                        "submitted_at": r.get("submitted_at", ""),
+                        "commit_id": r.get("commit_id", ""),
                     }
-                    for r in pr['reviews']
+                    for r in pr["reviews"]
                     if isinstance(r, dict)
                 ]
 
@@ -1461,118 +1626,141 @@ class DataChunker:
             file_changes = []
 
             # Check multiple possible keys for file changes
-            files_data = pr.get('changed_files') or pr.get('files') or []
+            files_data = pr.get("changed_files") or pr.get("files") or []
 
             if isinstance(files_data, list):
                 for f in files_data:
                     if isinstance(f, dict):
                         file_change = {
-                            'filename': f.get('filename', ''),
-                            'status': f.get('status', ''),  # added, modified, removed, renamed
-                            'additions': f.get('additions', 0),
-                            'deletions': f.get('deletions', 0),
-                            'changes': f.get('changes', 0),
-                            'patch': f.get('patch', ''),  # The actual diff/patch content
-                            'previous_filename': f.get('previous_filename', ''),  # For renamed files
-                            'blob_url': f.get('blob_url', ''),
-                            'raw_url': f.get('raw_url', ''),
-                            'contents_url': f.get('contents_url', '')
+                            "filename": f.get("filename", ""),
+                            "status": f.get(
+                                "status", ""
+                            ),  # added, modified, removed, renamed
+                            "additions": f.get("additions", 0),
+                            "deletions": f.get("deletions", 0),
+                            "changes": f.get("changes", 0),
+                            "patch": f.get(
+                                "patch", ""
+                            ),  # The actual diff/patch content
+                            "previous_filename": f.get(
+                                "previous_filename", ""
+                            ),  # For renamed files
+                            "blob_url": f.get("blob_url", ""),
+                            "raw_url": f.get("raw_url", ""),
+                            "contents_url": f.get("contents_url", ""),
                         }
 
                         # Only add if we have a filename
-                        if file_change['filename']:
+                        if file_change["filename"]:
                             file_changes.append(file_change)
 
             # Bidirectional linking
-            linked_issues = pr.get('linked_issues', [])
+            linked_issues = pr.get("linked_issues", [])
 
             # PROPERLY DETERMINE PR STATUS - merged vs closed
-            is_merged = pr.get('merged', False) or pr.get('is_merged', False)
-            state = pr.get('state', 'unknown')
+            is_merged = pr.get("merged", False) or pr.get("is_merged", False)
+            state = pr.get("state", "unknown")
 
             # Determine the actual PR status
             if is_merged:
-                pr_status = 'merged'
-            elif state == 'closed' and not is_merged:
-                pr_status = 'closed'
-            elif state == 'open':
-                pr_status = 'open'
+                pr_status = "merged"
+            elif state == "closed" and not is_merged:
+                pr_status = "closed"
+            elif state == "open":
+                pr_status = "open"
             else:
-                pr_status = state or 'unknown'
+                pr_status = state or "unknown"
 
-            body_text = pr.get('body', '') or ''
+            body_text = pr.get("body", "") or ""
 
             # Extract reviewers list
             reviewers = []
             for r in reviews:
-                if r.get('author'):
-                    reviewers.append(r['author'])
+                if r.get("author"):
+                    reviewers.append(r["author"])
             reviewers = list(set(reviewers))  # Remove duplicates
 
             # Get merge information
             merged_by = None
-            if pr.get('merged_by'):
-                if isinstance(pr['merged_by'], dict):
-                    merged_by = pr['merged_by'].get('login')
+            if pr.get("merged_by"):
+                if isinstance(pr["merged_by"], dict):
+                    merged_by = pr["merged_by"].get("login")
                 else:
-                    merged_by = str(pr['merged_by'])
+                    merged_by = str(pr["merged_by"])
 
             chunk = {
-                'chunk_id': chunk_id,
-                'type': 'pr',
-                'source': 'git',
-                'repo_name': reponame,
-                'retrieval_priority': 1,
-                'entities': {
-                    'pr_number': pr.get('number'),
-                    'author': pr.get('user', {}).get('login') if isinstance(pr.get('user'), dict) else None,
-                    'reviewers': reviewers,
-                    'merged_by': merged_by,
-                    'base_branch': pr.get('base', {}).get('ref') if isinstance(pr.get('base'), dict) else None,
-                    'head_branch': pr.get('head', {}).get('ref') if isinstance(pr.get('head'), dict) else None,
-                    'linked_issues': linked_issues,
-                    'pr_status': pr_status,
-                    'is_merged': is_merged
+                "chunk_id": chunk_id,
+                "type": "pr",
+                "source": "git",
+                "repo_name": reponame,
+                "retrieval_priority": 1,
+                "entities": {
+                    "pr_number": pr.get("number"),
+                    "author": (
+                        pr.get("user", {}).get("login")
+                        if isinstance(pr.get("user"), dict)
+                        else None
+                    ),
+                    "reviewers": reviewers,
+                    "merged_by": merged_by,
+                    "base_branch": (
+                        pr.get("base", {}).get("ref")
+                        if isinstance(pr.get("base"), dict)
+                        else None
+                    ),
+                    "head_branch": (
+                        pr.get("head", {}).get("ref")
+                        if isinstance(pr.get("head"), dict)
+                        else None
+                    ),
+                    "linked_issues": linked_issues,
+                    "pr_status": pr_status,
+                    "is_merged": is_merged,
                 },
-                'temporal': {
-                    'created_at': pr.get('created_at'),
-                    'updated_at': pr.get('updated_at'),
-                    'merged_at': pr.get('merged_at'),
-                    'closed_at': pr.get('closed_at')
+                "temporal": {
+                    "created_at": pr.get("created_at"),
+                    "updated_at": pr.get("updated_at"),
+                    "merged_at": pr.get("merged_at"),
+                    "closed_at": pr.get("closed_at"),
                 },
-                'content': {
-                    'title': pr.get('title', ''),
-                    'body': body_text,
-                    'state': state,
-                    'merged': is_merged,
-                    'mergeable': pr.get('mergeable'),
-                    'mergeable_state': pr.get('mergeable_state', ''),
-                    'commits_count': pr.get('commits', 0) if isinstance(pr.get('commits'), int) else len(
-                        pr.get('commits', [])),
-                    'changed_files_count': len(file_changes),
-                    'additions': pr.get('additions', 0),
-                    'deletions': pr.get('deletions', 0),
-                    'review_comments_count': len(reviews)
+                "content": {
+                    "title": pr.get("title", ""),
+                    "body": body_text,
+                    "state": state,
+                    "merged": is_merged,
+                    "mergeable": pr.get("mergeable"),
+                    "mergeable_state": pr.get("mergeable_state", ""),
+                    "commits_count": (
+                        pr.get("commits", 0)
+                        if isinstance(pr.get("commits"), int)
+                        else len(pr.get("commits", []))
+                    ),
+                    "changed_files_count": len(file_changes),
+                    "additions": pr.get("additions", 0),
+                    "deletions": pr.get("deletions", 0),
+                    "review_comments_count": len(reviews),
                 },
-                'reviews': reviews,
-                'file_changes': file_changes,
-                'closes_issues': linked_issues,
-                'search_hints': {
-                    'text': f"{pr.get('title', '')} {body_text}",
-                    'keywords': list(entities['keywords']),
-                    'files_modified': [f['filename'] for f in file_changes]
+                "reviews": reviews,
+                "file_changes": file_changes,
+                "closes_issues": linked_issues,
+                "search_hints": {
+                    "text": f"{pr.get('title', '')} {body_text}",
+                    "keywords": list(entities["keywords"]),
+                    "files_modified": [f["filename"] for f in file_changes],
                 },
-                'raw_data': pr
+                "raw_data": pr,
             }
 
             chunks.append(chunk)
             self.chunk_registry[chunk_id] = chunk
 
-            if pr.get('number'):
+            if pr.get("number"):
                 self.entity_map[f"pr_{pr['number']}"].add(chunk_id)
+            
+            self.graph_extractor.process_pr(pr)
 
         # CHUNK COMMITS - ONE CHUNK PER COMMIT
-        commits = data.get('commits', [])
+        commits = data.get("commits", [])
         print(f"   Processing {len(commits)} commits...")
 
         for idx, commit in enumerate(commits):
@@ -1581,73 +1769,91 @@ class DataChunker:
 
             chunk_id = self.generate_chunk_id(commit, f"{reponame}_commit", idx)
 
-            commit_data = commit.get('commit', {}) or {}
-            message = commit_data.get('message', '') or ''
+            commit_data = commit.get("commit", {}) or {}
+            message = commit_data.get("message", "") or ""
 
             # Extract files with full details
             files_modified = []
-            if 'files' in commit and isinstance(commit['files'], list):
-                for f in commit['files']:
+            if "files" in commit and isinstance(commit["files"], list):
+                for f in commit["files"]:
                     if isinstance(f, dict):
-                        files_modified.append({
-                            'filename': f.get('filename', ''),
-                            'status': f.get('status', ''),
-                            'additions': f.get('additions', 0),
-                            'deletions': f.get('deletions', 0),
-                            'changes': f.get('changes', 0),
-                            'patch': f.get('patch', '')
-                        })
+                        files_modified.append(
+                            {
+                                "filename": f.get("filename", ""),
+                                "status": f.get("status", ""),
+                                "additions": f.get("additions", 0),
+                                "deletions": f.get("deletions", 0),
+                                "changes": f.get("changes", 0),
+                                "patch": f.get("patch", ""),
+                            }
+                        )
 
             # Extract author and committer info
-            author_info = commit_data.get('author', {}) if isinstance(commit_data.get('author'), dict) else {}
-            committer_info = commit_data.get('committer', {}) if isinstance(commit_data.get('committer'), dict) else {}
+            author_info = (
+                commit_data.get("author", {})
+                if isinstance(commit_data.get("author"), dict)
+                else {}
+            )
+            committer_info = (
+                commit_data.get("committer", {})
+                if isinstance(commit_data.get("committer"), dict)
+                else {}
+            )
 
             chunk = {
-                'chunk_id': chunk_id,
-                'type': 'commit',
-                'source': 'git',
-                'repo_name': reponame,
-                'retrieval_priority': 2,
-                'entities': {
-                    'sha': commit.get('sha'),
-                    'sha_short': (commit.get('sha') or '')[:7],
-                    'author': author_info.get('name'),
-                    'author_email': author_info.get('email'),
-                    'committer': committer_info.get('name'),
-                    'committer_email': committer_info.get('email')
+                "chunk_id": chunk_id,
+                "type": "commit",
+                "source": "git",
+                "repo_name": reponame,
+                "retrieval_priority": 2,
+                "entities": {
+                    "sha": commit.get("sha"),
+                    "sha_short": (commit.get("sha") or "")[:7],
+                    "author": author_info.get("name"),
+                    "author_email": author_info.get("email"),
+                    "committer": committer_info.get("name"),
+                    "committer_email": committer_info.get("email"),
                 },
-                'temporal': {
-                    'date': author_info.get('date'),
-                    'author_date': author_info.get('date'),
-                    'committer_date': committer_info.get('date')
+                "temporal": {
+                    "date": author_info.get("date"),
+                    "author_date": author_info.get("date"),
+                    "committer_date": committer_info.get("date"),
                 },
-                'content': {
-                    'message': message,
-                    'files_modified': [f['filename'] for f in files_modified if f.get('filename')],
-                    'stats': {
-                        'total_files': len(files_modified),
-                        'additions': commit.get('stats', {}).get('additions', 0) if isinstance(commit.get('stats'),
-                                                                                               dict) else 0,
-                        'deletions': commit.get('stats', {}).get('deletions', 0) if isinstance(commit.get('stats'),
-                                                                                               dict) else 0
-                    }
+                "content": {
+                    "message": message,
+                    "files_modified": [
+                        f["filename"] for f in files_modified if f.get("filename")
+                    ],
+                    "stats": {
+                        "total_files": len(files_modified),
+                        "additions": (
+                            commit.get("stats", {}).get("additions", 0)
+                            if isinstance(commit.get("stats"), dict)
+                            else 0
+                        ),
+                        "deletions": (
+                            commit.get("stats", {}).get("deletions", 0)
+                            if isinstance(commit.get("stats"), dict)
+                            else 0
+                        ),
+                    },
                 },
-                'files': files_modified,  # Full file details with patches
-                'search_hints': {
-                    'text': message,
-                    'keywords': list(entities['keywords'])
+                "files": files_modified,  # Full file details with patches
+                "search_hints": {
+                    "text": message,
+                    "keywords": list(entities["keywords"]),
                 },
-                'raw_data': commit
+                "raw_data": commit,
             }
 
             chunks.append(chunk)
             self.chunk_registry[chunk_id] = chunk
 
-            if commit.get('sha'):
+            if commit.get("sha"):
                 self.entity_map[f"commit_{commit['sha'][:7]}"].add(chunk_id)
 
         # CHUNK CODE FILES - ONE CHUNK PER FILE
-        code_files = data.get('code_files', [])
+        code_files = data.get("code_files", [])
         print(f"   Processing {len(code_files)} code files...")
 
         for idx, codefile in enumerate(code_files):
@@ -1656,37 +1862,35 @@ class DataChunker:
 
             chunk_id = self.generate_chunk_id(codefile, f"{reponame}_code", idx)
 
-            path = codefile.get('path')
-            language = codefile.get('language') or self.code_analyzer.detect_language(path)
-            content = codefile.get('content', '') or ''
-            size = codefile.get('size', 0)
+            path = codefile.get("path")
+            language = codefile.get("language") or self.code_analyzer.detect_language(
+                path
+            )
+            content = codefile.get("content", "") or ""
+            size = codefile.get("size", 0)
 
-            ast_analysis = codefile.get('analysis') 
+            ast_analysis = codefile.get("analysis")
             if path:
                 self.graph_extractor.process_analysis(path, ast_analysis, content)
-                
+
             chunk = {
-                'chunk_id': chunk_id,
-                'type': 'code',
-                'source': 'git',
-                'repo_name': reponame,
-                'retrieval_priority': 2,
-                'entities': {
-                    'path': path,
-                    'language': language,
-                    'directory': str(Path(path).parent) if path else '',
-                    'filename': Path(path).name if path else ''
+                "chunk_id": chunk_id,
+                "type": "code",
+                "source": "git",
+                "repo_name": reponame,
+                "retrieval_priority": 2,
+                "entities": {
+                    "path": path,
+                    "language": language,
+                    "directory": str(Path(path).parent) if path else "",
+                    "filename": Path(path).name if path else "",
                 },
-                'content': {
-                    'content': content,
-                    'size': size,
-                    'analysis': ast_analysis
+                "content": {"content": content, "size": size, "analysis": ast_analysis},
+                "search_hints": {
+                    "text": content[:1000],
+                    "keywords": list(entities["keywords"]),
                 },
-                'search_hints': {
-                    'text': content[:1000],
-                    'keywords': list(entities['keywords'])
-                },
-                'raw_data': codefile
+                "raw_data": codefile,
             }
 
             chunks.append(chunk)
@@ -1696,7 +1900,7 @@ class DataChunker:
                 self.entity_map[f"file_{path}"].add(chunk_id)
 
         # CHUNK DOCUMENTATION - ONE CHUNK PER DOC
-        documentation = data.get('documentation', [])
+        documentation = data.get("documentation", [])
         print(f"   Processing {len(documentation)} documentation files...")
 
         for idx, doc in enumerate(documentation):
@@ -1705,34 +1909,34 @@ class DataChunker:
 
             chunk_id = self.generate_chunk_id(doc, f"{reponame}_doc", idx)
 
-            content_text = doc.get('content', '') or ''
+            content_text = doc.get("content", "") or ""
 
             chunk = {
-                'chunk_id': chunk_id,
-                'type': 'documentation',
-                'source': 'git',
-                'repo_name': reponame,
-                'retrieval_priority': 1,
-                'entities': {
-                    'path': doc.get('path', ''),
-                    'title': doc.get('title', '')
+                "chunk_id": chunk_id,
+                "type": "documentation",
+                "source": "git",
+                "repo_name": reponame,
+                "retrieval_priority": 1,
+                "entities": {
+                    "path": doc.get("path", ""),
+                    "title": doc.get("title", ""),
                 },
-                'content': {
-                    'content': content_text,
-                    'headers': re.findall(r'^#+\s+(.+)$', content_text, re.MULTILINE)
+                "content": {
+                    "content": content_text,
+                    "headers": re.findall(r"^#+\s+(.+)$", content_text, re.MULTILINE),
                 },
-                'search_hints': {
-                    'text': content_text,
-                    'keywords': list(entities['keywords'])
+                "search_hints": {
+                    "text": content_text,
+                    "keywords": list(entities["keywords"]),
                 },
-                'raw_data': doc
+                "raw_data": doc,
             }
 
             chunks.append(chunk)
             self.chunk_registry[chunk_id] = chunk
 
         # CHUNK WORKFLOWS - ONE CHUNK PER WORKFLOW
-        workflows = data.get('workflows', [])
+        workflows = data.get("workflows", [])
         print(f"   Processing {len(workflows)} workflows...")
 
         for idx, workflow in enumerate(workflows):
@@ -1742,28 +1946,28 @@ class DataChunker:
             chunk_id = self.generate_chunk_id(workflow, f"{reponame}_workflow", idx)
 
             chunk = {
-                'chunk_id': chunk_id,
-                'type': 'workflow',
-                'source': 'git',
-                'repo_name': reponame,
-                'retrieval_priority': 2,
-                'entities': {
-                    'name': workflow.get('name', ''),
-                    'path': workflow.get('path', '')
+                "chunk_id": chunk_id,
+                "type": "workflow",
+                "source": "git",
+                "repo_name": reponame,
+                "retrieval_priority": 2,
+                "entities": {
+                    "name": workflow.get("name", ""),
+                    "path": workflow.get("path", ""),
                 },
-                'content': workflow,
-                'search_hints': {
-                    'text': json.dumps(workflow),
-                    'keywords': list(entities['keywords'])
+                "content": workflow,
+                "search_hints": {
+                    "text": json.dumps(workflow),
+                    "keywords": list(entities["keywords"]),
                 },
-                'raw_data': workflow
+                "raw_data": workflow,
             }
 
             chunks.append(chunk)
             self.chunk_registry[chunk_id] = chunk
 
         # CHUNK ANALYZED FILES - ONE CHUNK PER ANALYZED FILE
-        analyzed_files = data.get('analyzed_files', [])
+        analyzed_files = data.get("analyzed_files", [])
         print(f"   Processing {len(analyzed_files)} analyzed files...")
 
         for idx, analyzed in enumerate(analyzed_files):
@@ -1773,65 +1977,64 @@ class DataChunker:
             chunk_id = self.generate_chunk_id(analyzed, f"{reponame}_analyzed", idx)
 
             chunk = {
-                'chunk_id': chunk_id,
-                'type': 'analyzed_file',
-                'source': 'git',
-                'repo_name': reponame,
-                'retrieval_priority': 2,
-                'entities': {
-                    'path': analyzed.get('path', '')
+                "chunk_id": chunk_id,
+                "type": "analyzed_file",
+                "source": "git",
+                "repo_name": reponame,
+                "retrieval_priority": 2,
+                "entities": {"path": analyzed.get("path", "")},
+                "content": analyzed,
+                "search_hints": {
+                    "text": json.dumps(analyzed),
+                    "keywords": list(entities["keywords"]),
                 },
-                'content': analyzed,
-                'search_hints': {
-                    'text': json.dumps(analyzed),
-                    'keywords': list(entities['keywords'])
-                },
-                'raw_data': analyzed
+                "raw_data": analyzed,
             }
 
             chunks.append(chunk)
             self.chunk_registry[chunk_id] = chunk
 
         # CHUNK ONBOARDING (single document)
-        if 'onboarding' in data and data['onboarding']:
+        if "onboarding" in data and data["onboarding"]:
             chunk = {
-                'chunk_id': f"{reponame}_onboarding_all",
-                'type': 'onboarding',
-                'source': 'git',
-                'repo_name': reponame,
-                'retrieval_priority': 1,
-                'content': data['onboarding'],
-                'search_hints': {
-                    'text': json.dumps(data['onboarding']),
-                    'keywords': list(entities['keywords'])
+                "chunk_id": f"{reponame}_onboarding_all",
+                "type": "onboarding",
+                "source": "git",
+                "repo_name": reponame,
+                "retrieval_priority": 1,
+                "content": data["onboarding"],
+                "search_hints": {
+                    "text": json.dumps(data["onboarding"]),
+                    "keywords": list(entities["keywords"]),
                 },
-                'raw_data': data['onboarding']
+                "raw_data": data["onboarding"],
             }
             chunks.append(chunk)
-            self.chunk_registry[chunk['chunk_id']] = chunk
+            self.chunk_registry[chunk["chunk_id"]] = chunk
 
         # CHUNK OFFBOARDING (single document)
-        if 'offboarding' in data and data['offboarding']:
+        if "offboarding" in data and data["offboarding"]:
             chunk = {
-                'chunk_id': f"{reponame}_offboarding_all",
-                'type': 'offboarding',
-                'source': 'git',
-                'repo_name': reponame,
-                'retrieval_priority': 1,
-                'content': data['offboarding'],
-                'search_hints': {
-                    'text': json.dumps(data['offboarding']),
-                    'keywords': list(entities['keywords'])
+                "chunk_id": f"{reponame}_offboarding_all",
+                "type": "offboarding",
+                "source": "git",
+                "repo_name": reponame,
+                "retrieval_priority": 1,
+                "content": data["offboarding"],
+                "search_hints": {
+                    "text": json.dumps(data["offboarding"]),
+                    "keywords": list(entities["keywords"]),
                 },
-                'raw_data': data['offboarding']
+                "raw_data": data["offboarding"],
             }
             chunks.append(chunk)
-            self.chunk_registry[chunk['chunk_id']] = chunk
+            self.chunk_registry[chunk["chunk_id"]] = chunk
 
         return chunks, entities, techstack
 
-
-    def chunk_gmail_data(self, data: Dict[str, Any], repo_name: str, git_entities: Dict[str, Set[str]]) -> List[Dict[str, Any]]:
+    def chunk_gmail_data(
+        self, data: Dict[str, Any], repo_name: str, git_entities: Dict[str, Set[str]]
+    ) -> List[Dict[str, Any]]:
         """
         Chunk Gmail data with GitHub correlation analysis
         """
@@ -2106,8 +2309,12 @@ def process_multi_source_data(
     return all_chunks, entities, tech_stack
 
 
-def process_file(input_file: str, output_dir: str, chunker: 'DataChunker',
-                git_entities: Optional[Dict[str, Set[str]]] = None) -> Dict[str, Any]:
+def process_file(
+    input_file: str,
+    output_dir: str,
+    chunker: "DataChunker",
+    git_entities: Optional[Dict[str, Set[str]]] = None,
+) -> Dict[str, Any]:
     """
     Load JSON, Chunk with dual indexing, Save SPLIT BY TYPE + GRAPH DATA
     """
@@ -2116,33 +2323,37 @@ def process_file(input_file: str, output_dir: str, chunker: 'DataChunker',
     print("=" * 70)
 
     print(f"Loading {input_file}")
-    with open(input_file, 'r', encoding='utf-8') as f:
+    with open(input_file, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     repo_name = REPO_NAME
     repo_owner = REPO_OWNER
-    source = data.get('source', 'unknown')
+    source = data.get("source", "unknown")
 
     print(f"Source: {source}")
     print(f"File: {repo_name}")
 
-    if source == 'git':
+    if source == "git":
         print(f"Issues: {len(data.get('issues', []))}")
         print(f"PRs: {len(data.get('prs', []))}")
         print(f"Commits: {len(data.get('commits', []))}")
         print(f"Code files: {len(data.get('code_files', []))}")
         print(f"Docs: {len(data.get('documentation', []))}")
-    elif source == 'gmail':
-        total_messages = data.get('total_messages', len(data.get('messages', [])))
-        messages_with_attachments = sum(1 for m in data.get('messages', []) if m.get('has_attachments'))
+    elif source == "gmail":
+        total_messages = data.get("total_messages", len(data.get("messages", [])))
+        messages_with_attachments = sum(
+            1 for m in data.get("messages", []) if m.get("has_attachments")
+        )
         print(f"Total messages: {total_messages}")
         print(f"Messages with attachments: {messages_with_attachments}")
 
     print("Processing...")
-    chunks, entities, tech_stack = process_multi_source_data(data, repo_name, chunker, git_entities)
+    chunks, entities, tech_stack = process_multi_source_data(
+        data, repo_name, chunker, git_entities
+    )
 
-    processed_chunks = [c for c in chunks if not c.get('is_raw_data', False)]
-    raw_chunks = [c for c in chunks if c.get('is_raw_data', False)]
+    processed_chunks = [c for c in chunks if not c.get("is_raw_data", False)]
+    raw_chunks = [c for c in chunks if c.get("is_raw_data", False)]
 
     print(f"Total chunks: {len(chunks)}")
     print(f" - Processed chunks: {len(processed_chunks)}")
@@ -2160,10 +2371,11 @@ def process_file(input_file: str, output_dir: str, chunker: 'DataChunker',
 
     # GROUP CHUNKS BY TYPE
     from collections import defaultdict
+
     chunks_by_type = defaultdict(list)
 
     for chunk in chunks:
-        chunk_type = chunk.get('type', 'unknown')
+        chunk_type = chunk.get("type", "unknown")
         chunks_by_type[chunk_type].append(chunk)
 
     saved_files = []
@@ -2175,46 +2387,50 @@ def process_file(input_file: str, output_dir: str, chunker: 'DataChunker',
 
         output_file = chunks_dir / f"{chunk_type}_chunks.json"
 
-        with open(output_file, 'w', encoding='utf-8') as f:
+        with open(output_file, "w", encoding="utf-8") as f:
             json.dump(type_chunks, f, indent=2, ensure_ascii=False)
 
-        print(f"   Saved {len(type_chunks)} {chunk_type} chunks -> {Path(output_file).name}")
+        print(
+            f"   Saved {len(type_chunks)} {chunk_type} chunks -> {Path(output_file).name}"
+        )
         saved_files.append(output_file)
 
     # ALSO SAVE COMBINED FILE (optional, for backward compatibility)
     combined_file = chunks_dir / "combined_chunks.json"
-    with open(combined_file, 'w', encoding='utf-8') as f:
+    with open(combined_file, "w", encoding="utf-8") as f:
         json.dump(chunks, f, indent=2, ensure_ascii=False)
     print(f"   Saved {len(chunks)} combined chunks -> {Path(combined_file).name}")
     saved_files.append(combined_file)
 
     # --- NEW: SAVE GRAPH DATA ---
     graph_has_data = len(chunker.graph_extractor.nodes) > 0
-    
-    if source == 'git' or graph_has_data:
+
+    if source == "git" or graph_has_data:
         # Extract graph data from the chunker's state
         graph_data = chunker.graph_extractor.get_graph_data()
         graph_file = repo_output_dir / "graph_data.json"
-        
-        with open(graph_file, 'w', encoding='utf-8') as f:
+
+        with open(graph_file, "w", encoding="utf-8") as f:
             json.dump(graph_data, f, indent=2, ensure_ascii=False)
-            
-        print(f"   🕸️  Graph Data Saved: {len(graph_data['nodes'])} nodes, {len(graph_data['edges'])} edges -> {graph_file.name}")
+
+        print(
+            f"   🕸️  Graph Data Saved: {len(graph_data['nodes'])} nodes, {len(graph_data['edges'])} edges -> {graph_file.name}"
+        )
         saved_files.append(graph_file)
     # ----------------------------
 
     # Save entities
-    if entities and source == 'git':
+    if entities and source == "git":
         entities_file = repo_output_dir / "entities.json"
         entities_serializable = {k: list(v) for k, v in entities.items()}
-        with open(entities_file, 'w', encoding='utf-8') as f:
+        with open(entities_file, "w", encoding="utf-8") as f:
             json.dump(entities_serializable, f, indent=2, ensure_ascii=False)
         print(f"   Entities saved: {entities_file}")
 
     # Save tech stack
-    if tech_stack and source == 'git':
+    if tech_stack and source == "git":
         techstack_file = repo_output_dir / "techstack.json"
-        with open(techstack_file, 'w', encoding='utf-8') as f:
+        with open(techstack_file, "w", encoding="utf-8") as f:
             json.dump(tech_stack, f, indent=2, ensure_ascii=False)
         print(f"   Tech stack analysis saved: {techstack_file}")
 
@@ -2226,8 +2442,8 @@ def process_file(input_file: str, output_dir: str, chunker: 'DataChunker',
             "full_name": f"{REPO_OWNER}/{REPO_NAME}",
             "url": f"https://github.com/{REPO_OWNER}/{REPO_NAME}",
         },
-        'source': source,
-        'chatbot_flow': [
+        "source": source,
+        "chatbot_flow": [
             "1. User query received",
             "2. Search repository overview for tech stack/metrics queries",
             "3. Search GitHub chunks (priority 0-2) using hybrid search (semantic + keyword)",
@@ -2235,50 +2451,52 @@ def process_file(input_file: str, output_dir: str, chunker: 'DataChunker',
             "5. Search Gmail chunks using GitHub entities as correlation hints",
             "6. Merge and rank results based on relevance and correlation",
             "7. If insufficient results, fallback to raw data references (priority 4)",
-            "8. Generate response using combined context with tech stack awareness"
+            "8. Generate response using combined context with tech stack awareness",
         ],
-        'retrieval_priorities': {
-            '0': 'Repository overview (tech stack, metrics, structure)',
-            '1': 'GitHub issues, PRs, docs, high-correlation emails',
-            '2': 'GitHub commits, code, Git-related emails',
-            '3': 'General emails, attachments',
-            '4': 'Raw data (fallback for edge cases)'
+        "retrieval_priorities": {
+            "0": "Repository overview (tech stack, metrics, structure)",
+            "1": "GitHub issues, PRs, docs, high-correlation emails",
+            "2": "GitHub commits, code, Git-related emails",
+            "3": "General emails, attachments",
+            "4": "Raw data (fallback for edge cases)",
         },
-        'chunk_counts': {
-            'total': len(chunks),
-            'processed': len(processed_chunks),
-            'raw_references': len(raw_chunks),
-            'by_type': {k: len(v) for k, v in chunks_by_type.items()}
+        "chunk_counts": {
+            "total": len(chunks),
+            "processed": len(processed_chunks),
+            "raw_references": len(raw_chunks),
+            "by_type": {k: len(v) for k, v in chunks_by_type.items()},
         },
-        'graph_stats': {
-            'nodes_count': len(chunker.graph_extractor.nodes) if source == 'git' else 0,
-            'edges_count': len(chunker.graph_extractor.edges) if source == 'git' else 0
+        "graph_stats": {
+            "nodes_count": len(chunker.graph_extractor.nodes) if source == "git" else 0,
+            "edges_count": len(chunker.graph_extractor.edges) if source == "git" else 0,
         },
-        'correlation_strategy': 'Entity-based linking (authors, issue/PR numbers, commits, file paths)',
-        'edge_case_handling': 'Raw data preserved for queries requiring full context or missing from processed chunks',
-        'techstack_integration': 'Overview chunk contains comprehensive tech stack, code metrics, and structure analysis'
+        "correlation_strategy": "Entity-based linking (authors, issue/PR numbers, commits, file paths)",
+        "edge_case_handling": "Raw data preserved for queries requiring full context or missing from processed chunks",
+        "techstack_integration": "Overview chunk contains comprehensive tech stack, code metrics, and structure analysis",
     }
 
     if tech_stack:
-        strategy['techstack_summary'] = {
-            'primary_language': tech_stack['languages']['primary'],
-            'total_languages': tech_stack['languages']['count'],
-            'frameworks_detected': len(tech_stack['frameworks']['detected']),
-            'tools_detected': len(tech_stack['tools']['detected']),
-            'total_files': tech_stack['metrics']['total_files'],
-            'total_code_lines': tech_stack['metrics']['total_code_lines'],
-            'total_functions': tech_stack['functions_and_classes']['total_functions'],
-            'total_classes': tech_stack['functions_and_classes']['total_classes']
+        strategy["techstack_summary"] = {
+            "primary_language": tech_stack["languages"]["primary"],
+            "total_languages": tech_stack["languages"]["count"],
+            "frameworks_detected": len(tech_stack["frameworks"]["detected"]),
+            "tools_detected": len(tech_stack["tools"]["detected"]),
+            "total_files": tech_stack["metrics"]["total_files"],
+            "total_code_lines": tech_stack["metrics"]["total_code_lines"],
+            "total_functions": tech_stack["functions_and_classes"]["total_functions"],
+            "total_classes": tech_stack["functions_and_classes"]["total_classes"],
         }
 
-    if source == 'gmail':
-        git_related = [c for c in processed_chunks if c.get('is_git_related', False)]
-        high_correlation = [c for c in processed_chunks if c.get('correlation_score', 0) >= 3]
-        strategy['chunk_counts']['git_related_emails'] = len(git_related)
-        strategy['chunk_counts']['high_correlation_emails'] = len(high_correlation)
+    if source == "gmail":
+        git_related = [c for c in processed_chunks if c.get("is_git_related", False)]
+        high_correlation = [
+            c for c in processed_chunks if c.get("correlation_score", 0) >= 3
+        ]
+        strategy["chunk_counts"]["git_related_emails"] = len(git_related)
+        strategy["chunk_counts"]["high_correlation_emails"] = len(high_correlation)
 
     strategy_file = repo_output_dir / "retrieval_strategy.json"
-    with open(strategy_file, 'w', encoding='utf-8') as f:
+    with open(strategy_file, "w", encoding="utf-8") as f:
         json.dump(strategy, f, indent=2, ensure_ascii=False)
     print(f"   Retrieval strategy: {strategy_file}")
 
@@ -2287,14 +2505,14 @@ def process_file(input_file: str, output_dir: str, chunker: 'DataChunker',
     print("=" * 70)
 
     return {
-        'output_files': saved_files,
-        'chunk_count': len(chunks),
-        'processed_count': len(processed_chunks),
-        'raw_count': len(raw_chunks),
-        'repo_name': repo_name,
-        'source': source,
-        'entities': entities,
-        'techstack': tech_stack
+        "output_files": saved_files,
+        "chunk_count": len(chunks),
+        "processed_count": len(processed_chunks),
+        "raw_count": len(raw_chunks),
+        "repo_name": repo_name,
+        "source": source,
+        "entities": entities,
+        "techstack": tech_stack,
     }
 
 
@@ -2353,6 +2571,7 @@ def batch_process():
         except Exception as e:
             print(f"❌ Failed {json_file.name}: {e}")
             import traceback
+
             traceback.print_exc()
             results.append((json_file.name, "Failed", str(e)))
 
@@ -2394,6 +2613,7 @@ def batch_process():
             except Exception as e:
                 print(f"❌ Failed {json_file.name}: {e}")
                 import traceback
+
                 traceback.print_exc()
                 results.append((json_file.name, "Failed", str(e)))
 
@@ -2454,7 +2674,9 @@ def batch_process():
                 for tool in tech_stack["tools"]["detected"]:
                     all_tools[tool] += 1
                 total_code_lines += tech_stack["metrics"]["total_code_lines"]
-                total_functions += tech_stack["functions_and_classes"]["total_functions"]
+                total_functions += tech_stack["functions_and_classes"][
+                    "total_functions"
+                ]
                 total_classes += tech_stack["functions_and_classes"]["total_classes"]
 
             print(f"      • Total code lines: {total_code_lines:,}")
@@ -2539,6 +2761,7 @@ def main():
         except Exception as e:
             print(f"❌ Error: {e}")
             import traceback
+
             traceback.print_exc()
             sys.exit(1)
 

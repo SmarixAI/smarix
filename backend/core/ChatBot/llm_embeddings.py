@@ -770,27 +770,25 @@ class LLMEmbeddingMixin:
             QueryType.IMPACT_ANALYSIS: """
         IMPACT & DEPENDENCY ANALYSIS QUERY:
         
-        TASK: Analyze the dependencies, call graph, and impact of changes based on the provided Graph Context.
+        TASK: Analyze dependencies, call graphs, and historical impact using the Knowledge Graph.
 
-        MANDATORY:
+        MANDATORY SECTIONS:
         1. **Dependency Diagram**: Create a mermaid flowchart showing:
-           - The entity in question
-           - What calls it (Incoming edges)
-           - What it calls (Outgoing edges)
-           - Inheritance relationships (if any)
+           - The entity in question (File/Function)
+           - Callers/Callees (Code Structure)
+           - **Related PRs/Issues** (Historical Context)
 
         2. **Impact Assessment**:
-           - Explicitly list files/functions that would break if this component changes.
-           - Identify the "Blast Radius" (Direct vs Indirect dependencies).
-           - Cite specific "Called By" and "Calls To" data from the context.
+           - **Code Impact**: List files/functions that break if this changes.
+           - **Process Impact**: List open PRs or Issues that might be affected (check 'related_to' edges).
+           - **Expertise**: List users who have modified this code recently (check 'modified_by' edges).
 
         3. **Code Context**:
-           - Show the actual code of the dependencies found in the context.
-           
+           - Show actual code snippets for dependencies.
+
         STRICT RULES:
-        - Use the "Graph Context" provided in the input (Source: dependency_graph).
-        - Distinguish between "Caller" (upstream) and "Callee" (downstream).
-        - Do NOT hallucinate connections not shown in the context.
+        - Use "Graph Context" for both code dependencies (CALLS) and metadata (MODIFIES, CLOSES).
+        - Highlight if a file is "Hot" (modified by many PRs).
         """,
             QueryType.GENERAL: """
         GENERAL QUERY:
@@ -798,6 +796,21 @@ class LLMEmbeddingMixin:
         - Supporting documentation
         - Code examples where relevant
         - Clear, concise response""",
+            QueryType.TRACEABILITY: """
+        TRACEABILITY QUERY (History & Authorship):
+        
+        TASK: Trace the history of code changes, identify authors, and link code to Pull Requests.
+
+        MANDATORY:
+        1. **Timeline**: Show a chronological list of changes based on PRs and Commits in context.
+        2. **Attribution**: Identify the "User" or "Author" nodes from the graph context.
+        3. **Linkage**: Connect specific files to the PRs that modified them (MODIFIES edge).
+
+        STRICT RULES:
+        - Use "Graph Context" to find 'CREATED_BY' and 'MODIFIES' edges.
+        - If the graph shows User X created PR Y which modified File Z, state: "User X modified File Z in PR Y".
+        - Do not guess authors; use only the explicit graph data.
+        """,
         }
 
         specific_prompt = prompts.get(query_type, prompts[QueryType.GENERAL])
@@ -811,9 +824,9 @@ class LLMEmbeddingMixin:
                 "structure of",
                 "how does",
                 "service",
-                'call graph',
-                'dependencies',
-                'impact'
+                "call graph",
+                "dependencies",
+                "impact",
             ]
         )
 
@@ -1134,10 +1147,24 @@ class LLMEmbeddingMixin:
             )
         elif query_type == QueryType.IMPACT_ANALYSIS:
             prompt_parts.append("\n# STRICT IMPACT ANALYSIS RULES:")
-            prompt_parts.append("1. Use the 'Graph Context' to identify callers and callees.")
+            prompt_parts.append(
+                "1. Use the 'Graph Context' to identify callers, callees, and related PRs."
+            )
             prompt_parts.append("2. Trace dependencies explicitly.")
-            prompt_parts.append("3. If a function is listed as 'Called By' X, then X depends on it.")
-            prompt_parts.append("4. Generate a dependency diagram (Mermaid) first.")
+            prompt_parts.append(
+                "3. If a function is listed as 'Called By' X, then X depends on it."
+            )
+            prompt_parts.append(
+                "4. If a file was modified by PR Y, mention that history."
+            )
+            prompt_parts.append("5. Generate a dependency diagram (Mermaid) first.")
+        elif query_type == QueryType.TRACEABILITY:
+            prompt_parts.append("\n# STRICT TRACEABILITY RULES:")
+            prompt_parts.append(
+                "1. Focus on the 'Who' (User) and 'How' (PR/Commit) aspects."
+            )
+            prompt_parts.append("2. Use graph edges: CREATED_BY, MODIFIES, CLOSES.")
+            prompt_parts.append("3. Present a clear timeline of changes.")
         else:
             # For other queries, be flexible
             prompt_parts.append(
@@ -1159,7 +1186,15 @@ class LLMEmbeddingMixin:
 
         needs_diagram = any(
             kw in query.lower()
-            for kw in ["architecture", "flow", "diagram", "how does", "service", 'impact', 'dependency']
+            for kw in [
+                "architecture",
+                "flow",
+                "diagram",
+                "how does",
+                "service",
+                "impact",
+                "dependency",
+            ]
         ) and query_type not in [
             QueryType.CODE_STRUCTURE,
             QueryType.QUESTION_GENERATION,

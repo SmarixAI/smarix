@@ -871,6 +871,40 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
                     self.query_rewriter.response_cache.set(query, result, active_session_id)
 
                 return result
+            
+        if query_type == QueryType.TRACEABILITY and entity:
+                self.logger.info(f"TRACEABILITY | Handling trace for {entity['type']} #{entity['number']}")
+                
+                target_key = "pr_number" if entity['type'] == 'pr' else "issue_number"
+                # Use vector_db directly or multi_index search
+                # Since vector_db is aliased to multi_index_store, this works if find() is implemented there
+                # Otherwise, use search_by_metadata on the specific index
+                if self.multi_index_store:
+                    idx_type = 'pr' if entity['type'] == 'pr' else 'issue'
+                    results = self.multi_index_store.search_by_metadata(filters={target_key: str(entity['number'])}, index_type=idx_type, top_k=self.top_k)
+                else:
+                    results = self.vector_db.find(where={target_key: str(entity['number'])}, top_k=self.top_k)
+                
+                if results:
+                    self.logger.info(f"TRACEABILITY | Found {len(results)} chunks")
+                    result = self._respond_with_results(results, QueryType.TRACEABILITY, query, expanded_query, role=role)
+                    
+                    # Update Caches
+                    if self.query_rewriter and self.query_rewriter.semantic_cache:
+                        self.query_rewriter.semantic_cache.set(query, result, active_session_id, quality_score=result.get('context_quality', 0.8))
+                    if self.query_rewriter and self.query_rewriter.response_cache:
+                        self.query_rewriter.response_cache.set(query, result, active_session_id)
+
+                    # Save conversation
+                    try:
+                        self.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
+                        self.conversation_store.add_message(active_session_id, "assistant", result.get("answer", ""), tokens_used=0)
+                    except Exception as e:
+                        self.logger.error(f"CONVERSATION_STORE | Failed to save: {e}")
+
+                    return result
+                else:
+                    self.logger.warning(f"TRACEABILITY | No match for {entity['type']} #{entity['number']}")
 
         # Non-chronological / general flow
         if query_type in [QueryType.REPOSITORY_METRICS, QueryType.TECH_STACK, QueryType.CODE_STRUCTURE]:

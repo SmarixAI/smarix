@@ -469,6 +469,7 @@ Feel free to ask me anything about the codebase!"""
         15. random_pr_generator - Requests to randomly select/generate a PR with code changes
         16. general - Questions that don't fit above categories or are too vague
         17. impact_analysis - Questions about dependencies, what breaks if code changes, callers/callees, class hierarchy
+        18. traceability - Questions about history, authorship, who changed code, evolution, timeline of changes, and linking users to code.
 
         Respond with ONLY the category name, nothing else.
 
@@ -519,7 +520,8 @@ Feel free to ask me anything about the codebase!"""
                 QueryType.PR_ISSUE_CODING_QUESTION,
                 QueryType.RANDOM_PR_GENERATOR,
                 QueryType.IMPACT_ANALYSIS,
-                QueryType.GENERAL
+                QueryType.GENERAL,
+                QueryType.TRACEABILITY
             ]
 
             if category in valid_categories:
@@ -636,6 +638,16 @@ Feel free to ask me anything about the codebase!"""
         if any(kw in query_lower for kw in impact_keywords):
             self.logger.info("CLASSIFICATION | Rule-based: IMPACT_ANALYSIS")
             return QueryType.IMPACT_ANALYSIS
+        
+        traceability_keywords = [
+            'who changed', 'who modified', 'who updated', 'who wrote',
+            'who created', 'author of', 'creator of', 'history of',
+            'evolution of', 'timeline of', 'changes to', 'past versions',
+            'who is the expert', 'who knows about'
+        ]
+        if any(kw in query_lower for kw in traceability_keywords):
+            self.logger.info("CLASSIFICATION | Rule-based: TRACEABILITY")
+            return QueryType.TRACEABILITY
 
         self.logger.info("CLASSIFICATION | No rule matched, using LLM classification")
         llm_category = self.llm_classify_query(query)

@@ -44,7 +44,7 @@ REPO_OWNER, REPO_NAME = load_current_repo_from_state()
 backend_dir = Path(__file__).resolve().parents[2]
 EMBEDDINGS_DIR = backend_dir / "data" / "Embeddings" / REPO_OWNER / REPO_NAME
 VECTORDB_ROOT = backend_dir / "data" / "VectorDB" / REPO_OWNER / REPO_NAME
-PROCESSED_DATA_DIR = Path("../../data/DataProcessing") / REPO_OWNER / REPO_NAME
+PROCESSED_DATA_DIR = backend_dir / "data" / "DataProcessing" / REPO_OWNER / REPO_NAME
 
 VECTORDB_ROOT.mkdir(parents=True, exist_ok=True)
 

@@ -59,21 +59,26 @@ class GraphRetrievalMixin:
             
             # Step 2: Get Neighbors (Traverse 1-hop)
             # Incoming edges (Who calls me?)
-            callers = []
+            relationships = []
+            
+            # Incoming edges (e.g., Who calls me? Who modifies me?)
             for u, v, attr in G.in_edges(node_id, data=True):
-                if attr.get('type') == 'CALLS':
-                    callers.append(u.split('::')[-1]) # Simplify ID to Name
+                edge_type = attr.get('type', 'RELATED')
+                source_name = u.split('::')[-1] # Simplify ID to Name
+                relationships.append(f"<- [{edge_type}] -- {source_name}")
 
-            # Outgoing edges (Who do I call?)
-            callees = []
+            # Outgoing edges (e.g., Who do I call? Who did I create?)
             for u, v, attr in G.out_edges(node_id, data=True):
-                if attr.get('type') == 'CALLS':
-                    callees.append(v.split('::')[-1])
+                edge_type = attr.get('type', 'RELATED')
+                target_name = v.split('::')[-1]
+                relationships.append(f"-- [{edge_type}] -> {target_name}")
 
             # Format as a Text Chunk for the Context Window
             context_text = f"Entity: {node_data.get('label')} {node_data.get('name')}\n"
-            if callers: context_text += f"Called By: {', '.join(callers[:5])}\n"
-            if callees: context_text += f"Calls To: {', '.join(callees[:5])}\n"
+            
+            if relationships:
+                # Limit to 15 relationships to prevent context overflow
+                context_text += "Relationships:\n" + "\n".join(relationships[:15]) + "\n"
             
             graph_results.append({
                 "content": context_text,
@@ -111,8 +116,8 @@ class RetrievalMixin(GraphRetrievalMixin):
             query_text: Original query text (for routing in multi-index mode)
         """
 
-        if query_type == "impact_analysis" and self.multi_index_store:
-            print("Executing Graph Impact Analysis...")
+        if query_type in ["impact_analysis", "traceability"] and self.multi_index_store:
+            print(f"Executing Graph-Enhanced Retrieval ({query_type})...")
             
             vector_results = self._retrieve_multi_index(query_embedding, query_type, entity, keywords, top_k, query_text)
             
@@ -292,6 +297,11 @@ class RetrievalMixin(GraphRetrievalMixin):
                 # Also ensure 'code' is present for context
                 if not any(i[0] == 'code' for i in top3_indexes):
                     adjusted_indexes.append(('code', conf * 0.8))
+            elif idx_name == 'traceability':
+                adjusted_indexes.append(('graph_nodes', conf))
+                # Ensure we also look at PR text for context
+                if not any(i[0] == 'pr' for i in top3_indexes):
+                    adjusted_indexes.append(('pr', conf * 0.9))
             else:
                 adjusted_indexes.append((idx_name, conf))
         top3_indexes = adjusted_indexes

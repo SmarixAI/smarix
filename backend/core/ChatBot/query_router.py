@@ -61,6 +61,12 @@ class QueryRouter:
             'coupling', 'inheritance', 'hierarchy', 'call graph', 'structure',
             'relationship', 'connected to'
         ],
+        'traceability': [
+            'who changed', 'who modified', 'who updated', 'who wrote',
+            'who created', 'author of', 'creator of', 'history of',
+            'evolution of', 'timeline of', 'changes to', 'past versions',
+            'who is the expert', 'who knows about'
+        ],
 
         'pr_issue_tutorial': [
             'tutorial', 'guide me', 'teach me', 'show me how',
@@ -155,6 +161,7 @@ class QueryRouter:
             'email': 0,
             'issue': 0,
             'impact_analysis': 0,
+            'traceability': 0,
             'pr_issue_tutorial': 0,
             'pr_issue_coding_question': 0,
             'random_pr_generator': 0
@@ -306,6 +313,13 @@ class QueryRouter:
                     "Who inherits from BaseController?",
                     "Show the call graph for login"
                 ],
+                'traceability': [
+                    "Who is the expert on auth.py?",
+                    "Who modified the login function recently?",
+                    "Show the history of changes for this file",
+                    "Timeline of Pull Requests for the API",
+                    "Who created this module?"
+                ],
 
                 'pr_issue_tutorial': [
                     "Create a tutorial from PR #45",
@@ -376,7 +390,8 @@ class QueryRouter:
                 5. 'email' — Email messages, Gmail inbox, threads, subjects, senders, recipients, attachments, message bodies, mailbox searches
                 6. 'issue' – Bug discussions, crashes, exceptions, debugging, regression, troubleshooting, tickets
                 7. 'impact_analysis' - Questions about breaking changes, dependencies, callers, usages, impact of modifications, inheritance, class hierarchy
-                8. 'multi' - Questions that clearly need information from multiple index types
+                8. 'traceability' - Questions about history, authorship, who changed code, evolution, timeline of changes, and linking users to code.
+                9. 'multi' - Questions that clearly need information from multiple index types
                 
 
                 EXAMPLES:
@@ -392,7 +407,7 @@ class QueryRouter:
                 USER QUERY: "{query}"
 
                 Respond with ONLY a valid JSON object in this exact format:
-                {{"index_type": "documentation|code|pr|commit|email|issue|impact_analysis|multi", "confidence": 0.0-1.0, "reasoning": "brief explanation"}}
+                {{"index_type": "documentation|code|pr|commit|email|issue|impact_analysis|traceability|multi", "confidence": 0.0-1.0, "reasoning": "brief explanation"}}
 
                 Do not include any other text, only the JSON object."""
                             
@@ -456,7 +471,7 @@ class QueryRouter:
                 reasoning = result_json.get('reasoning', '')
                 
                 # Validate index type
-                valid_types = ['documentation', 'code', 'pr', 'commit', 'email','issue', 'multi']
+                valid_types = ['documentation', 'code', 'pr', 'commit', 'email', 'issue', 'impact_analysis', 'traceability', 'multi']
                 if index_type in valid_types:
                     logger.info(f"LLM route: '{query[:50]}...' → '{index_type}' (confidence: {confidence:.2f}, reasoning: {reasoning})")
                     return index_type
@@ -528,12 +543,13 @@ class QueryRouter:
                 5. 'email' — Email messages, Gmail inbox, subjects, senders, recipients, threads, attachments, message body, mailbox searches
                 6. 'issue' — Bug discussions, crashes, exceptions, debugging, regression, troubleshooting, tickets
                 7. 'impact_analysis' - Questions about breaking changes, dependencies, callers, usages, impact of modifications, inheritance, class hierarchy
-                8. 'multi' - Questions that clearly need information from multiple index types
+                8. 'traceability' - Questions about history, authorship, who changed code, evolution.
+                9. 'multi' - Questions that clearly need information from multiple index types
 
                 USER QUERY: "{query}"
 
                 Respond with ONLY a valid JSON object:
-                {{"index_type": "documentation|code|pr|commit|email|issue|multi", "confidence": 0.0-1.0, "reasoning": "brief explanation"}}"""
+                {{"index_type": "documentation|code|pr|commit|email|issue|impact_analysis|traceability|multi", "confidence": 0.0-1.0, "reasoning": "brief explanation"}}"""
 
             if hasattr(self.llm_client, 'chat'):
                 try:
@@ -588,7 +604,7 @@ class QueryRouter:
                 reasoning = result_json.get('reasoning', '')
                 
                 # Validate
-                valid_types = ['documentation', 'code', 'pr', 'commit', 'email',"issue", 'multi']
+                valid_types = ['documentation', 'code', 'pr', 'commit', 'email', 'issue', 'impact_analysis', 'traceability', 'multi']
                 if index_type in valid_types:
                     # Clamp confidence to valid range
                     confidence = max(0.0, min(1.0, confidence))
@@ -620,6 +636,7 @@ class QueryRouter:
             'email': 0,
             'issue': 0,
             'impact_analysis': 0,
+            'traceability': 0,
         }
         
         # Count matches
@@ -689,7 +706,8 @@ class QueryRouter:
                 5. 'issue' — Bug discussions, crashes, exceptions, debugging, regression, troubleshooting, tickets
                 6. 'email' - Email messages (Gmail), subjects, senders, recipients, bodies, attachments, threads, inbox/search
                 7. 'impact_analysis' - Questions about breaking changes, dependencies, callers, usages, impact of modifications, inheritance, class hierarchy
-                8. 'multi' - Questions that clearly need information from multiple index types
+                8. 'traceability' - Questions about history, authorship, and evolution.
+                9. 'multi' - Questions that clearly need information from multiple index types
 
                 USER QUERY: "{query}"
 
@@ -759,7 +777,7 @@ class QueryRouter:
                     return self._keyword_route_top3(query)
                 
                 # Extract and validate
-                valid_types = ['documentation', 'code', 'pr', 'commit', 'email', 'issue']
+                valid_types = ['documentation', 'code', 'pr', 'commit', 'email', 'issue', 'impact_analysis', 'traceability', 'multi']
                 top3_results = []
                 for item in top3_list[:3]:
                     idx_type = item.get('index_type', '').lower().strip()
@@ -815,6 +833,7 @@ class QueryRouter:
             'email': 0.0,
             'issue': 0.0,
             'impact_analysis': 0.0,
+            'traceability': 0.0,
         }
         
         # Count keyword matches
