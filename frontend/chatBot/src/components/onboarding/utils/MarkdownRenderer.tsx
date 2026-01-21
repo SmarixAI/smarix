@@ -219,6 +219,41 @@ const MermaidDiagram = ({ code }: { code: string }) => {
   );
 };
 
+const CodeBlock = ({
+  code,
+  language,
+}: {
+  code: string;
+  language: string;
+}) => {
+  return (
+    <div className="my-4 rounded-xl border border-[#0E1B2E]/15 bg-[#0E1B2E] overflow-hidden shadow-sm">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-2 text-xs bg-black/30">
+        <span className="font-mono text-white/80 uppercase">
+          {language || 'code'}
+        </span>
+        <button
+          onClick={() => {
+            if (navigator?.clipboard) {
+              navigator.clipboard.writeText(code);
+            }
+          }}
+          className="text-white/60 hover:text-white transition"
+        >
+          Copy
+        </button>
+      </div>
+
+      {/* Code */}
+      <pre className="p-4 overflow-x-auto text-sm text-white font-mono leading-relaxed">
+        <code>{code}</code>
+      </pre>
+    </div>
+  );
+};
+
+
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   content,
   className = '',
@@ -227,121 +262,165 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   const parseMarkdown = (text: string): ReactNode[] => {
     const parts: ReactNode[] = [];
     let lastIndex = 0;
-    
-    // First, extract mermaid code blocks
-    const mermaidRegex = /```mermaid\n([\s\S]*?)```/g;
-    const mermaidBlocks: Array<{ start: number; end: number; code: string }> = [];
-    let mermaidMatch;
-    
-    while ((mermaidMatch = mermaidRegex.exec(text)) !== null) {
-      mermaidBlocks.push({
-        start: mermaidMatch.index,
-        end: mermaidMatch.index + mermaidMatch[0].length,
-        code: mermaidMatch[1].trim(),
-      });
-    }
-    
-    // If we have mermaid blocks, split the text and insert mermaid components
-    if (mermaidBlocks.length > 0) {
-      let currentIndex = 0;
-      
-      mermaidBlocks.forEach((block, idx) => {
-        // Add text before mermaid block
-        if (block.start > currentIndex) {
-          const textBefore = text.substring(currentIndex, block.start);
-          if (textBefore.trim()) {
-            parts.push(...parseTextContent(textBefore, idx * 10000));
-          }
-        }
-        
-        // Add mermaid diagram
-        parts.push(
-          <MermaidDiagram key={`mermaid-${idx}`} code={block.code} />
-        );
-        
-        currentIndex = block.end;
-      });
-      
-      // Add remaining text after last mermaid block
-      if (currentIndex < text.length) {
-        const textAfter = text.substring(currentIndex);
-        if (textAfter.trim()) {
-          parts.push(...parseTextContent(textAfter, mermaidBlocks.length * 10000));
+    let match;
+    let blockIndex = 0;
+
+    const fenceRegex = /```([\w-]+)?\n([\s\S]*?)```/g;
+
+    while ((match = fenceRegex.exec(text)) !== null) {
+      const [full, lang = 'text', code] = match;
+
+      // Text before block
+      if (match.index > lastIndex) {
+        const before = text.slice(lastIndex, match.index);
+        if (before.trim()) {
+          parts.push(...parseTextContent(before, blockIndex * 1000));
         }
       }
-      
-      return parts;
+
+      // Block rendering
+      if (lang === 'mermaid') {
+        parts.push(
+          <MermaidDiagram key={`mermaid-${blockIndex}`} code={code.trim()} />
+        );
+      } else {
+        parts.push(
+          <CodeBlock
+            key={`code-${blockIndex}`}
+            language={lang}
+            code={code.trim()}
+          />
+        );
+      }
+
+      lastIndex = match.index + full.length;
+      blockIndex++;
     }
-    
-    // No mermaid blocks, parse normally
-    return parseTextContent(text, 0);
+
+    // Remaining text
+    if (lastIndex < text.length) {
+      const remaining = text.slice(lastIndex);
+      if (remaining.trim()) {
+        parts.push(...parseTextContent(remaining, blockIndex * 1000));
+      }
+    }
+
+    return parts;
   };
+
   
   const parseTextContent = (text: string, baseKey: number): ReactNode[] => {
-    // Split by lines first to handle headings and lists properly
     const lines = text.split('\n');
-    
+    let inDiffBlock = false;
+
     return lines.map((line, lineIndex) => {
-      const key = baseKey + lineIndex;
+
+      // --- DIFF BLOCK DETECTION (ADD THIS FIRST) ---
+      if (
+        line.trim() === 'diff' ||
+        line.startsWith('@@ ') ||
+        line.startsWith('+++') ||
+        line.startsWith('---')
+      ) {
+        inDiffBlock = true;
+      }
+
+      if (inDiffBlock) {
+        // Exit diff block on empty line
+        if (line.trim() === '') {
+          inDiffBlock = false;
+          return <div key={`diff-end-${baseKey}-${lineIndex}`} className="h-2" />;
+        }
+
+        return (
+          <pre
+            key={`diff-${baseKey}-${lineIndex}`}
+            className="bg-[#0E1B2E] text-white text-xs font-mono p-3 rounded-md overflow-x-auto my-1"
+          >
+            {line}
+          </pre>
+        );
+      }
+
+      if (line.match(/^#### /)) {
+        return (
+          <h4
+            key={`h4-${baseKey}-${lineIndex}`}
+            className="text-base font-semibold text-[#0E1B2E] mt-3 mb-2"
+          >
+            {line.replace(/^#### /, '').trim()}
+          </h4>
+        );
+      }
+
       if (line.match(/^### /)) {
-        const title = line.replace(/^### /, '').trim();
         return (
           <h3
-            key={`h3-${lineIndex}`}
-            className="text-lg font-bold text-[#0E1B2E] mt-3 mb-2"
+            key={`h3-${baseKey}-${lineIndex}`}
+            className="text-lg font-semibold text-[#0E1B2E] mt-3 mb-2"
           >
-            {title}
+            {line.replace(/^### /, '').trim()}
           </h3>
         );
       }
 
       if (line.match(/^## /)) {
-        const title = line.replace(/^## /, '').trim();
         return (
           <h2
-            key={`h2-${lineIndex}`}
+            key={`h2-${baseKey}-${lineIndex}`}
             className="text-xl font-bold text-[#0E1B2E] mt-4 mb-3"
           >
-            {title}
+            {line.replace(/^## /, '').trim()}
           </h2>
         );
       }
 
       if (line.match(/^# /)) {
-        const title = line.replace(/^# /, '').trim();
         return (
           <h1
-            key={`h1-${lineIndex}`}
+            key={`h1-${baseKey}-${lineIndex}`}
             className="text-2xl font-bold text-[#0E1B2E] mt-5 mb-3"
           >
-            {title}
+            {line.replace(/^# /, '').trim()}
           </h1>
         );
       }
 
-      if (line.match(/^- /) || line.match(/^• /)) {
-        const item = line.replace(/^[-•]\s*/, '').trim();
+      if (
+        (line.match(/^- /) || line.match(/^• /)) &&
+        !line.startsWith('---') &&
+        !line.startsWith('@@')
+      ) {
         return (
-          <li key={`li-${lineIndex}`} className="text-[#0E1B2E] ml-4 my-1 flex gap-2">
+          <li
+            key={`li-${baseKey}-${lineIndex}`}
+            className="text-[#0E1B2E] ml-4 my-1 flex gap-2"
+          >
             <span className="flex-shrink-0 text-[#3B82F6] font-bold">▪</span>
-            <span className="flex-1">{renderInlinElements(item)}</span>
+            <span className="flex-1">
+              {renderInlinElements(line.replace(/^[-•]\s*/, '').trim())}
+            </span>
           </li>
         );
       }
 
       if (line.trim() === '') {
-        return (
-          <div key={`spacer-${lineIndex}`} className="h-2" />
-        );
+        return <div key={`spacer-${baseKey}-${lineIndex}`} className="h-2" />;
       }
 
       return (
-        <p key={`p-${lineIndex}`} className={`text-[#0E1B2E] leading-relaxed ${isFullscreen ? 'text-base' : 'text-sm'}`}>
+        <p
+          key={`p-${baseKey}-${lineIndex}`}
+          className={`text-[#0E1B2E] leading-relaxed ${
+            isFullscreen ? 'text-base' : 'text-sm'
+          }`}
+        >
           {renderInlinElements(line)}
         </p>
       );
     });
   };
+
 
   const renderInlinElements = (text: string): ReactNode => {
     const parts: ReactNode[] = [];
@@ -360,6 +439,21 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
       });
     }
 
+    // Handle links [text](url)
+    const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+    let linkMatch;
+    const linkMatches: Array<{ start: number; end: number; text: string; url: string }> = [];
+
+    while ((linkMatch = linkRegex.exec(text)) !== null) {
+      linkMatches.push({
+        start: linkMatch.index,
+        end: linkMatch.index + linkMatch[0].length,
+        text: linkMatch[1],
+        url: linkMatch[2],
+      });
+    }
+
+
     // Handle inline code
     const codeRegex = /`([^`]+)`/g;
     let codeMatch;
@@ -374,9 +468,12 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
     }
 
     // Combine and sort all matches
-    const allMatches = [...boldMatches, ...codeMatches].sort(
-      (a, b) => a.start - b.start
-    );
+    const allMatches = [
+      ...linkMatches,
+      ...codeMatches,
+      ...boldMatches,
+    ].sort((a, b) => a.start - b.start);
+
 
     let currentIndex = 0;
 
@@ -385,15 +482,29 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
         parts.push(text.substring(currentIndex, match.start));
       }
 
-      if (boldMatches.some((bm) => bm === match)) {
+      // 1️⃣ Links (highest priority)
+      if (linkMatches.some((lm) => lm === match)) {
+        const isGitHub = match.url.includes('github.com');
+
         parts.push(
-          <strong
-            key={`bold-${idx}`}
-            className="font-bold text-[#0E1B2E] bg-gradient-to-r from-[#3B82F6] to-[#1E40AF] bg-clip-text text-transparent"
+          <a
+            key={`link-${idx}`}
+            href={match.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`
+              inline-flex items-center gap-1 px-2 py-1 rounded-md text-sm font-medium
+              ${isGitHub
+                ? 'bg-[#24292F]/10 text-[#24292F] hover:bg-[#24292F]/20'
+                : 'bg-[#0E1B2E]/10 text-[#0E1B2E] hover:bg-[#0E1B2E]/20'}
+              transition-colors
+            `}
           >
-            {match.text}
-          </strong>
+            🔗 {match.text}
+          </a>
         );
+
+      // 2️⃣ Inline code
       } else if (codeMatches.some((cm) => cm === match)) {
         parts.push(
           <code
@@ -403,10 +514,22 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
             {match.text}
           </code>
         );
+
+      // 3️⃣ Bold (lowest priority)
+      } else if (boldMatches.some((bm) => bm === match)) {
+        parts.push(
+          <strong
+            key={`bold-${idx}`}
+            className="font-bold text-[#0E1B2E] bg-gradient-to-r from-[#3B82F6] to-[#1E40AF] bg-clip-text text-transparent"
+          >
+            {match.text}
+          </strong>
+        );
       }
 
       currentIndex = match.end;
     });
+
 
     if (currentIndex < text.length) {
       parts.push(text.substring(currentIndex));
