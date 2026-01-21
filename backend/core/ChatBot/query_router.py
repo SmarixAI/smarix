@@ -11,6 +11,24 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+# Constants for routing
+VALID_INDEX_TYPES = [
+    'documentation', 'code', 'pr', 'commit', 'email', 'issue', 
+    'impact_analysis', 'traceability', 'multi', 'direct_id',
+    'pr_issue_tutorial', 'pr_issue_coding_question', 'random_pr_generator'
+]
+
+# Confidence thresholds
+MULTI_QUERY_THRESHOLD = 0.7  # Score threshold for multi-query detection
+DEFAULT_CONFIDENCE = 0.3  # Default confidence for unmatched queries
+HIGH_CONFIDENCE_MULTI = 0.8  # Confidence multiplier for multi-query
+DEFAULT_TOP3_CONFIDENCES = [0.6, 0.4, 0.3]  # Default confidences for top-3 fallback
+
+# Score multipliers
+IMPACT_ANALYSIS_BOOST = 2.0
+PR_ISSUE_CONTEXT_BOOST = 3.0
+PATTERN_MATCH_BOOST = 2.0
+
 
 class QueryRouter:
     """
@@ -110,6 +128,127 @@ class QueryRouter:
 
         logger.info(f"Initialized QueryRouter with method: {routing_method}")
 
+    def _initialize_scores(self) -> Dict[str, float]:
+        """
+        Initialize score dictionary for all index types.
+        
+        Returns:
+            Dictionary with all index types initialized to 0.0
+        """
+        return {
+            'documentation': 0.0,
+            'code': 0.0,
+            'pr': 0.0,
+            'commit': 0.0,
+            'email': 0.0,
+            'issue': 0.0,
+            'impact_analysis': 0.0,
+            'traceability': 0.0,
+            'pr_issue_tutorial': 0.0,
+            'pr_issue_coding_question': 0.0,
+            'random_pr_generator': 0.0
+        }
+    
+    def _clean_json_response(self, text: str) -> str:
+        """
+        Clean JSON response by removing markdown code blocks.
+        
+        Args:
+            text: Raw response text
+            
+        Returns:
+            Cleaned JSON string
+        """
+        text = text.strip()
+        if text.startswith("```json"):
+            text = text[7:]
+        if text.startswith("```"):
+            text = text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+        return text.strip()
+    
+    def _call_llm_client(self, prompt: str, system_message: str = None, max_tokens: int = 150) -> Optional[str]:
+        """
+        Unified LLM client call handler supporting OpenAI and Anthropic.
+        
+        Args:
+            prompt: User prompt
+            system_message: Optional system message (defaults to routing expert)
+            max_tokens: Maximum tokens in response
+            
+        Returns:
+            Response text or None if failed
+        """
+        if self.llm_client is None:
+            return None
+        
+        system_message = system_message or "You are a query routing expert. Always respond with valid JSON only."
+        
+        try:
+            if hasattr(self.llm_client, 'chat'):
+                # OpenAI-style
+                try:
+                    response = self.llm_client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[
+                            {"role": "system", "content": system_message},
+                            {"role": "user", "content": prompt}
+                        ],
+                        temperature=0.1,
+                        max_tokens=max_tokens,
+                        response_format={"type": "json_object"}
+                    )
+                except TypeError:
+                    # Fallback if response_format not supported
+                    response = self.llm_client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[
+                            {"role": "system", "content": system_message},
+                            {"role": "user", "content": prompt}
+                        ],
+                        temperature=0.1,
+                        max_tokens=max_tokens
+                    )
+                return response.choices[0].message.content.strip()
+                
+            elif hasattr(self.llm_client, 'messages'):
+                # Anthropic-style
+                response = self.llm_client.messages.create(
+                    model="claude-3-5-sonnet-20241022",
+                    max_tokens=max_tokens,
+                    temperature=0.1,
+                    system=system_message,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                return response.content[0].text.strip()
+            else:
+                logger.warning("Unknown LLM client type")
+                return None
+                
+        except Exception as e:
+            logger.error(f"LLM client call failed: {e}")
+            return None
+    
+    def _parse_llm_json_response(self, result_text: str) -> Optional[Dict[str, any]]:
+        """
+        Parse and validate LLM JSON response.
+        
+        Args:
+            result_text: Raw LLM response text
+            
+        Returns:
+            Parsed JSON dict or None if parsing fails
+        """
+        import json
+        try:
+            cleaned_text = self._clean_json_response(result_text)
+            result_json = json.loads(cleaned_text)
+            return result_json
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse JSON response: {e}")
+            return None
+
     def route(self, query: str) -> str:
         """
         Route query to appropriate index.
@@ -153,19 +292,7 @@ class QueryRouter:
         query_lower = query.lower()
 
         # Count keyword matches for each index type
-        scores = {
-            'documentation': 0,
-            'code': 0,
-            'pr': 0,
-            'commit': 0,
-            'email': 0,
-            'issue': 0,
-            'impact_analysis': 0,
-            'traceability': 0,
-            'pr_issue_tutorial': 0,
-            'pr_issue_coding_question': 0,
-            'random_pr_generator': 0
-        }
+        scores = self._initialize_scores()
 
         # Check for direct keyword matches
         for keyword, index_type in self.keyword_lookup.items():
@@ -184,53 +311,53 @@ class QueryRouter:
 
         if has_pr_issue_context:
             if any(word in query_lower for word in ['tutorial', 'guide', 'teach', 'show', 'learn', 'walkthrough']):
-                scores['pr_issue_tutorial'] += 3
+                scores['pr_issue_tutorial'] += PR_ISSUE_CONTEXT_BOOST
             if any(word in query_lower for word in ['question', 'practice', 'challenge', 'quiz', 'exercise']):
-                scores['pr_issue_coding_question'] += 3
+                scores['pr_issue_coding_question'] += PR_ISSUE_CONTEXT_BOOST
 
         if has_random_pr_pattern:
-            scores['random_pr_generator'] += 3
+            scores['random_pr_generator'] += PR_ISSUE_CONTEXT_BOOST
 
         # Check for phrase patterns
         if any(phrase in query_lower for phrase in ['how to', 'how do', 'how can']):
             # Check if it's about setup/install
             if any(word in query_lower for word in ['setup', 'install', 'configure', 'get started']):
-                scores['documentation'] += 2
+                scores['documentation'] += PATTERN_MATCH_BOOST
             else:
                 scores['code'] += 1
 
         if any(phrase in query_lower for phrase in ['why', 'reason', 'rationale']):
-            scores['pr'] += 2
+            scores['pr'] += PATTERN_MATCH_BOOST
 
         if any(phrase in query_lower for phrase in ['when', 'who', 'author', 'timeline']):
-            scores['commit'] += 2
+            scores['commit'] += PATTERN_MATCH_BOOST
 
         # Check for code-specific patterns
         if any(pattern in query_lower for pattern in ['function', 'class', 'method', 'implementation']):
-            scores['code'] += 2
+            scores['code'] += PATTERN_MATCH_BOOST
 
         # Check for PR-specific patterns
         if any(pattern in query_lower for pattern in ['pull request', 'pr #', 'feature', 'change']):
-            scores['pr'] += 2
+            scores['pr'] += PATTERN_MATCH_BOOST
 
         # Check for ISSUE-specific patterns
         if any(pattern in query_lower for pattern in [
             'error', 'exception', 'stacktrace', 'traceback', 'crash',
             'not working', 'failing', 'failure', 'bug', 'fix', 'debug',
             'investigate', 'troubleshoot', 'regression', 'reproduce']):
-            scores['issue'] += 2
+            scores['issue'] += PATTERN_MATCH_BOOST
 
         # Check for EMAIL-specific patterns
         if any(pattern in query_lower for pattern in [
             'email', 'gmail', 'mail', 'message', 'inbox', 'sent mail', 'received mail',
             'from:', 'to:', 'cc:', 'bcc:', 'subject', 'sender', 'recipient', 'attachment',
             'thread', 'conversation', 'mailbox']):
-            scores['email'] += 2
+            scores['email'] += PATTERN_MATCH_BOOST
 
         if any(pattern in query_lower for pattern in [
             'what breaks', 'impact of', 'if i change', 'who uses', 'callers of',
             'dependencies', 'dependents', 'inheritance', 'call graph', 'hierarchy']):
-            scores['impact_analysis'] += 3
+            scores['impact_analysis'] += PR_ISSUE_CONTEXT_BOOST
 
 
         # Get max score
@@ -245,7 +372,7 @@ class QueryRouter:
         best_index = max(scores.items(), key=lambda x: x[1])[0]
 
         # Check if multiple indices have high scores (multi-query)
-        high_scores = [idx for idx, score in scores.items() if score >= max_score * 0.7]
+        high_scores = [idx for idx, score in scores.items() if score >= max_score * MULTI_QUERY_THRESHOLD]
 
         if len(high_scores) > 1:
             logger.info(f"Multiple indices matched: {high_scores}, using 'multi'")
@@ -412,76 +539,16 @@ class QueryRouter:
                 Do not include any other text, only the JSON object."""
                             
             # Call LLM with structured output
-            if hasattr(self.llm_client, 'chat'):
-                # OpenAI-style - try JSON mode if available
-                try:
-                    response = self.llm_client.chat.completions.create(
-                        model="gpt-4o-mini",
-                        messages=[
-                            {"role": "system", "content": "You are a query routing expert. Always respond with valid JSON only."},
-                            {"role": "user", "content": prompt}
-                        ],
-                        temperature=0.1,
-                        max_tokens=150,
-                        response_format={"type": "json_object"}  # Force JSON output
-                    )
-                except TypeError:
-                    # Fallback if response_format not supported
-                    response = self.llm_client.chat.completions.create(
-                        model="gpt-4o-mini",
-                        messages=[
-                            {"role": "system", "content": "You are a query routing expert. Always respond with valid JSON only."},
-                            {"role": "user", "content": prompt}
-                        ],
-                        temperature=0.1,
-                        max_tokens=150
-                    )
-                result_text = response.choices[0].message.content.strip()
-                
-            elif hasattr(self.llm_client, 'messages'):
-                # Anthropic-style
-                response = self.llm_client.messages.create(
-                    model="claude-3-5-sonnet-20241022",
-                    max_tokens=150,
-                    temperature=0.1,
-                    system="You are a query routing expert. Always respond with valid JSON only.",
-                    messages=[{"role": "user", "content": prompt}]
-                )
-                result_text = response.content[0].text.strip()
-            else:
-                logger.warning("Unknown LLM client type, falling back to keyword")
+            result_text = self._call_llm_client(prompt, max_tokens=150)
+            if result_text is None:
+                logger.warning("LLM client call failed, falling back to keyword")
                 return self.keyword_route(query)
             
             # Parse JSON response
-            import json
-            try:
-                # Clean up response (remove markdown code blocks if present)
-                result_text = result_text.strip()
-                if result_text.startswith("```json"):
-                    result_text = result_text[7:]
-                if result_text.startswith("```"):
-                    result_text = result_text[3:]
-                if result_text.endswith("```"):
-                    result_text = result_text[:-3]
-                result_text = result_text.strip()
-                
-                result_json = json.loads(result_text)
-                index_type = result_json.get('index_type', '').lower().strip()
-                confidence = result_json.get('confidence', 0.5)
-                reasoning = result_json.get('reasoning', '')
-                
-                # Validate index type
-                valid_types = ['documentation', 'code', 'pr', 'commit', 'email', 'issue', 'impact_analysis', 'traceability', 'multi']
-                if index_type in valid_types:
-                    logger.info(f"LLM route: '{query[:50]}...' → '{index_type}' (confidence: {confidence:.2f}, reasoning: {reasoning})")
-                    return index_type
-                else:
-                    logger.warning(f"LLM returned invalid type: '{index_type}', falling back to keyword")
-                    return self.keyword_route(query)
-                    
-            except json.JSONDecodeError as e:
+            result_json = self._parse_llm_json_response(result_text)
+            if result_json is None:
                 # Try to extract index type from text if JSON parsing fails
-                logger.warning(f"Failed to parse JSON response: {e}, attempting text extraction")
+                logger.warning("Failed to parse JSON response, attempting text extraction")
                 result_lower = result_text.lower()
                 for valid_type in ['documentation', 'code', 'pr', 'commit', 'multi']:
                     if f'"index_type": "{valid_type}"' in result_lower or f'index_type": "{valid_type}' in result_lower:
@@ -489,6 +556,19 @@ class QueryRouter:
                         return valid_type
                 
                 logger.warning(f"Could not extract index type from: {result_text}, falling back to keyword")
+                return self.keyword_route(query)
+            
+            index_type = result_json.get('index_type', '').lower().strip()
+            confidence = result_json.get('confidence', 0.5)
+            reasoning = result_json.get('reasoning', '')
+            
+            # Validate index type
+            valid_types = [t for t in VALID_INDEX_TYPES if t not in ['direct_id', 'pr_issue_tutorial', 'pr_issue_coding_question', 'random_pr_generator']]
+            if index_type in valid_types:
+                logger.info(f"LLM route: '{query[:50]}...' → '{index_type}' (confidence: {confidence:.2f}, reasoning: {reasoning})")
+                return index_type
+            else:
+                logger.warning(f"LLM returned invalid type: '{index_type}', falling back to keyword")
                 return self.keyword_route(query)
                 
         except Exception as e:
@@ -551,93 +631,50 @@ class QueryRouter:
                 Respond with ONLY a valid JSON object:
                 {{"index_type": "documentation|code|pr|commit|email|issue|impact_analysis|traceability|multi", "confidence": 0.0-1.0, "reasoning": "brief explanation"}}"""
 
-            if hasattr(self.llm_client, 'chat'):
-                try:
-                    response = self.llm_client.chat.completions.create(
-                        model="gpt-4o-mini",
-                        messages=[
-                            {"role": "system", "content": "You are a query routing expert. Always respond with valid JSON only."},
-                            {"role": "user", "content": prompt}
-                        ],
-                        temperature=0.1,
-                        max_tokens=150,
-                        response_format={"type": "json_object"}
-                    )
-                except TypeError:
-                    response = self.llm_client.chat.completions.create(
-                        model="gpt-4o-mini",
-                        messages=[
-                            {"role": "system", "content": "You are a query routing expert. Always respond with valid JSON only."},
-                            {"role": "user", "content": prompt}
-                        ],
-                        temperature=0.1,
-                        max_tokens=150
-                    )
-                result_text = response.choices[0].message.content.strip()
-            elif hasattr(self.llm_client, 'messages'):
-                response = self.llm_client.messages.create(
-                    model="claude-3-5-sonnet-20241022",
-                    max_tokens=150,
-                    temperature=0.1,
-                    system="You are a query routing expert. Always respond with valid JSON only.",
-                    messages=[{"role": "user", "content": prompt}]
-                )
-                result_text = response.content[0].text.strip()
-            else:
+            result_text = self._call_llm_client(prompt, max_tokens=150)
+            if result_text is None:
                 return self._keyword_route_with_confidence(query)
             
             # Parse JSON
-            import json
-            try:
-                result_text = result_text.strip()
-                if result_text.startswith("```json"):
-                    result_text = result_text[7:]
-                if result_text.startswith("```"):
-                    result_text = result_text[3:]
-                if result_text.endswith("```"):
-                    result_text = result_text[:-3]
-                result_text = result_text.strip()
-                
-                result_json = json.loads(result_text)
-                index_type = result_json.get('index_type', '').lower().strip()
-                confidence = float(result_json.get('confidence', 0.7))
-                reasoning = result_json.get('reasoning', '')
-                
-                # Validate
-                valid_types = ['documentation', 'code', 'pr', 'commit', 'email', 'issue', 'impact_analysis', 'traceability', 'multi']
-                if index_type in valid_types:
-                    # Clamp confidence to valid range
-                    confidence = max(0.0, min(1.0, confidence))
-                    logger.info(f"LLM route (with confidence): '{query[:50]}...' → '{index_type}' ({confidence:.2f}) - {reasoning}")
-                    return (index_type, confidence)
-                else:
-                    logger.warning(f"LLM returned invalid type: '{index_type}', falling back")
-                    return self._keyword_route_with_confidence(query)
-                    
-            except (json.JSONDecodeError, ValueError, KeyError) as e:
-                logger.warning(f"Failed to parse LLM confidence response: {e}, using default confidence")
+            result_json = self._parse_llm_json_response(result_text)
+            if result_json is None:
+                logger.warning("Failed to parse LLM confidence response, using default confidence")
                 # Try to get index type from llm_route
                 index_type = self.llm_route(query)
                 confidence = 0.75 if index_type != 'multi' else 0.6
                 return (index_type, confidence)
+            
+            index_type = result_json.get('index_type', '').lower().strip()
+            confidence = float(result_json.get('confidence', 0.7))
+            reasoning = result_json.get('reasoning', '')
+            
+            # Validate
+            valid_types = [t for t in VALID_INDEX_TYPES if t not in ['direct_id', 'pr_issue_tutorial', 'pr_issue_coding_question', 'random_pr_generator']]
+            if index_type in valid_types:
+                # Clamp confidence to valid range
+                confidence = max(0.0, min(1.0, confidence))
+                logger.info(f"LLM route (with confidence): '{query[:50]}...' → '{index_type}' ({confidence:.2f}) - {reasoning}")
+                return (index_type, confidence)
+            else:
+                logger.warning(f"LLM returned invalid type: '{index_type}', falling back")
+                return self._keyword_route_with_confidence(query)
                 
         except Exception as e:
             logger.error(f"LLM confidence routing failed: {e}, falling back to keyword")
             return self._keyword_route_with_confidence(query)
     
     def _keyword_route_with_confidence(self, query: str) -> Tuple[str, float]:
-        """Keyword routing with confidence score"""
+        """
+        Keyword routing with confidence score.
+        
+        Args:
+            query: User query string
+            
+        Returns:
+            Tuple of (index_type, confidence_score)
+        """
         query_lower = query.lower()
-        scores = {
-            'documentation': 0,
-            'code': 0,
-            'pr': 0,
-            'commit': 0,
-            'email': 0,
-            'issue': 0,
-            'impact_analysis': 0,
-            'traceability': 0,
-        }
+        scores = self._initialize_scores()
         
         # Count matches
         for keyword, index_type in self.keyword_lookup.items():
@@ -645,21 +682,21 @@ class QueryRouter:
                 scores[index_type] += 1
 
         if any(p in query_lower for p in ['breaks', 'impact', 'who uses', 'callers', 'dependency']):
-            scores['impact_analysis'] += 2.0
+            scores['impact_analysis'] += IMPACT_ANALYSIS_BOOST
         
         max_score = max(scores.values())
         total_score = sum(scores.values())
         
         if total_score == 0:
-            return ('code', 0.3)  # Low confidence default
+            return ('code', DEFAULT_CONFIDENCE)
         
         best_index = max(scores.items(), key=lambda x: x[1])[0]
         confidence = min(max_score / max(total_score, 1), 1.0)
         
         # Check for multi-query
-        high_scores = [idx for idx, score in scores.items() if score >= max_score * 0.7]
+        high_scores = [idx for idx, score in scores.items() if score >= max_score * MULTI_QUERY_THRESHOLD]
         if len(high_scores) > 1:
-            return ('multi', confidence * 0.8)
+            return ('multi', confidence * HIGH_CONFIDENCE_MULTI)
         
         return (best_index, confidence)
     
@@ -722,93 +759,51 @@ class QueryRouter:
 
                 Return exactly 3 indexes, sorted by confidence (highest first). Do not include any other text."""
 
-            if hasattr(self.llm_client, 'chat'):
-                try:
-                    response = self.llm_client.chat.completions.create(
-                        model="gpt-4o-mini",
-                        messages=[
-                            {"role": "system", "content": "You are a query routing expert. Always respond with valid JSON only."},
-                            {"role": "user", "content": prompt}
-                        ],
-                        temperature=0.1,
-                        max_tokens=300,
-                        response_format={"type": "json_object"}
-                    )
-                except TypeError:
-                    response = self.llm_client.chat.completions.create(
-                        model="gpt-4o-mini",
-                        messages=[
-                            {"role": "system", "content": "You are a query routing expert. Always respond with valid JSON only."},
-                            {"role": "user", "content": prompt}
-                        ],
-                        temperature=0.1,
-                        max_tokens=300
-                    )
-                result_text = response.choices[0].message.content.strip()
-            elif hasattr(self.llm_client, 'messages'):
-                response = self.llm_client.messages.create(
-                    model="claude-3-5-sonnet-20241022",
-                    max_tokens=300,
-                    temperature=0.1,
-                    system="You are a query routing expert. Always respond with valid JSON only.",
-                    messages=[{"role": "user", "content": prompt}]
-                )
-                result_text = response.content[0].text.strip()
-            else:
+            result_text = self._call_llm_client(prompt, max_tokens=300)
+            if result_text is None:
                 return self._keyword_route_top3(query)
             
             # Parse JSON
-            import json
-            try:
-                result_text = result_text.strip()
-                if result_text.startswith("```json"):
-                    result_text = result_text[7:]
-                if result_text.startswith("```"):
-                    result_text = result_text[3:]
-                if result_text.endswith("```"):
-                    result_text = result_text[:-3]
-                result_text = result_text.strip()
-                
-                result_json = json.loads(result_text)
-                top3_list = result_json.get('top3_indexes', [])
-                
-                if len(top3_list) < 3:
-                    logger.warning(f"LLM returned {len(top3_list)} indexes, expected 3. Falling back to keyword.")
-                    return self._keyword_route_top3(query)
-                
-                # Extract and validate
-                valid_types = ['documentation', 'code', 'pr', 'commit', 'email', 'issue', 'impact_analysis', 'traceability', 'multi']
-                top3_results = []
-                for item in top3_list[:3]:
-                    idx_type = item.get('index_type', '').lower().strip()
-                    confidence = float(item.get('confidence', 0.5))
-                    confidence = max(0.0, min(1.0, confidence))
-                    
-                    if idx_type in valid_types:
-                        top3_results.append((idx_type, confidence))
-                
-                if len(top3_results) < 3:
-                    logger.warning(f"Only {len(top3_results)} valid indexes from LLM, filling with keyword routing")
-                    keyword_top3 = self._keyword_route_top3(query)
-                    # Merge and deduplicate
-                    seen = set()
-                    merged = []
-                    for idx, conf in top3_results + keyword_top3:
-                        if idx not in seen:
-                            seen.add(idx)
-                            merged.append((idx, conf))
-                            if len(merged) >= 3:
-                                break
-                    return merged[:3]
-                
-                # Sort by confidence (descending)
-                top3_results.sort(key=lambda x: x[1], reverse=True)
-                logger.info(f"LLM TOP-3 route: {top3_results}")
-                return top3_results[:3]
-                
-            except (json.JSONDecodeError, ValueError, KeyError) as e:
-                logger.warning(f"Failed to parse LLM TOP-3 response: {e}, falling back to keyword")
+            result_json = self._parse_llm_json_response(result_text)
+            if result_json is None:
+                logger.warning("Failed to parse LLM TOP-3 response, falling back to keyword")
                 return self._keyword_route_top3(query)
+            
+            top3_list = result_json.get('top3_indexes', [])
+            
+            if len(top3_list) < 3:
+                logger.warning(f"LLM returned {len(top3_list)} indexes, expected 3. Falling back to keyword.")
+                return self._keyword_route_top3(query)
+            
+            # Extract and validate
+            valid_types = [t for t in VALID_INDEX_TYPES if t not in ['direct_id', 'pr_issue_tutorial', 'pr_issue_coding_question', 'random_pr_generator']]
+            top3_results = []
+            for item in top3_list[:3]:
+                idx_type = item.get('index_type', '').lower().strip()
+                confidence = float(item.get('confidence', 0.5))
+                confidence = max(0.0, min(1.0, confidence))
+                
+                if idx_type in valid_types:
+                    top3_results.append((idx_type, confidence))
+            
+            if len(top3_results) < 3:
+                logger.warning(f"Only {len(top3_results)} valid indexes from LLM, filling with keyword routing")
+                keyword_top3 = self._keyword_route_top3(query)
+                # Merge and deduplicate
+                seen = set()
+                merged = []
+                for idx, conf in top3_results + keyword_top3:
+                    if idx not in seen:
+                        seen.add(idx)
+                        merged.append((idx, conf))
+                        if len(merged) >= 3:
+                            break
+                return merged[:3]
+            
+            # Sort by confidence (descending)
+            top3_results.sort(key=lambda x: x[1], reverse=True)
+            logger.info(f"LLM TOP-3 route: {top3_results}")
+            return top3_results[:3]
                 
         except Exception as e:
             logger.error(f"LLM TOP-3 routing failed: {e}, falling back to keyword")
@@ -825,16 +820,7 @@ class QueryRouter:
             List of (index_type, confidence) tuples, sorted by confidence (descending)
         """
         query_lower = query.lower()
-        scores = {
-            'documentation': 0.0,
-            'code': 0.0,
-            'pr': 0.0,
-            'commit': 0.0,
-            'email': 0.0,
-            'issue': 0.0,
-            'impact_analysis': 0.0,
-            'traceability': 0.0,
-        }
+        scores = self._initialize_scores()
         
         # Count keyword matches
         for keyword, index_type in self.keyword_lookup.items():
@@ -842,7 +828,7 @@ class QueryRouter:
                 scores[index_type] += 1.0
 
         if any(p in query_lower for p in ['breaks', 'impact', 'callers', 'dependency']):
-            scores['impact_analysis'] += 2.0
+            scores['impact_analysis'] += IMPACT_ANALYSIS_BOOST
         
         # Normalize scores to confidence (0.0-1.0)
         max_score = max(scores.values()) if scores.values() else 1.0
@@ -850,7 +836,11 @@ class QueryRouter:
         
         if total_score == 0:
             # Default: code, documentation, pr with decreasing confidence
-            return [('code', 0.6), ('documentation', 0.4), ('pr', 0.3)]
+            return [
+                ('code', DEFAULT_TOP3_CONFIDENCES[0]), 
+                ('documentation', DEFAULT_TOP3_CONFIDENCES[1]), 
+                ('pr', DEFAULT_TOP3_CONFIDENCES[2])
+            ]
         
         # Convert scores to confidence scores
         confidences = {}

@@ -2,9 +2,195 @@
 import re
 import time
 from typing import List, Dict, Any, Optional, Iterator
-from .query_type import QueryType 
+from .query_type import QueryType
+
+# Constants for classification
+GREETING_WORDS = ['hi', 'hello', 'hellow', 'hey', 'greetings', 'howdy', 'sup']
+
+GREETING_PATTERNS = [
+    r'^(hi+|hello+|hey+)\s*(there|chatbot|bot|assistant)[\?\.!]*$',
+    r'^(what\'s up|whats up|sup|howdy)[\?\.!]*$',
+    r'^(good\s+(morning|afternoon|evening))[\?\.!]*$',
+    r'^(how\s+are\s+you|how\s+do\s+you\s+do)[\?\.!]*$',
+    r'^(introduce\s+yourself|who\s+are\s+you|what\s+can\s+you\s+do)[\?\.!]*$',
+    r'^help[\?\.!]*$',
+    r'^start[\?\.!]*$',
+]
+
+QUESTION_GENERATION_PATTERNS = [
+    r"generate\s+(questions?|mcqs?|quiz)",
+    r"create\s+(questions?|mcqs?|quiz)",
+    r"make\s+(questions?|mcqs?|quiz)",
+    r"give\s+me\s+(questions?|mcqs?|quiz)",
+    r"(questions?|mcqs?|quiz)\s+(on|about|for)",
+    r"test\s+my\s+knowledge",
+    r"assess\s+(my\s+)?understanding",
+    r"prepare\s+(questions?|quiz)",
+    r"subjective\s+questions?",
+    r"code\s+based\s+questions?",
+    r"multiple\s+choice\s+questions?",
+    r"coding\s+question\s+based?"
+]
+
+PR_ISSUE_PATTERNS = [
+    'pr #', 'pr#', 'pull request #', 'issue #', 'issue#',
+    'from pr', 'from issue', 'based on pr', 'based on issue',
+    'using pr', 'using issue'
+]
+
+TUTORIAL_INTENT_PATTERNS = [
+    'tutorial', 'guide', 'walkthrough', 'step by step', 'teach',
+    'show me how', 'explain how', 'learn', 'guide me through'
+]
+
+QUESTION_INTENT_PATTERNS = [
+    'question', 'challenge', 'practice', 'exercise', 'problem',
+    'coding question', 'coding challenge', 'practice problem',
+    'quiz', 'test', 'assessment', 'task'
+]
+
+RANDOM_PR_PATTERNS = [
+    r'random\s+pr',
+    r'random\s+pull\s+request',
+    r'generate\s+random\s+pr',
+    r'pick\s+random\s+pr',
+    r'select\s+random\s+pr',
+    r'choose\s+random\s+pr',
+    r'find\s+random\s+pr',
+    r'get\s+random\s+pr',
+    r'show\s+random\s+pr',
+    r'give\s+me\s+random\s+pr',
+    r'any\s+random\s+pr',
+    r'suggest\s+pr',
+    r'random\s+merged\s+pr',
+]
+
+METRICS_KEYWORDS = [
+    'repo metric', 'repository metric', 'show me metric',
+    'lines of code', 'loc', 'total lines', 'code lines',
+    'how many lines', 'size of codebase', 'number of functions',
+    'number of classes', 'function count', 'class count',
+    'code metric', 'complexity', 'code quality', 'code statistics',
+    'statistics', 'code stats'
+]
+
+TECH_STACK_KEYWORDS = [
+    'tech stack', 'technology', 'technologies used', 'framework',
+    'frameworks', 'what language', 'programming language',
+    'built with', 'uses what', 'database', 'tools used',
+    'dependencies', 'libraries'
+]
+
+STRUCTURE_KEYWORDS = [
+    'codebase structure', 'project structure', 'folder structure',
+    'directory structure', 'file organization', 'how is code organized',
+    'repo structure', 'repository structure', 'modules', 'components',
+    'file hierarchy', 'directory tree', 'code structure', 'show me.*structure',
+    'diagram.*structure', 'structure.*diagram'
+]
+
+FLOW_KEYWORDS = [
+    'flow', 'diagram', 'sequence', 'process flow', 'architecture',
+    'how does it work', 'how does', 'explain the flow', 'data flow',
+    'workflow', 'pipeline', 'system design', 'architecture.*service',
+    'service.*architecture', 'architecture.*flow', 'flow.*architecture'
+]
+
+IMPACT_KEYWORDS = [
+    'what breaks', 'impact of', 'if i change', 'who uses', 'callers of',
+    'dependencies', 'depend on', 'relies on', 'used by', 'who calls',
+    'change impact', 'consequences of changing', 'call graph', 'hierarchy',
+    'inheritance'
+]
+
+TRACEABILITY_KEYWORDS = [
+    'who changed', 'who modified', 'who updated', 'who wrote',
+    'who created', 'author of', 'creator of', 'history of',
+    'evolution of', 'timeline of', 'changes to', 'past versions',
+    'who is the expert', 'who knows about'
+]
+
+STOP_WORDS = {
+    'how', 'do', 'i', 'the', 'a', 'an', 'is', 'are', 'what', 'where',
+    'when', 'who', 'which', 'this', 'that', 'can', 'does', 'to', 'in',
+    'on', 'for', 'me', 'you', 'it', 'of', 'and', 'or', 'but', 'show', 'me',
+    'about', 'tell', 'first', 'last', 'oldest', 'newest', 'latest'
+}
+
+# LLM Configuration Constants
+LLM_TEMPERATURE_LOW = 0.1  # For classification tasks
+LLM_TEMPERATURE_MEDIUM = 0.3  # For rewriting/optimization tasks
+LLM_MAX_TOKENS_SHORT = 10  # For yes/no responses
+LLM_MAX_TOKENS_MEDIUM = 50  # For category names
+LLM_MAX_TOKENS_STANDARD = 150  # For query optimization
+LLM_MAX_TOKENS_LONG = 200  # For query rewriting
+
+# Streaming and validation constants
+STREAMING_DELAY = 0.02  # Delay between lines in streaming (seconds)
+QUERY_LENGTH_MULTIPLIER_THRESHOLD = 3  # Max length multiplier for rewritten queries
+WORD_OVERLAP_THRESHOLD = 0.3  # Minimum word overlap for rewritten queries
+SHORT_QUERY_MAX_WORDS = 2  # Max words for short query detection
+SHORT_QUERY_MAX_LENGTH = 20  # Max characters for short query detection
+
+# Simple queries that shouldn't be rewritten
+SIMPLE_QUERIES = ['help', 'start', 'hi', 'hello', 'hey']
+
 
 class ClassifierMixin:
+
+    def _call_llm_client(
+        self, 
+        prompt: str, 
+        system_message: str = None,
+        temperature: float = LLM_TEMPERATURE_LOW,
+        max_tokens: int = LLM_MAX_TOKENS_MEDIUM
+    ) -> Optional[str]:
+        """
+        Unified LLM client call handler supporting OpenAI and Anthropic.
+        
+        Args:
+            prompt: User prompt
+            system_message: Optional system message
+            temperature: Temperature for generation
+            max_tokens: Maximum tokens in response
+            
+        Returns:
+            Response text or None if failed
+        """
+        if not hasattr(self, 'provider') or self.provider not in ['openai', 'anthropic']:
+            return None
+        
+        if not hasattr(self, 'client') or not self.client:
+            return None
+        
+        try:
+            if self.provider == 'openai':
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": system_message or "You are a helpful assistant."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=temperature,
+                    max_tokens=max_tokens
+                )
+                return response.choices[0].message.content.strip()
+                
+            elif self.provider == 'anthropic':
+                response = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    system=system_message or "You are a helpful assistant.",
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                return response.content[0].text.strip()
+            
+            return None
+                
+        except Exception as e:
+            self.logger.error(f"LLM client call failed: {e}")
+            return None
 
     def is_greeting(self, query: str) -> bool:
         """
@@ -16,9 +202,7 @@ class ClassifierMixin:
             return False
 
         # Try LLM-based detection first if available
-        if self.provider in ['openai', 'anthropic'] and hasattr(self, 'client') and self.client:
-            try:
-                greeting_prompt = f"""Determine if the following user message is a greeting or introduction.
+        greeting_prompt = f"""Determine if the following user message is a greeting or introduction.
 
         A greeting is:
         - A simple hello, hi, hey, or similar salutation (including variations like "hii", "hiii", "heyyy")
@@ -36,38 +220,18 @@ class ClassifierMixin:
 
         Respond with ONLY "yes" if it's a greeting, or "no" if it's not. No other text."""
 
-                if self.provider == 'openai':
-                    response = self.client.chat.completions.create(
-                        model=self.model,
-                        messages=[
-                            {"role": "system",
-                             "content": "You are a helpful assistant that classifies user messages. Respond with only 'yes' or 'no'."},
-                            {"role": "user", "content": greeting_prompt}
-                        ],
-                        temperature=0.1,  # Low temperature for consistent classification
-                        max_tokens=10  # Just need "yes" or "no"
-                    )
-                    result = response.choices[0].message.content.strip().lower()
-                elif self.provider == 'anthropic':
-                    response = self.client.messages.create(
-                        model=self.model,
-                        max_tokens=10,
-                        temperature=0.1,
-                        system="You are a helpful assistant that classifies user messages. Respond with only 'yes' or 'no'.",
-                        messages=[{"role": "user", "content": greeting_prompt}]
-                    )
-                    result = response.content[0].text.strip().lower()
-                else:
-                    result = None
+        result = self._call_llm_client(
+            greeting_prompt,
+            system_message="You are a helpful assistant that classifies user messages. Respond with only 'yes' or 'no'.",
+            temperature=LLM_TEMPERATURE_LOW,
+            max_tokens=LLM_MAX_TOKENS_SHORT
+        )
 
-                if result:
-                    is_greeting = result.startswith('yes')
-                    if is_greeting:
-                        self.logger.info(f"GREETING DETECTION | LLM detected greeting: '{query}'")
-                    return is_greeting
-
-            except Exception as e:
-                self.logger.warning(f"GREETING DETECTION | LLM detection failed: {e}, falling back to regex")
+        if result:
+            is_greeting = result.lower().startswith('yes')
+            if is_greeting:
+                self.logger.info(f"GREETING DETECTION | LLM detected greeting: '{query}'")
+            return is_greeting
 
         # Fallback to regex-based detection
         query_lower = query.lower()
@@ -75,15 +239,12 @@ class ClassifierMixin:
         # Remove punctuation for easier matching
         query_clean = re.sub(r'[^\w\s]', '', query_lower).strip()
 
-        # Check for common greeting words (allowing for repeated letters like "hii", "hiii")
-        greeting_words = ['hi', 'hello','hellow', 'hey', 'greetings', 'howdy', 'sup']
-
         # Normalize by collapsing repeated consecutive letters (e.g., "hii" -> "hi", "hiii" -> "hi")
         # This handles variations like "hii", "hiii", "heyyy", etc.
         normalized = re.sub(r'(.)\1+', r'\1', query_clean)
 
         # Check if normalized query starts with a greeting word
-        for word in greeting_words:
+        for word in GREETING_WORDS:
             if normalized.startswith(word):
                 # Check if it's just the greeting word
                 remaining = normalized[len(word):].strip()
@@ -94,17 +255,7 @@ class ClassifierMixin:
                     return True
 
         # Also check original query with patterns (handles punctuation)
-        greeting_patterns = [
-            r'^(hi+|hello+|hey+)\s*(there|chatbot|bot|assistant)[\?\.!]*$',
-            r'^(what\'s up|whats up|sup|howdy)[\?\.!]*$',
-            r'^(good\s+(morning|afternoon|evening))[\?\.!]*$',
-            r'^(how\s+are\s+you|how\s+do\s+you\s+do)[\?\.!]*$',
-            r'^(introduce\s+yourself|who\s+are\s+you|what\s+can\s+you\s+do)[\?\.!]*$',
-            r'^help[\?\.!]*$',
-            r'^start[\?\.!]*$',
-        ]
-
-        for pattern in greeting_patterns:
+        for pattern in GREETING_PATTERNS:
             if re.match(pattern, query_lower):
                 return True
 
@@ -116,22 +267,7 @@ class ClassifierMixin:
         """
         query_lower = query.lower().strip()
 
-        question_patterns = [
-            r"generate\s+(questions?|mcqs?|quiz)",
-            r"create\s+(questions?|mcqs?|quiz)",
-            r"make\s+(questions?|mcqs?|quiz)",
-            r"give\s+me\s+(questions?|mcqs?|quiz)",
-            r"(questions?|mcqs?|quiz)\s+(on|about|for)",
-            r"test\s+my\s+knowledge",
-            r"assess\s+(my\s+)?understanding",
-            r"prepare\s+(questions?|quiz)",
-            r"subjective\s+questions?",
-            r"code\s+based\s+questions?",
-            r"multiple\s+choice\s+questions?",
-            r"coding\s+question\s+based?"
-        ]
-
-        for pattern in question_patterns:
+        for pattern in QUESTION_GENERATION_PATTERNS:
             if re.search(pattern, query_lower):
                 return True
 
@@ -144,16 +280,8 @@ class ClassifierMixin:
         query_lower = query.lower().strip()
 
         # Must have both: PR/issue reference AND tutorial/guide keywords
-        has_pr_issue = any(pattern in query_lower for pattern in [
-            'pr #', 'pr#', 'pull request #', 'issue #', 'issue#',
-            'from pr', 'from issue', 'based on pr', 'based on issue',
-            'using pr', 'using issue'
-        ])
-
-        has_tutorial_intent = any(pattern in query_lower for pattern in [
-            'tutorial', 'guide', 'walkthrough', 'step by step', 'teach',
-            'show me how', 'explain how', 'learn', 'guide me through'
-        ])
+        has_pr_issue = any(pattern in query_lower for pattern in PR_ISSUE_PATTERNS)
+        has_tutorial_intent = any(pattern in query_lower for pattern in TUTORIAL_INTENT_PATTERNS)
 
         return has_pr_issue and has_tutorial_intent
 
@@ -164,27 +292,19 @@ class ClassifierMixin:
         """
         query_lower = query.lower().strip()
 
-        has_question_intent = any(pattern in query_lower for pattern in [
-            'question', 'challenge', 'practice', 'exercise', 'problem',
-            'coding question', 'coding challenge', 'practice problem',
-            'quiz', 'test', 'assessment', 'task'
-        ])
+        has_question_intent = any(pattern in query_lower for pattern in QUESTION_INTENT_PATTERNS)
 
-        has_pr_issue = any(pattern in query_lower for pattern in [
-            'pr #', 'pr#', 'pull request #', 'issue #', 'issue#',
-            'from pr', 'from issue', 'based on pr', 'based on issue',
-            'using pr', 'using issue',
-
+        # Extended PR/issue patterns including random PR requests
+        extended_pr_issue_patterns = PR_ISSUE_PATTERNS + [
             'random pr', 'random pull request', 'random issue',
             'any pr', 'any pull request', 'any issue',
             'a pr', 'a pull request', 'an issue',
-
             'easy pr', 'medium pr', 'hard pr',
             'easy pull request', 'medium pull request', 'hard pull request',
             'easy difficulty pr', 'medium difficulty pr', 'hard difficulty pr',
-
             'inspired by', 'based on a', 'from a'
-        ])
+        ]
+        has_pr_issue = any(pattern in query_lower for pattern in extended_pr_issue_patterns)
 
         combined_patterns = [
             'generate a coding question',
@@ -270,7 +390,7 @@ Feel free to ask me anything about the codebase!"""
         for line in lines:
             yield line + '\n'
             # small delay to make streaming more natural (adjustable)
-            time.sleep(0.02)
+            time.sleep(STREAMING_DELAY)
 
     def expand_query(self, query: str) -> str:
         query_lower = query.lower().strip()
@@ -364,12 +484,7 @@ Feel free to ask me anything about the codebase!"""
         return None
 
     def extract_keywords(self, query: str) -> List[str]:
-        stop_words = {
-            'how', 'do', 'i', 'the', 'a', 'an', 'is', 'are', 'what', 'where',
-            'when', 'who', 'which', 'this', 'that', 'can', 'does', 'to', 'in',
-            'on', 'for', 'me', 'you', 'it', 'of', 'and', 'or', 'but', 'show', 'me',
-            'about', 'tell', 'first', 'last', 'oldest', 'newest', 'latest'
-        }
+        stop_words = STOP_WORDS
 
         words = re.findall(r'\b\w+\b', query.lower())
         keywords = [w for w in words if w not in stop_words and len(w) > 2]
@@ -394,32 +509,16 @@ Feel free to ask me anything about the codebase!"""
 
         OPTIMIZED QUERY:"""
 
+        queries_text = self._call_llm_client(
+            multi_query_prompt,
+            system_message="You are a query optimization expert. Generate 1 optimized query variation.",
+            temperature=LLM_TEMPERATURE_MEDIUM,
+            max_tokens=LLM_MAX_TOKENS_STANDARD
+        )
+
         try:
-            if self.provider == 'openai':
-                response = self.client.chat.completions.create(
-                    model='gpt-4o-mini',
-                    messages=[
-                        {"role": "system",
-                         "content": "You are a query optimization expert. Generate 1 optimized query variation."},
-                        {"role": "user", "content": multi_query_prompt}
-                    ],
-                    temperature=0.3,
-                    max_tokens=150
-                )
-                queries_text = response.choices[0].message.content.strip()
-
-            elif self.provider == 'anthropic':
-                response = self.client.messages.create(
-                    model=self.model,
-                    max_tokens=150,
-                    temperature=0.3,
-                    system="You are a query optimization expert. Generate 1 optimized query variation.",
-                    messages=[{"role": "user", "content": multi_query_prompt}]
-                )
-                queries_text = response.content[0].text.strip()
-
-            else:
-                self.logger.info("MULTI-QUERY | Skipped (provider not OpenAI/Anthropic)")
+            if not queries_text:
+                self.logger.info("MULTI-QUERY | Skipped (provider not OpenAI/Anthropic or call failed)")
                 return [original_query]
 
             # Extract single query (handle both single line and multi-line responses)
@@ -476,32 +575,18 @@ Feel free to ask me anything about the codebase!"""
         CATEGORY:"""
 
         try:
-            if self.provider == 'openai':
-                response = self.client.chat.completions.create(
-                    model='gpt-4o-mini',
-                    messages=[
-                        {"role": "system",
-                         "content": "You are a query classification expert. Respond with only the category name."},
-                        {"role": "user", "content": classification_prompt}
-                    ],
-                    temperature=0.1,
-                    max_tokens=50
-                )
-                category = response.choices[0].message.content.strip().lower()
+            category_text = self._call_llm_client(
+                classification_prompt,
+                system_message="You are a query classification expert. Respond with only the category name.",
+                temperature=LLM_TEMPERATURE_LOW,
+                max_tokens=LLM_MAX_TOKENS_MEDIUM
+            )
 
-            elif self.provider == 'anthropic':
-                response = self.client.messages.create(
-                    model=self.model,
-                    max_tokens=50,
-                    temperature=0.1,
-                    system="You are a query classification expert. Respond with only the category name.",
-                    messages=[{"role": "user", "content": classification_prompt}]
-                )
-                category = response.content[0].text.strip().lower()
-
-            else:
-                self.logger.info("LLM CLASSIFICATION | Skipped (provider not OpenAI/Anthropic)")
+            if not category_text:
+                self.logger.info("LLM CLASSIFICATION | Skipped (provider not OpenAI/Anthropic or call failed)")
                 return QueryType.GENERAL
+
+            category = category_text.lower()
 
             valid_categories = [
                 QueryType.FLOW_ARCHITECTURE,
@@ -558,36 +643,15 @@ Feel free to ask me anything about the codebase!"""
             self.logger.info("CLASSIFICATION | Rule-based: QUESTION_GENERATION")
             return QueryType.QUESTION_GENERATION
 
-        metrics_keywords = [
-            'repo metric', 'repository metric', 'show me metric',
-            'lines of code', 'loc', 'total lines', 'code lines',
-            'how many lines', 'size of codebase', 'number of functions',
-            'number of classes', 'function count', 'class count',
-            'code metric', 'complexity', 'code quality', 'code statistics',
-            'statistics', 'code stats'
-        ]
-        if any(kw in query_lower for kw in metrics_keywords):
+        if any(kw in query_lower for kw in METRICS_KEYWORDS):
             self.logger.info("CLASSIFICATION | Rule-based: REPOSITORY_METRICS")
             return QueryType.REPOSITORY_METRICS
 
-        tech_keywords = [
-            'tech stack', 'technology', 'technologies used', 'framework',
-            'frameworks', 'what language', 'programming language',
-            'built with', 'uses what', 'database', 'tools used',
-            'dependencies', 'libraries'
-        ]
-        if any(kw in query_lower for kw in tech_keywords):
+        if any(kw in query_lower for kw in TECH_STACK_KEYWORDS):
             self.logger.info("CLASSIFICATION | Rule-based: TECH_STACK")
             return QueryType.TECH_STACK
 
-        structure_keywords = [
-            'codebase structure', 'project structure', 'folder structure',
-            'directory structure', 'file organization', 'how is code organized',
-            'repo structure', 'repository structure', 'modules', 'components',
-            'file hierarchy', 'directory tree', 'code structure', 'show me.*structure',
-            'diagram.*structure', 'structure.*diagram'
-        ]
-        if any(re.search(kw, query_lower) for kw in structure_keywords):
+        if any(re.search(kw, query_lower) for kw in STRUCTURE_KEYWORDS):
             self.logger.info("CLASSIFICATION | Rule-based: CODE_STRUCTURE")
             return QueryType.CODE_STRUCTURE
 
@@ -603,13 +667,7 @@ Feel free to ask me anything about the codebase!"""
             self.logger.info("CLASSIFICATION | Rule-based: COMMIT_SPECIFIC")
             return QueryType.COMMIT_SPECIFIC
 
-        flow_keywords = [
-            'flow', 'diagram', 'sequence', 'process flow', 'architecture',
-            'how does it work', 'how does', 'explain the flow', 'data flow',
-            'workflow', 'pipeline', 'system design', 'architecture.*service',
-            'service.*architecture', 'architecture.*flow', 'flow.*architecture'
-        ]
-        if any(re.search(kw, query_lower) for kw in flow_keywords):
+        if any(re.search(kw, query_lower) for kw in FLOW_KEYWORDS):
             self.logger.info("CLASSIFICATION | Rule-based: FLOW_ARCHITECTURE")
             return QueryType.FLOW_ARCHITECTURE
 
@@ -629,23 +687,11 @@ Feel free to ask me anything about the codebase!"""
             self.logger.info("CLASSIFICATION | Rule-based: CODE_LOCATION")
             return QueryType.CODE_LOCATION
         
-        impact_keywords = [
-            'what breaks', 'impact of', 'if i change', 'who uses', 'callers of',
-            'dependencies', 'depend on', 'relies on', 'used by', 'who calls',
-            'change impact', 'consequences of changing', 'call graph', 'hierarchy',
-            'inheritance'
-        ]
-        if any(kw in query_lower for kw in impact_keywords):
+        if any(kw in query_lower for kw in IMPACT_KEYWORDS):
             self.logger.info("CLASSIFICATION | Rule-based: IMPACT_ANALYSIS")
             return QueryType.IMPACT_ANALYSIS
         
-        traceability_keywords = [
-            'who changed', 'who modified', 'who updated', 'who wrote',
-            'who created', 'author of', 'creator of', 'history of',
-            'evolution of', 'timeline of', 'changes to', 'past versions',
-            'who is the expert', 'who knows about'
-        ]
-        if any(kw in query_lower for kw in traceability_keywords):
+        if any(kw in query_lower for kw in TRACEABILITY_KEYWORDS):
             self.logger.info("CLASSIFICATION | Rule-based: TRACEABILITY")
             return QueryType.TRACEABILITY
 
@@ -659,23 +705,7 @@ Feel free to ask me anything about the codebase!"""
         """
         query_lower = query.lower().strip()
 
-        random_pr_patterns = [
-            r'random\s+pr',
-            r'random\s+pull\s+request',
-            r'generate\s+random\s+pr',
-            r'pick\s+random\s+pr',
-            r'select\s+random\s+pr',
-            r'choose\s+random\s+pr',
-            r'find\s+random\s+pr',
-            r'get\s+random\s+pr',
-            r'show\s+random\s+pr',
-            r'give\s+me\s+random\s+pr',
-            r'any\s+random\s+pr',
-            r'suggest\s+pr',
-            r'random\s+merged\s+pr',
-        ]
-
-        for pattern in random_pr_patterns:
+        for pattern in RANDOM_PR_PATTERNS:
             if re.search(pattern, query_lower):
                 return True
 
@@ -711,13 +741,13 @@ Feel free to ask me anything about the codebase!"""
                 self.logger.info("QUERY REWRITE | Skipped (question generation query)")
                 return query
 
-            # Skip rewriting for very short queries that are already clear (1-2 words)
+            # Skip rewriting for very short queries that are already clear
             # This prevents over-rewriting simple queries
             words = query.strip().split()
-            if len(words) <= 2 and len(query.strip()) <= 20:
+            if len(words) <= SHORT_QUERY_MAX_WORDS and len(query.strip()) <= SHORT_QUERY_MAX_LENGTH:
                 # Only rewrite if it seems unclear or needs expansion
                 # Simple queries like "how to", "where is" might benefit, but "hi", "help" shouldn't
-                if query.lower().strip() in ['help', 'start', 'hi', 'hello', 'hey']:
+                if query.lower().strip() in SIMPLE_QUERIES:
                     return query
 
             if self.provider not in ['openai', 'anthropic']:
@@ -739,28 +769,14 @@ Feel free to ask me anything about the codebase!"""
 
                 Rewritten question (respond with ONLY the rewritten question, no explanations):"""
 
-            if self.provider == 'openai':
-                response = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                        {"role": "system",
-                         "content": "You are a helpful assistant that rewrites questions to be clearer and more searchable."},
-                        {"role": "user", "content": rewrite_prompt}
-                    ],
-                    temperature=0.3,  # Lower temperature for more consistent rewrites
-                    max_tokens=200
-                )
-                rewritten = response.choices[0].message.content.strip()
-            elif self.provider == 'anthropic':
-                response = self.client.messages.create(
-                    model=self.model,
-                    max_tokens=200,
-                    temperature=0.3,
-                    system="You are a helpful assistant that rewrites questions to be clearer and more searchable.",
-                    messages=[{"role": "user", "content": rewrite_prompt}]
-                )
-                rewritten = response.content[0].text.strip()
-            else:
+            rewritten = self._call_llm_client(
+                rewrite_prompt,
+                system_message="You are a helpful assistant that rewrites questions to be clearer and more searchable.",
+                temperature=LLM_TEMPERATURE_MEDIUM,
+                max_tokens=LLM_MAX_TOKENS_LONG
+            )
+
+            if not rewritten:
                 return self.expand_query(query)
 
             # Clean up the response (remove quotes if present)
@@ -768,18 +784,18 @@ Feel free to ask me anything about the codebase!"""
 
             if rewritten and rewritten != query:
                 # Validate that the rewritten query is not too different from the original
-                # Check if it's more than 3x longer (likely added too much)
-                if len(rewritten) > len(query) * 3:
+                # Check if it's more than threshold longer (likely added too much)
+                if len(rewritten) > len(query) * QUERY_LENGTH_MULTIPLIER_THRESHOLD:
                     self.logger.warning(
                         f"QUERY REWRITE | Rewritten query too long, using original. Original: {len(query)} chars, Rewritten: {len(rewritten)} chars")
                     return query
 
-                # Check word overlap - if less than 30% of original words are in rewritten, it's too different
+                # Check word overlap - if less than threshold of original words are in rewritten, it's too different
                 original_words = set(query.lower().split())
                 rewritten_words = set(rewritten.lower().split())
                 if original_words and rewritten_words:
                     overlap = len(original_words & rewritten_words) / len(original_words)
-                    if overlap < 0.3:
+                    if overlap < WORD_OVERLAP_THRESHOLD:
                         self.logger.warning(
                             f"QUERY REWRITE | Rewritten query too different (overlap: {overlap:.2f}), using original")
                         return query

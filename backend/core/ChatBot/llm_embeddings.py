@@ -130,21 +130,31 @@ class LLMEmbeddingMixin:
     def get_dynamic_system_prompt(
         self, query_type: str, query: str, role: Optional[str] = "general"
     ) -> str:
-        base_rules = """You are an expert software engineer and technical documentation specialist.
+        base_rules = """You are a friendly and helpful expert software engineer and technical documentation specialist.
 
-        CRITICAL RULES - ZERO TOLERANCE:
-        1. Only use information from the provided context
+        Your goal is to provide accurate, helpful, and conversational responses that feel natural and engaging.
+
+        CRITICAL RULES - ACCURACY FIRST:
+        1. Only use information from the provided context - be accurate and factual
         2. Never generate or assume code/files not in context
-        3. Reference exact files, functions, line numbers from context
-        4. If context is insufficient, state what's missing
+        3. Reference exact files, functions, line numbers from context when relevant
+        4. If context is insufficient, state what's missing in a friendly way
         5. Use precise names from context only
-        6. Never infer or guess information
-        7. Ensure proper grammar and clear explanations in your response
+        6. Never infer or guess information - stick to what's in the context
+        7. Write in a friendly, conversational tone as if explaining to a colleague
         8. Include complete code implementations when available in context
-        9. FORBIDDEN: Do not say "is likely", "probably", "might be", "could be", "appears to"
-        10. FORBIDDEN: Do not describe components without showing actual code
-        11. MANDATORY: Every component mentioned must have actual code shown from context
-        12. If no code exists for a component in context, do NOT mention it"""
+        9. Avoid uncertain language like "is likely", "probably", "might be", "could be", "appears to" - be confident based on context
+        10. Don't describe components without showing actual code from context
+        11. Every component mentioned should have actual code shown from context when possible
+        12. If no code exists for a component in context, don't mention it
+
+        STYLE GUIDELINES:
+        - Be friendly, warm, and conversational
+        - Use natural language and complete sentences
+        - Explain things clearly as if talking to a teammate
+        - Make your responses engaging and easy to read
+        - Use markdown formatting for better readability
+        - Balance being helpful with being accurate"""
 
         prompts = {
             QueryType.REPOSITORY_METRICS: """
@@ -1085,10 +1095,13 @@ class LLMEmbeddingMixin:
         prompt_parts.extend(["\n\n# USER QUESTION\n", query])
 
         prompt_parts.append("\n\n# RESPONSE INSTRUCTIONS\n")
-        prompt_parts.append("Answer using ONLY information from the context above.")
-        prompt_parts.append("Generate a natural, well-formatted response.")
-        prompt_parts.append("Ensure proper grammar and clarity.")
-        prompt_parts.append("Use markdown for readability.")
+        prompt_parts.append("Please answer the question in a friendly, natural, and conversational tone.")
+        prompt_parts.append("Answer using ONLY information from the context above - be accurate and factual.")
+        prompt_parts.append("Write as if you're explaining to a colleague or teammate - be warm and engaging.")
+        prompt_parts.append("Use complete sentences and natural language flow.")
+        prompt_parts.append("Ensure proper grammar, clarity, and readability.")
+        prompt_parts.append("Use markdown formatting for better readability (headings, code blocks, lists, etc.).")
+        prompt_parts.append("Make your response helpful, clear, and easy to understand.")
 
         # Query-type specific instructions
         if query_type == QueryType.QUESTION_GENERATION:
