@@ -47,38 +47,51 @@ export class MermaidRenderer {
     return sanitized.trim();
   }
 
+  // static fixTruncatedMermaidCode(code: string): string {
+  //   const lines = code.split('\n');
+  //   const validLines: string[] = [];
+    
+  //   for (const line of lines) {
+  //     const trimmedLine = line.trim();
+      
+  //     if (!trimmedLine) continue;
+      
+  //     if (trimmedLine.match(/^(graph|flowchart|sequenceDiagram|classDiagram)/i)) {
+  //       validLines.push(line);
+  //       continue;
+  //     }
+      
+  //     const isValidLine = 
+  //       trimmedLine.match(/^[A-Z]\[[^\]]+\]$/) ||
+  //       trimmedLine.match(/^[A-Z]\[[^\]]+\]\s*-->/) ||
+  //       trimmedLine.match(/^[A-Z]\s*-->/) ||
+  //       trimmedLine.match(/-->\s*[A-Z]/) ||
+  //       trimmedLine.match(/-->\s*[A-Z]\[[^\]]+\]$/);
+      
+  //     if (isValidLine) {
+  //       if (!trimmedLine.endsWith('-->') && !trimmedLine.match(/-->\s*$/)) {
+  //         validLines.push(line);
+  //       } else {
+  //       }
+  //     } else {
+  //     }
+  //   }
+    
+  //   return validLines.join('\n');
+  // }
+
   static fixTruncatedMermaidCode(code: string): string {
     const lines = code.split('\n');
-    const validLines: string[] = [];
-    
+    const result: string[] = [];
+
     for (const line of lines) {
-      const trimmedLine = line.trim();
-      
-      if (!trimmedLine) continue;
-      
-      if (trimmedLine.match(/^(graph|flowchart|sequenceDiagram|classDiagram)/i)) {
-        validLines.push(line);
-        continue;
-      }
-      
-      const isValidLine = 
-        trimmedLine.match(/^[A-Z]\[[^\]]+\]$/) ||
-        trimmedLine.match(/^[A-Z]\[[^\]]+\]\s*-->/) ||
-        trimmedLine.match(/^[A-Z]\s*-->/) ||
-        trimmedLine.match(/-->\s*[A-Z]/) ||
-        trimmedLine.match(/-->\s*[A-Z]\[[^\]]+\]$/);
-      
-      if (isValidLine) {
-        if (!trimmedLine.endsWith('-->') && !trimmedLine.match(/-->\s*$/)) {
-          validLines.push(line);
-        } else {
-        }
-      } else {
-      }
+      result.push(line);
+      if (line.trim().match(/^(end|stop)$/i)) break;
     }
-    
-    return validLines.join('\n');
+
+    return result.join('\n');
   }
+
 
   static isValidMermaidCode(code: string): boolean {
     const validStarters = [

@@ -7,6 +7,9 @@ import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import remarkGfm from 'remark-gfm';
 import type { ContentSection } from '../../../../../types/onboarding';
 import { Inter, JetBrains_Mono, Source_Code_Pro } from 'next/font/google';
+import React, { useEffect, useState } from 'react';
+
+
 
 interface ContentRendererProps {
   sections: ContentSection[];
@@ -17,11 +20,51 @@ const inter = Inter({ subsets: ['latin'], weight: ['400', '500', '600', '700'] }
 const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], weight: ['400', '500', '600'] });
 const sourceCodePro = Source_Code_Pro({ subsets: ['latin'], weight: ['400', '500', '600'] });
 
+
 export default function ContentRenderer({ sections, renderedMermaid }: ContentRendererProps) {
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
+  const [collapsedCodes, setCollapsedCodes] = useState<Record<number, boolean>>({});
+  const [copiedCodeIdx, setCopiedCodeIdx] = useState<number | null>(null);
+  const codeRefs = React.useRef<Record<number, HTMLDivElement | null>>({});
+
+  const toggleCollapse = (idx: number) => {
+    setCollapsedCodes(prev => ({
+      ...prev,
+      [idx]: !prev[idx],
+    }));
   };
+
+
+  useEffect(() => {
+    if (copiedCodeIdx === null) return;
+
+    const observer = new IntersectionObserver(
+      entries => {
+        entries.forEach(entry => {
+          if (!entry.isIntersecting) {
+            setCopiedCodeIdx(null);
+          }
+        });
+      },
+      { threshold: 0.1 }
+    );
+
+    Object.values(codeRefs.current).forEach(el => {
+      if (el) observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, [copiedCodeIdx]);
+
+
+
+  const copyToClipboard = (text: string, idx: number) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedCodeIdx(idx);
+    });
+  };
+
+
 
   const getLanguageIcon = (language?: string) => {
     if (!language) return <Code className="w-5 h-5" />;
@@ -198,7 +241,12 @@ export default function ContentRenderer({ sections, renderedMermaid }: ContentRe
             )}
 
             {section.type === 'code' && (
-              <div className="rounded-xl overflow-hidden shadow-lg border border-slate-200/60 bg-[#282c34]">
+              <div
+                ref={el => (codeRefs.current[idx] = el)}
+                className="rounded-xl overflow-hidden shadow-lg border border-slate-200/60 bg-[#282c34]"
+              >
+                
+                {/* Header */}
                 <div className="flex items-center justify-between px-5 py-3 bg-gradient-to-r from-slate-800 to-slate-900 border-b border-slate-700/50">
                   <div className="flex items-center space-x-3">
                     <div className="text-slate-300">
@@ -208,35 +256,63 @@ export default function ContentRenderer({ sections, renderedMermaid }: ContentRe
                       {getLanguageLabel(section.language)}
                     </span>
                   </div>
-                  <button
-                    onClick={() => copyToClipboard(section.content)}
-                    className={`${inter.className} text-xs px-4 py-2 rounded-lg font-medium transition-all bg-slate-700/50 hover:bg-slate-600 text-slate-200 hover:text-white border border-slate-600/50 hover:border-slate-500`}
-                  >
-                    Copy Code
-                  </button>
+
+                  {/* Actions */}
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => toggleCollapse(idx)}
+                      className={`${inter.className} text-xs px-3 py-2 rounded-lg font-medium transition-all
+                        bg-slate-700/50 hover:bg-slate-600 text-slate-200
+                        border border-slate-600/50`}
+                    >
+                      {collapsedCodes[idx] ? 'Expand' : 'Collapse'}
+                    </button>
+
+                    <button
+                      onClick={() => copyToClipboard(section.content, idx)}
+                      className={`${inter.className} text-xs px-4 py-2 rounded-lg font-medium transition-all
+                        ${
+                          copiedCodeIdx === idx
+                            ? 'bg-green-600 text-white border-green-500'
+                            : 'bg-slate-700/50 hover:bg-slate-600 text-slate-200 hover:text-white border-slate-600/50 hover:border-slate-500'
+                        }`}
+                    >
+                      {copiedCodeIdx === idx ? 'Copied' : 'Copy Code'}
+                    </button>
+                  </div>
                 </div>
-                <div className="overflow-x-auto">
-                  <SyntaxHighlighter
-                    language={section.language || 'text'}
-                    style={oneDark}
-                    customStyle={{
-                      margin: 0,
-                      padding: '1.25rem',
-                      background: '#282c34',
-                      fontSize: '0.875rem',
-                      lineHeight: '1.7',
-                    }}
-                    showLineNumbers
-                    wrapLines
-                    codeTagProps={{
-                      className: sourceCodePro.className,
-                    }}
+
+                {/* Code Body */}
+                {!collapsedCodes[idx] && (
+                  <div
+                    className="max-h-[420px] overflow-y-auto overflow-x-auto"
+                    onScroll={() => copiedCodeIdx === idx && setCopiedCodeIdx(null)}
                   >
-                    {section.content}
-                  </SyntaxHighlighter>
-                </div>
+
+                    <SyntaxHighlighter
+                      language={section.language || 'text'}
+                      style={oneDark}
+                      customStyle={{
+                        margin: 0,
+                        padding: '1.25rem',
+                        background: '#282c34',
+                        fontSize: '0.875rem',
+                        lineHeight: '1.7',
+                      }}
+                      showLineNumbers
+                      wrapLines
+                      codeTagProps={{
+                        className: sourceCodePro.className,
+                      }}
+                    >
+                      {section.content}
+                    </SyntaxHighlighter>
+                  </div>
+                )}
               </div>
             )}
+
+
 
             {section.type === 'mermaid' && (
               <div className="my-6">

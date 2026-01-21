@@ -394,7 +394,7 @@ export default function OverviewModal({
       />
 
       <div
-        className="relative w-full max-w-6xl h-[85vh] flex flex-col overflow-hidden modal-content bg-white/95 backdrop-blur-xl rounded-3xl border border-slate-200/60 shadow-2xl shadow-slate-900/20"
+        className="relative w-full max-w-6xl h-[95vh] flex flex-col overflow-hidden modal-content bg-white/95 backdrop-blur-xl rounded-3xl border border-slate-200/60 shadow-2xl shadow-slate-900/20"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="absolute top-0 left-0 right-0 h-1 z-20 bg-slate-200/50 rounded-t-3xl overflow-hidden">
@@ -481,49 +481,43 @@ export default function OverviewModal({
                       id={`module-section-${moduleData.moduleId}`}
                       className="rounded-2xl overflow-hidden transition-all animate-fade-in bg-white/60 backdrop-blur-xl border border-slate-200/60 shadow-lg shadow-slate-200/30"
                     >
-                      <div className="px-6 py-4 border-b border-slate-200/60 bg-gradient-to-r from-slate-50/80 to-blue-50/40 backdrop-blur-sm">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-3">
-                            <span className={`${jetbrainsMono.className} text-sm font-semibold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg`}>
-                              {currentSectionIndex + 1}
-                            </span>
-                            <h3 className={`${inter.className} text-base font-semibold text-[#0E1B2E]`}>
-                              {moduleData.moduleTitle}
-                            </h3>
+                      {!moduleData.isQnASection && (
+                        <div className="px-6 py-4 border-b border-slate-200/60 bg-gradient-to-r from-slate-50/80 to-blue-50/40 backdrop-blur-sm">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              <span className={`${jetbrainsMono.className} text-sm font-semibold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg`}>
+                                {currentSectionIndex + 1}
+                              </span>
+                              <h3 className={`${inter.className} text-base font-semibold text-[#0E1B2E]`}>
+                                {moduleData.moduleTitle}
+                              </h3>
+                            </div>
                           </div>
 
-                          {moduleData.content?.quality && (
-                            <div className="flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200">
-                              <Award className="w-4 h-4 text-amber-600" />
-                              <span className={`${jetbrainsMono.className} text-xs font-semibold text-amber-700`}>
-                                {(moduleData.content.quality * 5).toFixed(1)}
-                              </span>
+                          {moduleData.content?.topic && (
+                            <div className="mt-3">
+                              <button
+                                onClick={() => toggleModuleExpanded(moduleData.moduleId)}
+                                className={`${inter.className} w-full text-left text-xs text-slate-600 hover:text-[#0E1B2E] transition-colors flex items-center space-x-2`}
+                              >
+                                <ChevronDown
+                                  className={`w-4 h-4 transition-transform ${
+                                    expandedModules.has(moduleData.moduleId) ? "rotate-180" : ""
+                                  }`}
+                                />
+                                <span className="font-medium">Learning Objective</span>
+                              </button>
+
+                              {expandedModules.has(moduleData.moduleId) && (
+                                <p className={`${inter.className} mt-2 text-sm leading-relaxed text-slate-700 pl-6`}>
+                                  {moduleData.content.topic}
+                                </p>
+                              )}
                             </div>
                           )}
                         </div>
+                      )}
 
-                        {moduleData.content?.topic && !moduleData.isQnASection && (
-                          <div className="mt-3">
-                            <button
-                              onClick={() => toggleModuleExpanded(moduleData.moduleId)}
-                              className={`${inter.className} w-full text-left text-xs text-slate-600 hover:text-[#0E1B2E] transition-colors flex items-center space-x-2`}
-                            >
-                              <ChevronDown
-                                className={`w-4 h-4 transition-transform ${
-                                  expandedModules.has(moduleData.moduleId) ? "rotate-180" : ""
-                                }`}
-                              />
-                              <span className="font-medium">Learning Objective</span>
-                            </button>
-
-                            {expandedModules.has(moduleData.moduleId) && (
-                              <p className={`${inter.className} mt-2 text-sm leading-relaxed text-slate-700 pl-6`}>
-                                {moduleData.content.topic}
-                              </p>
-                            )}
-                          </div>
-                        )}
-                      </div>
 
                       <div className="px-6 py-6">
                         {moduleData.isQnASection ? (

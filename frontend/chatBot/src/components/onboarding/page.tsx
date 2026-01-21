@@ -182,7 +182,7 @@ export default function OnboardingPage() {
             activeRepos={activeRepos}
             onboardingData={onboardingData}
             onUpdateProgress={updateProgress}
-            onModalChange={(isOpen) => setIsHeaderVisible(!isOpen)} // Handle modal visibility
+            onModalChange={(isOpen) => setIsHeaderVisible(!isOpen)} 
           />
         );
       case "practice":
