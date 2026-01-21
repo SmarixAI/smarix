@@ -73,32 +73,23 @@ class FileProcessor:
         return False
 
     def categorize_file(self, file_item: Dict) -> str:
-        """
-        Categorize file into: code, documentation, dependencies, or other
-
-        OPTIMIZED: Uses cached sets for faster lookups
-        """
-        file_name = file_item.get("name", "")
-        if not file_name:
-            return "other"
-
-        file_name_lower = file_name.lower()
-        file_ext = Path(file_name).suffix.lower()
-
-        # Check if it's a code file
-        if file_ext in self.config.SUPPORTED_CODE_EXTENSIONS:
+        file_name_lower = file_item.get("name", "").lower()
+        ext = Path(file_name_lower).suffix
+        
+        # CODE FIRST - expanded config covers everything
+        if ext in self.config.SUPPORTED_CODE_EXTENSIONS:
             return "code"
-
-        # Check if it's documentation
-        elif self._is_documentation_file_optimized(file_name_lower):
+        
+        # Docs second
+        if self._is_documentation_file_optimized(file_name_lower):
             return "documentation"
-
-        # Check if it's a dependency file
-        elif file_name_lower in self._dep_file_cache:
+        
+        # Dependencies last
+        if file_name_lower in self._dep_file_cache:
             return "dependencies"
+        
+        return "code" 
 
-        else:
-            return "other"
 
     def process_file_content(self, file_item: Dict, content: str) -> Dict[str, Any]:
         """
