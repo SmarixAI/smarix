@@ -85,9 +85,25 @@ const MermaidDiagram = ({ code }: { code: string }) => {
   const [error, setError] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [zoom, setZoom] = useState(1);
+  const MIN_ZOOM = 0.3;
+  const MAX_ZOOM = 1.6;
+  const ZOOM_STEP = 0.05;
+  const [collapsed, setCollapsed] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const isDragging = useRef(false);
+  const startX = useRef(0);
+  const startY = useRef(0);
+  const scrollLeft = useRef(0);
+  const scrollTop = useRef(0);
+
+
+
 
   useEffect(() => {
     if (!code || !containerRef.current) return;
+
+    // Reset zoom on re-render
+    setZoom(1);
 
     const renderDiagram = async () => {
       setIsLoading(true);
@@ -132,11 +148,17 @@ const MermaidDiagram = ({ code }: { code: string }) => {
   }, [zoom]);
 
   const handleZoomIn = () => {
-    setZoom((prev) => Math.min(prev + 0.2, 3));
+    setZoom((prev) =>
+    Math.min(MAX_ZOOM, prev + ZOOM_STEP)
+  );
+
   };
 
   const handleZoomOut = () => {
-    setZoom((prev) => Math.max(prev - 0.2, 0.5));
+    setZoom((prev) =>
+    Math.max(MIN_ZOOM, prev - ZOOM_STEP)
+  );
+
   };
 
   const handleReset = () => {
@@ -144,10 +166,55 @@ const MermaidDiagram = ({ code }: { code: string }) => {
   };
 
   const handleWheel = (e: React.WheelEvent) => {
+    // Only zoom when Ctrl (Windows/Linux) or Cmd (Mac) is pressed
+    if (!(e.ctrlKey || e.metaKey)) return;
+
     e.preventDefault();
-    const delta = e.deltaY > 0 ? -0.1 : 0.1;
-    setZoom((prev) => Math.max(0.5, Math.min(3, prev + delta)));
+
+    const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+
+    setZoom((prev) =>
+      Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, prev + delta))
+    );
   };
+
+  const onMouseDown = (e: React.MouseEvent) => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    isDragging.current = true;
+    el.classList.add('cursor-grabbing');
+
+    startX.current = e.pageX - el.offsetLeft;
+    startY.current = e.pageY - el.offsetTop;
+    scrollLeft.current = el.scrollLeft;
+    scrollTop.current = el.scrollTop;
+  };
+
+  const onMouseLeaveOrUp = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    isDragging.current = false;
+    el.classList.remove('cursor-grabbing');
+  };
+
+  const onMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging.current) return;
+
+    const el = scrollRef.current;
+    if (!el) return;
+
+    e.preventDefault();
+
+    const x = e.pageX - el.offsetLeft;
+    const y = e.pageY - el.offsetTop;
+
+    el.scrollLeft = scrollLeft.current - (x - startX.current);
+    el.scrollTop = scrollTop.current - (y - startY.current);
+  };
+
+
 
   if (error) {
     return (
@@ -167,56 +234,96 @@ const MermaidDiagram = ({ code }: { code: string }) => {
   }
 
   return (
-    <div className="my-4 bg-white/60 backdrop-blur-sm rounded-xl border border-[#0E1B2E]/10 shadow-sm relative">
+    <div className="my-4 rounded-xl border border-[#0E1B2E]/10 bg-white/60 backdrop-blur-sm shadow-sm overflow-hidden">
+
+      {/* Loading overlay */}
       {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-white/80 backdrop-blur-sm z-10 rounded-xl">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0E1B2E]"></div>
+        <div className="absolute inset-0 flex items-center justify-center bg-white/80 backdrop-blur-sm z-10">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0E1B2E]" />
         </div>
       )}
 
+      {/* Header */}
       {!isLoading && (
-        <div className="absolute top-2 right-2 z-20 flex items-center gap-1 bg-white/80 backdrop-blur-md rounded-lg p-1 border border-[#0E1B2E]/10 shadow-sm">
-          <button
-            onClick={handleZoomOut}
-            className="p-1.5 hover:bg-[#0E1B2E]/5 rounded transition-colors"
-            title="Zoom Out"
-          >
-            <ZoomOut className="w-4 h-4 text-[#0E1B2E]" />
-          </button>
+        <div className="flex items-center justify-between px-4 py-2 text-xs bg-[#0E1B2E]/5 border-b border-[#0E1B2E]/10">
+          
+          {/* Left: Title */}
+          <span className="font-mono text-[#0E1B2E]/80 uppercase">
+            Diagram
+          </span>
 
-          <div className="px-2 py-0.5 min-w-[50px] text-center">
-            <span className="text-xs text-[#0E1B2E] font-mono">
+          {/* Right: Controls */}
+          <div className="flex items-center gap-3">
+            
+            {/* Collapse / Expand */}
+            <button
+              onClick={() => setCollapsed((prev) => !prev)}
+              className="text-[#0E1B2E]/60 hover:text-[#0E1B2E] transition"
+            >
+              {collapsed ? 'Expand' : 'Collapse'}
+            </button>
+
+            <span className="w-px h-4 bg-[#0E1B2E]/20" />
+
+            {/* Zoom out */}
+            <button
+              onClick={handleZoomOut}
+              className="hover:text-[#0E1B2E]"
+              title="Zoom Out"
+            >
+              <ZoomOut className="w-4 h-4" />
+            </button>
+
+            {/* Zoom percentage */}
+            <span className="text-xs font-mono text-[#0E1B2E] min-w-[40px] text-center">
               {(zoom * 100).toFixed(0)}%
             </span>
+
+            {/* Zoom in */}
+            <button
+              onClick={handleZoomIn}
+              className="hover:text-[#0E1B2E]"
+              title="Zoom In"
+            >
+              <ZoomIn className="w-4 h-4" />
+            </button>
+
+            {/* Reset */}
+            <button
+              onClick={handleReset}
+              className="hover:text-[#0E1B2E]"
+              title="Reset Zoom"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
           </div>
-
-          <button
-            onClick={handleZoomIn}
-            className="p-1.5 hover:bg-[#0E1B2E]/5 rounded transition-colors"
-            title="Zoom In"
-          >
-            <ZoomIn className="w-4 h-4 text-[#0E1B2E]" />
-          </button>
-
-          <button
-            onClick={handleReset}
-            className="p-1.5 hover:bg-[#0E1B2E]/5 rounded transition-colors"
-            title="Reset Zoom"
-          >
-            <RotateCcw className="w-4 h-4 text-[#0E1B2E]" />
-          </button>
         </div>
       )}
 
+      {/* Diagram Body */}
       <div
-        className="p-4 overflow-auto"
-        onWheel={handleWheel}
-        style={{ minHeight: "200px", maxHeight: "600px" }}
+        className={`
+          transition-[max-height] duration-300 ease-in-out
+          ${collapsed ? 'max-h-0 overflow-hidden' : 'max-h-[520px] overflow-auto'}
+        `}
+        style={{ minHeight: collapsed ? '0px' : '240px' }}
       >
-        <div ref={containerRef} className="mermaid-container" />
+        <div
+          ref={scrollRef}
+          className="p-4 overflow-auto cursor-grab"
+          onMouseDown={onMouseDown}
+          onMouseUp={onMouseLeaveOrUp}
+          onMouseLeave={onMouseLeaveOrUp}
+          onMouseMove={onMouseMove}
+          onWheel={handleWheel}
+        >
+
+          <div ref={containerRef} className="mermaid-container" />
+        </div>
       </div>
     </div>
-  );
+);
+
 };
 
 const CodeBlock = ({
@@ -226,33 +333,91 @@ const CodeBlock = ({
   code: string;
   language: string;
 }) => {
+  const [collapsed, setCollapsed] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const blockRef = useRef<HTMLDivElement>(null);
+
+  // Observe visibility
+  useEffect(() => {
+    const el = blockRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        // When block leaves viewport → reset
+        if (!entry.isIntersecting) {
+          setCopied(false);
+        }
+      },
+      {
+        threshold: 0.1, // even slightly visible counts
+      }
+    );
+
+    observer.observe(el);
+
+    return () => observer.disconnect();
+  }, []);
+
+  const handleCopy = () => {
+    if (navigator?.clipboard) {
+      navigator.clipboard.writeText(code);
+      setCopied(true);
+    }
+  };
+
   return (
-    <div className="my-4 rounded-xl border border-[#0E1B2E]/15 bg-[#0E1B2E] overflow-hidden shadow-sm">
+    <div
+      ref={blockRef}
+      className="my-4 rounded-xl border border-[#0E1B2E]/15 bg-[#0E1B2E] overflow-hidden shadow-sm"
+    >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2 text-xs bg-black/30">
         <span className="font-mono text-white/80 uppercase">
           {language || 'code'}
         </span>
-        <button
-          onClick={() => {
-            if (navigator?.clipboard) {
-              navigator.clipboard.writeText(code);
-            }
-          }}
-          className="text-white/60 hover:text-white transition"
-        >
-          Copy
-        </button>
+
+        <div className="flex items-center gap-3">
+          {/* Collapse / Expand */}
+          <button
+            onClick={() => setCollapsed((prev) => !prev)}
+            className="text-white/60 hover:text-white transition"
+          >
+            {collapsed ? 'Expand' : 'Collapse'}
+          </button>
+
+          {/* Copy */}
+          <button
+            onClick={handleCopy}
+            className={`transition font-medium ${
+              copied
+                ? 'text-green-400'
+                : 'text-white/60 hover:text-white'
+            }`}
+          >
+            {copied ? 'Copied ✓' : 'Copy'}
+          </button>
+        </div>
       </div>
 
       {/* Code */}
-      <pre className="p-4 overflow-x-auto text-sm text-white font-mono leading-relaxed">
-        <code>{code}</code>
-      </pre>
+      <div
+        className={`
+          transition-[max-height] duration-300 ease-in-out
+          ${collapsed ? 'max-h-0 overflow-hidden' : 'max-h-[600px]'}
+        `}
+      >
+        {/* Vertical scroll container */}
+        <div className="max-h-[600px] overflow-y-auto">
+          <pre className="p-4 overflow-x-auto text-sm text-white font-mono leading-relaxed">
+            <code>{code}</code>
+          </pre>
+        </div>
+      </div>
+
     </div>
   );
 };
-
 
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   content,
