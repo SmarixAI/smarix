@@ -83,4 +83,5 @@ node_modules/
 # #large files
 # *.npy
 # *.json.bak.*
-# backend/data/DataCollectionFromGit/ 
+backend/data/DataCollectionFromGit/ 
+backend/data/*
