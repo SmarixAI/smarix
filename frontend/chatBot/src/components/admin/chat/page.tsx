@@ -44,6 +44,7 @@ import { useRouter } from "next/navigation";
 import { Fira_Code, Space_Grotesk } from "next/font/google";
 import Image from "next/image";
 import { useAuth } from "@/components/auth/AuthContext";
+import { formatResponseForUI } from "@/utils/responseFormatter";
 
 const firaCode = Fira_Code({
   weight: ["400", "500", "600", "700"],
@@ -1443,7 +1444,7 @@ export default function ChatPage() {
                               ),
                             }}
                           >
-                            {message.content}
+                            {formatResponseForUI(message.content)}
                           </ReactMarkdown>
                         </div>
                       </div>
