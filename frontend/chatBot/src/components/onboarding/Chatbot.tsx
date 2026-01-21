@@ -7,6 +7,7 @@ import { Fira_Code, Space_Grotesk } from 'next/font/google';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { MarkdownRenderer } from './utils/MarkdownRenderer';
+import { formatResponseForUI } from '@/utils/responseFormatter';
 
 const firaCode = Fira_Code({ subsets: ['latin'] });
 const spaceGrotesk = Space_Grotesk({ subsets: ['latin'] });
@@ -707,7 +708,7 @@ export default function Chatbot({ role = 'onboarding' }: ChatbotProps) {
                     {message.role === 'user' ? (
                       <p className={`${spaceGrotesk.className} ${isFullscreen ? 'text-base' : 'text-sm'} whitespace-pre-wrap break-words leading-relaxed`}>{message.content}</p>
                     ) : (
-                      <MarkdownRenderer content={message.content} isFullscreen={isFullscreen} />
+                      <MarkdownRenderer content={formatResponseForUI(message.content)} isFullscreen={isFullscreen} />
                     )}
                     <p
                       className={`${firaCode.className} text-xs mt-2 ${
