@@ -280,18 +280,18 @@ class AsyncRepositoryProcessor:
         file_data = self.file_processor.process_file_content(file_item, file_content)
 
         # Check for duplicates
-        if getattr(self.config, "SKIP_DUPLICATE_FILES", True):
-            if self.file_utils.is_duplicate_file(file_data, self.processed_hashes):
-                original_path = self._find_original_file_path(file_data, repo_data)
-                repo_data["duplicate_files"].append(
-                    {
-                        "path": file_path,
-                        "original_path": original_path,
-                        "size": file_item["size"],
-                    }
-                )
-                repo_data["stats"]["duplicates_skipped"] += 1
-                return
+        # if getattr(self.config, "SKIP_DUPLICATE_FILES", True):
+        #     if self.file_utils.is_duplicate_file(file_data, self.processed_hashes):
+        #         original_path = self._find_original_file_path(file_data, repo_data)
+        #         repo_data["duplicate_files"].append(
+        #             {
+        #                 "path": file_path,
+        #                 "original_path": original_path,
+        #                 "size": file_item["size"],
+        #             }
+        #         )
+        #         repo_data["stats"]["duplicates_skipped"] += 1
+        #         return
 
         # Categorize and store
         category = self.file_processor.categorize_file(file_item)
