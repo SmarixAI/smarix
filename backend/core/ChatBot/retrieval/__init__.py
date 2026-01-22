@@ -59,6 +59,199 @@ class RetrievalMixin(
             query_text: Original query text (for routing in multi-index mode)
         """
 
+        # -------------------------------------------------------
+        # CODE_LOCATION: Try code_chunks_loader first (exact filename + path), then vector search if not found
+        # This must happen BEFORE multi-index routing to avoid unnecessary processing
+        if query_type == QueryType.CODE_LOCATION and query_text:
+            self.logger.info(f"CODE_LOCATION | Processing code location query: {query_text}")
+            
+            # Detect file query intent
+            file_intent = self._detect_file_query_intent(query_text, keywords)
+            file_paths = file_intent.get('file_paths', [])
+            filename_hints = file_intent.get('filename_hints', [])
+            
+            # Try code_chunks_loader first with exact filename + path
+            code_loader = self._get_code_chunks_loader()
+            if code_loader:
+                repo_owner = getattr(self, 'repo_owner', None)
+                repo_name = getattr(self, 'repo_name', None)
+                
+                results = []
+                seen_chunk_ids = set()
+                
+                # Try exact file paths first
+                if file_paths:
+                    self.logger.info(f"CODE_LOCATION | Searching code_chunks_loader for {len(file_paths)} file paths: {file_paths}")
+                    for file_path in file_paths:
+                        # Try by full path with exact match
+                        chunks = code_loader.get_chunks_by_file_path(
+                            file_path,
+                            repo_owner,
+                            repo_name,
+                            exact_match_only=True  # Exact match only for code location queries
+                        )
+                        
+                        # If no results, try by filename (in case user only provided filename)
+                        if not chunks and filename_hints:
+                            from utils.path_normalizer import extract_filename
+                            filename = extract_filename(file_path)
+                            if filename:
+                                self.logger.info(
+                                    f"CODE_LOCATION | No results for path '{file_path}', "
+                                    f"trying filename search: '{filename}'"
+                                )
+                                chunks = code_loader.get_chunks_by_filename(
+                                    filename,
+                                    repo_owner,
+                                    repo_name
+                                )
+                        
+                        self.logger.info(
+                            f"CODE_LOCATION | File path '{file_path}': found {len(chunks)} chunks from code_chunks_loader"
+                        )
+                        
+                        # Convert chunks to expected format
+                        for chunk in chunks:
+                            chunk_id = chunk.get('chunk_id')
+                            if chunk_id and chunk_id not in seen_chunk_ids:
+                                seen_chunk_ids.add(chunk_id)
+                                
+                                # Extract content from code_chunks.json format
+                                content = chunk.get('content', {})
+                                if isinstance(content, dict):
+                                    content_text = content.get('content', '')
+                                    if not content_text:
+                                        raw_data = chunk.get('raw_data', {})
+                                        if isinstance(raw_data, dict):
+                                            content_text = raw_data.get('content', '')
+                                    if not content_text:
+                                        content_text = str(content)
+                                else:
+                                    content_text = str(content) if content else ''
+                                
+                                # Build metadata in expected format
+                                chunk_metadata = chunk.get('metadata', {})
+                                if not chunk_metadata:
+                                    from utils.metadata_normalizer import MetadataNormalizer
+                                    meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+                                    chunk_type = meta_norm.get_chunk_type('')
+                                    
+                                    chunk_metadata = {
+                                        'file_path': chunk.get('file_path', ''),
+                                        'filename': chunk.get('filename', ''),
+                                        'directory': chunk.get('directory', ''),
+                                        'chunk_type': chunk_type,
+                                        'repo_name': chunk.get('repo_name', ''),
+                                        'repo_owner': chunk.get('repo_owner', ''),
+                                        'language': chunk.get('language', ''),
+                                    }
+                                
+                                results.append({
+                                    'chunk_id': chunk_id,
+                                    'metadata': chunk_metadata,
+                                    'content': content_text,
+                                    'score': 10.0,  # High score for exact file matches
+                                    'source': 'code_chunks_loader',
+                                    'match_type': 'exact_file_match'
+                                })
+                
+                # Try filename hints if no results from file paths
+                if not results and filename_hints:
+                    self.logger.info(
+                        f"CODE_LOCATION | No results from exact paths, trying filename hints: {filename_hints}"
+                    )
+                    for filename_hint in filename_hints:
+                        chunks = code_loader.get_chunks_by_filename(
+                            filename_hint,
+                            repo_owner,
+                            repo_name
+                        )
+                        
+                        self.logger.info(
+                            f"CODE_LOCATION | Filename hint '{filename_hint}': found {len(chunks)} chunks"
+                        )
+                        
+                        for chunk in chunks:
+                            chunk_id = chunk.get('chunk_id')
+                            if chunk_id and chunk_id not in seen_chunk_ids:
+                                seen_chunk_ids.add(chunk_id)
+                                
+                                # Extract content
+                                content = chunk.get('content', {})
+                                if isinstance(content, dict):
+                                    content_text = content.get('content', '')
+                                    if not content_text:
+                                        raw_data = chunk.get('raw_data', {})
+                                        if isinstance(raw_data, dict):
+                                            content_text = raw_data.get('content', '')
+                                    if not content_text:
+                                        content_text = str(content)
+                                else:
+                                    content_text = str(content) if content else ''
+                                
+                                # Build metadata
+                                chunk_metadata = chunk.get('metadata', {})
+                                if not chunk_metadata:
+                                    from utils.metadata_normalizer import MetadataNormalizer
+                                    meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+                                    chunk_type = meta_norm.get_chunk_type('')
+                                    
+                                    chunk_metadata = {
+                                        'file_path': chunk.get('file_path', ''),
+                                        'filename': chunk.get('filename', ''),
+                                        'directory': chunk.get('directory', ''),
+                                        'chunk_type': chunk_type,
+                                        'repo_name': chunk.get('repo_name', ''),
+                                        'repo_owner': chunk.get('repo_owner', ''),
+                                        'language': chunk.get('language', ''),
+                                    }
+                                
+                                results.append({
+                                    'chunk_id': chunk_id,
+                                    'metadata': chunk_metadata,
+                                    'content': content_text,
+                                    'score': 9.0,  # Slightly lower than exact path match
+                                    'source': 'code_chunks_loader',
+                                    'match_type': 'exact_filename_match'
+                                })
+                
+                # If found results from code_chunks_loader, return immediately (no vector search, no routing, no reranking)
+                if results:
+                    self.logger.info(
+                        f"CODE_LOCATION | Found {len(results)} chunks from code_chunks_loader, "
+                        f"returning immediately without vector search, routing, or reranking"
+                    )
+                    results = sorted(results, key=lambda x: x.get('score', 0), reverse=True)
+                    return results[:self.top_k * 2]
+            
+            # If code_chunks_loader didn't find results, do simple vector search
+            # Skip multi-index routing and complex file index merging
+            self.logger.info(
+                f"CODE_LOCATION | No results from code_chunks_loader, doing simple vector search"
+            )
+            
+            # Simple vector search - search 'code' index directly in multi-index mode, or regular db in single-index mode
+            retrieve_k = top_k or self.top_k * 4
+            repo_filters = self._get_repo_filters()
+            
+            if self.multi_index_store:
+                # Multi-index mode: search 'code' index directly (no routing, no reranking)
+                code_index = self.multi_index_store.indices.get('code')
+                if code_index:
+                    vector_results = code_index.search(query_embedding, top_k=retrieve_k)
+                    vector_results = self._filter_by_repo(vector_results)
+                    self.logger.info(f"CODE_LOCATION | Found {len(vector_results)} results from 'code' index")
+                    return vector_results[:self.top_k * 2]
+                else:
+                    self.logger.warning("CODE_LOCATION | 'code' index not found in multi-index store")
+                    return []
+            else:
+                # Single-index mode: simple vector search
+                vector_results = self.db.search(query_embedding, top_k=retrieve_k, filters=repo_filters)
+                vector_results = self._filter_by_repo(vector_results)
+                self.logger.info(f"CODE_LOCATION | Found {len(vector_results)} results from vector search")
+                return vector_results[:self.top_k * 2]
+
         if query_type in ["impact_analysis", "traceability"] and self.multi_index_store:
             print(f"Executing Graph-Enhanced Retrieval ({query_type})...")
             
@@ -284,194 +477,17 @@ class RetrievalMixin(
                     # Fall through to normal vector search below
 
         # -------------------------------------------------------
-        # CODE_LOCATION: Try code_chunks_loader first (exact filename + path), then vector search if not found
-        if query_type == QueryType.CODE_LOCATION and query_text:
-            self.logger.info(f"CODE_LOCATION | Processing code location query: {query_text}")
-            
-            # Detect file query intent
-            file_intent = self._detect_file_query_intent(query_text, keywords)
-            file_paths = file_intent.get('file_paths', [])
-            filename_hints = file_intent.get('filename_hints', [])
-            
-            # Try code_chunks_loader first with exact filename + path
-            code_loader = self._get_code_chunks_loader()
-            if code_loader:
-                repo_owner = getattr(self, 'repo_owner', None)
-                repo_name = getattr(self, 'repo_name', None)
-                
-                results = []
-                seen_chunk_ids = set()
-                
-                # Try exact file paths first
-                if file_paths:
-                    self.logger.info(f"CODE_LOCATION | Searching code_chunks_loader for {len(file_paths)} file paths: {file_paths}")
-                    for file_path in file_paths:
-                        # Try by full path with exact match
-                        chunks = code_loader.get_chunks_by_file_path(
-                            file_path,
-                            repo_owner,
-                            repo_name,
-                            exact_match_only=True  # Exact match only for code location queries
-                        )
-                        
-                        # If no results, try by filename (in case user only provided filename)
-                        if not chunks and filename_hints:
-                            from utils.path_normalizer import extract_filename
-                            filename = extract_filename(file_path)
-                            if filename:
-                                self.logger.info(
-                                    f"CODE_LOCATION | No results for path '{file_path}', "
-                                    f"trying filename search: '{filename}'"
-                                )
-                                chunks = code_loader.get_chunks_by_filename(
-                                    filename,
-                                    repo_owner,
-                                    repo_name
-                                )
-                        
-                        self.logger.info(
-                            f"CODE_LOCATION | File path '{file_path}': found {len(chunks)} chunks from code_chunks_loader"
-                        )
-                        
-                        # Convert chunks to expected format
-                        for chunk in chunks:
-                            chunk_id = chunk.get('chunk_id')
-                            if chunk_id and chunk_id not in seen_chunk_ids:
-                                seen_chunk_ids.add(chunk_id)
-                                
-                                # Extract content from code_chunks.json format
-                                content = chunk.get('content', {})
-                                if isinstance(content, dict):
-                                    content_text = content.get('content', '')
-                                    if not content_text:
-                                        raw_data = chunk.get('raw_data', {})
-                                        if isinstance(raw_data, dict):
-                                            content_text = raw_data.get('content', '')
-                                    if not content_text:
-                                        content_text = str(content)
-                                else:
-                                    content_text = str(content) if content else ''
-                                
-                                # Build metadata in expected format
-                                chunk_metadata = chunk.get('metadata', {})
-                                if not chunk_metadata:
-                                    from utils.metadata_normalizer import MetadataNormalizer
-                                    meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
-                                    chunk_type = meta_norm.get_chunk_type('')
-                                    
-                                    chunk_metadata = {
-                                        'file_path': chunk.get('file_path', ''),
-                                        'filename': chunk.get('filename', ''),
-                                        'directory': chunk.get('directory', ''),
-                                        'chunk_type': chunk_type,
-                                        'repo_name': chunk.get('repo_name', ''),
-                                        'repo_owner': chunk.get('repo_owner', ''),
-                                        'language': chunk.get('language', ''),
-                                    }
-                                
-                                results.append({
-                                    'chunk_id': chunk_id,
-                                    'metadata': chunk_metadata,
-                                    'content': content_text,
-                                    'score': 10.0,  # High score for exact file matches
-                                    'source': 'code_chunks_loader',
-                                    'match_type': 'exact_file_match'
-                                })
-                
-                # Try filename hints if no results from file paths
-                if not results and filename_hints:
-                    self.logger.info(
-                        f"CODE_LOCATION | No results from exact paths, trying filename hints: {filename_hints}"
-                    )
-                    for filename_hint in filename_hints:
-                        chunks = code_loader.get_chunks_by_filename(
-                            filename_hint,
-                            repo_owner,
-                            repo_name
-                        )
-                        
-                        self.logger.info(
-                            f"CODE_LOCATION | Filename hint '{filename_hint}': found {len(chunks)} chunks"
-                        )
-                        
-                        for chunk in chunks:
-                            chunk_id = chunk.get('chunk_id')
-                            if chunk_id and chunk_id not in seen_chunk_ids:
-                                seen_chunk_ids.add(chunk_id)
-                                
-                                # Extract content
-                                content = chunk.get('content', {})
-                                if isinstance(content, dict):
-                                    content_text = content.get('content', '')
-                                    if not content_text:
-                                        raw_data = chunk.get('raw_data', {})
-                                        if isinstance(raw_data, dict):
-                                            content_text = raw_data.get('content', '')
-                                    if not content_text:
-                                        content_text = str(content)
-                                else:
-                                    content_text = str(content) if content else ''
-                                
-                                # Build metadata
-                                chunk_metadata = chunk.get('metadata', {})
-                                if not chunk_metadata:
-                                    from utils.metadata_normalizer import MetadataNormalizer
-                                    meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
-                                    chunk_type = meta_norm.get_chunk_type('')
-                                    
-                                    chunk_metadata = {
-                                        'file_path': chunk.get('file_path', ''),
-                                        'filename': chunk.get('filename', ''),
-                                        'directory': chunk.get('directory', ''),
-                                        'chunk_type': chunk_type,
-                                        'repo_name': chunk.get('repo_name', ''),
-                                        'repo_owner': chunk.get('repo_owner', ''),
-                                        'language': chunk.get('language', ''),
-                                    }
-                                
-                                results.append({
-                                    'chunk_id': chunk_id,
-                                    'metadata': chunk_metadata,
-                                    'content': content_text,
-                                    'score': 9.0,  # Slightly lower than exact path match
-                                    'source': 'code_chunks_loader',
-                                    'match_type': 'exact_filename_match'
-                                })
-                
-                # If found results from code_chunks_loader, return immediately (no vector search)
-                if results:
-                    self.logger.info(
-                        f"CODE_LOCATION | Found {len(results)} chunks from code_chunks_loader, "
-                        f"returning without vector search"
-                    )
-                    results = sorted(results, key=lambda x: x.get('score', 0), reverse=True)
-                    return results[:self.top_k * 2]
-                else:
-                    self.logger.info(
-                        f"CODE_LOCATION | No results from code_chunks_loader, falling back to vector search"
-                    )
-                    # Fall through to normal vector search below
 
-        # -------------------------------------------------------
-
-        # Normal retrieve logic (unchanged)
+        # Normal retrieve logic
+        # NOTE: CODE_LOCATION is handled above - if it reaches here, code_chunks_loader didn't find results
+        # so we do a simple vector search without complex file index merging
         if query_type == QueryType.FLOW_ARCHITECTURE:
             retrieve_k = top_k or self.top_k * 6
-        elif query_type in [QueryType.HOW_TO, QueryType.CODE_LOCATION]:
-            # HYBRID APPROACH: File index + Vector search with path-based boosts
-            file_path_results = []
-            if query_type == QueryType.CODE_LOCATION and query_text:
-                file_path_results = self._retrieve_by_file_path(query_text, keywords)
-                if file_path_results:
-                    self.logger.info(f"FILE_PATH_INDEX | Found {len(file_path_results)} chunks via file path index")
-            
+        elif query_type == QueryType.HOW_TO:
             retrieve_k = top_k or self.top_k * 4
-            
-            # Always do vector search as well (for semantic matches)
-            # Then merge with file index results and apply path-based boosts
-            if query_type == QueryType.CODE_LOCATION:
-                # We'll merge results after vector search
-                pass
+        elif query_type == QueryType.CODE_LOCATION:
+            # CODE_LOCATION: Simple vector search fallback (code_chunks_loader already checked above)
+            retrieve_k = top_k or self.top_k * 4
         elif query_type in [QueryType.PR_ISSUE_TUTORIAL, QueryType.PR_ISSUE_CODING_QUESTION]:
             retrieve_k = top_k or self.top_k * 8
         elif query_type == QueryType.RANDOM_PR_GENERATOR:
@@ -511,8 +527,13 @@ class RetrievalMixin(
         # CRITICAL: Post-filter to ensure only current repo (safeguard)
         vector_results = self._filter_by_repo(vector_results)
         
-        # For CODE_LOCATION queries: Merge file index results with vector search
-        if query_type == QueryType.CODE_LOCATION and query_text:
+        # For CODE_LOCATION queries: Simple vector search only (code_chunks_loader already checked above)
+        # Skip complex file index merging - just return vector results
+        if query_type == QueryType.CODE_LOCATION:
+            self.logger.info(f"CODE_LOCATION | Returning {len(vector_results)} vector search results (code_chunks_loader had no matches)")
+            results = vector_results
+        # For HOW_TO queries: Merge file index results with vector search (if needed)
+        elif query_type == QueryType.HOW_TO and query_text:
             file_path_results = self._retrieve_by_file_path(query_text, keywords)
             
             if file_path_results:
