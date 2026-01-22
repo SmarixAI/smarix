@@ -5,6 +5,7 @@ from typing import List, Dict, Any, Optional
 from utils.metadata_normalizer import MetadataNormalizer
 from utils.repo_normalizer import normalize_repo_name, normalize_repo_owner, repo_matches, extract_repo_parts
 from utils.path_normalizer import normalize_path, extract_filename, extract_directory
+from utils.code_chunks_loader import CodeChunksLoader
 
 
 class RepoFilterMixin:
@@ -115,6 +116,24 @@ class RepoFilterMixin:
             self.logger.info(f"FILTER | Filtered {len(results)} -> {len(filtered)} results for repo {current_repo_display}")
         
         return filtered
+    
+    def _get_code_chunks_loader(self) -> Optional[CodeChunksLoader]:
+        """Get or create code chunks loader instance (lazy initialization)."""
+        # Use a private attribute that's initialized on first access
+        if not hasattr(self, '_code_chunks_loader') or self._code_chunks_loader is None:
+            self._code_chunks_loader = CodeChunksLoader()
+            
+            # Try to load chunks for current repo
+            repo_owner = getattr(self, 'repo_owner', None)
+            repo_name = getattr(self, 'repo_name', None)
+            
+            if repo_name:
+                self._code_chunks_loader.load_repo_chunks(
+                    repo_owner or '', 
+                    repo_name
+                )
+        
+        return self._code_chunks_loader
     
     def _get_file_suggestions(self, query_text: str, limit: int = 5) -> List[str]:
         """
@@ -516,10 +535,14 @@ class RepoFilterMixin:
                     }
                     results.append(result)
         
+        # Merge all_results (from file path index searches) with results (from direct file paths)
+        # This ensures we don't lose any matches
+        all_merged_results = all_results + results
+        
         # Remove duplicates by chunk_id
         seen = set()
         unique_results = []
-        for result in results:
+        for result in all_merged_results:
             chunk_id = result.get('chunk_id')
             if chunk_id and chunk_id not in seen:
                 seen.add(chunk_id)
@@ -597,6 +620,127 @@ class RepoFilterMixin:
                                         'match_type': 'fuzzy_match',
                                         'similarity': similarity_score
                                     })
+        
+        # Step 6: Fallback to code_chunks.json files if still no results
+        # This ensures we can find files even if they're not in the vector index yet
+        # Also try even if we have some results, to ensure completeness
+        if len(unique_results) < 3:  # If we have very few results, try code_chunks.json too
+            code_loader = self._get_code_chunks_loader()
+            if code_loader:
+                repo_owner = getattr(self, 'repo_owner', None)
+                repo_name = getattr(self, 'repo_name', None)
+                
+                # Try exact file paths first
+                if file_paths:
+                    for file_path in file_paths:
+                        chunks = code_loader.get_chunks_by_file_path(
+                            file_path,
+                            repo_owner,
+                            repo_name
+                        )
+                        
+                        for chunk in chunks:
+                            chunk_id = chunk.get('chunk_id')
+                            # Check both seen_chunk_ids and seen to avoid duplicates
+                            if chunk_id and chunk_id not in seen_chunk_ids and chunk_id not in seen:
+                                seen_chunk_ids.add(chunk_id)
+                                seen.add(chunk_id)
+                                from utils.metadata_normalizer import MetadataNormalizer
+                                meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+                                chunk_type = meta_norm.get_chunk_type('')
+                                
+                                if chunk_type in ['pr', 'issue', 'email']:
+                                    continue
+                                
+                                # Extract content from code_chunks.json format
+                                content = chunk.get('content', {})
+                                if isinstance(content, dict):
+                                    # Handle nested content structure
+                                    content_text = content.get('content', '') or str(content)
+                                else:
+                                    content_text = str(content) if content else ''
+                                
+                                # Build metadata in expected format
+                                chunk_metadata = chunk.get('metadata', {})
+                                if not chunk_metadata:
+                                    # Build metadata from chunk fields
+                                    chunk_metadata = {
+                                        'file_path': chunk.get('file_path', ''),
+                                        'filename': chunk.get('filename', ''),
+                                        'directory': chunk.get('directory', ''),
+                                        'chunk_type': chunk_type,
+                                        'repo_name': chunk.get('repo_name', ''),
+                                        'repo_owner': chunk.get('repo_owner', ''),
+                                        'language': chunk.get('language', ''),
+                                    }
+                                
+                                unique_results.append({
+                                    'chunk_id': chunk_id,
+                                    'metadata': chunk_metadata,
+                                    'content': content_text,
+                                    'score': 6.0,  # Lower than index but still good
+                                    'source': 'code_chunks_json',
+                                    'match_type': 'code_chunks_fallback'
+                                })
+                
+                # Try filename search in code chunks
+                if not unique_results and filename_hints:
+                    for filename_hint in filename_hints:
+                        found_paths = code_loader.search_files(
+                            filename_hint, 
+                            repo_owner, 
+                            repo_name, 
+                            limit=10
+                        )
+                        for file_path in found_paths:
+                            chunks = code_loader.get_chunks_by_file_path(
+                                file_path,
+                                repo_owner,
+                                repo_name
+                            )
+                            
+                            for chunk in chunks:
+                                chunk_id = chunk.get('chunk_id')
+                                # Check both seen_chunk_ids and seen to avoid duplicates
+                                if chunk_id and chunk_id not in seen_chunk_ids and chunk_id not in seen:
+                                    seen_chunk_ids.add(chunk_id)
+                                    seen.add(chunk_id)
+                                    from utils.metadata_normalizer import MetadataNormalizer
+                                    meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+                                    chunk_type = meta_norm.get_chunk_type('')
+                                    
+                                    if chunk_type in ['pr', 'issue', 'email']:
+                                        continue
+                                    
+                                    content = chunk.get('content', {})
+                                    if isinstance(content, dict):
+                                        content_text = content.get('content', '') or str(content)
+                                    else:
+                                        content_text = str(content) if content else ''
+                                    
+                                    chunk_metadata = chunk.get('metadata', {})
+                                    if not chunk_metadata:
+                                        chunk_metadata = {
+                                            'file_path': chunk.get('file_path', ''),
+                                            'filename': chunk.get('filename', ''),
+                                            'directory': chunk.get('directory', ''),
+                                            'chunk_type': chunk_type,
+                                            'repo_name': chunk.get('repo_name', ''),
+                                            'repo_owner': chunk.get('repo_owner', ''),
+                                            'language': chunk.get('language', ''),
+                                        }
+                                    
+                                    unique_results.append({
+                                        'chunk_id': chunk_id,
+                                        'metadata': chunk_metadata,
+                                        'content': content_text,
+                                        'score': 5.0,
+                                        'source': 'code_chunks_json',
+                                        'match_type': 'code_chunks_filename_search'
+                                    })
+                    
+                    if unique_results:
+                        self.logger.info(f"CODE_CHUNKS_FALLBACK | Found {len(unique_results)} chunks from code_chunks.json")
         
         # Log results for debugging
         if unique_results:
