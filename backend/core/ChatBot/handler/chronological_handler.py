@@ -65,10 +65,12 @@ class ChronologicalHandler:
         self.chatbot.logger.info(f"CHRONOLOGICAL RESULT | Found {chrono_query['type']} #{chrono_result['number']}")
         self.chatbot.logger.info(f"RETRIEVAL | Retrieved {len(github_results)} chunks")
 
+        from utils.metadata_normalizer import MetadataNormalizer
         for i, result in enumerate(github_results[:5], 1):
-            metadata = result.get('metadata', {})
+            # Use metadata normalizer for unified access
+            meta_norm = MetadataNormalizer(result.get('metadata', {}), result)
             self.chatbot.logger.info(
-                f"CHUNK {i} | File: {metadata.get('file_path', 'N/A')}, Score: {result.get('score', 0):.4f}, Type: {metadata.get('type', 'N/A')}")
+                f"CHUNK {i} | File: {meta_norm.get_file_path('N/A')}, Score: {result.get('score', 0):.4f}, Type: {meta_norm.get_chunk_type('N/A')}")
 
         query_type = QueryType.ISSUE_SPECIFIC if chrono_result['type'] == 'issue' else QueryType.PR_SPECIFIC
 
@@ -103,11 +105,10 @@ class ChronologicalHandler:
 
         sources = []
         for i, result in enumerate(github_results[:5], 1):
-            metadata = result.get('metadata', {})
-            # Handle both file_path and file fields
-            file_path = metadata.get('file_path') or metadata.get('file') or 'unknown'
-            # Handle both type and source_type fields
-            chunk_type = metadata.get('type') or metadata.get('source_type') or metadata.get('chunk_type') or 'unknown'
+            # Use metadata normalizer for unified access
+            meta_norm = MetadataNormalizer(result.get('metadata', {}), result)
+            file_path = meta_norm.get_file_path('unknown')
+            chunk_type = meta_norm.get_chunk_type('unknown')
             sources.append({
                 'rank': i,
                 'file': file_path,
@@ -251,11 +252,10 @@ class ChronologicalHandler:
 
         sources = []
         for i, result in enumerate(github_results[:5], 1):
-            metadata = result.get('metadata', {})
-            # Handle both file_path and file fields
-            file_path = metadata.get('file_path') or metadata.get('file') or 'unknown'
-            # Handle both type and source_type fields
-            chunk_type = metadata.get('type') or metadata.get('source_type') or metadata.get('chunk_type') or 'unknown'
+            # Use metadata normalizer for unified access
+            meta_norm = MetadataNormalizer(result.get('metadata', {}), result)
+            file_path = meta_norm.get_file_path('unknown')
+            chunk_type = meta_norm.get_chunk_type('unknown')
             sources.append({
                 'rank': i,
                 'file': file_path,

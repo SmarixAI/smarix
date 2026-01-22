@@ -318,15 +318,19 @@ class ResponseHandler:
 
     def _get_metadata(self, chunk: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Extract metadata from chunk with safe access.
+        Extract metadata from chunk with safe access and normalization support.
         
         Args:
             chunk: Chunk dictionary
             
         Returns:
-            Metadata dictionary
+            Normalized metadata dictionary
         """
-        return chunk.get("metadata", {})
+        from utils.metadata_normalizer import MetadataNormalizer
+        metadata = chunk.get('metadata', {})
+        # Return normalized metadata for consistent access
+        meta_norm = MetadataNormalizer(metadata, chunk)
+        return meta_norm.normalize() if metadata else {}
     
     def _get_metadata_str_lower(self, chunk: Dict[str, Any]) -> str:
         """
@@ -625,11 +629,12 @@ Instructions:
             limit = len(github_results)
 
         for i, result in enumerate(github_results[:limit], 1):
-            meta = self._get_metadata(result)
+            from utils.metadata_normalizer import MetadataNormalizer
+            meta_norm = MetadataNormalizer(result.get('metadata', {}), result)
             sources.append({
                 "rank": i,
-                "file": meta.get("file_path", "unknown"),
-                "type": meta.get("type", "unknown"),
+                "file": meta_norm.get_file_path("unknown"),
+                "type": meta_norm.get_chunk_type("unknown"),
                 "score": result.get("score", 0.0),
                 "chunk_id": meta.get("chunk_id", "")
             })

@@ -321,10 +321,12 @@ class GeneralQueryHandler:
         self.chatbot.logger.info(f"RETRIEVAL | Retrieved {len(github_results)} chunks from GitHub")
         
         # Log chunks
+        from utils.metadata_normalizer import MetadataNormalizer
         for i, result in enumerate(github_results[:5], 1):
-            metadata = result.get('metadata', {})
-            file_path = metadata.get('file_path') or metadata.get('file') or 'N/A'
-            chunk_type = metadata.get('type') or metadata.get('source_type') or metadata.get('chunk_type') or 'N/A'
+            # Use metadata normalizer for unified access
+            meta_norm = MetadataNormalizer(result.get('metadata', {}), result)
+            file_path = meta_norm.get_file_path('N/A')
+            chunk_type = meta_norm.get_chunk_type('N/A')
             self.chatbot.logger.info(
                 f"CHUNK {i} | File: {file_path}, Score: {result.get('score', 0):.4f}, Type: {chunk_type}")
 
@@ -431,16 +433,18 @@ class GeneralQueryHandler:
     
     def _build_sources(self, github_results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Build sources list from GitHub results."""
+        from utils.metadata_normalizer import MetadataNormalizer
         sources = []
         if github_results:
             for i, result in enumerate(github_results[:5], 1):
-                metadata = result.get('metadata', {})
+                # Use metadata normalizer for unified access
+                meta_norm = MetadataNormalizer(result.get('metadata', {}), result)
                 sources.append({
                     'rank': i,
-                    'file': metadata.get('file_path', 'unknown'),
-                    'type': metadata.get('type', 'unknown'),
+                    'file': meta_norm.get_file_path('unknown'),
+                    'type': meta_norm.get_chunk_type('unknown'),
                     'score': result.get('score', 0.0),
-                    'chunk_id': metadata.get('chunk_id', '')
+                    'chunk_id': result.get('chunk_id', '') or meta_norm.get('chunk_id', '')
                 })
         return sources
     

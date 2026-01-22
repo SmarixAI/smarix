@@ -5,6 +5,7 @@ from typing import List, Dict, Any
 from pathlib import Path
 import json
 from ..query_type import QueryType
+from utils.metadata_normalizer import MetadataNormalizer
 
 
 class ContextBuilderMixin:
@@ -23,12 +24,13 @@ class ContextBuilderMixin:
                 score *= 1.1
 
             # Try multiple fields for content
-            full_content = (metadata.get('full_content') or metadata.get('content') or '').lower()
+            meta_norm = MetadataNormalizer(metadata, result)
+            full_content = (meta_norm.get_content() or '').lower()
             keyword_matches = sum(1 for k in keywords if k.lower() in full_content)
             if keyword_matches > 0:
                 score *= (1.0 + 0.1 * min(keyword_matches, 5))
 
-            chunk_type = metadata.get('type', '')
+            chunk_type = meta_norm.get_chunk_type('')
             if query_type == QueryType.FLOW_ARCHITECTURE and chunk_type in ['documentation', 'analyzed_file']:
                 score *= 1.2
             elif query_type == QueryType.TROUBLESHOOTING and chunk_type == 'issue':
@@ -63,32 +65,37 @@ class ContextBuilderMixin:
 
         for i, chunk in enumerate(chunks[:max_chunks], 1):
             metadata = chunk.get('metadata', {})
+            # Use metadata normalizer for unified access
+            meta_norm = MetadataNormalizer(metadata, chunk)
 
             context_parts.append(f"## Source {i}")
             
-            # Handle both 'type' and 'source_type' fields
-            chunk_type = metadata.get('type') or metadata.get('source_type') or metadata.get('chunk_type') or 'unknown'
+            # Get chunk type with fallback lookups
+            chunk_type = meta_norm.get_chunk_type('unknown')
             context_parts.append(f"Type: {chunk_type}")
 
-            # Handle both 'file_path' and 'file' fields
-            file_path = metadata.get('file_path') or metadata.get('file') or metadata.get('source')
+            # Get file path with fallback lookups
+            file_path = meta_norm.get_file_path()
             if file_path:
                 context_parts.append(f"File: {file_path}")
 
             if metadata.get('line_start') and metadata.get('line_end'):
                 context_parts.append(f"Lines: {metadata['line_start']}-{metadata['line_end']}")
 
-            if metadata.get('issue_number'):
-                context_parts.append(f"Issue: #{metadata['issue_number']}")
-            if metadata.get('pr_number'):
-                context_parts.append(f"PR: #{metadata['pr_number']}")
+            # Get issue/PR numbers with fallback lookups
+            issue_number = meta_norm.get_issue_number()
+            if issue_number is not None:
+                context_parts.append(f"Issue: #{issue_number}")
+            pr_number = meta_norm.get_pr_number()
+            if pr_number is not None:
+                context_parts.append(f"PR: #{pr_number}")
             if metadata.get('author'):
                 context_parts.append(f"Author: {metadata['author']}")
             if metadata.get('title'):
                 context_parts.append(f"Title: {metadata['title']}")
 
-            # Try multiple fields for content (full_content, content, or from chunk)
-            content = metadata.get('full_content') or metadata.get('content') or chunk.get('content', '')
+            # Get content with fallback lookups
+            content = meta_norm.get_content() or chunk.get('content', '')
             if content:
                 if query_type == QueryType.FLOW_ARCHITECTURE:
                     max_length = 5000
@@ -143,8 +150,9 @@ class ContextBuilderMixin:
                 except Exception:
                     pass
 
-            # Try multiple fields for content
-            content = metadata.get('full_content') or metadata.get('content') or ''
+            # Get content with fallback lookups
+            meta_norm = MetadataNormalizer(metadata, email)
+            content = meta_norm.get_content() or ''
             if content:
                 if len(content) > 800:
                     content = content[:800] + "\n... (truncated)"

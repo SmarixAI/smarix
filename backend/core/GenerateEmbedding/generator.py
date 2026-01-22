@@ -184,24 +184,32 @@ class EmbeddingGenerator:
             # Store important metadata (including repo info)
             # Check both top-level and nested metadata for repo info
             nested_metadata = chunk.get('metadata', {})
+            # Ensure standard fields are set (with fallbacks)
+            from utils.path_normalizer import normalize_path
+            
+            chunk_type = chunk.get('chunk_type') or chunk.get('type') or nested_metadata.get('chunk_type') or nested_metadata.get('type') or ''
+            file_path_raw = chunk.get('file_path') or nested_metadata.get('file_path') or nested_metadata.get('path') or nested_metadata.get('file') or ''
+            # Normalize file path using path normalizer
+            file_path = normalize_path(file_path_raw, '') if file_path_raw else ''
+            
             metadata_list.append({
                 'chunk_id': chunk.get('chunk_id'),
-                'chunk_type': chunk.get('chunk_type'),
+                'chunk_type': chunk_type,  # Standard field
+                'type': chunk_type,  # Alias for backward compat
                 'category': chunk.get('category'),
                 'importance_score': chunk.get('importance_score', 1.0),
-                'file_path': chunk.get('file_path'),
+                'file_path': file_path,  # Standard field - normalized
                 'function_name': chunk.get('function_name', ''),
                 'class_name': chunk.get('class_name', ''),
                 'semantic_tags': chunk.get('semantic_tags', []),
                 'keywords': chunk.get('keywords', [])[:10],
-                'language': chunk.get('language', ''),
+                'language': chunk.get('language') or nested_metadata.get('language', ''),
                 'content': chunk.get('content', ''),  # Store original content
                 # CRITICAL: Include repo info for filtering
                 'repo_name': chunk.get('repo_name') or nested_metadata.get('repo_name', ''),
                 'repo_owner': chunk.get('repo_owner') or nested_metadata.get('repo_owner', ''),
                 # Include other important metadata fields
                 'source': chunk.get('source') or nested_metadata.get('source', ''),
-                'type': chunk.get('type') or chunk.get('chunk_type', ''),
                 'retrieval_priority': chunk.get('retrieval_priority') or nested_metadata.get('retrieval_priority', 3),
             })
             # compute a small metadata hash to detect metadata-only changes

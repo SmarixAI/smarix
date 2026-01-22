@@ -265,15 +265,17 @@ class PRHandler:
         self.chatbot.logger.info(f"TUTORIAL GENERATION | Completed, Length: {len(tutorial_answer)} chars")
         
         # Extract sources
+        from utils.metadata_normalizer import MetadataNormalizer
         sources = []
         for i, result in enumerate(github_results[:10], 1):
-            metadata = result.get('metadata', {})
+            # Use metadata normalizer for unified access
+            meta_norm = MetadataNormalizer(result.get('metadata', {}), result)
             sources.append({
                 'rank': i,
-                'file': metadata.get('file_path') or metadata.get('file') or 'unknown',
-                'type': metadata.get('type') or 'unknown',
+                'file': meta_norm.get_file_path('unknown'),
+                'type': meta_norm.get_chunk_type('unknown'),
                 'score': result.get('score', 0.0),
-                'chunk_id': metadata.get('chunk_id', '')
+                'chunk_id': result.get('chunk_id', '') or meta_norm.get('chunk_id', '')
             })
         
         self.chatbot.history.append({'role': 'user', 'content': original_query})
@@ -374,15 +376,17 @@ class PRHandler:
         self.chatbot.logger.info(f"CODING QUESTION GENERATION | Completed, Length: {len(question_answer)} chars")
         
         # Extract sources
+        from utils.metadata_normalizer import MetadataNormalizer
         sources = []
         for i, result in enumerate(github_results[:10], 1):
-            metadata = result.get('metadata', {})
+            # Use metadata normalizer for unified access
+            meta_norm = MetadataNormalizer(result.get('metadata', {}), result)
             sources.append({
                 'rank': i,
-                'file': metadata.get('file_path') or metadata.get('file') or 'unknown',
-                'type': metadata.get('type') or 'unknown',
+                'file': meta_norm.get_file_path('unknown'),
+                'type': meta_norm.get_chunk_type('unknown'),
                 'score': result.get('score', 0.0),
-                'chunk_id': metadata.get('chunk_id', '')
+                'chunk_id': result.get('chunk_id', '') or meta_norm.get('chunk_id', '')
             })
         
         self.chatbot.history.append({'role': 'user', 'content': original_query})

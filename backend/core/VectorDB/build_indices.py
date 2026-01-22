@@ -130,22 +130,48 @@ def build_faiss_index(vectors: np.ndarray):
 
 def save_index_and_metadata(index_name: str, index, metadata):
     """Save FAISS index with metadata in the new format"""
+    from utils.metadata_normalizer import MetadataNormalizer
+    
     index_dir = VECTORDB_ROOT / index_name
     index_dir.mkdir(parents=True, exist_ok=True)
 
     faiss.write_index(index, str(index_dir / "faiss.index"))
 
+    # Normalize metadata using MetadataNormalizer for consistency
     for m in metadata:
-        m["chunk_type"] = m.get("chunk_type") or m.get("type")
-        m["file_path"] = m.get("file_path") or m.get("path") or m.get("repo_file_path")
+        meta_norm = MetadataNormalizer(m)
+        # Use normalizer to get standardized values, but preserve original fields for backward compat
+        chunk_type = meta_norm.get_chunk_type()
+        if chunk_type:
+            m["chunk_type"] = chunk_type
+            m["type"] = chunk_type  # Alias for backward compat
+        
+        file_path = meta_norm.get_file_path()
+        if file_path:
+            m["file_path"] = file_path
+        
         # Ensure repo_name is set - fallback to current repo
-        m["repo_name"] = m.get("repo_name") or m.get("repository") or m.get("repo") or f"{REPO_OWNER}/{REPO_NAME}"
-        m["repo_owner"] = m.get("repo_owner") or REPO_OWNER
-        m["language"] = m.get("language") or m.get("entities", {}).get("language")
-        m["pr_number"] = m.get("pr_number") or m.get("metadata", {}).get("pr_number")
-        m["issue_number"] = m.get("issue_number") or m.get("metadata", {}).get(
-            "issue_number"
-        )
+        repo_name = meta_norm.get_repo_name()
+        if not repo_name:
+            repo_name = f"{REPO_OWNER}/{REPO_NAME}"
+        m["repo_name"] = repo_name
+        
+        repo_owner = meta_norm.get_repo_owner()
+        if not repo_owner:
+            repo_owner = REPO_OWNER
+        m["repo_owner"] = repo_owner
+        
+        language = meta_norm.get_language()
+        if language:
+            m["language"] = language
+        
+        pr_number = meta_norm.get_pr_number()
+        if pr_number is not None:
+            m["pr_number"] = pr_number
+        
+        issue_number = meta_norm.get_issue_number()
+        if issue_number is not None:
+            m["issue_number"] = issue_number
 
     with open(index_dir / "metadata.pkl", "wb") as f:
         pickle.dump(
@@ -284,16 +310,24 @@ def main():
             skipped_count = 0
             fixed_count = 0
             
+            # Import repo normalizer for flexible matching
+            from utils.repo_normalizer import normalize_repo_name, normalize_repo_owner, repo_matches, extract_repo_parts
+            
+            # Normalize current repo info
+            normalized_current_owner, normalized_current_repo = extract_repo_parts(FULL_REPO_NAME)
+            if not normalized_current_owner:
+                normalized_current_owner = normalize_repo_owner(REPO_OWNER)
+            if not normalized_current_repo:
+                normalized_current_repo = normalize_repo_name(REPO_NAME)
+            
             for i, m in enumerate(metadata):
                 # Get repo_name - check multiple possible locations
                 chunk_repo_raw = m.get("repo_name") or m.get("repository") or m.get("repo") or None
-                chunk_repo = str(chunk_repo_raw).strip() if chunk_repo_raw is not None else ""
                 chunk_owner_raw = m.get("repo_owner") or m.get("owner") or None
-                chunk_owner = str(chunk_owner_raw).strip() if chunk_owner_raw is not None else ""
                 
                 # If repo_name is empty/missing, assume it's for current repo (embeddings are in repo dir)
                 # Since embeddings are in Embeddings/{REPO_OWNER}/{REPO_NAME}/, they belong to current repo
-                if not chunk_repo or chunk_repo == "" or chunk_repo == "None":
+                if not chunk_repo_raw or str(chunk_repo_raw).strip() == "" or str(chunk_repo_raw).strip() == "None":
                     # Embeddings are in Embeddings/{REPO_OWNER}/{REPO_NAME}/, so assume current repo
                     m["repo_name"] = REPO_NAME
                     m["repo_owner"] = REPO_OWNER
@@ -302,19 +336,18 @@ def main():
                     fixed_count += 1
                     continue
                 
-                # STRICT matching: BOTH owner AND repo name must match
-                # Accept chunks that match current repo
-                matches_repo = False
+                # Normalize chunk repo info
+                normalized_chunk_owner, normalized_chunk_repo = extract_repo_parts(chunk_repo_raw)
+                if not normalized_chunk_owner and chunk_owner_raw:
+                    normalized_chunk_owner = normalize_repo_owner(chunk_owner_raw)
+                if not normalized_chunk_repo:
+                    normalized_chunk_repo = normalize_repo_name(chunk_repo_raw)
                 
-                # Check full format first: "owner/repo"
-                if chunk_repo == FULL_REPO_NAME:
-                    matches_repo = True
-                # Check separate owner and repo name (BOTH must match)
-                elif chunk_owner == REPO_OWNER and chunk_repo == REPO_NAME:
-                    matches_repo = True
-                # If repo_name is stored as just the name, owner must still match
-                elif chunk_repo == REPO_NAME and chunk_owner == REPO_OWNER:
-                    matches_repo = True
+                # FLEXIBLE matching: Use repo normalizer for format variations
+                matches_repo = repo_matches(
+                    normalized_current_owner, normalized_current_repo,
+                    normalized_chunk_owner, normalized_chunk_repo
+                )
                 
                 if matches_repo:
                     # Ensure repo_name is set correctly

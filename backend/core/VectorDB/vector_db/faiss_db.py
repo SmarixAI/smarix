@@ -37,6 +37,10 @@ class FAISSVectorDB:
         self.metadata = []
         self.chunk_ids = []
         
+        # File path index for fast file-based lookups
+        from utils.file_path_index import FilePathIndex
+        self.file_path_index = FilePathIndex()
+        
         self._initialize_faiss()
         self._create_index()
     
@@ -105,8 +109,19 @@ class FAISSVectorDB:
         self.chunk_ids.extend(chunk_ids)
         self.metadata.extend(metadata)
         
+        # Update file path index
+        for i, chunk_id in enumerate(chunk_ids):
+            chunk_metadata = metadata[i] if i < len(metadata) else {}
+            # Use metadata normalizer for unified file path access
+            from utils.metadata_normalizer import MetadataNormalizer
+            meta_norm = MetadataNormalizer(chunk_metadata)
+            file_path = meta_norm.get_file_path()
+            if file_path:
+                self.file_path_index.add_chunk(file_path, chunk_id, chunk_metadata)
+        
         print(f"✅ Added {len(embeddings)} embeddings to index")
         print(f"   Total vectors: {self.index.ntotal}")
+        print(f"   File path index: {self.file_path_index.get_statistics()['total_files']} files, {self.file_path_index.get_statistics()['total_chunks']} chunks")
     
     def search(self, 
           query_embedding: np.ndarray,
@@ -295,6 +310,45 @@ class FAISSVectorDB:
                 results.append(chunk)
         return results
     
+    def get_by_file_path(self, file_path: str) -> List[Dict[str, Any]]:
+        """
+        Get all chunks for a specific file path (fast lookup).
+        
+        Args:
+            file_path: File path to search for
+            
+        Returns:
+            List of chunk dictionaries
+        """
+        chunk_ids = self.file_path_index.get_chunks_by_path(file_path)
+        return self.get_by_ids(chunk_ids)
+    
+    def get_by_file_paths(self, file_paths: List[str]) -> List[Dict[str, Any]]:
+        """
+        Get all chunks for multiple file paths (fast lookup).
+        
+        Args:
+            file_paths: List of file paths to search for
+            
+        Returns:
+            List of chunk dictionaries
+        """
+        chunk_ids = self.file_path_index.get_chunks_by_paths(file_paths)
+        return self.get_by_ids(chunk_ids)
+    
+    def search_file_paths(self, query: str, limit: Optional[int] = None) -> List[str]:
+        """
+        Search for file paths matching a query (partial match).
+        
+        Args:
+            query: Search query (can be partial path, filename, or directory)
+            limit: Maximum number of paths to return
+            
+        Returns:
+            List of matching file paths
+        """
+        return self.file_path_index.search_paths(query, limit)
+    
     def get_statistics(self) -> Dict[str, Any]:
         """Get index statistics with hierarchical context info"""
         stats = {
@@ -352,7 +406,8 @@ class FAISSVectorDB:
                 'metadata': self.metadata,
                 'dimension': self.dimension,
                 'index_type': self.index_type,
-                'metric': self.metric
+                'metric': self.metric,
+                'file_path_index': self.file_path_index.to_dict()  # Save file path index
             }, f)
         
         # Save config as JSON
@@ -412,6 +467,15 @@ class FAISSVectorDB:
             db.metadata = metadata_list
             db.chunk_ids = [m.get("chunk_id", str(i)) for i, m in enumerate(metadata_list)]
             
+            # Rebuild file path index from metadata
+            from utils.metadata_normalizer import MetadataNormalizer
+            for i, chunk_metadata in enumerate(metadata_list):
+                chunk_id = db.chunk_ids[i]
+                meta_norm = MetadataNormalizer(chunk_metadata)
+                file_path = meta_norm.get_file_path()
+                if file_path:
+                    db.file_path_index.add_chunk(file_path, chunk_id, chunk_metadata)
+            
             print(f"⚡ Loaded vector DB @ {load_dir} ({db.index.ntotal} vectors) [legacy format]")
             return db
         
@@ -446,6 +510,21 @@ class FAISSVectorDB:
         # Restore metadata
         db.metadata = data["metadata"]
         db.chunk_ids = data["chunk_ids"]
+        
+        # Restore file path index if available, otherwise rebuild from metadata
+        file_path_index_data = data.get("file_path_index")
+        if file_path_index_data:
+            from utils.file_path_index import FilePathIndex
+            db.file_path_index = FilePathIndex.from_dict(file_path_index_data)
+        else:
+            # Rebuild file path index from metadata (for backward compatibility)
+            from utils.metadata_normalizer import MetadataNormalizer
+            for i, chunk_metadata in enumerate(data["metadata"]):
+                chunk_id = db.chunk_ids[i]
+                meta_norm = MetadataNormalizer(chunk_metadata)
+                file_path = meta_norm.get_file_path()
+                if file_path:
+                    db.file_path_index.add_chunk(file_path, chunk_id, chunk_metadata)
 
         print(f"⚡ Loaded vector DB @ {load_dir} ({db.index.ntotal} vectors)")
         return db

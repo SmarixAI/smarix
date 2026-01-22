@@ -1204,14 +1204,20 @@ class DataChunker:
                         entities["authors"].add(author.lower())
 
                 # Extract file paths
+                from utils.path_normalizer import normalize_path
                 for file in pr.get("files", []):
                     if isinstance(file, dict) and "filename" in file:
-                        path = file["filename"]
-                        entities["file_paths"].add(path)
-                        # Also add directories
-                        parts = path.split("/")
-                        for i in range(1, len(parts) + 1):
-                            entities["file_paths"].add("/".join(parts[:i]))
+                        path_raw = file["filename"]
+                        # Normalize path before adding
+                        path = normalize_path(path_raw, '') if path_raw else ''
+                        if path:
+                            entities["file_paths"].add(path)
+                            # Also add directories (normalized)
+                            parts = path.split("/")
+                            for i in range(1, len(parts) + 1):
+                                dir_path = "/".join(parts[:i])
+                                if dir_path:
+                                    entities["file_paths"].add(dir_path)
 
                 # Extract from PR body
                 body = pr.get("body", "")
@@ -1861,18 +1867,33 @@ class DataChunker:
             if path:
                 self.graph_extractor.process_analysis(path, ast_analysis, content)
 
+            # Standardize metadata fields (add standard fields alongside existing for backward compat)
+            from utils.path_normalizer import normalize_path, extract_filename, extract_directory
+            
+            # Normalize path using path normalizer
+            normalized_path = normalize_path(path, '') if path else ''
+            normalized_filename = extract_filename(normalized_path) if normalized_path else ''
+            normalized_directory = extract_directory(normalized_path) if normalized_path else ''
+            
             chunk = {
                 'chunk_id': chunk_id,
-                'type': 'code',
+                'type': 'code',  # Keep for backward compat
+                'chunk_type': 'code',  # Standard field
                 'source': 'git',
                 'repo_name': reponame,
-                'repo_owner': REPO_OWNER,  # Add owner for strict filtering
+                'repo_owner': REPO_OWNER,
                 'retrieval_priority': 2,
+                # Standard file path fields (normalized)
+                'file_path': normalized_path,  # Standard field - normalized
+                'language': language,  # Standard field (promoted from entities)
+                'filename': normalized_filename,  # Standard field - normalized
+                'directory': normalized_directory,  # Standard field - normalized
+                # Keep entities for backward compat (also normalized)
                 'entities': {
-                    'path': path,
+                    'path': normalized_path,
                     'language': language,
-                    'directory': str(Path(path).parent) if path else '',
-                    'filename': Path(path).name if path else ''
+                    'directory': normalized_directory,
+                    'filename': normalized_filename
                 },
                 "content": {"content": content, "size": size, "analysis": ast_analysis},
                 "search_hints": {
@@ -1900,15 +1921,30 @@ class DataChunker:
 
             content_text = doc.get("content", "") or ""
 
+            # Standardize metadata fields
+            from utils.path_normalizer import normalize_path, extract_filename, extract_directory
+            
+            doc_path_raw = doc.get('path', '')
+            # Normalize path using path normalizer
+            doc_path = normalize_path(doc_path_raw, '') if doc_path_raw else ''
+            doc_filename = extract_filename(doc_path) if doc_path else ''
+            doc_directory = extract_directory(doc_path) if doc_path else ''
+            
             chunk = {
                 'chunk_id': chunk_id,
-                'type': 'documentation',
+                'type': 'documentation',  # Keep for backward compat
+                'chunk_type': 'documentation',  # Standard field
                 'source': 'git',
                 'repo_name': reponame,
-                'repo_owner': REPO_OWNER,  # Add owner for strict filtering
+                'repo_owner': REPO_OWNER,
                 'retrieval_priority': 1,
+                # Standard file path fields (normalized)
+                'file_path': doc_path,  # Standard field - normalized
+                'filename': doc_filename,  # Standard field - normalized
+                'directory': doc_directory,  # Standard field - normalized
+                # Keep entities for backward compat
                 'entities': {
-                    'path': doc.get('path', ''),
+                    'path': doc_path,
                     'title': doc.get('title', '')
                 },
                 "content": {
@@ -1935,15 +1971,31 @@ class DataChunker:
 
             chunk_id = self.generate_chunk_id(workflow, f"{reponame}_workflow", idx)
 
+            # Standardize metadata fields
+            from utils.path_normalizer import normalize_path, extract_filename, extract_directory
+            
+            workflow_path_raw = workflow.get("path", "")
+            # Normalize path using path normalizer
+            workflow_path = normalize_path(workflow_path_raw, '') if workflow_path_raw else ''
+            workflow_filename = extract_filename(workflow_path) if workflow_path else ''
+            workflow_directory = extract_directory(workflow_path) if workflow_path else ''
+            
             chunk = {
                 "chunk_id": chunk_id,
-                "type": "workflow",
+                "type": "workflow",  # Keep for backward compat
+                "chunk_type": "workflow",  # Standard field
                 "source": "git",
                 "repo_name": reponame,
+                "repo_owner": REPO_OWNER,  # Add owner for consistency
                 "retrieval_priority": 2,
+                # Standard file path fields (normalized)
+                "file_path": workflow_path,  # Standard field - normalized
+                "filename": workflow_filename,  # Standard field - normalized
+                "directory": workflow_directory,  # Standard field - normalized
+                # Keep entities for backward compat
                 "entities": {
                     "name": workflow.get("name", ""),
-                    "path": workflow.get("path", ""),
+                    "path": workflow_path,
                 },
                 "content": workflow,
                 "search_hints": {
@@ -1966,15 +2018,30 @@ class DataChunker:
 
             chunk_id = self.generate_chunk_id(analyzed, f"{reponame}_analyzed", idx)
 
+            # Standardize metadata fields
+            from utils.path_normalizer import normalize_path, extract_filename, extract_directory
+            
+            analyzed_path_raw = analyzed.get('path', '')
+            # Normalize path using path normalizer
+            analyzed_path = normalize_path(analyzed_path_raw, '') if analyzed_path_raw else ''
+            analyzed_filename = extract_filename(analyzed_path) if analyzed_path else ''
+            analyzed_directory = extract_directory(analyzed_path) if analyzed_path else ''
+            
             chunk = {
                 'chunk_id': chunk_id,
-                'type': 'analyzed_file',
+                'type': 'analyzed_file',  # Keep for backward compat
+                'chunk_type': 'analyzed_file',  # Standard field
                 'source': 'git',
                 'repo_name': reponame,
-                'repo_owner': REPO_OWNER,  # Add owner for strict filtering
+                'repo_owner': REPO_OWNER,
                 'retrieval_priority': 2,
+                # Standard file path fields (normalized)
+                'file_path': analyzed_path,  # Standard field - normalized
+                'filename': analyzed_filename,  # Standard field - normalized
+                'directory': analyzed_directory,  # Standard field - normalized
+                # Keep entities for backward compat
                 'entities': {
-                    'path': analyzed.get('path', '')
+                    'path': analyzed_path
                 },
                 'content': analyzed,
                 'search_hints': {
@@ -2409,18 +2476,32 @@ def process_file(
         chunk_repo = chunk.get('repo_name', '').strip()
         chunk_owner = chunk.get('repo_owner', '').strip()
         
-        # STRICT matching: BOTH owner AND repo name must match
+        # FLEXIBLE matching: Use repo normalizer for format variations
         matches_repo = False
         
         # Check full format first: "owner/repo"
-        if chunk_repo == expected_repo_full:
-            matches_repo = True
-        # Check separate owner and repo name (BOTH must match)
-        elif chunk_owner == repo_owner and chunk_repo == repo_name:
-            matches_repo = True
-        # If repo_name is stored as just the name, owner must still match
-        elif chunk_repo == repo_name and chunk_owner == repo_owner:
-            matches_repo = True
+        # Use flexible repo matching with normalizer
+        from utils.repo_normalizer import repo_matches, normalize_repo_name, normalize_repo_owner, extract_repo_parts
+        
+        # Normalize current repo
+        normalized_current_owner, normalized_current_repo = extract_repo_parts(expected_repo_full)
+        if not normalized_current_owner:
+            normalized_current_owner = normalize_repo_owner(repo_owner)
+        if not normalized_current_repo:
+            normalized_current_repo = normalize_repo_name(repo_name)
+        
+        # Normalize chunk repo
+        normalized_chunk_owner, normalized_chunk_repo = extract_repo_parts(chunk_repo)
+        if not normalized_chunk_owner:
+            normalized_chunk_owner = normalize_repo_owner(chunk_owner)
+        if not normalized_chunk_repo:
+            normalized_chunk_repo = normalize_repo_name(chunk_repo)
+        
+        # Use flexible matching
+        matches_repo = repo_matches(
+            normalized_current_owner, normalized_current_repo,
+            normalized_chunk_owner, normalized_chunk_repo
+        )
         
         if matches_repo:
             # Ensure repo_name is set correctly (use just repo_name, not full format)

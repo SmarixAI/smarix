@@ -4,6 +4,7 @@ Reranking and diversity selection for retrieval results.
 from typing import List, Dict, Any
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
+from utils.metadata_normalizer import MetadataNormalizer
 
 
 class RerankingMixin:
@@ -46,16 +47,13 @@ class RerankingMixin:
             # Extract text content from results
             pairs = []
             for result in results:
-                # Get text content from various possible fields (check all common locations)
-                metadata = result.get('metadata', {})
+                # Get text content using metadata normalizer
+                meta_norm = MetadataNormalizer(result.get('metadata', {}), result)
                 content = (
                     result.get('content') or 
                     result.get('text') or 
-                    metadata.get('full_content') or
-                    metadata.get('content') or
-                    metadata.get('text') or
-                    metadata.get('chunk_text') or
-                    str(metadata)
+                    meta_norm.get_content() or
+                    str(result.get('metadata', {}))
                 )
                 if content and len(str(content).strip()) > 10:  # Ensure meaningful content
                     pairs.append([query_text, str(content)])
@@ -99,9 +97,10 @@ class RerankingMixin:
                 try:
                     from ..query_type import QueryType
                     if hasattr(self, "last_query_type") and self.last_query_type == QueryType.CODE_LOCATION:
-                        filename = (results[idx].get('metadata', {}).get('name') or
-                                    results[idx].get('metadata', {}).get('file') or
-                                    results[idx].get('metadata', {}).get('path') or "").lower()
+                        # Use metadata normalizer for unified file path access
+                        meta_norm = MetadataNormalizer(results[idx].get('metadata', {}), results[idx])
+                        file_path = meta_norm.get_file_path("")
+                        filename = file_path.lower() if file_path else ""
 
                         # Direct filename hit boost
                         q = query_text.lower().replace(" ", "").replace("_", "").replace("-", "")
@@ -110,7 +109,8 @@ class RerankingMixin:
                             results[idx]['score'] += 2.5
 
                         # Strong priority boost for pure code chunks
-                        if results[idx].get('metadata', {}).get('type') == "code":
+                        chunk_type = meta_norm.get_chunk_type("")
+                        if chunk_type == "code":
                             results[idx]['score'] += 1.8
                 except Exception:
                     pass
@@ -165,15 +165,13 @@ class RerankingMixin:
             # Extract embeddings for all chunks
             chunk_texts = []
             for result in results:
-                metadata = result.get('metadata', {})
+                # Use metadata normalizer for unified content access
+                meta_norm = MetadataNormalizer(result.get('metadata', {}), result)
                 content = (
                     result.get('content') or 
                     result.get('text') or 
-                    metadata.get('full_content') or
-                    metadata.get('content') or
-                    metadata.get('text') or
-                    metadata.get('chunk_text') or
-                    str(metadata)
+                    meta_norm.get_content() or
+                    str(result.get('metadata', {}))
                 )
                 chunk_texts.append(str(content) if content else "")
             

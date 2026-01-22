@@ -5,6 +5,7 @@ from typing import List, Dict, Any, Optional
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 from ..query_type import QueryType
+from utils.metadata_normalizer import MetadataNormalizer
 
 
 class MultiIndexRetrievalMixin:
@@ -115,12 +116,10 @@ class MultiIndexRetrievalMixin:
         if query_type == QueryType.CODE_LOCATION and query_text:
             normalized_query = query_text.lower().replace(" ", "").replace("_", "").replace("-", "")
             for r in unique_results:
-                filename = (
-                    r.get("metadata", {}).get("file_path") or
-                    r.get("metadata", {}).get("file") or
-                    r.get("metadata", {}).get("source") or 
-                    r.get("metadata", {}).get("path") or ""
-                ).lower()
+                # Use metadata normalizer for unified file path access
+                meta_norm = MetadataNormalizer(r.get("metadata", {}), r)
+                file_path = meta_norm.get_file_path("")
+                filename = file_path.lower() if file_path else ""
                 normalized_file = filename.replace(" ", "").replace("_", "").replace("-", "")
                 if normalized_query in normalized_file or any(token in normalized_file for token in normalized_query.split()):
                     r["score"] = r.get("score", 0) + 4.0   # very strong boost
@@ -138,12 +137,13 @@ class MultiIndexRetrievalMixin:
             entity_type = entity.get('type')
             filtered_results = []
             for result in unique_results:
-                metadata = result.get('metadata', {})
-                if entity_type == 'issue' and metadata.get('issue_number') == entity.get('number'):
+                # Use metadata normalizer for unified access
+                meta_norm = MetadataNormalizer(result.get('metadata', {}), result)
+                if entity_type == 'issue' and meta_norm.get_issue_number() == entity.get('number'):
                     filtered_results.append(result)
-                elif entity_type == 'pr' and metadata.get('pr_number') == entity.get('number'):
+                elif entity_type == 'pr' and meta_norm.get_pr_number() == entity.get('number'):
                     filtered_results.append(result)
-                elif entity_type == 'commit' and metadata.get('sha', '').startswith(entity.get('sha', '')):
+                elif entity_type == 'commit' and result.get('metadata', {}).get('sha', '').startswith(entity.get('sha', '')):
                     filtered_results.append(result)
             
             if filtered_results:
@@ -164,11 +164,12 @@ class MultiIndexRetrievalMixin:
 
         # 🔥 Normalize metadata → promote fields to top-level for context builder + logs
         for r in final_results:
-            m = r.get("metadata", {}) or {}
-            r["file_path"] = m.get("file_path") or m.get("file") or m.get("path")
-            r["type"] = m.get("type") or m.get("chunk_type")
-            r["repo_name"] = m.get("repo_name")
-            r["issue_number"] = m.get("issue_number")
-            r["pr_number"] = m.get("pr_number")
+            # Use metadata normalizer for unified access
+            meta_norm = MetadataNormalizer(r.get("metadata", {}), r)
+            r["file_path"] = meta_norm.get_file_path()
+            r["type"] = meta_norm.get_chunk_type()
+            r["repo_name"] = meta_norm.get_repo_name()
+            r["issue_number"] = meta_norm.get_issue_number()
+            r["pr_number"] = meta_norm.get_pr_number()
 
         return final_results

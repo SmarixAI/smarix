@@ -120,6 +120,13 @@ class RetrievalMixin(
         if query_type == QueryType.FLOW_ARCHITECTURE:
             retrieve_k = top_k or self.top_k * 6
         elif query_type in [QueryType.HOW_TO, QueryType.CODE_LOCATION]:
+            # For CODE_LOCATION, try file path index first if file paths detected
+            if query_type == QueryType.CODE_LOCATION and query_text:
+                file_path_results = self._retrieve_by_file_path(query_text, keywords)
+                if file_path_results:
+                    self.logger.info(f"FILE_PATH_INDEX | Found {len(file_path_results)} chunks via file path index")
+                    return file_path_results
+            
             retrieve_k = top_k or self.top_k * 4
         elif query_type in [QueryType.PR_ISSUE_TUTORIAL, QueryType.PR_ISSUE_CODING_QUESTION]:
             retrieve_k = top_k or self.top_k * 8
@@ -187,21 +194,23 @@ class RetrievalMixin(
         repo_filters = self._get_repo_filters()
         results = self.db.search(query_embedding, top_k=100, filters=repo_filters)
 
+        from utils.metadata_normalizer import MetadataNormalizer
         matching_entities = []
         for result in results:
-            metadata = result.get('metadata', {})
-            chunk_type = metadata.get('type', '')
+            # Use metadata normalizer for unified access
+            meta_norm = MetadataNormalizer(result.get('metadata', {}), result)
+            chunk_type = meta_norm.get_chunk_type('')
 
             if entity_type == 'issue' and chunk_type == 'issue':
-                issue_num = metadata.get('issue_number')
-                if issue_num:
+                issue_num = meta_norm.get_issue_number()
+                if issue_num is not None:
                     matching_entities.append({
                         'number': issue_num,
                         'result': result
                     })
             elif entity_type == 'pr' and chunk_type == 'pr':
-                pr_num = metadata.get('pr_number')
-                if pr_num:
+                pr_num = meta_norm.get_pr_number()
+                if pr_num is not None:
                     matching_entities.append({
                         'number': pr_num,
                         'result': result
