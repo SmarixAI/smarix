@@ -5,6 +5,7 @@ from typing import List, Dict, Any, Optional
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 from ..query_type import QueryType
+from utils.metadata_normalizer import MetadataNormalizer
 
 
 class MultiIndexRetrievalMixin:
@@ -111,19 +112,63 @@ class MultiIndexRetrievalMixin:
             self.logger.warning("RETRIEVAL | No results found, returning empty list")
             return []
         
+        # For CODE_LOCATION: Try file path index first, then merge with vector results
+        if query_type == QueryType.CODE_LOCATION and query_text:
+            # Get file index results (from RepoFilterMixin)
+            if hasattr(self, '_retrieve_by_file_path'):
+                file_path_results = self._retrieve_by_file_path(query_text, keywords)
+                
+                if file_path_results:
+                    # Merge file index results with vector results
+                    file_chunk_ids = {r.get('chunk_id') for r in file_path_results if r.get('chunk_id')}
+                    
+                    # Add file index results to unique_results
+                    for file_result in file_path_results:
+                        chunk_id = file_result.get('chunk_id')
+                        if chunk_id:
+                            # Check if already in unique_results
+                            existing = next((r for r in unique_results if r.get('chunk_id') == chunk_id), None)
+                            if existing:
+                                # Update score to be higher (file index takes priority)
+                                existing['score'] = max(existing.get('score', 0), file_result.get('score', 0))
+                            else:
+                                unique_results.append(file_result)
+                    
+                    self.logger.info(f"HYBRID_FILE_RETRIEVAL | Added {len(file_path_results)} file index results to {len(unique_results)} total")
+        
         # Filename keyword boost to help CODE_LOCATION find the right file
+        # Also prioritize code chunks and filter out PR/issue chunks
         if query_type == QueryType.CODE_LOCATION and query_text:
             normalized_query = query_text.lower().replace(" ", "").replace("_", "").replace("-", "")
+            filtered_results = []
+            
             for r in unique_results:
-                filename = (
-                    r.get("metadata", {}).get("file_path") or
-                    r.get("metadata", {}).get("file") or
-                    r.get("metadata", {}).get("source") or 
-                    r.get("metadata", {}).get("path") or ""
-                ).lower()
+                # Use metadata normalizer for unified file path access
+                meta_norm = MetadataNormalizer(r.get("metadata", {}), r)
+                chunk_type = meta_norm.get_chunk_type("")
+                
+                # For CODE_LOCATION queries, strongly prioritize code chunks
+                # Filter out PR/issue chunks unless they're highly relevant
+                if chunk_type in ['pr', 'issue', 'email']:
+                    # Only keep if it has a very high score (might be relevant)
+                    if r.get("score", 0) < 0.8:  # Threshold for keeping PR/issue chunks
+                        continue
+                
+                file_path = meta_norm.get_file_path("")
+                filename = file_path.lower() if file_path else ""
                 normalized_file = filename.replace(" ", "").replace("_", "").replace("-", "")
+                
+                # Strong boost for file path matches
                 if normalized_query in normalized_file or any(token in normalized_file for token in normalized_query.split()):
-                    r["score"] = r.get("score", 0) + 4.0   # very strong boost
+                    r["score"] = r.get("score", 0) + 5.0   # very strong boost
+                
+                # Additional boost for code chunks
+                if chunk_type == "code":
+                    r["score"] = r.get("score", 0) + 3.0   # prioritize code chunks
+                
+                filtered_results.append(r)
+            
+            unique_results = filtered_results
 
         # STEP 3: Cross-Encoder Reranking
         if query_text:
@@ -138,12 +183,13 @@ class MultiIndexRetrievalMixin:
             entity_type = entity.get('type')
             filtered_results = []
             for result in unique_results:
-                metadata = result.get('metadata', {})
-                if entity_type == 'issue' and metadata.get('issue_number') == entity.get('number'):
+                # Use metadata normalizer for unified access
+                meta_norm = MetadataNormalizer(result.get('metadata', {}), result)
+                if entity_type == 'issue' and meta_norm.get_issue_number() == entity.get('number'):
                     filtered_results.append(result)
-                elif entity_type == 'pr' and metadata.get('pr_number') == entity.get('number'):
+                elif entity_type == 'pr' and meta_norm.get_pr_number() == entity.get('number'):
                     filtered_results.append(result)
-                elif entity_type == 'commit' and metadata.get('sha', '').startswith(entity.get('sha', '')):
+                elif entity_type == 'commit' and result.get('metadata', {}).get('sha', '').startswith(entity.get('sha', '')):
                     filtered_results.append(result)
             
             if filtered_results:
@@ -164,11 +210,12 @@ class MultiIndexRetrievalMixin:
 
         # 🔥 Normalize metadata → promote fields to top-level for context builder + logs
         for r in final_results:
-            m = r.get("metadata", {}) or {}
-            r["file_path"] = m.get("file_path") or m.get("file") or m.get("path")
-            r["type"] = m.get("type") or m.get("chunk_type")
-            r["repo_name"] = m.get("repo_name")
-            r["issue_number"] = m.get("issue_number")
-            r["pr_number"] = m.get("pr_number")
+            # Use metadata normalizer for unified access
+            meta_norm = MetadataNormalizer(r.get("metadata", {}), r)
+            r["file_path"] = meta_norm.get_file_path()
+            r["type"] = meta_norm.get_chunk_type()
+            r["repo_name"] = meta_norm.get_repo_name()
+            r["issue_number"] = meta_norm.get_issue_number()
+            r["pr_number"] = meta_norm.get_pr_number()
 
         return final_results

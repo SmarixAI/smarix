@@ -5,6 +5,7 @@ from typing import Dict, Any, Optional
 from pathlib import Path
 import json
 import re
+from utils.metadata_normalizer import MetadataNormalizer
 
 
 class RepositoryInfoMixin:
@@ -31,15 +32,13 @@ class RepositoryInfoMixin:
                             # Check first few metadata entries for repo name
                             for meta in index_db.metadata[:10]:
                                 if isinstance(meta, dict):
-                                    # Look for repo_name, repository, repo, or file_path that might contain repo name
-                                    potential_name = (meta.get('repo_name') or 
-                                                     meta.get('repository') or 
-                                                     meta.get('repo') or
-                                                     meta.get('source'))
+                                    # Use metadata normalizer for unified access
+                                    meta_norm = MetadataNormalizer(meta)
+                                    potential_name = meta_norm.get_repo_name()
                                     
                                     # Also check file_path for repo-like patterns
                                     if not potential_name:
-                                        file_path = meta.get('file_path') or meta.get('file') or meta.get('source')
+                                        file_path = meta_norm.get_file_path()
                                         if file_path:
                                             # Extract repo name from file path (e.g., CCExtractor_taskwarrior-flutter_data/...)
                                             match = re.search(r'([A-Z][A-Za-z0-9_-]+(?:[_-][A-Za-z0-9_-]+)*)', str(file_path))

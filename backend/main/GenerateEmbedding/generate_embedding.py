@@ -1183,17 +1183,17 @@ def prepare_enhanced_chunk_for_embedding(chunk: Dict[str, Any]) -> Dict[str, Any
     final_content = f"{' | '.join(context_parts)}\n\n{main_content}" if context_parts else main_content
 
     # --- derive file path/filename/directory/language for metadata ---
-    file_path_val = entities.get('path') or chunk.get('path') or chunk.get('repo_file_path') or chunk.get('file_path')
+    from utils.path_normalizer import normalize_path, extract_filename, extract_directory
+    
+    file_path_raw = entities.get('path') or chunk.get('path') or chunk.get('repo_file_path') or chunk.get('file_path')
+    # Normalize file path using path normalizer
+    file_path_val = normalize_path(file_path_raw, '') if file_path_raw else ''
     derived_filename = None
     derived_directory = None
     if file_path_val:
-        try:
-            p = Path(file_path_val)
-            derived_filename = p.name
-            derived_directory = str(p.parent) if str(p.parent) not in ('.', '') else ''
-        except Exception:
-            derived_filename = None
-            derived_directory = None
+        # Use path normalizer for consistent extraction
+        derived_filename = extract_filename(file_path_val) or ''
+        derived_directory = extract_directory(file_path_val) or ''
 
     # --- Metadata object used in RAG + vector DB ---
     # CRITICAL: Always set repo_name to current repo (chunks are already filtered by repo)
@@ -1525,18 +1525,33 @@ def batch_generate(args):
 
                 print(f"      Raw chunks: {len(chunks)}")
                 
-                # CRITICAL: Filter chunks to only include current repo
+                # CRITICAL: Filter chunks to only include current repo (flexible matching)
+                from utils.repo_normalizer import repo_matches, normalize_repo_name, normalize_repo_owner, extract_repo_parts
+                
+                # Normalize current repo
+                normalized_current_owner, normalized_current_repo = extract_repo_parts(FULL_REPO_NAME)
+                if not normalized_current_owner:
+                    normalized_current_owner = normalize_repo_owner(REPO_OWNER)
+                if not normalized_current_repo:
+                    normalized_current_repo = normalize_repo_name(REPO_NAME)
+                
                 filtered_chunks = []
                 skipped_count = 0
                 for chunk in chunks:
-                    chunk_repo = chunk.get('repo_name', '')
-                    chunk_owner = chunk.get('repo_owner', '')
+                    chunk_repo_raw = chunk.get('repo_name', '')
+                    chunk_owner_raw = chunk.get('repo_owner', '')
                     
-                    # Accept chunks that match current repo
-                    matches_repo = (
-                        chunk_repo == REPO_NAME or 
-                        chunk_repo == FULL_REPO_NAME or
-                        (chunk_owner == REPO_OWNER and chunk_repo == REPO_NAME)
+                    # Normalize chunk repo info
+                    normalized_chunk_owner, normalized_chunk_repo = extract_repo_parts(chunk_repo_raw)
+                    if not normalized_chunk_owner and chunk_owner_raw:
+                        normalized_chunk_owner = normalize_repo_owner(chunk_owner_raw)
+                    if not normalized_chunk_repo:
+                        normalized_chunk_repo = normalize_repo_name(chunk_repo_raw)
+                    
+                    # Use flexible matching
+                    matches_repo = repo_matches(
+                        normalized_current_owner, normalized_current_repo,
+                        normalized_chunk_owner, normalized_chunk_repo
                     )
                     
                     if matches_repo:
@@ -1599,10 +1614,31 @@ def batch_generate(args):
         # Double-check: Filter again to ensure only current repo chunks
         final_all_chunks = []
         for chunk in all_chunks_for_repo:
-            chunk_repo = chunk.get('repo_name', '')
-            chunk_owner = chunk.get('repo_owner', '')
-            if (chunk_repo == REPO_NAME or chunk_repo == FULL_REPO_NAME or
-                (chunk_owner == REPO_OWNER and chunk_repo == REPO_NAME)):
+            # Use flexible repo matching with normalizer
+            from utils.repo_normalizer import repo_matches, normalize_repo_name, normalize_repo_owner, extract_repo_parts
+            
+            chunk_repo_raw = chunk.get('repo_name', '')
+            chunk_owner_raw = chunk.get('repo_owner', '')
+            
+            # Normalize current repo
+            normalized_current_owner, normalized_current_repo = extract_repo_parts(FULL_REPO_NAME)
+            if not normalized_current_owner:
+                normalized_current_owner = normalize_repo_owner(REPO_OWNER)
+            if not normalized_current_repo:
+                normalized_current_repo = normalize_repo_name(REPO_NAME)
+            
+            # Normalize chunk repo
+            normalized_chunk_owner, normalized_chunk_repo = extract_repo_parts(chunk_repo_raw)
+            if not normalized_chunk_owner and chunk_owner_raw:
+                normalized_chunk_owner = normalize_repo_owner(chunk_owner_raw)
+            if not normalized_chunk_repo:
+                normalized_chunk_repo = normalize_repo_name(chunk_repo_raw)
+            
+            # Use flexible matching
+            if repo_matches(
+                normalized_current_owner, normalized_current_repo,
+                normalized_chunk_owner, normalized_chunk_repo
+            ):
                 chunk['repo_name'] = REPO_NAME
                 chunk['repo_owner'] = REPO_OWNER
                 final_all_chunks.append(chunk)

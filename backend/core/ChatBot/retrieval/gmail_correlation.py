@@ -3,6 +3,7 @@ Gmail correlation with GitHub results.
 """
 from typing import List, Dict, Any
 import numpy as np
+from utils.metadata_normalizer import MetadataNormalizer
 
 
 class GmailCorrelationMixin:
@@ -25,13 +26,17 @@ class GmailCorrelationMixin:
         }
 
         for result in github_results[:5]:
-            metadata = result.get('metadata', {})
-            if metadata.get('author'):
-                github_entities['authors'].add(metadata['author'].lower())
-            if metadata.get('issue_number'):
-                github_entities['issue_numbers'].add(str(metadata['issue_number']))
-            if metadata.get('pr_number'):
-                github_entities['pr_numbers'].add(str(metadata['pr_number']))
+            # Use metadata normalizer for unified access
+            meta_norm = MetadataNormalizer(result.get('metadata', {}), result)
+            author = meta_norm.get('author')
+            if author:
+                github_entities['authors'].add(str(author).lower())
+            issue_number = meta_norm.get_issue_number()
+            if issue_number is not None:
+                github_entities['issue_numbers'].add(str(issue_number))
+            pr_number = meta_norm.get_pr_number()
+            if pr_number is not None:
+                github_entities['pr_numbers'].add(str(pr_number))
 
         gmail_results = self.gmail_db.search(query_embedding, top_k=20)
 

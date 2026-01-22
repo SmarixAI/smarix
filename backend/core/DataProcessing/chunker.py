@@ -40,11 +40,20 @@ class Chunk:
     tokens: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
+        # Ensure metadata has standard fields
+        metadata = self.metadata.copy() if self.metadata else {}
+        # Add standard fields if not present
+        if 'chunk_type' not in metadata:
+            metadata['chunk_type'] = self.chunk_type.value
+        if 'type' not in metadata:
+            metadata['type'] = self.chunk_type.value  # Alias for backward compat
+        
         return {
             "chunk_id": self.chunk_id,
             "content": self.content,
-            "type": self.chunk_type.value,
-            "metadata": self.metadata,
+            "type": self.chunk_type.value,  # Keep for backward compat
+            "chunk_type": self.chunk_type.value,  # Standard field
+            "metadata": metadata,
             "parent_id": self.parent_id,
             "importance_score": self.importance_score,
             "tokens": self.tokens,
@@ -156,11 +165,13 @@ class IntelligentChunker:
                     chunks.append(chunk)
         else:
             # Final fallback: size-based chunking
+            from utils.path_normalizer import normalize_path
+            normalized_file_path = normalize_path(file_path, "unknown") if file_path != "unknown" else "unknown"
             chunks = self._chunk_by_size(
                 content,
-                file_path,
+                normalized_file_path,
                 ChunkType.CODE,
-                {"language": language, "file_path": file_path},
+                {"language": language, "file_path": normalized_file_path},
             )
 
         return chunks
@@ -188,22 +199,35 @@ class IntelligentChunker:
         module_docstring = ast.get_docstring(tree) or ""
 
         # Create file overview chunk (NEW: architectural context)
+        from utils.path_normalizer import normalize_path, extract_filename, extract_directory
+        
+        # Normalize file_path
+        normalized_file_path = normalize_path(file_path, '') if file_path else ''
+        
         overview_content = self._create_file_overview(
-            file_path, tree, module_docstring, import_block, file_data
+            normalized_file_path, tree, module_docstring, import_block, file_data
         )
         if overview_content:
-            overview_chunk = Chunk(
-                content=overview_content,
-                chunk_type=ChunkType.FILE_OVERVIEW,
-                metadata={
-                    "file_path": file_path,
+            overview_metadata = {
+                    "file_path": normalized_file_path,  # Normalized
                     "chunk_role": "file_overview",
                     "language": "python",
+                    "chunk_type": "file_overview",  # Standard field
+                    "type": "file_overview",  # Alias for backward compat
                     "contains": self._get_file_structure_summary(tree),
                     "imports": imports,
                     "has_docstring": bool(module_docstring),
-                },
-                chunk_id=f"{file_path}_overview",
+                }
+            # Add filename and directory using path normalizer
+            if normalized_file_path:
+                overview_metadata["filename"] = extract_filename(normalized_file_path) or ''
+                overview_metadata["directory"] = extract_directory(normalized_file_path) or ''
+            
+            overview_chunk = Chunk(
+                content=overview_content,
+                chunk_type=ChunkType.FILE_OVERVIEW,
+                metadata=overview_metadata,
+                chunk_id=f"{normalized_file_path}_overview",
                 importance_score=2.5,
                 tokens=self._estimate_tokens(overview_content),
             )
@@ -293,10 +317,14 @@ class IntelligentChunker:
         func_code = ast.unparse(node)
         docstring = ast.get_docstring(node) or ""
 
+        # Normalize file_path first
+        from utils.path_normalizer import normalize_path, extract_filename, extract_directory
+        normalized_file_path = normalize_path(file_path, '') if file_path else ''
+        
         # Build contextual content (NEW: both code AND explanation)
         content = f"# Function: `{node.name}`\n"
         content += (
-            f"**File**: `{file_path}` (lines {node.lineno}-{node.end_lineno})\n\n"
+            f"**File**: `{normalized_file_path}` (lines {node.lineno}-{node.end_lineno})\n\n"
         )
 
         # Architectural context (NEW)
@@ -341,13 +369,13 @@ class IntelligentChunker:
         complexity = self._calculate_complexity(node)
         content += f"**Complexity**: {complexity} (cyclomatic)\n"
 
-        return Chunk(
-            content=content,
-            chunk_type=ChunkType.FUNCTION,
-            metadata={
-                "file_path": file_path,
+        # Build metadata with standard fields (file_path already normalized above)
+        metadata = {
+                "file_path": normalized_file_path,  # Standard field - normalized
                 "function_name": node.name,
-                "language": "python",
+                "language": "python",  # Standard field
+                "chunk_type": "function",  # Standard field
+                "type": "function",  # Alias for backward compat
                 "has_docstring": bool(docstring),
                 "params": params,
                 "param_count": len(params),
@@ -361,9 +389,18 @@ class IntelligentChunker:
                 "is_private": node.name.startswith("_"),
                 "is_entry_point": node.name in ["main", "run", "execute", "__main__"],
                 "purpose": purpose,
-            },
-            chunk_id=f"{file_path}_func_{node.name}_{idx}",
-            parent_id=f"{file_path}_overview",
+            }
+        # Add filename and directory using path normalizer
+        if normalized_file_path:
+            metadata["filename"] = extract_filename(normalized_file_path) or ''
+            metadata["directory"] = extract_directory(normalized_file_path) or ''
+        
+        return Chunk(
+            content=content,
+            chunk_type=ChunkType.FUNCTION,
+            metadata=metadata,
+            chunk_id=f"{normalized_file_path}_func_{node.name}_{idx}",
+            parent_id=f"{normalized_file_path}_overview",
             importance_score=self._score_function_importance(node, docstring),
             tokens=self._estimate_tokens(content),
         )
@@ -380,10 +417,14 @@ class IntelligentChunker:
         chunks = []
         class_docstring = ast.get_docstring(node) or ""
 
+        # Normalize file_path first
+        from utils.path_normalizer import normalize_path, extract_filename, extract_directory
+        normalized_file_path = normalize_path(file_path, '') if file_path else ''
+        
         # Class overview chunk (NEW: architectural view)
         overview = f"# Class: `{node.name}`\n"
         overview += (
-            f"**File**: `{file_path}` (lines {node.lineno}-{node.end_lineno})\n\n"
+            f"**File**: `{normalized_file_path}` (lines {node.lineno}-{node.end_lineno})\n\n"
         )
 
         # Purpose
@@ -418,13 +459,13 @@ class IntelligentChunker:
 
         overview += f"\n## Signature\n``````\n"
 
-        overview_chunk = Chunk(
-            content=overview,
-            chunk_type=ChunkType.CLASS,
-            metadata={
-                "file_path": file_path,
+        # Build metadata with standard fields (file_path already normalized above)
+        class_metadata = {
+                "file_path": normalized_file_path,  # Standard field - normalized
                 "class_name": node.name,
-                "language": "python",
+                "language": "python",  # Standard field
+                "chunk_type": "class",  # Standard field
+                "type": "class",  # Alias for backward compat
                 "bases": bases,
                 "methods": methods,
                 "method_count": len(methods),
@@ -434,9 +475,18 @@ class IntelligentChunker:
                 "line_start": node.lineno,
                 "line_end": node.end_lineno,
                 "purpose": purpose,
-            },
-            chunk_id=f"{file_path}_class_{node.name}_overview",
-            parent_id=f"{file_path}_overview",
+            }
+        # Add filename and directory using path normalizer
+        if normalized_file_path:
+            class_metadata["filename"] = extract_filename(normalized_file_path) or ''
+            class_metadata["directory"] = extract_directory(normalized_file_path) or ''
+        
+        overview_chunk = Chunk(
+            content=overview,
+            chunk_type=ChunkType.CLASS,
+            metadata=class_metadata,
+            chunk_id=f"{normalized_file_path}_class_{node.name}_overview",
+            parent_id=f"{normalized_file_path}_overview",
             importance_score=2.5,
             tokens=self._estimate_tokens(overview),
         )
@@ -465,8 +515,12 @@ class IntelligentChunker:
         method_code = ast.unparse(node)
         docstring = ast.get_docstring(node) or ""
 
+        # Normalize file_path first
+        from utils.path_normalizer import normalize_path, extract_filename, extract_directory
+        normalized_file_path = normalize_path(file_path, '') if file_path else ''
+        
         content = f"# Method: `{class_name}.{node.name}`\n"
-        content += f"**Class**: `{class_name}` | **File**: `{file_path}`\n\n"
+        content += f"**Class**: `{class_name}` | **File**: `{normalized_file_path}`\n\n"
 
         # Purpose
         purpose = self._infer_function_purpose(node, docstring, is_method=True)
@@ -482,24 +536,34 @@ class IntelligentChunker:
         # Implementation
         content += f"## Implementation\n``````\n"
 
-        return Chunk(
-            content=content,
-            chunk_type=ChunkType.METHOD,
-            metadata={
-                "file_path": file_path,
+        # Build metadata with standard fields
+        
+        method_metadata = {
+                "file_path": normalized_file_path,  # Standard field - normalized
                 "class_name": class_name,
                 "method_name": node.name,
                 "full_name": f"{class_name}.{node.name}",
-                "language": "python",
+                "language": "python",  # Standard field
+                "chunk_type": "method",  # Standard field
+                "type": "method",  # Alias for backward compat
                 "method_type": method_type,
                 "has_docstring": bool(docstring),
                 "decorators": [ast.unparse(d) for d in node.decorator_list],
                 "is_private": node.name.startswith("_"),
                 "is_magic": node.name.startswith("__") and node.name.endswith("__"),
                 "purpose": purpose,
-            },
-            chunk_id=f"{file_path}_method_{class_name}_{node.name}_{idx}",
-            parent_id=f"{file_path}_class_{class_name}_overview",
+            }
+        # Add filename and directory using path normalizer
+        if normalized_file_path:
+            method_metadata["filename"] = extract_filename(normalized_file_path) or ''
+            method_metadata["directory"] = extract_directory(normalized_file_path) or ''
+        
+        return Chunk(
+            content=content,
+            chunk_type=ChunkType.METHOD,
+            metadata=method_metadata,
+            chunk_id=f"{normalized_file_path}_method_{class_name}_{node.name}_{idx}",
+            parent_id=f"{normalized_file_path}_class_{class_name}_overview",
             importance_score=self._score_function_importance(node, docstring),
             tokens=self._estimate_tokens(content),
         )
@@ -513,20 +577,32 @@ class IntelligentChunker:
         if not targets or not any(t.isupper() for t in targets):
             return None
 
+        # Normalize file_path
+        from utils.path_normalizer import normalize_path, extract_filename, extract_directory
+        normalized_file_path = normalize_path(file_path, '') if file_path else ''
+        
         var_code = ast.unparse(node)
-        content = f"# Module Constants\n**File**: `{file_path}`\n\n"
+        content = f"# Module Constants\n**File**: `{normalized_file_path}`\n\n"
         content += f"``````\n"
 
+        var_metadata = {
+                "file_path": normalized_file_path,  # Normalized
+                "variables": targets,
+                "language": "python",
+                "chunk_type": "config",  # Standard field
+                "type": "config",  # Alias for backward compat
+            }
+        # Add filename and directory using path normalizer
+        if normalized_file_path:
+            var_metadata["filename"] = extract_filename(normalized_file_path) or ''
+            var_metadata["directory"] = extract_directory(normalized_file_path) or ''
+        
         return Chunk(
             content=content,
             chunk_type=ChunkType.CONFIG,
-            metadata={
-                "file_path": file_path,
-                "variables": targets,
-                "language": "python",
-            },
-            chunk_id=f"{file_path}_const_{idx}",
-            parent_id=f"{file_path}_overview",
+            metadata=var_metadata,
+            chunk_id=f"{normalized_file_path}_const_{idx}",
+            parent_id=f"{normalized_file_path}_overview",
             importance_score=1.5,
             tokens=self._estimate_tokens(content),
         )
@@ -541,21 +617,33 @@ class IntelligentChunker:
         file_data: Dict,
     ) -> Chunk:
         """Create a generic code chunk (fallback for non-Python or unparseable code)"""
+        from utils.path_normalizer import normalize_path, extract_filename, extract_directory
+        
+        # Normalize file_path
+        normalized_file_path = normalize_path(file_path, '') if file_path else ''
         chunk_id_suffix = f"{idx}_{sub_idx}" if sub_idx is not None else str(idx)
 
-        return Chunk(
-            content=section,
-            chunk_type=ChunkType.CODE,
-            metadata={
-                "file_path": file_path,
+        code_metadata = {
+                "file_path": normalized_file_path,  # Normalized
                 "language": language,
+                "chunk_type": "code",  # Standard field
+                "type": "code",  # Alias for backward compat
                 "section_index": idx,
                 "has_function": self._has_function_def(section),
                 "has_class": self._has_class_def(section),
                 "line_count": len(section.split("\n")),
-            },
-            chunk_id=f"code_{file_path}_{chunk_id_suffix}",
-            parent_id=file_path,
+            }
+        # Add filename and directory using path normalizer
+        if normalized_file_path:
+            code_metadata["filename"] = extract_filename(normalized_file_path) or ''
+            code_metadata["directory"] = extract_directory(normalized_file_path) or ''
+
+        return Chunk(
+            content=section,
+            chunk_type=ChunkType.CODE,
+            metadata=code_metadata,
+            chunk_id=f"code_{normalized_file_path}_{chunk_id_suffix}",
+            parent_id=normalized_file_path,
             importance_score=self._calculate_code_importance(section),
             tokens=self._estimate_tokens(section),
         )
@@ -837,8 +925,13 @@ class IntelligentChunker:
 
     def chunk_documentation(self, doc_data: Dict[str, Any]) -> List[Chunk]:
         """Chunk documentation with section awareness"""
+        from utils.path_normalizer import normalize_path, extract_filename, extract_directory
+        
         content = doc_data.get("content", "")
-        file_path = doc_data.get("path", "unknown")
+        file_path_raw = doc_data.get("path", "unknown")
+        
+        # Normalize file_path
+        normalized_file_path = normalize_path(file_path_raw, "unknown") if file_path_raw != "unknown" else "unknown"
 
         chunks = []
 
@@ -851,19 +944,27 @@ class IntelligentChunker:
 
             importance = self._calculate_doc_importance(header, section_content)
 
-            chunk = Chunk(
-                content=section_content,
-                chunk_type=ChunkType.DOCUMENTATION,
-                metadata={
-                    "file_path": file_path,
+            doc_metadata = {
+                    "file_path": normalized_file_path,  # Normalized
+                    "chunk_type": "documentation",  # Standard field
+                    "type": "documentation",  # Alias for backward compat
                     "section_header": header,
                     "section_index": idx,
                     "is_setup": self._is_setup_section(header, section_content),
                     "is_api_doc": self._is_api_doc(section_content),
                     "has_code_examples": "```",
-                },
-                chunk_id=f"doc_{file_path}_{idx}",
-                parent_id=file_path,
+                }
+            # Add filename and directory using path normalizer
+            if normalized_file_path and normalized_file_path != "unknown":
+                doc_metadata["filename"] = extract_filename(normalized_file_path) or ''
+                doc_metadata["directory"] = extract_directory(normalized_file_path) or ''
+
+            chunk = Chunk(
+                content=section_content,
+                chunk_type=ChunkType.DOCUMENTATION,
+                metadata=doc_metadata,
+                chunk_id=f"doc_{normalized_file_path}_{idx}",
+                parent_id=normalized_file_path,
                 importance_score=importance,
                 tokens=self._estimate_tokens(section_content),
             )

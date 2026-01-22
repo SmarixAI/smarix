@@ -58,7 +58,8 @@ class MetadataEnricher:
         enriched = {
             **chunk.metadata,
             'chunk_id': chunk.chunk_id,
-            'chunk_type': chunk.chunk_type.value,
+            'chunk_type': chunk.chunk_type.value,  # Standard field
+            'type': chunk.chunk_type.value,  # Alias for backward compat
             'importance_score': chunk.importance_score,
             'tokens': chunk.tokens,
             
@@ -152,12 +153,15 @@ class MetadataEnricher:
             }
         
         # FILE CONTEXT: What file is this in and what's its role?
-        file_path = chunk.metadata.get('file_path', '')
-        if file_path:
+        from utils.path_normalizer import normalize_path, extract_filename, extract_directory
+        file_path_raw = chunk.metadata.get('file_path', '')
+        if file_path_raw:
+            # Normalize path for consistent access
+            file_path = normalize_path(file_path_raw, '') or file_path_raw
             context['file'] = {
                 'path': file_path,
-                'name': file_path.split('/')[-1],
-                'directory': '/'.join(file_path.split('/')[:-1]),
+                'name': extract_filename(file_path) or file_path.split('/')[-1] if '/' in file_path else file_path,
+                'directory': extract_directory(file_path) or '/'.join(file_path.split('/')[:-1]) if '/' in file_path else '',
                 'language': chunk.metadata.get('language', 'unknown'),
                 'role': self._infer_file_role_from_path(file_path),
                 'dependencies': self._get_file_dependencies(file_path),
@@ -317,9 +321,11 @@ class MetadataEnricher:
                 ])
         
         elif chunk.chunk_type.value == 'file_overview':
-            file_path = chunk.metadata.get('file_path', '')
-            if file_path:
-                file_name = file_path.split('/')[-1]
+            from utils.path_normalizer import normalize_path, extract_filename
+            file_path_raw = chunk.metadata.get('file_path', '')
+            if file_path_raw:
+                file_path = normalize_path(file_path_raw, '') or file_path_raw
+                file_name = extract_filename(file_path) or file_path.split('/')[-1] if '/' in file_path else file_path
                 questions.extend([
                     f"What is in {file_name}?",
                     f"What does {file_name} do?",
@@ -889,8 +895,10 @@ class MetadataEnricher:
         terms.update(self._extract_semantic_tags(chunk))
         
         # Add file path components
-        file_path = chunk.metadata.get('file_path', '')
-        if file_path:
+        from utils.path_normalizer import normalize_path
+        file_path_raw = chunk.metadata.get('file_path', '')
+        if file_path_raw:
+            file_path = normalize_path(file_path_raw, '') or file_path_raw
             parts = file_path.split('/')
             terms.update(parts)
         

@@ -130,8 +130,12 @@ class FileProcessor:
         except Exception:
             lines = 0
 
+        # Normalize path using path normalizer
+        from utils.path_normalizer import normalize_path
+        normalized_path = normalize_path(file_path, '') if file_path else ''
+        
         record = {
-            "path": file_path,
+            "path": normalized_path,  # Normalized path
             "name": file_name,
             "extension": file_ext,
             "size": file_item.get(

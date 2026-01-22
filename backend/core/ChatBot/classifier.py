@@ -683,8 +683,24 @@ Feel free to ask me anything about the codebase!"""
             self.logger.info("CLASSIFICATION | Rule-based: TROUBLESHOOTING")
             return QueryType.TROUBLESHOOTING
 
-        if any(kw in query_lower for kw in ['where is', 'where can i find', 'locate', 'find', 'which file']):
-            self.logger.info("CLASSIFICATION | Rule-based: CODE_LOCATION")
+        # Enhanced file query detection - check for file-related patterns
+        file_query_patterns = [
+            'where is', 'where can i find', 'locate', 'find', 'which file',
+            'show me', 'tell me about', 'what is in', 'what\'s in',
+            'file', 'code in', 'implementation of', 'definition of',
+            # File extensions
+            r'\.(py|js|ts|dart|java|go|rs|cpp|c|h|hpp|md|txt|json|yaml|yml|xml|html|css|scss|less|vue|jsx|tsx|kt|swift|rb|php)',
+            # Path patterns
+            r'[\w\-_/\\]+\.(py|js|ts|dart|java|go|rs|cpp|c|h|hpp|md|txt|json|yaml|yml)',
+            r'[\w\-_/\\]+/[\w\-_/\\]+',
+        ]
+        
+        # Check for file path patterns
+        has_file_path = any(re.search(pattern, query_lower) for pattern in file_query_patterns[4:])
+        has_file_keywords = any(kw in query_lower for kw in file_query_patterns[:4])
+        
+        if has_file_path or has_file_keywords:
+            self.logger.info("CLASSIFICATION | Rule-based: CODE_LOCATION (file query detected)")
             return QueryType.CODE_LOCATION
         
         if any(kw in query_lower for kw in IMPACT_KEYWORDS):

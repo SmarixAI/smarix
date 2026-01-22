@@ -2,60 +2,941 @@
 Repository filtering and utility functions for retrieval.
 """
 from typing import List, Dict, Any, Optional
+from utils.metadata_normalizer import MetadataNormalizer
+from utils.repo_normalizer import normalize_repo_name, normalize_repo_owner, repo_matches, extract_repo_parts
+from utils.path_normalizer import normalize_path, extract_filename, extract_directory
+from utils.code_chunks_loader import CodeChunksLoader
 
 
 class RepoFilterMixin:
     """Mixin for repository-based filtering utilities."""
     
     def _get_repo_filters(self) -> Optional[Dict[str, Any]]:
-        """Get repo-based filters for VectorDB search - STRICT filtering by both owner and repo name"""
-        repo_owner = getattr(self, 'repo_owner', None)
-        repo_name = getattr(self, 'repo_name', None)
+        """
+        Get repo-based filters for VectorDB search - FLEXIBLE filtering with normalization.
         
-        if not repo_owner or not repo_name:
+        Normalizes repo info before creating filters to handle format variations.
+        """
+        repo_owner_raw = getattr(self, 'repo_owner', None)
+        repo_name_raw = getattr(self, 'repo_name', None)
+        
+        if not repo_name_raw:
             return None
         
-        # Return filter that matches BOTH owner and repo name
-        return {"repo_name": repo_name, "repo_owner": repo_owner}
+        # Normalize repo info for consistent filtering
+        # Handle case where repo_name might be in "owner/repo" format
+        normalized_owner, normalized_repo = extract_repo_parts(repo_name_raw)
+        
+        # If owner not extracted from repo_name, use separate repo_owner
+        if not normalized_owner and repo_owner_raw:
+            normalized_owner = normalize_repo_owner(repo_owner_raw)
+        
+        # Normalize repo name if not already extracted
+        if not normalized_repo:
+            normalized_repo = normalize_repo_name(repo_name_raw)
+        
+        if not normalized_repo:
+            return None
+        
+        # Return filter with normalized values
+        # Note: VectorDB filter will do exact match, but we also do post-filtering
+        # with flexible matching in _filter_by_repo
+        filters = {"repo_name": normalized_repo}
+        if normalized_owner:
+            filters["repo_owner"] = normalized_owner
+        
+        return filters
     
     def _filter_by_repo(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Post-retrieval filtering to ensure only current repo chunks are returned - STRICT filtering"""
-        repo_owner = getattr(self, 'repo_owner', None)
-        repo_name = getattr(self, 'repo_name', None)
+        """
+        Post-retrieval filtering to ensure only current repo chunks are returned.
         
-        # If repo info not available, return empty (don't return results from unknown repos)
-        if not repo_owner or not repo_name:
+        Uses FLEXIBLE matching to handle format variations:
+        - Case-insensitive matching
+        - Whitespace handling
+        - URL format extraction
+        - Missing owner handling (if repo name matches)
+        - Various format variations (owner/repo, owner-repo, etc.)
+        """
+        repo_owner_raw = getattr(self, 'repo_owner', None)
+        repo_name_raw = getattr(self, 'repo_name', None)
+        
+        # If repo name not available, return empty (don't return results from unknown repos)
+        if not repo_name_raw:
             if results:
                 self.logger.warning(f"FILTER | No repo info available, filtering out {len(results)} results")
             return []
         
+        # Normalize current repo info
+        # Handle case where repo_name might be in "owner/repo" format
+        normalized_current_owner, normalized_current_repo = extract_repo_parts(repo_name_raw)
+        
+        # If owner not extracted from repo_name, use separate repo_owner
+        if not normalized_current_owner and repo_owner_raw:
+            normalized_current_owner = normalize_repo_owner(repo_owner_raw)
+        
+        # Normalize repo name if not already extracted
+        if not normalized_current_repo:
+            normalized_current_repo = normalize_repo_name(repo_name_raw)
+        
+        if not normalized_current_repo:
+            if results:
+                self.logger.warning(f"FILTER | Could not normalize repo name, filtering out {len(results)} results")
+            return []
+        
         filtered = []
         for result in results:
-            metadata = result.get('metadata', {})
-            chunk_repo = metadata.get('repo_name', '').strip()
-            chunk_owner = metadata.get('repo_owner', '').strip()
+            # Use metadata normalizer for unified repo access
+            meta_norm = MetadataNormalizer(result.get('metadata', {}), result)
+            chunk_repo_raw = meta_norm.get_repo_name('')
+            chunk_owner_raw = meta_norm.get_repo_owner('')
             
-            # STRICT matching: BOTH owner AND repo name must match
-            # Accept if:
-            # 1. Full format matches: "owner/repo" == "owner/repo"
-            # 2. Both owner and repo name match separately
-            matches = False
+            # Normalize chunk repo info
+            normalized_chunk_owner, normalized_chunk_repo = extract_repo_parts(chunk_repo_raw)
             
-            # Check full format first
-            if chunk_repo == f"{repo_owner}/{repo_name}":
-                matches = True
-            # Check separate owner and repo name (both must match)
-            elif chunk_owner == repo_owner and chunk_repo == repo_name:
-                matches = True
-            # If repo_name is stored as just the name (without owner), check owner separately
-            elif chunk_repo == repo_name and chunk_owner == repo_owner:
-                matches = True
+            # If owner not extracted from repo_name, use separate repo_owner
+            if not normalized_chunk_owner and chunk_owner_raw:
+                normalized_chunk_owner = normalize_repo_owner(chunk_owner_raw)
+            
+            # Normalize repo name if not already extracted
+            if not normalized_chunk_repo:
+                normalized_chunk_repo = normalize_repo_name(chunk_repo_raw)
+            
+            # Use flexible matching
+            matches = repo_matches(
+                normalized_current_owner, normalized_current_repo,
+                normalized_chunk_owner, normalized_chunk_repo
+            )
             
             if matches:
                 filtered.append(result)
         
         if len(filtered) < len(results):
-            self.logger.info(f"FILTER | Filtered {len(results)} -> {len(filtered)} results for repo {repo_owner}/{repo_name}")
+            current_repo_display = f"{normalized_current_owner}/{normalized_current_repo}" if normalized_current_owner else normalized_current_repo
+            self.logger.info(f"FILTER | Filtered {len(results)} -> {len(filtered)} results for repo {current_repo_display}")
         
         return filtered
+    
+    def _get_code_chunks_loader(self) -> Optional[CodeChunksLoader]:
+        """Get or create code chunks loader instance (lazy initialization)."""
+        # Use a private attribute that's initialized on first access
+        if not hasattr(self, '_code_chunks_loader') or self._code_chunks_loader is None:
+            self._code_chunks_loader = CodeChunksLoader()
+            
+            # Try to load chunks for current repo
+            repo_owner = getattr(self, 'repo_owner', None)
+            repo_name = getattr(self, 'repo_name', None)
+            
+            if repo_name:
+                self._code_chunks_loader.load_repo_chunks(
+                    repo_owner or '', 
+                    repo_name
+                )
+        
+        return self._code_chunks_loader
+    
+    def _get_file_suggestions(self, query_text: str, limit: int = 5) -> List[str]:
+        """
+        Get file suggestions when exact match not found.
+        Uses fuzzy matching to suggest similar files.
+        
+        Args:
+            query_text: Query text
+            limit: Maximum number of suggestions
+            
+        Returns:
+            List of suggested file paths
+        """
+        if not hasattr(self, 'multi_index_store') or not self.multi_index_store:
+            return []
+        
+        suggestions = []
+        
+        # Get all available files from file path index
+        for index_type in ['code', 'all']:
+            index_db = self.multi_index_store.indices.get(index_type)
+            if not index_db or not hasattr(index_db, 'file_path_index'):
+                continue
+            
+            file_path_index = index_db.file_path_index
+            if not file_path_index:
+                continue
+            
+            # Get all filenames
+            all_filenames = list(file_path_index._filename_to_paths.keys())
+            
+            # Extract filename from query
+            from utils.path_normalizer import extract_filename
+            query_filename = extract_filename(query_text) or query_text.split()[-1] if query_text.split() else ''
+            
+            if query_filename:
+                from utils.fuzzy_file_matcher import find_similar_filenames
+                similar = find_similar_filenames(query_filename, all_filenames, limit=limit)
+                
+                # Get full paths for similar filenames
+                for filename, score in similar:
+                    if filename in file_path_index._filename_to_paths:
+                        paths = file_path_index._filename_to_paths[filename]
+                        suggestions.extend(list(paths)[:2])  # Max 2 paths per filename
+                
+                if len(suggestions) >= limit:
+                    break
+        
+        return suggestions[:limit]
+    
+    def _detect_file_query_intent(self, query_text: str, keywords: List[str]) -> Dict[str, Any]:
+        """
+        Detect if query is about a file and extract file-related information.
+        
+        Returns:
+            Dict with:
+            - is_file_query: bool
+            - file_paths: List[str] - extracted file paths
+            - filename_hints: List[str] - potential filenames
+            - directory_hints: List[str] - potential directories
+        """
+        import re
+        from utils.path_normalizer import normalize_path, extract_filename, extract_directory
+        
+        result = {
+            'is_file_query': False,
+            'file_paths': [],
+            'filename_hints': [],
+            'directory_hints': []
+        }
+        
+        query_lower = query_text.lower()
+        
+        # Check for explicit file path patterns
+        path_patterns = [
+            r'[\w\-_./\\]+\.(?:py|js|ts|dart|java|go|rs|cpp|c|h|hpp|md|txt|json|yaml|yml|xml|html|css|scss|less|vue|jsx|tsx|kt|swift|rb|php|r|m|mm|pl|sh|bash|zsh|fish|ps1|bat|cmd)',
+            r'[\w\-_./\\]+/[\w\-_./\\]+',
+        ]
+        
+        for pattern in path_patterns:
+            matches = re.findall(pattern, query_text, re.IGNORECASE)
+            for match in matches:
+                if isinstance(match, tuple):
+                    match = ''.join(match)
+                normalized = normalize_path(match.strip(), '')
+                if normalized:
+                    result['file_paths'].append(normalized)
+                    result['is_file_query'] = True
+                    
+                    # Extract filename and directory hints
+                    filename = extract_filename(normalized)
+                    directory = extract_directory(normalized)
+                    if filename:
+                        result['filename_hints'].append(filename.lower())
+                    if directory:
+                        result['directory_hints'].append(directory.lower())
+        
+        # Check keywords for file-like patterns
+        for keyword in keywords:
+            if '/' in keyword or '\\' in keyword or '.' in keyword:
+                normalized = normalize_path(keyword, '')
+                if normalized and normalized not in result['file_paths']:
+                    result['file_paths'].append(normalized)
+                    result['is_file_query'] = True
+                    
+                    filename = extract_filename(normalized)
+                    directory = extract_directory(normalized)
+                    if filename:
+                        result['filename_hints'].append(filename.lower())
+                    if directory:
+                        result['directory_hints'].append(directory.lower())
+        
+        # Check for filename-only queries (e.g., "filters.dart")
+        filename_only_pattern = r'([\w\-_]+\.[\w]+)'
+        filename_matches = re.findall(filename_only_pattern, query_text, re.IGNORECASE)
+        for match in filename_matches:
+            if match.lower() not in result['filename_hints']:
+                result['filename_hints'].append(match.lower())
+                result['is_file_query'] = True
+        
+        # Check for multiple file queries (e.g., "filters.dart and users.dart")
+        from utils.fuzzy_file_matcher import extract_file_query_components
+        multi_file_info = extract_file_query_components(query_text)
+        if multi_file_info['is_multiple']:
+            for file_query in multi_file_info['file_queries']:
+                normalized = normalize_path(file_query, '')
+                if normalized and normalized not in result['file_paths']:
+                    result['file_paths'].append(normalized)
+                    result['is_file_query'] = True
+                    
+                    filename = extract_filename(normalized)
+                    directory = extract_directory(normalized)
+                    if filename:
+                        result['filename_hints'].append(filename.lower())
+                    if directory:
+                        result['directory_hints'].append(directory.lower())
+        
+        # Check for directory queries (e.g., "show me all files in lib/app/models")
+        directory_query_patterns = [
+            r'(?:all files?|files?) (?:in|from|under)\s+([\w\-_./\\]+)',
+            r'(?:list|show|get)\s+(?:all\s+)?files?\s+(?:in|from|under)\s+([\w\-_./\\]+)',
+        ]
+        for pattern in directory_query_patterns:
+            matches = re.findall(pattern, query_text, re.IGNORECASE)
+            for match in matches:
+                normalized = normalize_path(match.strip(), '')
+                if normalized and normalized not in result['directory_hints']:
+                    result['directory_hints'].append(normalized.lower())
+                    result['is_file_query'] = True
+        
+        # Remove duplicates
+        result['file_paths'] = list(set(result['file_paths']))
+        result['filename_hints'] = list(set(result['filename_hints']))
+        result['directory_hints'] = list(set(result['directory_hints']))
+        
+        return result
+    
+    def _retrieve_by_file_path(self, query_text: str, keywords: List[str]) -> List[Dict[str, Any]]:
+        """
+        HYBRID FILE RETRIEVAL: Multi-strategy approach to ensure files are never missed.
+        
+        Strategy:
+        1. File Path Index Lookup (fast, exact/partial matches)
+        2. Keyword-based filename matching
+        3. Vector search with path-based boosts (fallback)
+        
+        Args:
+            query_text: Query text that may contain file paths
+            keywords: Extracted keywords that may include file paths
+            
+        Returns:
+            List of chunk dictionaries with all matching file chunks
+        """
+        # Step 1: Detect file query intent
+        file_intent = self._detect_file_query_intent(query_text, keywords)
+        
+        if not file_intent['is_file_query']:
+            # Not a file query, return empty
+            return []
+        
+        file_paths = file_intent['file_paths']
+        filename_hints = file_intent['filename_hints']
+        directory_hints = file_intent['directory_hints']
+        
+        all_results = []
+        seen_chunk_ids = set()
+        
+        if not hasattr(self, 'multi_index_store') or not self.multi_index_store:
+            return []
+        
+        # Step 2: File Path Index Lookup (highest priority)
+        for index_type in ['code', 'all']:
+            index_db = self.multi_index_store.indices.get(index_type)
+            if not index_db or not hasattr(index_db, 'get_by_file_paths'):
+                continue
+            
+            # Try exact file paths first
+            if file_paths:
+                self.logger.info(
+                    f"FILE_INDEX | Searching for exact file paths in '{index_type}' index: {file_paths}"
+                )
+                chunks = index_db.get_by_file_paths(file_paths)
+                self.logger.info(f"FILE_INDEX | Found {len(chunks)} chunks from file path index")
+                
+                for chunk in chunks:
+                    if not self._chunk_matches_repo(chunk):
+                        self.logger.debug(f"FILE_INDEX | Chunk {chunk.get('chunk_id')} filtered by repo")
+                        continue
+                    
+                    chunk_id = chunk.get('chunk_id')
+                    if chunk_id and chunk_id not in seen_chunk_ids:
+                        seen_chunk_ids.add(chunk_id)
+                        from utils.metadata_normalizer import MetadataNormalizer
+                        meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+                        chunk_type = meta_norm.get_chunk_type('')
+                        chunk_file_path = meta_norm.get_file_path('')
+                        chunk_filename = meta_norm.get_filename('')
+                        
+                        # Filter out PR/issue chunks
+                        if chunk_type in ['pr', 'issue', 'email']:
+                            self.logger.debug(
+                                f"FILE_INDEX | Chunk {chunk_id} filtered: type '{chunk_type}' is not code"
+                            )
+                            continue
+                        
+                        # Verify this chunk actually matches one of the requested file paths
+                        chunk_matches = False
+                        for requested_path in file_paths:
+                            if chunk_file_path and (
+                                chunk_file_path.lower() == requested_path.lower() or
+                                chunk_file_path.lower().endswith(requested_path.lower()) or
+                                requested_path.lower() in chunk_file_path.lower()
+                            ):
+                                chunk_matches = True
+                                break
+                        
+                        if chunk_matches:
+                            self.logger.info(
+                                f"FILE_INDEX | Adding chunk: file_path='{chunk_file_path}', "
+                                f"filename='{chunk_filename}', chunk_id={chunk_id}, "
+                                f"type='{chunk_type}', score=15.0"
+                            )
+                            all_results.append({
+                                'chunk_id': chunk_id,
+                                'metadata': chunk.get('metadata', {}),
+                                'content': chunk.get('content', ''),
+                                'score': 15.0 if index_type == 'code' else 12.0,  # Very high for exact match
+                                'source': f'file_index_{index_type}',
+                                'match_type': 'exact_path'
+                            })
+                        else:
+                            self.logger.warning(
+                                f"FILE_INDEX | Chunk file_path '{chunk_file_path}' doesn't match "
+                                f"requested paths {file_paths} - SKIPPING"
+                            )
+            
+            # Try filename-based search in file path index
+            if filename_hints and hasattr(index_db, 'search_file_paths'):
+                for filename_hint in filename_hints:
+                    found_paths = index_db.search_file_paths(filename_hint, limit=20)
+                    if found_paths:
+                        chunks = index_db.get_by_file_paths(found_paths)
+                        for chunk in chunks:
+                            if not self._chunk_matches_repo(chunk):
+                                continue
+                            
+                            chunk_id = chunk.get('chunk_id')
+                            if chunk_id and chunk_id not in seen_chunk_ids:
+                                seen_chunk_ids.add(chunk_id)
+                                from utils.metadata_normalizer import MetadataNormalizer
+                                meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+                                chunk_type = meta_norm.get_chunk_type('')
+                                
+                                if chunk_type in ['pr', 'issue', 'email']:
+                                    continue
+                                
+                                # Check if filename matches - STRICT MATCHING
+                                file_path = meta_norm.get_file_path('')
+                                filename = meta_norm.get_filename('')
+                                
+                                # Only match if filename exactly matches (case-insensitive)
+                                is_exact_match = False
+                                if filename:
+                                    is_exact_match = filename.lower() == filename_hint.lower()
+                                
+                                # Also check if the full path ends with the filename hint
+                                if not is_exact_match and file_path:
+                                    from utils.path_normalizer import extract_filename
+                                    path_filename = extract_filename(file_path)
+                                    if path_filename:
+                                        is_exact_match = path_filename.lower() == filename_hint.lower()
+                                
+                                if is_exact_match:
+                                    self.logger.info(
+                                        f"FILE_INDEX | Exact filename match: '{filename}' == '{filename_hint}' "
+                                        f"(file_path: '{file_path}', chunk_id: {chunk_id})"
+                                    )
+                                    all_results.append({
+                                        'chunk_id': chunk_id,
+                                        'metadata': chunk.get('metadata', {}),
+                                        'content': chunk.get('content', ''),
+                                        'score': 10.0 if index_type == 'code' else 8.0,  # High for filename match
+                                        'source': f'file_index_{index_type}',
+                                        'match_type': 'filename_match'
+                                    })
+                                else:
+                                    self.logger.debug(
+                                        f"FILE_INDEX | Filename mismatch: '{filename}' != '{filename_hint}' "
+                                        f"(file_path: '{file_path}') - SKIPPING"
+                                    )
+        
+        # Step 3: Try directory-based search if directory hints exist
+        if directory_hints and hasattr(self, 'multi_index_store') and self.multi_index_store:
+            for index_type in ['code', 'all']:
+                index_db = self.multi_index_store.indices.get(index_type)
+                if not index_db or not hasattr(index_db, 'file_path_index'):
+                    continue
+                
+                file_path_index = index_db.file_path_index
+                if not file_path_index:
+                    continue
+                
+                for dir_hint in directory_hints:
+                    # Get files in directory
+                    if hasattr(file_path_index, 'get_files_in_directory'):
+                        dir_files = file_path_index.get_files_in_directory(dir_hint)
+                        if dir_files:
+                            chunks = index_db.get_by_file_paths(dir_files)
+                            for chunk in chunks:
+                                if not self._chunk_matches_repo(chunk):
+                                    continue
+                                
+                                chunk_id = chunk.get('chunk_id')
+                                if chunk_id and chunk_id not in seen_chunk_ids:
+                                    seen_chunk_ids.add(chunk_id)
+                                    from utils.metadata_normalizer import MetadataNormalizer
+                                    meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+                                    chunk_type = meta_norm.get_chunk_type('')
+                                    
+                                    if chunk_type in ['pr', 'issue', 'email']:
+                                        continue
+                                    
+                                    all_results.append({
+                                        'chunk_id': chunk_id,
+                                        'metadata': chunk.get('metadata', {}),
+                                        'content': chunk.get('content', ''),
+                                        'score': 9.0 if index_type == 'code' else 7.0,
+                                        'source': f'file_index_{index_type}',
+                                        'match_type': 'directory_match'
+                                    })
+        
+        # Step 4: If we still don't have results, try broader file path index search
+        if not all_results and hasattr(self, 'multi_index_store') and self.multi_index_store:
+            for index_type in ['code', 'all']:
+                index_db = self.multi_index_store.indices.get(index_type)
+                if index_db and hasattr(index_db, 'search_file_paths'):
+                    # Search with full query text
+                    found_paths = index_db.search_file_paths(query_text, limit=15)
+                    if found_paths:
+                        chunks = index_db.get_by_file_paths(found_paths)
+                        for chunk in chunks:
+                            if not self._chunk_matches_repo(chunk):
+                                continue
+                            
+                            chunk_id = chunk.get('chunk_id')
+                            if chunk_id and chunk_id not in seen_chunk_ids:
+                                seen_chunk_ids.add(chunk_id)
+                                from utils.metadata_normalizer import MetadataNormalizer
+                                meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+                                chunk_type = meta_norm.get_chunk_type('')
+                                
+                                if chunk_type in ['pr', 'issue', 'email']:
+                                    continue
+                                
+                                all_results.append({
+                                    'chunk_id': chunk_id,
+                                    'metadata': chunk.get('metadata', {}),
+                                    'content': chunk.get('content', ''),
+                                    'score': 8.0 if index_type == 'code' else 6.0,  # Medium for partial match
+                                    'source': f'file_index_{index_type}',
+                                    'match_type': 'partial_path'
+                                })
+        
+        if not file_paths:
+            return []
+        
+        # Retrieve chunks for found file paths
+        # Prioritize 'code' index first, then 'all' index
+        results = []
+        
+        # First, try 'code' index (most relevant for file paths)
+        if hasattr(self, 'multi_index_store') and self.multi_index_store:
+            code_index_db = self.multi_index_store.indices.get('code')
+            if code_index_db and hasattr(code_index_db, 'get_by_file_paths'):
+                chunks = code_index_db.get_by_file_paths(file_paths)
+                
+                # Add score and format results - PRIORITIZE CODE CHUNKS
+                for chunk in chunks:
+                    # Check repo filter
+                    if not self._chunk_matches_repo(chunk):
+                        continue
+                    
+                    # Use metadata normalizer to check chunk type
+                    from utils.metadata_normalizer import MetadataNormalizer
+                    meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+                    chunk_type = meta_norm.get_chunk_type('')
+                    
+                    # FILTER OUT PR/ISSUE chunks - we want actual code files
+                    if chunk_type in ['pr', 'issue', 'email']:
+                        continue
+                    
+                    # Format result with high score for direct file path match
+                    result = {
+                        'chunk_id': chunk.get('chunk_id'),
+                        'metadata': chunk.get('metadata', {}),
+                        'content': chunk.get('content', ''),
+                        'score': 10.0,  # Very high score for direct file path match from code index
+                        'source': 'code'
+                    }
+                    results.append(result)
+        
+        # If we didn't find enough results, try 'all' index but still filter PR/issue chunks
+        # For file-specific queries, we want ALL chunks from the file, so don't limit
+        if hasattr(self, 'multi_index_store') and self.multi_index_store:
+            all_index_db = self.multi_index_store.indices.get('all')
+            if all_index_db and hasattr(all_index_db, 'get_by_file_paths'):
+                chunks = all_index_db.get_by_file_paths(file_paths)
+                
+                for chunk in chunks:
+                    # Check repo filter
+                    if not self._chunk_matches_repo(chunk):
+                        continue
+                    
+                    # Use metadata normalizer to check chunk type
+                    from utils.metadata_normalizer import MetadataNormalizer
+                    meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+                    chunk_type = meta_norm.get_chunk_type('')
+                    
+                    # FILTER OUT PR/ISSUE chunks - we want actual code files
+                    if chunk_type in ['pr', 'issue', 'email']:
+                        continue
+                    
+                    chunk_id = chunk.get('chunk_id')
+                    # Skip if already in results
+                    if any(r.get('chunk_id') == chunk_id for r in results):
+                        continue
+                    
+                    # Format result with lower score than code index
+                    result = {
+                        'chunk_id': chunk_id,
+                        'metadata': chunk.get('metadata', {}),
+                        'content': chunk.get('content', ''),
+                        'score': 8.0,  # High but lower than code index
+                        'source': 'all'
+                    }
+                    results.append(result)
+        
+        # Merge all_results (from file path index searches) with results (from direct file paths)
+        # This ensures we don't lose any matches
+        all_merged_results = all_results + results
+        
+        # Remove duplicates by chunk_id
+        seen = set()
+        unique_results = []
+        for result in all_merged_results:
+            chunk_id = result.get('chunk_id')
+            if chunk_id and chunk_id not in seen:
+                seen.add(chunk_id)
+                unique_results.append(result)
+        
+        # Sort by chunk type priority, then by score
+        # Priority: file_overview > code > function > class > method > others
+        def sort_key(r):
+            meta_norm = MetadataNormalizer(r.get('metadata', {}), r)
+            chunk_type = meta_norm.get_chunk_type('')
+            score = r.get('score', 0)
+            
+            # Type priority: overview first, then code chunks
+            type_priority_map = {
+                'file_overview': 0,
+                'code': 1,
+                'function': 2,
+                'class': 3,
+                'method': 4,
+            }
+            type_priority = type_priority_map.get(chunk_type, 10)
+            
+            return (type_priority, -score)
+        
+        unique_results.sort(key=sort_key)
+        
+        # Step 5: If still no results, try fuzzy matching for typos
+        if not unique_results and filename_hints and hasattr(self, 'multi_index_store') and self.multi_index_store:
+            from utils.fuzzy_file_matcher import find_similar_filenames
+            
+            for index_type in ['code', 'all']:
+                index_db = self.multi_index_store.indices.get(index_type)
+                if not index_db or not hasattr(index_db, 'file_path_index'):
+                    continue
+                
+                file_path_index = index_db.file_path_index
+                if not file_path_index:
+                    continue
+                
+                all_filenames = list(file_path_index._filename_to_paths.keys())
+                
+                for filename_hint in filename_hints:
+                    # Try fuzzy matching
+                    similar = find_similar_filenames(filename_hint, all_filenames, limit=5)
+                    
+                    for similar_filename, similarity_score in similar:
+                        if similar_filename in file_path_index._filename_to_paths:
+                            similar_paths = file_path_index._filename_to_paths[similar_filename]
+                            chunks = index_db.get_by_file_paths(list(similar_paths))
+                            
+                            for chunk in chunks:
+                                if not self._chunk_matches_repo(chunk):
+                                    continue
+                                
+                                chunk_id = chunk.get('chunk_id')
+                                if chunk_id and chunk_id not in seen_chunk_ids:
+                                    seen_chunk_ids.add(chunk_id)
+                                    from utils.metadata_normalizer import MetadataNormalizer
+                                    meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+                                    chunk_type = meta_norm.get_chunk_type('')
+                                    
+                                    if chunk_type in ['pr', 'issue', 'email']:
+                                        continue
+                                    
+                                    # Score based on similarity
+                                    base_score = 7.0 if index_type == 'code' else 5.0
+                                    score = base_score + (similarity_score * 2.0)  # Boost by similarity
+                                    
+                                    unique_results.append({
+                                        'chunk_id': chunk_id,
+                                        'metadata': chunk.get('metadata', {}),
+                                        'content': chunk.get('content', ''),
+                                        'score': score,
+                                        'source': f'file_index_{index_type}',
+                                        'match_type': 'fuzzy_match',
+                                        'similarity': similarity_score
+                                    })
+        
+        # Step 6: Fallback to code_chunks.json files if still no results
+        # This ensures we can find files even if they're not in the vector index yet
+        # Also try even if we have some results, to ensure completeness
+        if len(unique_results) < 3:  # If we have very few results, try code_chunks.json too
+            code_loader = self._get_code_chunks_loader()
+            if code_loader:
+                repo_owner = getattr(self, 'repo_owner', None)
+                repo_name = getattr(self, 'repo_name', None)
+                
+                # Try exact file paths first
+                if file_paths:
+                    self.logger.info(f"CODE_CHUNKS_JSON | Searching for {len(file_paths)} file paths: {file_paths}")
+                    for file_path in file_paths:
+                        # First try by full path
+                        chunks = code_loader.get_chunks_by_file_path(
+                            file_path,
+                            repo_owner,
+                            repo_name,
+                            exact_match_only=False  # Allow partial matches too
+                        )
+                        
+                        # If no results, try by filename (in case user only provided filename)
+                        if not chunks:
+                            from utils.path_normalizer import extract_filename
+                            filename = extract_filename(file_path)
+                            if filename:
+                                self.logger.info(
+                                    f"CODE_CHUNKS_JSON | No results for path '{file_path}', "
+                                    f"trying filename search: '{filename}'"
+                                )
+                                chunks = code_loader.get_chunks_by_filename(
+                                    filename,
+                                    repo_owner,
+                                    repo_name
+                                )
+                        
+                        self.logger.info(
+                            f"CODE_CHUNKS_JSON | File path '{file_path}': found {len(chunks)} chunks"
+                        )
+                        
+                        for chunk in chunks:
+                            chunk_id = chunk.get('chunk_id')
+                            # Check both seen_chunk_ids and seen to avoid duplicates
+                            if chunk_id and chunk_id not in seen_chunk_ids and chunk_id not in seen:
+                                seen_chunk_ids.add(chunk_id)
+                                seen.add(chunk_id)
+                                from utils.metadata_normalizer import MetadataNormalizer
+                                meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+                                chunk_type = meta_norm.get_chunk_type('')
+                                
+                                if chunk_type in ['pr', 'issue', 'email']:
+                                    continue
+                                
+                                # Extract content from code_chunks.json format
+                                # Content is stored as content.content in code_chunks.json
+                                content = chunk.get('content', {})
+                                if isinstance(content, dict):
+                                    # Handle nested content structure - code is in content.content
+                                    content_text = content.get('content', '')
+                                    if not content_text:
+                                        # Fallback: try to get from raw_data
+                                        raw_data = chunk.get('raw_data', {})
+                                        if isinstance(raw_data, dict):
+                                            content_text = raw_data.get('content', '')
+                                    if not content_text:
+                                        content_text = str(content)
+                                else:
+                                    content_text = str(content) if content else ''
+                                
+                                # Log what we're returning
+                                chunk_file_path = chunk.get('file_path', '')
+                                chunk_filename = chunk.get('filename', '')
+                                self.logger.info(
+                                    f"CODE_CHUNKS_JSON | Returning chunk for file: '{chunk_file_path}' "
+                                    f"(filename: '{chunk_filename}'), "
+                                    f"requested: '{file_path}', "
+                                    f"content_length: {len(content_text)}, "
+                                    f"chunk_id: {chunk_id}"
+                                )
+                                
+                                # Build metadata in expected format
+                                chunk_metadata = chunk.get('metadata', {})
+                                if not chunk_metadata:
+                                    # Build metadata from chunk fields
+                                    chunk_metadata = {
+                                        'file_path': chunk.get('file_path', ''),
+                                        'filename': chunk.get('filename', ''),
+                                        'directory': chunk.get('directory', ''),
+                                        'chunk_type': chunk_type,
+                                        'repo_name': chunk.get('repo_name', ''),
+                                        'repo_owner': chunk.get('repo_owner', ''),
+                                        'language': chunk.get('language', ''),
+                                    }
+                                
+                                unique_results.append({
+                                    'chunk_id': chunk_id,
+                                    'metadata': chunk_metadata,
+                                    'content': content_text,
+                                    'score': 6.0,  # Lower than index but still good
+                                    'source': 'code_chunks_json',
+                                    'match_type': 'code_chunks_fallback'
+                                })
+                
+                # Try filename search in code chunks - ONLY if no results from exact paths
+                # For filename-only queries, search directly by filename
+                if not unique_results and filename_hints:
+                    self.logger.info(
+                        f"CODE_CHUNKS_JSON | No results from exact paths, trying filename hints: {filename_hints}"
+                    )
+                    for filename_hint in filename_hints:
+                        # Search directly by filename (this is the key fix!)
+                        chunks = code_loader.get_chunks_by_filename(
+                            filename_hint,
+                            repo_owner,
+                            repo_name
+                        )
+                        
+                        self.logger.info(
+                            f"CODE_CHUNKS_JSON | Filename hint '{filename_hint}': found {len(chunks)} chunks directly by filename"
+                        )
+                        
+                        # Process chunks found by filename
+                        for chunk in chunks:
+                                chunk_id = chunk.get('chunk_id')
+                                # Check both seen_chunk_ids and seen to avoid duplicates
+                                if chunk_id and chunk_id not in seen_chunk_ids and chunk_id not in seen:
+                                    seen_chunk_ids.add(chunk_id)
+                                    seen.add(chunk_id)
+                                    from utils.metadata_normalizer import MetadataNormalizer
+                                    meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+                                    chunk_type = meta_norm.get_chunk_type('')
+                                    
+                                    if chunk_type in ['pr', 'issue', 'email']:
+                                        continue
+                                    
+                                    # Extract content from code_chunks.json format
+                                    content = chunk.get('content', {})
+                                    if isinstance(content, dict):
+                                        # Handle nested content structure - code is in content.content
+                                        content_text = content.get('content', '')
+                                        if not content_text:
+                                            # Fallback: try to get from raw_data
+                                            raw_data = chunk.get('raw_data', {})
+                                            if isinstance(raw_data, dict):
+                                                content_text = raw_data.get('content', '')
+                                        if not content_text:
+                                            content_text = str(content)
+                                    else:
+                                        content_text = str(content) if content else ''
+                                    
+                                    chunk_metadata = chunk.get('metadata', {})
+                                    if not chunk_metadata:
+                                        chunk_metadata = {
+                                            'file_path': chunk.get('file_path', ''),
+                                            'filename': chunk.get('filename', ''),
+                                            'directory': chunk.get('directory', ''),
+                                            'chunk_type': chunk_type,
+                                            'repo_name': chunk.get('repo_name', ''),
+                                            'repo_owner': chunk.get('repo_owner', ''),
+                                            'language': chunk.get('language', ''),
+                                        }
+                                    
+                                    # Log what we're returning
+                                    chunk_file_path = chunk.get('file_path', '')
+                                    chunk_filename = chunk.get('filename', '')
+                                    self.logger.info(
+                                        f"CODE_CHUNKS_JSON | Returning chunk from filename search: "
+                                        f"file='{chunk_file_path}' (filename: '{chunk_filename}'), "
+                                        f"searched for: '{filename_hint}', "
+                                        f"content_length: {len(content_text)}, "
+                                        f"chunk_id: {chunk_id}"
+                                    )
+                                    
+                                    unique_results.append({
+                                        'chunk_id': chunk_id,
+                                        'metadata': chunk_metadata,
+                                        'content': content_text,
+                                        'score': 5.0,
+                                        'source': 'code_chunks_json',
+                                        'match_type': 'code_chunks_filename_search'
+                                    })
+                    
+                    if unique_results:
+                        self.logger.info(f"CODE_CHUNKS_FALLBACK | Found {len(unique_results)} chunks from code_chunks.json")
+        
+        # Log results for debugging with detailed information
+        if unique_results:
+            self.logger.info(f"FILE_PATH_RETRIEVAL | Found {len(unique_results)} chunks from file retrieval")
+            match_types = {}
+            file_paths_returned = set()
+            for r in unique_results:
+                match_type = r.get('match_type', 'unknown')
+                match_types[match_type] = match_types.get(match_type, 0) + 1
+                
+                # Log file paths being returned
+                meta_norm = MetadataNormalizer(r.get('metadata', {}), r)
+                file_path = meta_norm.get_file_path('')
+                filename = meta_norm.get_filename('')
+                if file_path:
+                    file_paths_returned.add(file_path)
+            
+            self.logger.info(f"FILE_PATH_RETRIEVAL | Match types: {match_types}")
+            self.logger.info(
+                f"FILE_PATH_RETRIEVAL | Files being returned ({len(file_paths_returned)}): "
+                f"{list(file_paths_returned)[:10]}"
+            )
+            self.logger.info(
+                f"FILE_PATH_RETRIEVAL | Requested file paths: {file_paths}, "
+                f"Requested filename hints: {filename_hints}"
+            )
+        else:
+            # Log that no results were found and provide suggestions
+            suggestions = self._get_file_suggestions(query_text, limit=3)
+            if suggestions:
+                self.logger.warning(
+                    f"FILE_PATH_RETRIEVAL | No exact matches found for query '{query_text}'. "
+                    f"Requested: paths={file_paths}, filename_hints={filename_hints}. "
+                    f"Suggestions: {suggestions[:3]}"
+                )
+            else:
+                self.logger.warning(
+                    f"FILE_PATH_RETRIEVAL | No results found for query '{query_text}'. "
+                    f"Requested: paths={file_paths}, filename_hints={filename_hints}"
+                )
+        
+        # For file-specific queries, return ALL chunks (no limit)
+        # This ensures we get the complete file content
+        return unique_results
+    
+    def _chunk_matches_repo(self, chunk: Dict[str, Any]) -> bool:
+        """Check if chunk matches current repo (helper for file path retrieval)."""
+        repo_owner_raw = getattr(self, 'repo_owner', None)
+        repo_name_raw = getattr(self, 'repo_name', None)
+        
+        if not repo_name_raw:
+            return False
+        
+        from utils.metadata_normalizer import MetadataNormalizer
+        from utils.repo_normalizer import repo_matches, normalize_repo_name, normalize_repo_owner, extract_repo_parts
+        
+        meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+        chunk_repo = meta_norm.get_repo_name('')
+        chunk_owner = meta_norm.get_repo_owner('')
+        
+        # Normalize current repo
+        normalized_current_owner, normalized_current_repo = extract_repo_parts(repo_name_raw)
+        if not normalized_current_owner and repo_owner_raw:
+            normalized_current_owner = normalize_repo_owner(repo_owner_raw)
+        if not normalized_current_repo:
+            normalized_current_repo = normalize_repo_name(repo_name_raw)
+        
+        # Normalize chunk repo
+        normalized_chunk_owner, normalized_chunk_repo = extract_repo_parts(chunk_repo)
+        if not normalized_chunk_owner and chunk_owner:
+            normalized_chunk_owner = normalize_repo_owner(chunk_owner)
+        if not normalized_chunk_repo:
+            normalized_chunk_repo = normalize_repo_name(chunk_repo)
+        
+        return repo_matches(
+            normalized_current_owner, normalized_current_repo,
+            normalized_chunk_owner, normalized_chunk_repo
+        )
 

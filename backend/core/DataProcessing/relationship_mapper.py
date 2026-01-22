@@ -270,12 +270,15 @@ class RelationshipMapper:
                                 []
                             )
                             
+                            from utils.path_normalizer import normalize_path
                             for f in changed_files:
                                 if isinstance(f, dict):
-                                    file_path = f.get('filename') or f.get('path', '')
+                                    file_path_raw = f.get('filename') or f.get('path', '')
                                 else:
-                                    file_path = str(f)
-                                if file_path:
+                                    file_path_raw = str(f)
+                                if file_path_raw:
+                                    # Normalize path before adding to set
+                                    file_path = normalize_path(file_path_raw, '') or file_path_raw
                                     thread['affected_files'].add(file_path)
                     
                     thread['related_prs'].append(pr_data)

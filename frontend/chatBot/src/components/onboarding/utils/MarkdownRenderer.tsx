@@ -477,8 +477,62 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   const parseTextContent = (text: string, baseKey: number): ReactNode[] => {
     const lines = text.split('\n');
     let inDiffBlock = false;
+    let inTable = false;
+    let tableRows: string[] = [];
+    let tableStartIndex = -1;
 
-    return lines.map((line, lineIndex) => {
+    // First pass: detect and extract tables
+    const processedLines: Array<{ type: 'table' | 'line'; content: string; index: number }> = [];
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmedLine = line.trim();
+      
+      // Check if line is a table row (contains |)
+      const isTableRow = trimmedLine.includes('|') && trimmedLine.split('|').length >= 3;
+      const isTableSeparator = /^\|[\s\-:]+\|/.test(trimmedLine);
+      
+      if (isTableRow && !inTable) {
+        // Start of table
+        inTable = true;
+        tableStartIndex = i;
+        tableRows = [trimmedLine];
+      } else if (inTable) {
+        if (isTableSeparator) {
+          // Table separator row
+          tableRows.push(trimmedLine);
+        } else if (isTableRow) {
+          // Table data row
+          tableRows.push(trimmedLine);
+        } else {
+          // End of table - process it
+          if (tableRows.length >= 2) {
+            processedLines.push({ type: 'table', content: tableRows.join('\n'), index: tableStartIndex });
+          }
+          inTable = false;
+          tableRows = [];
+          tableStartIndex = -1;
+          // Process current line normally
+          processedLines.push({ type: 'line', content: line, index: i });
+        }
+      } else {
+        processedLines.push({ type: 'line', content: line, index: i });
+      }
+    }
+    
+    // Handle table at end of text
+    if (inTable && tableRows.length >= 2) {
+      processedLines.push({ type: 'table', content: tableRows.join('\n'), index: tableStartIndex });
+    }
+
+    // Second pass: render processed lines
+    return processedLines.map((item, itemIndex) => {
+      if (item.type === 'table') {
+        return renderTable(item.content, baseKey + itemIndex * 1000);
+      }
+      
+      const line = item.content;
+      const lineIndex = item.index;
 
       // --- DIFF BLOCK DETECTION (ADD THIS FIRST) ---
       if (
@@ -701,6 +755,117 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
     }
 
     return parts.length > 0 ? parts : text;
+  };
+
+  const renderTable = (tableText: string, key: number): ReactNode => {
+    const rows = tableText.split('\n').filter(row => row.trim());
+    if (rows.length < 2) return null;
+
+    // Parse header
+    const headerRow = rows[0].split('|').map(cell => cell.trim()).filter(cell => cell);
+    const separatorRow = rows[1];
+    const dataRows = rows.slice(2);
+
+    // Check if this looks like a file changes table
+    const isFileTable = headerRow.some(h => 
+      h.toLowerCase().includes('file') || 
+      h.toLowerCase().includes('status') || 
+      h.toLowerCase().includes('addition') || 
+      h.toLowerCase().includes('deletion')
+    );
+
+    return (
+      <div
+        key={`table-${key}`}
+        className="my-6 rounded-xl border border-[#0E1B2E]/15 bg-white/80 backdrop-blur-sm shadow-md overflow-hidden"
+      >
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-[#0E1B2E]/10 border-b border-[#0E1B2E]/20">
+                {headerRow.map((header, idx) => (
+                  <th
+                    key={`th-${key}-${idx}`}
+                    className={`px-4 py-3 text-left text-sm font-semibold text-[#0E1B2E] ${
+                      isFileTable && idx === 0 ? 'min-w-[200px]' : ''
+                    }`}
+                  >
+                    {header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {dataRows.map((row, rowIdx) => {
+                const cells = row.split('|').map(cell => cell.trim()).filter(cell => cell);
+                if (cells.length !== headerRow.length) return null;
+
+                return (
+                  <tr
+                    key={`tr-${key}-${rowIdx}`}
+                    className={`border-b border-[#0E1B2E]/10 transition-colors ${
+                      rowIdx % 2 === 0 ? 'bg-white/50' : 'bg-[#0E1B2E]/5'
+                    } hover:bg-[#0E1B2E]/10`}
+                  >
+                    {cells.map((cell, cellIdx) => {
+                      // Check if cell contains file path (starts with backtick or contains /)
+                      const isFilePath = cell.includes('`') || cell.includes('/');
+                      // Check if cell contains status (Modified, Added, Deleted)
+                      const isStatus = /^(Modified|Added|Deleted|Renamed)/i.test(cell);
+                      // Check if cell contains numbers with + or -
+                      const isChange = /^[+\-]\d+/.test(cell);
+
+                      return (
+                        <td
+                          key={`td-${key}-${rowIdx}-${cellIdx}`}
+                          className={`px-4 py-3 text-sm text-[#0E1B2E] ${
+                            isFilePath ? 'font-mono text-xs' : ''
+                          }`}
+                        >
+                          {isFilePath ? (
+                            <code className="bg-[#0E1B2E]/10 px-2 py-1 rounded text-[#0E1B2E] border border-[#0E1B2E]/20">
+                              {cell.replace(/`/g, '')}
+                            </code>
+                          ) : isStatus ? (
+                            <span
+                              className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+                                cell.toLowerCase().includes('added')
+                                  ? 'bg-green-100 text-green-800'
+                                  : cell.toLowerCase().includes('deleted')
+                                  ? 'bg-red-100 text-red-800'
+                                  : cell.toLowerCase().includes('modified')
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : 'bg-gray-100 text-gray-800'
+                              }`}
+                            >
+                              {cell}
+                            </span>
+                          ) : isChange ? (
+                            <span
+                              className={`font-mono font-semibold ${
+                                cell.startsWith('+')
+                                  ? 'text-green-600'
+                                  : cell.startsWith('-')
+                                  ? 'text-red-600'
+                                  : 'text-[#0E1B2E]'
+                              }`}
+                            >
+                              {cell}
+                            </span>
+                          ) : (
+                            cell
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
   };
 
   return (
