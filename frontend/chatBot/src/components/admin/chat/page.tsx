@@ -1403,26 +1403,100 @@ export default function ChatPage() {
                                   <ExternalLink className="w-3 h-3 inline" />
                                 </a>
                               ),
-                              table: ({ node, ...props }) => (
-                                <div className="overflow-x-auto my-4 rounded-lg border border-[#0E1B2E]/10">
-                                  <table className="min-w-full" {...props} />
-                                </div>
-                              ),
+                              table: ({ node, ...props }: any) => {
+                                // Check if this is a file changes table by examining children
+                                const isFileTable = node?.children?.some((child: any) => 
+                                  child?.children?.some((th: any) => 
+                                    th?.children?.some((text: any) => {
+                                      const textContent = typeof text === 'string' ? text : text?.value || '';
+                                      return /file|status|addition|deletion/i.test(textContent);
+                                    })
+                                  )
+                                );
+
+                                return (
+                                  <div className={`overflow-x-auto my-6 rounded-xl border border-[#0E1B2E]/15 bg-white/80 backdrop-blur-sm shadow-md ${isFileTable ? 'overflow-visible' : ''}`}>
+                                    <table className="min-w-full border-collapse" {...props} />
+                                  </div>
+                                );
+                              },
                               thead: ({ node, ...props }) => (
-                                <thead className="bg-[#0E1B2E]/5" {...props} />
+                                <thead className="bg-[#0E1B2E]/10 border-b border-[#0E1B2E]/20" {...props} />
                               ),
-                              th: ({ node, ...props }) => (
-                                <th
-                                  className={`px-4 py-3 text-left text-[#0E1B2E] font-semibold border-b border-[#0E1B2E]/10 ${spaceGrotesk.className}`}
-                                  {...props}
-                                />
-                              ),
-                              td: ({ node, ...props }) => (
-                                <td
-                                  className={`px-4 py-3 text-[#0E1B2E]/80 border-b border-[#0E1B2E]/10 ${spaceGrotesk.className}`}
-                                  {...props}
-                                />
-                              ),
+                              th: ({ node, ...props }: any) => {
+                                const textContent = typeof props.children === 'string' 
+                                  ? props.children 
+                                  : props.children?.props?.children || '';
+                                const isFileColumn = /file/i.test(textContent);
+                                
+                                return (
+                                  <th
+                                    className={`px-4 py-3 text-left text-sm font-semibold text-[#0E1B2E] ${isFileColumn ? 'min-w-[200px]' : ''} ${spaceGrotesk.className}`}
+                                    {...props}
+                                  />
+                                );
+                              },
+                              td: ({ node, ...props }: any) => {
+                                const cellContent = typeof props.children === 'string' 
+                                  ? props.children 
+                                  : props.children?.props?.children || '';
+                                
+                                // Check if cell contains file path
+                                const isFilePath = /`[^`]+`/.test(cellContent) || /\//.test(cellContent);
+                                // Check if cell contains status
+                                const isStatus = /^(Modified|Added|Deleted|Renamed)/i.test(cellContent);
+                                // Check if cell contains change numbers
+                                const isChange = /^[+\-]\d+/.test(cellContent);
+                                
+                                return (
+                                  <td
+                                    className={`px-4 py-3 text-sm text-[#0E1B2E] border-b border-[#0E1B2E]/10 ${
+                                      isFilePath ? 'font-mono text-xs' : ''
+                                    } ${spaceGrotesk.className}`}
+                                    {...props}
+                                  >
+                                    {isFilePath ? (
+                                      <code className="bg-[#0E1B2E]/10 px-2 py-1 rounded text-[#0E1B2E] border border-[#0E1B2E]/20">
+                                        {cellContent.replace(/`/g, '')}
+                                      </code>
+                                    ) : isStatus ? (
+                                      <span
+                                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+                                          cellContent.toLowerCase().includes('added')
+                                            ? 'bg-green-100 text-green-800'
+                                            : cellContent.toLowerCase().includes('deleted')
+                                            ? 'bg-red-100 text-red-800'
+                                            : cellContent.toLowerCase().includes('modified')
+                                            ? 'bg-blue-100 text-blue-800'
+                                            : 'bg-gray-100 text-gray-800'
+                                        }`}
+                                      >
+                                        {cellContent}
+                                      </span>
+                                    ) : isChange ? (
+                                      <span
+                                        className={`font-mono font-semibold ${
+                                          cellContent.startsWith('+')
+                                            ? 'text-green-600'
+                                            : cellContent.startsWith('-')
+                                            ? 'text-red-600'
+                                            : 'text-[#0E1B2E]'
+                                        }`}
+                                      >
+                                        {cellContent}
+                                      </span>
+                                    ) : (
+                                      props.children
+                                    )}
+                                  </td>
+                                );
+                              },
+                              tbody: ({ node, ...props }: any) => {
+                                // Add alternating row colors
+                                return (
+                                  <tbody className="[&>tr:nth-child(even)]:bg-[#0E1B2E]/5 [&>tr:hover]:bg-[#0E1B2E]/10 [&>tr]:transition-colors" {...props} />
+                                );
+                              },
                               strong: ({ node, ...props }) => (
                                 <strong
                                   className={`font-bold text-[#0E1B2E] ${spaceGrotesk.className}`}
