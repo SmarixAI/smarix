@@ -29,7 +29,7 @@ class CodeChunksLoader:
         """Initialize the loader with empty cache."""
         self._chunks_cache: Dict[str, List[Dict]] = {}  # repo_key -> chunks list
         self._file_path_index: Dict[str, List[Dict]] = defaultdict(list)  # normalized_path -> chunks
-        self._filename_index: Dict[str, List[str]] = defaultdict(list)  # filename -> paths
+        self._filename_index: Dict[str, List[Dict]] = defaultdict(list) 
         self._loaded_repos: Set[str] = set()
     
     def _get_repo_key(self, repo_owner: Optional[str], repo_name: Optional[str]) -> str:
@@ -150,9 +150,9 @@ class CodeChunksLoader:
                 normalized_path = normalize_path(file_path, '') if file_path else ''
                 
                 # If we have filename but no path, try to construct a path
-                if not normalized_path and filename:
-                    # Use filename as path (for filename-only queries)
-                    normalized_path = filename
+                # if not normalized_path and filename:
+                #     # Use filename as path (for filename-only queries)
+                #     normalized_path = filename
                 
                 if not normalized_path:
                     continue
@@ -163,13 +163,13 @@ class CodeChunksLoader:
                 # Index by filename - use chunk filename if available, otherwise extract from path
                 if filename:
                     # Use the filename from chunk directly
-                    self._filename_index[filename.lower()].append(normalized_path)
+                    self._filename_index[filename.lower()].append(chunk)
                 else:
                     # Extract filename from path
                     extracted_filename = extract_filename(normalized_path)
                     if extracted_filename:
-                        self._filename_index[extracted_filename.lower()].append(normalized_path)
-            
+                        self._filename_index[extracted_filename.lower()].append(chunk)
+                            
             self._loaded_repos.add(repo_key)
             logger.info(f"Loaded {len(chunks)} code chunks for {repo_key} from {chunks_file}")
             return True
@@ -210,6 +210,15 @@ class CodeChunksLoader:
         
         # Get chunks from index
         chunks = self._file_path_index.get(normalized_path, [])
+
+        if not chunks:
+            filename = extract_filename(normalized_path)
+            if filename:
+                return self.get_chunks_by_filename(
+                    filename,
+                    repo_owner=repo_owner,
+                    repo_name=repo_name
+                )
         
         if exact_match_only:
             # Only return exact matches
@@ -269,22 +278,22 @@ class CodeChunksLoader:
             return []
         
         # Get all paths that match this filename
-        matching_paths = self._filename_index.get(filename_lower, [])
+        #matching_paths = self._filename_index.get(filename_lower, [])
         
-        if not matching_paths:
-            logger.debug(f"CODE_CHUNKS_LOADER | No paths found for filename '{filename_lower}'")
-            return []
+        # if not matching_paths:
+        #     logger.debug(f"CODE_CHUNKS_LOADER | No paths found for filename '{filename_lower}'")
+        #     return []
         
         # Get all chunks for these paths
-        all_chunks = []
-        for path in matching_paths:
-            chunks = self._file_path_index.get(path, [])
-            all_chunks.extend(chunks)
+        all_chunks = list(self._filename_index.get(filename_lower, []))
+        # for path in matching_paths:
+        #     chunks = self._file_path_index.get(path, [])
+        #     all_chunks.extend(chunks)
         
-        logger.info(
-            f"CODE_CHUNKS_LOADER | Found {len(all_chunks)} chunks for filename '{filename_lower}' "
-            f"across {len(matching_paths)} paths: {matching_paths[:3]}"
-        )
+        # logger.info(
+        #     f"CODE_CHUNKS_LOADER | Found {len(all_chunks)} chunks for filename '{filename_lower}' "
+        #     f"across {len(matching_paths)} paths: {matching_paths[:3]}"
+        # )
         
         # Filter by repo if specified
         if repo_name:
@@ -338,12 +347,20 @@ class CodeChunksLoader:
         
         # 1. Exact filename match
         if query_lower in self._filename_index:
-            matches.update(self._filename_index[query_lower])
+            for chunk in self._filename_index[query_lower]:
+                path = chunk.get("file_path")
+                if path:
+                    matches.add(normalize_path(path, ''))
+
         
         # 2. Partial filename match
-        for filename, paths in self._filename_index.items():
+        for filename, chunks in self._filename_index.items():
             if query_lower in filename or filename.startswith(query_lower):
-                matches.update(paths)
+                for chunk in chunks:
+                    path = chunk.get("file_path")
+                    if path:
+                        matches.add(normalize_path(path, ''))
+
         
         # 3. Partial path match
         normalized_query = normalize_path(query, '')
