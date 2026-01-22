@@ -28,7 +28,8 @@ class GeneralQueryHandler:
         entity: Optional[Dict[str, Any]],
         keywords: List[str],
         active_session_id: str,
-        role: Optional[str] = None
+        role: Optional[str] = None,
+        schema_name: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Handle general query processing - the main retrieval and response flow.
@@ -124,8 +125,8 @@ class GeneralQueryHandler:
 
         # Save conversation
         try:
-            self.chatbot.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
-            self.chatbot.conversation_store.add_message(active_session_id, "assistant", refined_answer, tokens_used=0)
+            self.chatbot.conversation_store.add_message(active_session_id, "user", query, schema_name=schema_name, tokens_used=0)
+            self.chatbot.conversation_store.add_message(active_session_id, "assistant", refined_answer, schema_name=schema_name, tokens_used=0)
             self.chatbot.logger.info(f"CONVERSATION_STORE | Saved main response to session {active_session_id[:8]}...")
         except Exception as e:
             self.chatbot.logger.error(f"CONVERSATION_STORE | Failed to save main response: {e}")
@@ -389,7 +390,8 @@ class GeneralQueryHandler:
         self,
         query: str,
         query_type: str,
-        active_session_id: str
+        active_session_id: str,
+        schema_name: Optional[str] = None
     ) -> Dict[str, Any]:
         """Handle metrics query when metrics are not available."""
         repo_owner = getattr(self.chatbot, 'repo_owner', 'unknown')
@@ -404,10 +406,11 @@ class GeneralQueryHandler:
         )
         
         try:
-            self.chatbot.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
+            self.chatbot.conversation_store.add_message(active_session_id, "user", query, schema_name=schema_name, tokens_used=0)
             self.chatbot.conversation_store.add_message(
                 active_session_id, "assistant",
                 error_msg,
+                schema_name=schema_name,
                 tokens_used=0
             )
             self.chatbot.logger.info(f"CONVERSATION_STORE | Saved metrics error to session {active_session_id[:8]}...")

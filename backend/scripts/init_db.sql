@@ -1,7 +1,12 @@
+-- 1. Setup Extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-CREATE TABLE IF NOT EXISTS conversations (
+-- 2. Create the "Blueprint" Schema
+CREATE SCHEMA IF NOT EXISTS template_schema;
+
+-- 3. Define Template Tables (Blueprints for new users)
+CREATE TABLE IF NOT EXISTS template_schema.conversations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     session_id VARCHAR(255) UNIQUE NOT NULL,
     user_id VARCHAR(255),
@@ -11,9 +16,9 @@ CREATE TABLE IF NOT EXISTS conversations (
     metadata JSONB DEFAULT '{}'::jsonb
 );
 
-CREATE TABLE IF NOT EXISTS messages (
+CREATE TABLE IF NOT EXISTS template_schema.messages (
     id BIGSERIAL PRIMARY KEY,
-    conversation_id UUID REFERENCES conversations(id) ON DELETE CASCADE,
+    conversation_id UUID,
     role VARCHAR(20) NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
     content TEXT NOT NULL,
     tokens_used INTEGER DEFAULT 0,
@@ -22,30 +27,34 @@ CREATE TABLE IF NOT EXISTS messages (
     metadata JSONB DEFAULT '{}'::jsonb
 );
 
-CREATE INDEX idx_messages_conversation_time ON messages(conversation_id, created_at DESC);
-CREATE INDEX idx_conversations_session ON conversations(session_id);
-CREATE INDEX idx_conversations_user ON conversations(user_id);
+CREATE TABLE IF NOT EXISTS template_schema.tasks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title TEXT NOT NULL,
+    description TEXT,
+    category VARCHAR(50) DEFAULT 'day-to-day',
+    priority VARCHAR(20) DEFAULT 'medium',     
+    status VARCHAR(20) DEFAULT 'pending',    
+    deadline DATE,
+    assigned_to_username VARCHAR(50), 
+    assigned_by VARCHAR(50) DEFAULT 'Self',    
+    created_at TIMESTAMP DEFAULT NOW()
+);
 
-CREATE INDEX IF NOT EXISTS idx_messages_role_user
-ON messages(conversation_id, created_at DESC)
-WHERE role = 'user';
-
-CREATE INDEX IF NOT EXISTS idx_messages_role
-ON messages(role);
-
+-- 4. Define Shared Users Table (In Public Schema)
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     username VARCHAR(50) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     role VARCHAR(50) DEFAULT 'employee',
     status VARCHAR(50) DEFAULT 'general', 
-    
     name VARCHAR(255),
     designation VARCHAR(100),
     employee_id VARCHAR(50) UNIQUE,
     last_day DATE,
-    
     managers TEXT[] DEFAULT '{}',
+    
+    -- IMPORTANT: Stores the user's specific database schema name
+    schema_name VARCHAR(100),
     
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT NOW(),
@@ -55,25 +64,10 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 CREATE INDEX IF NOT EXISTS idx_users_employee_id ON users(employee_id);
 
-CREATE TABLE IF NOT EXISTS tasks (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    title TEXT NOT NULL,
-    description TEXT,
-    category VARCHAR(50) DEFAULT 'day-to-day',
-    priority VARCHAR(20) DEFAULT 'medium',     
-    status VARCHAR(20) DEFAULT 'pending',    
-    deadline DATE,
-    
-    assigned_to_username VARCHAR(50) REFERENCES users(username) ON DELETE CASCADE,
-    assigned_by VARCHAR(50) DEFAULT 'Self',    
-    
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON tasks(assigned_to_username);
-
+-- 5. Insert Initial Users
+-- We assign them a 'schema_name' immediately so the backend can create it on startup.
 INSERT INTO users (
-    username, password_hash, role, status, name, designation, employee_id, last_day, managers
+    username, password_hash, role, status, name, designation, employee_id, last_day, managers, schema_name
 ) 
 VALUES 
     (
@@ -85,7 +79,8 @@ VALUES
         NULL, 
         NULL, 
         NULL, 
-        '{}'
+        '{}',
+        'user_admin'
     ),
     (
         'manager1', 
@@ -96,7 +91,8 @@ VALUES
         'Dev Manager', 
         'EMP-123', 
         NULL, 
-        ARRAY['EMP-1234'] 
+        ARRAY['EMP-1234'],
+        'user_manager1'
     ),
     (
         'manager2', 
@@ -107,7 +103,8 @@ VALUES
         'Infra Manager', 
         'EMP-1234', 
         NULL, 
-        '{}'
+        '{}',
+        'user_manager2'
     ),
     (
         'Mastermind-sap', 
@@ -118,52 +115,8 @@ VALUES
         'Frontend Developer', 
         'EMP-763326', 
         '2025-12-29', 
-        ARRAY['EMP-123']
+        ARRAY['EMP-123'],
+        'user_mastermind_sap'
     )
-ON CONFLICT (username) DO NOTHING;
-
-INSERT INTO tasks (
-    title, description, category, priority, status, deadline, assigned_to_username, assigned_by
-)
-VALUES 
-    (
-        'Complete project documentation', 
-        'Document the current project structure and API endpoints', 
-        'day-to-day', 
-        'high', 
-        'pending', 
-        '2025-01-20', 
-        'Mastermind-sap', 
-        'Rajesh Kumar'
-    ),
-    (
-        'Review code changes', 
-        'Review and provide feedback on recent pull requests', 
-        'day-to-day', 
-        'medium', 
-        'in-progress', 
-        '2025-01-18', 
-        'Mastermind-sap', 
-        'Rajesh Kumar'
-    ),
-    
-    (
-        'Update personal development plan', 
-        'Review and update my personal development goals for Q1', 
-        'day-to-day', 
-        'low', 
-        'pending', 
-        NULL, 
-        'Mastermind-sap', 
-        'Self'
-    ),
-    (
-        'Learn new framework features', 
-        'Study the latest updates in the framework we are using', 
-        'day-to-day', 
-        'medium', 
-        'in-progress', 
-        '2025-01-25', 
-        'Mastermind-sap', 
-        'Self'
-    );
+ON CONFLICT (username) DO UPDATE 
+SET schema_name = EXCLUDED.schema_name;

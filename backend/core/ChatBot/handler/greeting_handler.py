@@ -23,7 +23,8 @@ class GreetingHandler:
         self,
         query: str,
         query_type: str,
-        active_session_id: str
+        active_session_id: str,
+        schema_name: str
     ) -> Dict[str, Any]:
         """
         Handle greeting query in the main chat method.
@@ -43,7 +44,7 @@ class GreetingHandler:
         self._update_history(query, greeting_response)
 
         # Save to conversation store
-        self._save_to_conversation_store(query, greeting_response, active_session_id)
+        self._save_to_conversation_store(query, greeting_response, active_session_id, schema_name)
 
         # Build result dictionary
         result = self._build_response_dict(greeting_response, query_type)
@@ -114,7 +115,8 @@ class GreetingHandler:
         self,
         query: str,
         response: str,
-        active_session_id: str
+        active_session_id: str,
+        schema_name: str
     ) -> None:
         """
         Save greeting exchange to conversation store.
@@ -126,10 +128,10 @@ class GreetingHandler:
         """
         try:
             self.chatbot.conversation_store.add_message(
-                active_session_id, "user", query, tokens_used=0
+                active_session_id, "user", query, schema_name=schema_name, tokens_used=0
             )
             self.chatbot.conversation_store.add_message(
-                active_session_id, "assistant", response, tokens_used=0
+                active_session_id, "assistant", response, schema_name=schema_name, tokens_used=0
             )
             self.chatbot.logger.info(
                 f"CONVERSATION_STORE | Saved greeting exchange to session {active_session_id[:8]}..."

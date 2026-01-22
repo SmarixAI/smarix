@@ -120,7 +120,8 @@ class CacheHandler:
         self,
         cached_result: Dict[str, Any],
         query: str,
-        session_id: str
+        session_id: str,
+        schema_name: str
     ) -> Optional[Dict[str, Any]]:
         """
         Handle a cached result, including augmentation and generation hints.
@@ -146,9 +147,9 @@ class CacheHandler:
             )
             
             try:
-                self.chatbot.conversation_store.add_message(session_id, 'user', query, tokens_used=0)
+                self.chatbot.conversation_store.add_message(session_id, 'user', query, schema_name=schema_name,tokens_used=0)
                 self.chatbot.conversation_store.add_message(
-                    session_id, 'assistant', result.get('answer', ''), tokens_used=0
+                    session_id, 'assistant', result.get('answer', ''), schema_name=schema_name, tokens_used=0
                 )
             except Exception as e:
                 self.chatbot.logger.error(f"Failed to save augmented response: {e}")
@@ -175,9 +176,9 @@ class CacheHandler:
             )
             
             try:
-                self.chatbot.conversation_store.add_message(session_id, 'user', query, tokens_used=0)
+                self.chatbot.conversation_store.add_message(session_id, 'user', query, schema_name=schema_name, tokens_used=0)
                 self.chatbot.conversation_store.add_message(
-                    session_id, 'assistant', cached_result.get('answer', ''), tokens_used=0
+                    session_id, 'assistant', cached_result.get('answer', ''), schema_name=schema_name, tokens_used=0
                 )
             except Exception as e:
                 self.chatbot.logger.error(f"Failed to save cached exchange: {e}")

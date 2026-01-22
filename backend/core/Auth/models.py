@@ -57,6 +57,7 @@ class User(Base):
     employee_id = Column(String, unique=True, index=True, nullable=True)
     last_day = Column(Date, nullable=True)
     managers = Column(ArrayType, default=[])
+    schema_name = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

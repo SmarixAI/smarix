@@ -26,7 +26,8 @@ class ChronologicalHandler:
         query: str,
         expanded_query: str,
         active_session_id: str,
-        role: Optional[str] = None
+        role: Optional[str] = None,
+        schema_name: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
         """
         Handle chronological query (first/last issue/PR).
@@ -137,8 +138,8 @@ class ChronologicalHandler:
 
         # Store conversation to database
         try:
-            self.chatbot.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
-            self.chatbot.conversation_store.add_message(active_session_id, "assistant", refined_answer, tokens_used=0)
+            self.chatbot.conversation_store.add_message(active_session_id, "user", query, schema_name=schema_name, tokens_used=0)
+            self.chatbot.conversation_store.add_message(active_session_id, "assistant", refined_answer, schema_name=schema_name, tokens_used=0)
             self.chatbot.logger.info(
                 f"CONVERSATION_STORE | Saved chronological response to session {active_session_id[:8]}...")
         except Exception as e:

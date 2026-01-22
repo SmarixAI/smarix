@@ -77,6 +77,13 @@ class EvaluationResponse(BaseModel):
     areas_for_improvement: List[str]
     evaluated_at: str
 
+class NewSessionRequest(BaseModel):
+    username: str
+
+class ClearHistoryRequest(BaseModel):
+    session_id: str
+    username: str
+
 
 # ==================== HELPER FUNCTIONS ====================
 
@@ -97,6 +104,15 @@ def load_json_file(file_path: str) -> dict:
         raise HTTPException(
             status_code=500, detail=f"Invalid JSON in file: {file_path}"
         )
+    
+
+def get_user_schema_name(username: str) -> str:
+    """Generate schema name from username (must match logic in auth/routes.py)"""
+    if not username:
+        # Fallback for anonymous/public users, or raise HTTPException
+        return "public" 
+    sanitized = re.sub(r"[^a-z0-9_]", "_", username.lower())
+    return f"user_{sanitized}"
 
 
 # ==================== CHAT ENDPOINTS ====================
@@ -323,6 +339,9 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=503, detail=error_detail)
 
     try:
+
+        schema_name = get_user_schema_name(request.username)
+
         # Determine which repo to use based on username
         user_repo = shared.get_user_repo(request.username)
         
@@ -349,6 +368,7 @@ async def chat(request: ChatRequest):
 
         result = shared.chatbot_instance.chat(
             request.query, 
+            get_user_schema_name(request.username),
             request.filters,
             session_id=request.session_id,
             role=request.role or "general"
@@ -396,84 +416,136 @@ async def chat(request: ChatRequest):
 
 
 @router.post("/new-session")
-async def new_session():
-    """Generate a fresh session ID and persist it immediately."""
+async def new_session(request: NewSessionRequest):
+    """Generate a fresh session ID in the user's schema."""
     
     if shared.chatbot_instance is None:
         raise HTTPException(status_code=503, detail="Chatbot not initialized")
 
-    new_session_id = shared.chatbot_instance.start_new_session()
-    print(f"🔄 NEW SESSION CREATED AND STORED: {new_session_id}")
+    schema_name = get_user_schema_name(request.username)
+
+    new_session_id = shared.chatbot_instance.start_new_session(schema_name=schema_name)
+    
+    print(f"NEW SESSION CREATED: {new_session_id} in {schema_name}")
     return {"session_id": new_session_id, "message": "New session created"}
 
-
 @router.post("/clear-history")
-async def clear_history(request: ChatRequest):
-    
+async def clear_history(request: ClearHistoryRequest):
     if shared.chatbot_instance is None:
         raise HTTPException(status_code=503, detail="Chatbot not initialized")
 
+    schema_name = get_user_schema_name(request.username) 
+
     session_id = shared.chatbot_instance.set_session(request.session_id)
-    shared.chatbot_instance.conversation_store.clear_session(session_id)
-    print(f"History cleared for session {session_id[:8]}...\n")
+    
+    shared.chatbot_instance.conversation_store.clear_session(
+        session_id, 
+        schema_name=schema_name 
+    )
+    print(f"History cleared for session {session_id[:8]} in {schema_name}...\n")
 
     return {"status": "success", "message": "Session history cleared"}
 
 
 @router.get("/sessions")
-async def get_sessions(limit: int = 50):
-    """List recent sessions with metadata"""
-    
+async def get_sessions(username: str, limit: int = 50):
     if shared.chatbot_instance is None:
         raise HTTPException(status_code=503, detail="Chatbot not initialized")
 
     try:
-        sessions = []
-        all_sessions = shared.chatbot_instance.conversation_store.get_all_sessions(limit=limit)
+        schema_name = get_user_schema_name(username)
 
+        all_sessions = shared.chatbot_instance.conversation_store.get_all_sessions(
+            limit=limit, 
+            schema_name=schema_name
+        )
+
+        sessions = []
         for session_data in all_sessions:
-            stats = shared.chatbot_instance.conversation_store.get_session_stats(session_data['session_id'])
             sessions.append({
                 'session_id': session_data['session_id'],
                 'title': session_data.get('title', 'New Chat'),
-                'message_count': stats.get('message_count', 0),
-                'last_message': stats.get('last_message', ''),
-                'first_message': stats.get('first_message', ''),
-                'total_tokens': stats.get('total_tokens', 0)
+                'message_count': session_data.get('message_count', 0),
+                'last_message': str(session_data.get('updated_at', '')),
+                'first_message': str(session_data.get('created_at', '')),
+                'total_tokens': 0
             })
 
+        print(f"📋 Returning {len(sessions)} sessions to frontend")
         return {'sessions': sessions}
+        
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
 @router.get("/load-session/{session_id}")
-async def load_session(session_id: str):
-    
+async def load_session(session_id: str, username: str):
     if shared.chatbot_instance is None:
         raise HTTPException(status_code=503, detail="Chatbot not initialized")
 
     try:
-        messages = shared.chatbot_instance.conversation_store.get_full_history(session_id)
-        shared.chatbot_instance.set_session(session_id)
+        schema_name = get_user_schema_name(username)
+        print(f"📖 Loading session {session_id} from schema: {schema_name}")  # Debug
+        
+        # Try to get messages - handle empty case
+        try:
+            messages = shared.chatbot_instance.conversation_store.get_full_history(
+                session_id, 
+                schema_name=schema_name
+            )
+            print(f"📖 Retrieved {len(messages)} messages")  # Debug
+        except Exception as msg_error:
+            print(f"⚠️ Error fetching messages: {msg_error}")
+            import traceback
+            traceback.print_exc()  # Full traceback
+            # Return empty messages instead of failing
+            messages = []
+        
+        # Set current session
+        shared.chatbot_instance.set_session(session_id, schema_name)
+        
+        # Try to get stats - handle empty case
+        try:
+            stats = shared.chatbot_instance.conversation_store.get_session_stats(
+                session_id, 
+                schema_name=schema_name
+            )
+        except Exception as stats_error:
+            print(f"⚠️ Error fetching stats: {stats_error}")
+            # Return default stats instead of failing
+            stats = {
+                'message_count': 0,
+                'last_message': '',
+                'first_message': '',
+                'total_tokens': 0
+            }
 
         return {
             'session_id': session_id,
             'messages': messages,
-            'stats': shared.chatbot_instance.conversation_store.get_session_stats(session_id)
+            'stats': stats
         }
     except Exception as e:
+        print(f"❌ Full exception in /load-session: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.delete("/delete-session/{session_id}")
-async def delete_session(session_id: str):
-    
+async def delete_session(session_id: str, username: str):
     if shared.chatbot_instance is None:
         raise HTTPException(status_code=503, detail="Chatbot not initialized")
 
     try:
-        shared.chatbot_instance.conversation_store.delete_session(session_id)
+        schema_name = get_user_schema_name(username)
+        shared.chatbot_instance.conversation_store.delete_session(
+            session_id, 
+            schema_name=schema_name
+        )
         return {"status": "success", "message": "Session deleted"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

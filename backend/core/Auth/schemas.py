@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import date, datetime
 import uuid
 
@@ -26,6 +26,7 @@ class UserResponse(UserBase):
 class Token(BaseModel):
     access_token: str
     token_type: str
+    user: Optional[Dict[str, Any]] = None
 
 class TaskBase(BaseModel):
     title: str

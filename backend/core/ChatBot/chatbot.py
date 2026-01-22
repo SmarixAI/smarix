@@ -257,37 +257,43 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             print(f"Logging: {log_file}")
         print("=" * 70)
 
-    def _ensure_session(self, session_id: Optional[str] = None) -> str:
+    def _ensure_session(self, session_id: Optional[str] = None, schema_name: str = None) -> str:
+        if not schema_name:
+             self.logger.warning("No schema_name provided to _ensure_session")
+             
         if session_id:
-            if not self.conversation_store.session_exists(session_id):
-                self.conversation_store.create_session(session_id)
+            if not self.conversation_store.session_exists(session_id, schema_name=schema_name):
+                self.conversation_store.create_session(session_id, schema_name=schema_name)
             self.current_session_id = session_id
             return session_id
 
         if self.current_session_id:
+            if not self.conversation_store.session_exists(self.current_session_id, schema_name=schema_name):
+                 self.conversation_store.create_session(self.current_session_id, schema_name=schema_name)
             return self.current_session_id
 
         new_id = str(uuid.uuid4())
-        self.conversation_store.create_session(new_id)
+        self.conversation_store.create_session(new_id, schema_name=schema_name)
         self.current_session_id = new_id
         return new_id
 
-    def start_new_session(self) -> str:
+    def start_new_session(self, schema_name: str) -> str:
         """Create a new empty session in DB and set it as current."""
-        # force new id
         self.current_session_id = None
-        new_session_id = self._ensure_session(None)
+        # Pass schema_name
+        new_session_id = self._ensure_session(None, schema_name=schema_name)
 
         try:
-            self.conversation_store.create_session(new_session_id, user_id=None, metadata={})
-            self.logger.info(f"CONVERSATION_STORE | Created new conversation row for {new_session_id[:8]}...")
+            # Pass schema_name
+            self.conversation_store.create_session(new_session_id, schema_name=schema_name, user_id=None, metadata={})
+            self.logger.info(f"CONVERSATION_STORE | Created new conversation row for {new_session_id[:8]} in {schema_name}...")
         except Exception as e:
             self.logger.error(f"CONVERSATION_STORE | Failed to create new session row: {e}")
 
         return new_session_id
 
-    def set_session(self, session_id: Optional[str]) -> str:
-        return self._ensure_session(session_id)
+    def set_session(self, session_id: Optional[str], schema_name: str) -> str:
+        return self._ensure_session(session_id, schema_name)
 
     def get_session_id(self) -> Optional[str]:
         return self.current_session_id
@@ -319,13 +325,13 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         self.logger.info("=" * 80)
 
 
-    def chat(self, query: str, filters: Optional[Dict] = None, session_id: Optional[str] = None, role: Optional[str] = None) -> Dict[str, Any]:
+    def chat(self, query: str, schema_name: str, filters: Optional[Dict] = None, session_id: Optional[str] = None, role: Optional[str] = None) -> Dict[str, Any]:
         if role is None:
             role = "general"
         
         self.logger.info("=" * 80)
         self.logger.info(f"NEW QUERY | {query}")
-        active_session_id = self._ensure_session(session_id)
+        active_session_id = self._ensure_session(session_id, schema_name=schema_name)
 
         # STEP 1: UPDATE CACHE AGES (runs periodically)
         self.cache_handler.update_cache_ages()
@@ -335,7 +341,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         cached_result = self.cache_handler.get_semantic_cache(query, active_session_id)
 
         if cached_result:
-            result = self.cache_handler.handle_cached_result(cached_result, query, active_session_id)
+            result = self.cache_handler.handle_cached_result(cached_result, query, active_session_id, schema_name=schema_name)
             if result:
                 self.logger.info(f"DIRECT CACHE HIT | confidence={result.get('cache_confidence', 'N/A')}")
                 return result
@@ -373,7 +379,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         if self.is_greeting(query):
             query_type = QueryType.GREETING
             self.logger.info("CLASSIFICATION | Rule-based: GREETING (detected early)")
-            return self.greeting_handler.handle_greeting(query, query_type, active_session_id)
+            return self.greeting_handler.handle_greeting(query, query_type, active_session_id, schema_name=schema_name)
 
         # Early entity detection to decide if rewriting is needed
         has_pr = bool(re.search(r'\bPR\s*#?\s*\d+|\bpull request\s*#?\s*\d+', query, re.IGNORECASE))
@@ -384,7 +390,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
 
         # SESSION CONTEXT REWRITING (skip for PR/Issue/Commit queries)
         if active_session_id and not skip_rewrite:
-            session_context_query = self.query_rewriter.rewrite(query, active_session_id)
+            session_context_query = self.query_rewriter.rewrite(query, active_session_id, schema_name=schema_name)
             if session_context_query and session_context_query != query:
                 self.logger.info(f"SESSION REWRITE | '{query}' -> '{session_context_query}'")
                 if self.verbose:
@@ -413,7 +419,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
                 subqueries = self.multi_query_handler.split_into_subqueries(query)
                 if len(subqueries) > 1:
                     self.logger.info(f"MULTI-QUERY | Detected {len(subqueries)} sub-questions")
-                    return self.multi_query_handler.handle_multi_query(subqueries, query, active_session_id)
+                    return self.multi_query_handler.handle_multi_query(subqueries, query, active_session_id, schema_name=schema_name)
 
         # STEP 3: Classify query into QueryType (using rewritten/expanded query)
         #         Determines query category: HOW_TO, CODE_LOCATION, CONCEPTUAL, etc.
@@ -432,9 +438,9 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             self.cache_handler.update_caches(query, result, active_session_id)
 
             try:
-                self.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
+                self.conversation_store.add_message(active_session_id, "user", query, schema_name=schema_name,  tokens_used=0)
                 self.conversation_store.add_message(
-                    active_session_id, "assistant", result.get("answer", ""), tokens_used=0
+                    active_session_id, "assistant", result.get("answer", ""), schema_name=schema_name, tokens_used=0
                 )
             except Exception as e:
                 self.logger.error(f"CONVERSATION_STORE | Failed to save tutorial exchange: {e}")
@@ -452,9 +458,9 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             self.cache_handler.update_caches(query, result, active_session_id)
 
             try:
-                self.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
+                self.conversation_store.add_message(active_session_id, "user", query, schema_name=schema_name, tokens_used=0)
                 self.conversation_store.add_message(
-                    active_session_id, "assistant", result.get("answer", ""), tokens_used=0
+                    active_session_id, "assistant", result.get("answer", ""), schema_name=schema_name, tokens_used=0
                 )
             except Exception as e:
                 self.logger.error(f"CONVERSATION_STORE | Failed to save coding-question exchange: {e}")
@@ -508,7 +514,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             or "mr" in query_lower
         ):
             result = self.pr_handler.handle_pr_override(
-                raw_num, query, expanded_query, query_lower, query_type, active_session_id, role=role
+                raw_num, query, expanded_query, query_lower, query_type, active_session_id, role=role, schema_name=schema_name
             )
             if result:
                 # Store RAW query
@@ -535,7 +541,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             or "report" in query_lower
         ):
             result = self.issue_handler.handle_issue_override(
-                raw_num, query, expanded_query, query_type, active_session_id, role=role
+                raw_num, query, expanded_query, query_type, active_session_id, role=role, schema_name=schema_name
             )
             if result:
                 # Store RAW query
@@ -556,7 +562,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         raw_sha = re.search(r'\b([a-f0-9]{7,40})\b', expanded_query.lower())
         if query_type == QueryType.COMMIT_SPECIFIC and raw_sha:
             result = self.commit_handler.handle_commit_override(
-                raw_sha, query, expanded_query, query_lower, query_type, active_session_id, role=role
+                raw_sha, query, expanded_query, query_lower, query_type, active_session_id, role=role, schema_name=schema_name
             )
             if result:
                 # Store RAW query
@@ -574,7 +580,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         #         Routes to appropriate index: docs, code, prs, commits, or combined
         #         Then searches both routed index AND combined index, merges results
         if query_type == QueryType.GREETING:
-            return self.greeting_handler.handle_greeting(query, query_type, active_session_id)
+            return self.greeting_handler.handle_greeting(query, query_type, active_session_id, schema_name=schema_name)
 
         chrono_query = self.detect_chronological_query(expanded_query)
 
@@ -585,7 +591,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
 
         if chrono_query:
             result = self.chronological_handler.handle_chronological(
-                chrono_query, query, expanded_query, active_session_id, role=role
+                chrono_query, query, expanded_query, active_session_id, role=role, schema_name=schema_name
             )
             if result:
                 # Store RAW query
@@ -594,7 +600,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             
         if query_type == QueryType.TRACEABILITY and entity:
             result = self.traceability_handler.handle_traceability(
-                entity, query, expanded_query, active_session_id, role=role
+                entity, query, expanded_query, active_session_id, role=role, schema_name=schema_name
             )
             if result:
                 # Store RAW query
@@ -603,7 +609,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
 
         # Non-chronological / general flow
         result = self.general_query_handler.handle_general_query(
-            query, expanded_query, query_type, entity, keywords, active_session_id, role=role
+            query, expanded_query, query_type, entity, keywords, active_session_id, role=role, schema_name=schema_name
         )
         # Store RAW query for general queries too
         self.cache_handler.update_caches(query, result, active_session_id)
@@ -641,12 +647,12 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         """
         return self.multi_query_handler.split_into_subqueries(query)
 
-    def handle_multi_query(self, subqueries: List[str], original_query: str, session_id: str) -> Dict[str, Any]:
+    def handle_multi_query(self, subqueries: List[str], original_query: str, session_id: str, schema_name: str) -> Dict[str, Any]:
         """
         Process multiple sub-queries and merge results into SINGLE response.
         CRITICAL: Pass filters={'is_subquery': True} to skip rewrite/multi-query recursion.
         """
-        return self.multi_query_handler.handle_multi_query(subqueries, original_query, session_id)
+        return self.multi_query_handler.handle_multi_query(subqueries, original_query, session_id, schema_name=schema_name)
 
     def merge_multi_answers(self, results: List[Dict[str, Any]], original_query: str) -> Dict[str, Any]:
         """

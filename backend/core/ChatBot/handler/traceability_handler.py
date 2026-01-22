@@ -25,7 +25,8 @@ class TraceabilityHandler:
         query: str,
         expanded_query: str,
         active_session_id: str,
-        role: Optional[str] = None
+        role: Optional[str] = None,
+        schema_name: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
         """
         Handle traceability query for PR or Issue.
@@ -70,7 +71,7 @@ class TraceabilityHandler:
             self._update_caches(query, result, active_session_id)
             
             # Save conversation
-            self._save_conversation(active_session_id, query, result)
+            self._save_conversation(active_session_id, query, result, schema_name=schema_name)
             
             return result
         else:
@@ -81,11 +82,11 @@ class TraceabilityHandler:
         """Update semantic and response caches."""
         self.chatbot.cache_handler.update_caches(query, result, active_session_id)
     
-    def _save_conversation(self, active_session_id: str, query: str, result: Dict[str, Any]):
+    def _save_conversation(self, active_session_id: str, query: str, result: Dict[str, Any], schema_name: Optional[str] = None):
         """Save conversation to conversation store."""
         try:
-            self.chatbot.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
-            self.chatbot.conversation_store.add_message(active_session_id, "assistant", result.get("answer", ""), tokens_used=0)
+            self.chatbot.conversation_store.add_message(active_session_id, "user", query, schema_name=schema_name, tokens_used=0)
+            self.chatbot.conversation_store.add_message(active_session_id, "assistant", result.get("answer", ""), schema_name=schema_name, tokens_used=0)
         except Exception as e:
             self.chatbot.logger.error(f"CONVERSATION_STORE | Failed to save: {e}")
 
