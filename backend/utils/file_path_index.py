@@ -21,7 +21,7 @@ Usage:
 from typing import Dict, List, Set, Optional, Tuple
 from collections import defaultdict
 import logging
-from utils.path_normalizer import normalize_path
+from utils.path_normalizer import normalize_path, extract_filename
 
 logger = logging.getLogger(__name__)
 

@@ -191,32 +191,90 @@ class RetrievalMixin(
                         seen_chunk_ids.add(chunk_id)
                 
                 # Add vector search results with path-based boost
+                # BUT: For file queries, only add vector results if they match the exact file
                 file_intent = self._detect_file_query_intent(query_text, keywords)
                 filename_hints = file_intent.get('filename_hints', [])
                 directory_hints = file_intent.get('directory_hints', [])
+                requested_file_paths = file_intent.get('file_paths', [])
+                
+                self.logger.info(
+                    f"FILE_RETRIEVAL | Merging vector results: "
+                    f"file_paths={requested_file_paths}, filename_hints={filename_hints}, "
+                    f"vector_results_count={len(vector_results)}"
+                )
                 
                 for result in vector_results:
+                    from utils.metadata_normalizer import MetadataNormalizer
+                    meta_norm = MetadataNormalizer(result.get('metadata', {}), result)
+                    result_file_path = meta_norm.get_file_path('')
+                    result_filename = meta_norm.get_filename('')
+                    chunk_type = meta_norm.get_chunk_type('')
+                    
+                    # For file queries, STRICTLY filter vector results to only exact matches
+                    matches_file_query = False
+                    
+                    # Check if this result matches any requested file path
+                    if requested_file_paths:
+                        for requested_path in requested_file_paths:
+                            if result_file_path and (
+                                result_file_path.lower() == requested_path.lower() or
+                                result_file_path.lower().endswith(requested_path.lower())
+                            ):
+                                matches_file_query = True
+                                self.logger.info(
+                                    f"FILE_RETRIEVAL | Vector result matches file path: "
+                                    f"'{result_file_path}' matches '{requested_path}'"
+                                )
+                                break
+                    
+                    # Check if this result matches any requested filename
+                    if not matches_file_query and filename_hints:
+                        for filename_hint in filename_hints:
+                            if result_filename and result_filename.lower() == filename_hint.lower():
+                                matches_file_query = True
+                                self.logger.info(
+                                    f"FILE_RETRIEVAL | Vector result matches filename: "
+                                    f"'{result_filename}' matches '{filename_hint}'"
+                                )
+                                break
+                    
+                    # Only add vector results that match the file query
+                    # For CODE_LOCATION queries, we want STRICT matching - only exact file matches
+                    if not matches_file_query:
+                        # Filter out non-matching files from vector search
+                        self.logger.debug(
+                            f"FILE_RETRIEVAL | Filtering out vector result: "
+                            f"file='{result_file_path}', filename='{result_filename}', "
+                            f"type='{chunk_type}', score={result.get('score', 0)}, "
+                            f"doesn't match requested files {requested_file_paths} or filename hints {filename_hints}"
+                        )
+                        continue
+                    
                     chunk_id = result.get('chunk_id')
                     if not chunk_id:
                         chunk_id = id(result)
                     
                     if chunk_id in seen_chunk_ids:
                         # Already have this from file index, skip
+                        self.logger.debug(
+                            f"FILE_RETRIEVAL | Skipping duplicate chunk_id: {chunk_id}"
+                        )
                         continue
                     
                     # Apply path-based boost if file path matches
-                    from utils.metadata_normalizer import MetadataNormalizer
-                    meta_norm = MetadataNormalizer(result.get('metadata', {}), result)
-                    file_path = meta_norm.get_file_path('')
+                    file_path_lower = result_file_path.lower() if result_file_path else ''
+                    original_score = result.get('score', 0)
                     
-                    if file_path:
-                        file_path_lower = file_path.lower()
-                        original_score = result.get('score', 0)
-                        
-                        # Boost for filename matches
+                    if file_path_lower:
+                        # Boost for exact filename matches
                         for filename_hint in filename_hints:
-                            if filename_hint in file_path_lower:
-                                result['score'] = original_score + 3.0  # Strong boost
+                            if result_filename and result_filename.lower() == filename_hint.lower():
+                                result['score'] = original_score + 5.0  # Very strong boost for exact match
+                                self.logger.info(
+                                    f"FILE_RETRIEVAL | Exact filename match boost: "
+                                    f"'{result_filename}' == '{filename_hint}', "
+                                    f"score: {original_score} -> {result['score']}"
+                                )
                                 break
                         
                         # Boost for directory matches
@@ -224,11 +282,12 @@ class RetrievalMixin(
                             if dir_hint in file_path_lower:
                                 result['score'] = result.get('score', original_score) + 1.5
                                 break
-                        
-                        # Boost for any path match in query
-                        if any(hint in query_text.lower() for hint in [file_path_lower.split('/')[-1], file_path_lower.split('\\')[-1]]):
-                            result['score'] = result.get('score', original_score) + 2.0
                     
+                    self.logger.info(
+                        f"FILE_RETRIEVAL | Adding vector result: "
+                        f"file='{result_file_path}', filename='{result_filename}', "
+                        f"score={result.get('score', 0)}, chunk_id={chunk_id}"
+                    )
                     merged_results[chunk_id] = result
                 
                 # Convert back to list and sort by score

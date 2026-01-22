@@ -167,7 +167,8 @@ class CodeChunksLoader:
         self, 
         file_path: str,
         repo_owner: Optional[str] = None,
-        repo_name: Optional[str] = None
+        repo_name: Optional[str] = None,
+        exact_match_only: bool = False
     ) -> List[Dict]:
         """
         Get all chunks for a specific file path.
@@ -176,6 +177,7 @@ class CodeChunksLoader:
             file_path: File path to search for
             repo_owner: Repository owner (optional, for loading if needed)
             repo_name: Repository name (for loading if needed)
+            exact_match_only: If True, only return exact path matches (no partial matches)
             
         Returns:
             List of chunks matching the file path
@@ -188,10 +190,22 @@ class CodeChunksLoader:
         # Normalize the search path
         normalized_path = normalize_path(file_path, '')
         if not normalized_path:
+            logger.debug(f"CODE_CHUNKS_LOADER | Empty normalized path for '{file_path}'")
             return []
         
         # Get chunks from index
         chunks = self._file_path_index.get(normalized_path, [])
+        
+        if exact_match_only:
+            # Only return exact matches
+            exact_chunks = []
+            for chunk in chunks:
+                chunk_path = chunk.get('file_path', '')
+                chunk_normalized = normalize_path(chunk_path, '')
+                if chunk_normalized == normalized_path:
+                    exact_chunks.append(chunk)
+            chunks = exact_chunks
+            logger.debug(f"CODE_CHUNKS_LOADER | Exact match only: found {len(chunks)} chunks for '{normalized_path}'")
         
         # Filter by repo if specified
         if repo_name:
@@ -202,9 +216,13 @@ class CodeChunksLoader:
                 
                 if repo_matches(chunk_repo, chunk_owner, repo_name, repo_owner):
                     filtered_chunks.append(chunk)
+                else:
+                    logger.debug(f"CODE_CHUNKS_LOADER | Repo filter: chunk repo '{chunk_repo}/{chunk_owner}' doesn't match '{repo_name}/{repo_owner}'")
             
+            logger.info(f"CODE_CHUNKS_LOADER | Found {len(filtered_chunks)} chunks for file '{normalized_path}' (repo filtered)")
             return filtered_chunks
         
+        logger.info(f"CODE_CHUNKS_LOADER | Found {len(chunks)} chunks for file '{normalized_path}'")
         return chunks
     
     def search_files(

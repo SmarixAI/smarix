@@ -332,9 +332,15 @@ class RepoFilterMixin:
             
             # Try exact file paths first
             if file_paths:
+                self.logger.info(
+                    f"FILE_INDEX | Searching for exact file paths in '{index_type}' index: {file_paths}"
+                )
                 chunks = index_db.get_by_file_paths(file_paths)
+                self.logger.info(f"FILE_INDEX | Found {len(chunks)} chunks from file path index")
+                
                 for chunk in chunks:
                     if not self._chunk_matches_repo(chunk):
+                        self.logger.debug(f"FILE_INDEX | Chunk {chunk.get('chunk_id')} filtered by repo")
                         continue
                     
                     chunk_id = chunk.get('chunk_id')
@@ -343,19 +349,46 @@ class RepoFilterMixin:
                         from utils.metadata_normalizer import MetadataNormalizer
                         meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
                         chunk_type = meta_norm.get_chunk_type('')
+                        chunk_file_path = meta_norm.get_file_path('')
+                        chunk_filename = meta_norm.get_filename('')
                         
                         # Filter out PR/issue chunks
                         if chunk_type in ['pr', 'issue', 'email']:
+                            self.logger.debug(
+                                f"FILE_INDEX | Chunk {chunk_id} filtered: type '{chunk_type}' is not code"
+                            )
                             continue
                         
-                        all_results.append({
-                            'chunk_id': chunk_id,
-                            'metadata': chunk.get('metadata', {}),
-                            'content': chunk.get('content', ''),
-                            'score': 15.0 if index_type == 'code' else 12.0,  # Very high for exact match
-                            'source': f'file_index_{index_type}',
-                            'match_type': 'exact_path'
-                        })
+                        # Verify this chunk actually matches one of the requested file paths
+                        chunk_matches = False
+                        for requested_path in file_paths:
+                            if chunk_file_path and (
+                                chunk_file_path.lower() == requested_path.lower() or
+                                chunk_file_path.lower().endswith(requested_path.lower()) or
+                                requested_path.lower() in chunk_file_path.lower()
+                            ):
+                                chunk_matches = True
+                                break
+                        
+                        if chunk_matches:
+                            self.logger.info(
+                                f"FILE_INDEX | Adding chunk: file_path='{chunk_file_path}', "
+                                f"filename='{chunk_filename}', chunk_id={chunk_id}, "
+                                f"type='{chunk_type}', score=15.0"
+                            )
+                            all_results.append({
+                                'chunk_id': chunk_id,
+                                'metadata': chunk.get('metadata', {}),
+                                'content': chunk.get('content', ''),
+                                'score': 15.0 if index_type == 'code' else 12.0,  # Very high for exact match
+                                'source': f'file_index_{index_type}',
+                                'match_type': 'exact_path'
+                            })
+                        else:
+                            self.logger.warning(
+                                f"FILE_INDEX | Chunk file_path '{chunk_file_path}' doesn't match "
+                                f"requested paths {file_paths} - SKIPPING"
+                            )
             
             # Try filename-based search in file path index
             if filename_hints and hasattr(index_db, 'search_file_paths'):
@@ -377,9 +410,27 @@ class RepoFilterMixin:
                                 if chunk_type in ['pr', 'issue', 'email']:
                                     continue
                                 
-                                # Check if filename matches
+                                # Check if filename matches - STRICT MATCHING
                                 file_path = meta_norm.get_file_path('')
-                                if file_path and filename_hint in file_path.lower():
+                                filename = meta_norm.get_filename('')
+                                
+                                # Only match if filename exactly matches (case-insensitive)
+                                is_exact_match = False
+                                if filename:
+                                    is_exact_match = filename.lower() == filename_hint.lower()
+                                
+                                # Also check if the full path ends with the filename hint
+                                if not is_exact_match and file_path:
+                                    from utils.path_normalizer import extract_filename
+                                    path_filename = extract_filename(file_path)
+                                    if path_filename:
+                                        is_exact_match = path_filename.lower() == filename_hint.lower()
+                                
+                                if is_exact_match:
+                                    self.logger.info(
+                                        f"FILE_INDEX | Exact filename match: '{filename}' == '{filename_hint}' "
+                                        f"(file_path: '{file_path}', chunk_id: {chunk_id})"
+                                    )
                                     all_results.append({
                                         'chunk_id': chunk_id,
                                         'metadata': chunk.get('metadata', {}),
@@ -388,6 +439,11 @@ class RepoFilterMixin:
                                         'source': f'file_index_{index_type}',
                                         'match_type': 'filename_match'
                                     })
+                                else:
+                                    self.logger.debug(
+                                        f"FILE_INDEX | Filename mismatch: '{filename}' != '{filename_hint}' "
+                                        f"(file_path: '{file_path}') - SKIPPING"
+                                    )
         
         # Step 3: Try directory-based search if directory hints exist
         if directory_hints and hasattr(self, 'multi_index_store') and self.multi_index_store:
@@ -630,13 +686,20 @@ class RepoFilterMixin:
                 repo_owner = getattr(self, 'repo_owner', None)
                 repo_name = getattr(self, 'repo_name', None)
                 
-                # Try exact file paths first
+                # Try exact file paths first - STRICT MATCHING ONLY
                 if file_paths:
+                    self.logger.info(f"CODE_CHUNKS_JSON | Searching for {len(file_paths)} file paths: {file_paths}")
                     for file_path in file_paths:
+                        # Use exact_match_only=True to ensure we only get the exact file
                         chunks = code_loader.get_chunks_by_file_path(
                             file_path,
                             repo_owner,
-                            repo_name
+                            repo_name,
+                            exact_match_only=True  # STRICT: Only exact matches
+                        )
+                        
+                        self.logger.info(
+                            f"CODE_CHUNKS_JSON | File path '{file_path}': found {len(chunks)} chunks"
                         )
                         
                         for chunk in chunks:
@@ -653,12 +716,31 @@ class RepoFilterMixin:
                                     continue
                                 
                                 # Extract content from code_chunks.json format
+                                # Content is stored as content.content in code_chunks.json
                                 content = chunk.get('content', {})
                                 if isinstance(content, dict):
-                                    # Handle nested content structure
-                                    content_text = content.get('content', '') or str(content)
+                                    # Handle nested content structure - code is in content.content
+                                    content_text = content.get('content', '')
+                                    if not content_text:
+                                        # Fallback: try to get from raw_data
+                                        raw_data = chunk.get('raw_data', {})
+                                        if isinstance(raw_data, dict):
+                                            content_text = raw_data.get('content', '')
+                                    if not content_text:
+                                        content_text = str(content)
                                 else:
                                     content_text = str(content) if content else ''
+                                
+                                # Log what we're returning
+                                chunk_file_path = chunk.get('file_path', '')
+                                chunk_filename = chunk.get('filename', '')
+                                self.logger.info(
+                                    f"CODE_CHUNKS_JSON | Returning chunk for file: '{chunk_file_path}' "
+                                    f"(filename: '{chunk_filename}'), "
+                                    f"requested: '{file_path}', "
+                                    f"content_length: {len(content_text)}, "
+                                    f"chunk_id: {chunk_id}"
+                                )
                                 
                                 # Build metadata in expected format
                                 chunk_metadata = chunk.get('metadata', {})
@@ -683,20 +765,40 @@ class RepoFilterMixin:
                                     'match_type': 'code_chunks_fallback'
                                 })
                 
-                # Try filename search in code chunks
+                # Try filename search in code chunks - ONLY if no results from exact paths
+                # For filename-only queries, we need to be strict about matching
                 if not unique_results and filename_hints:
+                    self.logger.info(f"CODE_CHUNKS_JSON | No results from exact paths, trying filename hints: {filename_hints}")
                     for filename_hint in filename_hints:
+                        # Search for files matching this filename
                         found_paths = code_loader.search_files(
                             filename_hint, 
                             repo_owner, 
                             repo_name, 
                             limit=10
                         )
+                        self.logger.info(
+                            f"CODE_CHUNKS_JSON | Filename hint '{filename_hint}': found {len(found_paths)} paths: {found_paths[:5]}"
+                        )
+                        
+                        # Filter to only exact filename matches
+                        exact_filename_matches = []
                         for file_path in found_paths:
+                            from utils.path_normalizer import extract_filename
+                            path_filename = extract_filename(file_path)
+                            if path_filename and path_filename.lower() == filename_hint.lower():
+                                exact_filename_matches.append(file_path)
+                                self.logger.info(
+                                    f"CODE_CHUNKS_JSON | Exact filename match: '{path_filename}' == '{filename_hint}'"
+                                )
+                        
+                        # Only use exact filename matches
+                        for file_path in exact_filename_matches:
                             chunks = code_loader.get_chunks_by_file_path(
                                 file_path,
                                 repo_owner,
-                                repo_name
+                                repo_name,
+                                exact_match_only=True  # STRICT: Only exact matches
                             )
                             
                             for chunk in chunks:
@@ -712,9 +814,18 @@ class RepoFilterMixin:
                                     if chunk_type in ['pr', 'issue', 'email']:
                                         continue
                                     
+                                    # Extract content from code_chunks.json format
                                     content = chunk.get('content', {})
                                     if isinstance(content, dict):
-                                        content_text = content.get('content', '') or str(content)
+                                        # Handle nested content structure - code is in content.content
+                                        content_text = content.get('content', '')
+                                        if not content_text:
+                                            # Fallback: try to get from raw_data
+                                            raw_data = chunk.get('raw_data', {})
+                                            if isinstance(raw_data, dict):
+                                                content_text = raw_data.get('content', '')
+                                        if not content_text:
+                                            content_text = str(content)
                                     else:
                                         content_text = str(content) if content else ''
                                     
@@ -730,6 +841,17 @@ class RepoFilterMixin:
                                             'language': chunk.get('language', ''),
                                         }
                                     
+                                    # Log what we're returning
+                                    chunk_file_path = chunk.get('file_path', '')
+                                    chunk_filename = chunk.get('filename', '')
+                                    self.logger.info(
+                                        f"CODE_CHUNKS_JSON | Returning chunk from filename search: "
+                                        f"file='{chunk_file_path}' (filename: '{chunk_filename}'), "
+                                        f"searched for: '{filename_hint}', "
+                                        f"content_length: {len(content_text)}, "
+                                        f"chunk_id: {chunk_id}"
+                                    )
+                                    
                                     unique_results.append({
                                         'chunk_id': chunk_id,
                                         'metadata': chunk_metadata,
@@ -742,19 +864,45 @@ class RepoFilterMixin:
                     if unique_results:
                         self.logger.info(f"CODE_CHUNKS_FALLBACK | Found {len(unique_results)} chunks from code_chunks.json")
         
-        # Log results for debugging
+        # Log results for debugging with detailed information
         if unique_results:
-            self.logger.info(f"FILE_PATH_RETRIEVAL | Found {len(unique_results)} chunks from file index")
+            self.logger.info(f"FILE_PATH_RETRIEVAL | Found {len(unique_results)} chunks from file retrieval")
             match_types = {}
+            file_paths_returned = set()
             for r in unique_results:
                 match_type = r.get('match_type', 'unknown')
                 match_types[match_type] = match_types.get(match_type, 0) + 1
+                
+                # Log file paths being returned
+                meta_norm = MetadataNormalizer(r.get('metadata', {}), r)
+                file_path = meta_norm.get_file_path('')
+                filename = meta_norm.get_filename('')
+                if file_path:
+                    file_paths_returned.add(file_path)
+            
             self.logger.info(f"FILE_PATH_RETRIEVAL | Match types: {match_types}")
+            self.logger.info(
+                f"FILE_PATH_RETRIEVAL | Files being returned ({len(file_paths_returned)}): "
+                f"{list(file_paths_returned)[:10]}"
+            )
+            self.logger.info(
+                f"FILE_PATH_RETRIEVAL | Requested file paths: {file_paths}, "
+                f"Requested filename hints: {filename_hints}"
+            )
         else:
             # Log that no results were found and provide suggestions
             suggestions = self._get_file_suggestions(query_text, limit=3)
             if suggestions:
-                self.logger.warning(f"FILE_PATH_RETRIEVAL | No exact matches found. Suggestions: {suggestions[:3]}")
+                self.logger.warning(
+                    f"FILE_PATH_RETRIEVAL | No exact matches found for query '{query_text}'. "
+                    f"Requested: paths={file_paths}, filename_hints={filename_hints}. "
+                    f"Suggestions: {suggestions[:3]}"
+                )
+            else:
+                self.logger.warning(
+                    f"FILE_PATH_RETRIEVAL | No results found for query '{query_text}'. "
+                    f"Requested: paths={file_paths}, filename_hints={filename_hints}"
+                )
         
         # For file-specific queries, return ALL chunks (no limit)
         # This ensures we get the complete file content
