@@ -8,6 +8,7 @@ Each folder contains:
 """
 
 import os
+import sys
 import json
 import numpy as np
 from pathlib import Path
@@ -16,6 +17,11 @@ import pickle
 import networkx as nx
 from collections import defaultdict
 import re
+
+# Add backend directory to sys.path to resolve utils imports
+backend_dir = Path(__file__).resolve().parent.parent.parent
+if str(backend_dir) not in sys.path:
+    sys.path.insert(0, str(backend_dir))
 
 
 STATE_FILE = Path(
