@@ -120,14 +120,20 @@ class RetrievalMixin(
         if query_type == QueryType.FLOW_ARCHITECTURE:
             retrieve_k = top_k or self.top_k * 6
         elif query_type in [QueryType.HOW_TO, QueryType.CODE_LOCATION]:
-            # For CODE_LOCATION, try file path index first if file paths detected
+            # HYBRID APPROACH: File index + Vector search with path-based boosts
+            file_path_results = []
             if query_type == QueryType.CODE_LOCATION and query_text:
                 file_path_results = self._retrieve_by_file_path(query_text, keywords)
                 if file_path_results:
                     self.logger.info(f"FILE_PATH_INDEX | Found {len(file_path_results)} chunks via file path index")
-                    return file_path_results
             
             retrieve_k = top_k or self.top_k * 4
+            
+            # Always do vector search as well (for semantic matches)
+            # Then merge with file index results and apply path-based boosts
+            if query_type == QueryType.CODE_LOCATION:
+                # We'll merge results after vector search
+                pass
         elif query_type in [QueryType.PR_ISSUE_TUTORIAL, QueryType.PR_ISSUE_CODING_QUESTION]:
             retrieve_k = top_k or self.top_k * 8
         elif query_type == QueryType.RANDOM_PR_GENERATOR:
@@ -162,11 +168,107 @@ class RetrievalMixin(
 
         # Regular similarity search
         repo_filters = self._get_repo_filters()
-        results = self.db.search(query_embedding, top_k=retrieve_k, filters=repo_filters)
+        vector_results = self.db.search(query_embedding, top_k=retrieve_k, filters=repo_filters)
         
         # CRITICAL: Post-filter to ensure only current repo (safeguard)
-        results = self._filter_by_repo(results)
-
+        vector_results = self._filter_by_repo(vector_results)
+        
+        # For CODE_LOCATION queries: Merge file index results with vector search
+        if query_type == QueryType.CODE_LOCATION and query_text:
+            file_path_results = self._retrieve_by_file_path(query_text, keywords)
+            
+            if file_path_results:
+                # Merge file index results with vector search results
+                # File index results have higher priority
+                merged_results = {}
+                seen_chunk_ids = set()
+                
+                # Add file index results first (highest priority)
+                for result in file_path_results:
+                    chunk_id = result.get('chunk_id')
+                    if chunk_id:
+                        merged_results[chunk_id] = result
+                        seen_chunk_ids.add(chunk_id)
+                
+                # Add vector search results with path-based boost
+                file_intent = self._detect_file_query_intent(query_text, keywords)
+                filename_hints = file_intent.get('filename_hints', [])
+                directory_hints = file_intent.get('directory_hints', [])
+                
+                for result in vector_results:
+                    chunk_id = result.get('chunk_id')
+                    if not chunk_id:
+                        chunk_id = id(result)
+                    
+                    if chunk_id in seen_chunk_ids:
+                        # Already have this from file index, skip
+                        continue
+                    
+                    # Apply path-based boost if file path matches
+                    from utils.metadata_normalizer import MetadataNormalizer
+                    meta_norm = MetadataNormalizer(result.get('metadata', {}), result)
+                    file_path = meta_norm.get_file_path('')
+                    
+                    if file_path:
+                        file_path_lower = file_path.lower()
+                        original_score = result.get('score', 0)
+                        
+                        # Boost for filename matches
+                        for filename_hint in filename_hints:
+                            if filename_hint in file_path_lower:
+                                result['score'] = original_score + 3.0  # Strong boost
+                                break
+                        
+                        # Boost for directory matches
+                        for dir_hint in directory_hints:
+                            if dir_hint in file_path_lower:
+                                result['score'] = result.get('score', original_score) + 1.5
+                                break
+                        
+                        # Boost for any path match in query
+                        if any(hint in query_text.lower() for hint in [file_path_lower.split('/')[-1], file_path_lower.split('\\')[-1]]):
+                            result['score'] = result.get('score', original_score) + 2.0
+                    
+                    merged_results[chunk_id] = result
+                
+                # Convert back to list and sort by score
+                results = list(merged_results.values())
+                results = sorted(results, key=lambda x: x.get('score', 0), reverse=True)
+                
+                self.logger.info(f"HYBRID_FILE_RETRIEVAL | Merged {len(file_path_results)} file index + {len(vector_results)} vector results = {len(results)} total")
+            else:
+                # No file index results, use vector search with path-based boosts
+                results = vector_results
+                
+                # Apply path-based boosts to vector results
+                file_intent = self._detect_file_query_intent(query_text, keywords)
+                filename_hints = file_intent.get('filename_hints', [])
+                directory_hints = file_intent.get('directory_hints', [])
+                
+                for result in results:
+                    from utils.metadata_normalizer import MetadataNormalizer
+                    meta_norm = MetadataNormalizer(result.get('metadata', {}), result)
+                    file_path = meta_norm.get_file_path('')
+                    
+                    if file_path:
+                        file_path_lower = file_path.lower()
+                        original_score = result.get('score', 0)
+                        
+                        for filename_hint in filename_hints:
+                            if filename_hint in file_path_lower:
+                                result['score'] = original_score + 3.0
+                                break
+                        
+                        for dir_hint in directory_hints:
+                            if dir_hint in file_path_lower:
+                                result['score'] = result.get('score', original_score) + 1.5
+                                break
+                
+                results = sorted(results, key=lambda x: x.get('score', 0), reverse=True)
+        else:
+            # Non-CODE_LOCATION queries: use vector search as before
+            results = vector_results
+        
         # Hybrid metadata boost (unchanged)
         if self.use_hybrid_retrieval:
             results = self.boost_by_metadata(results, keywords, query_type)

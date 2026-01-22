@@ -112,6 +112,30 @@ class MultiIndexRetrievalMixin:
             self.logger.warning("RETRIEVAL | No results found, returning empty list")
             return []
         
+        # For CODE_LOCATION: Try file path index first, then merge with vector results
+        if query_type == QueryType.CODE_LOCATION and query_text:
+            # Get file index results (from RepoFilterMixin)
+            if hasattr(self, '_retrieve_by_file_path'):
+                file_path_results = self._retrieve_by_file_path(query_text, keywords)
+                
+                if file_path_results:
+                    # Merge file index results with vector results
+                    file_chunk_ids = {r.get('chunk_id') for r in file_path_results if r.get('chunk_id')}
+                    
+                    # Add file index results to unique_results
+                    for file_result in file_path_results:
+                        chunk_id = file_result.get('chunk_id')
+                        if chunk_id:
+                            # Check if already in unique_results
+                            existing = next((r for r in unique_results if r.get('chunk_id') == chunk_id), None)
+                            if existing:
+                                # Update score to be higher (file index takes priority)
+                                existing['score'] = max(existing.get('score', 0), file_result.get('score', 0))
+                            else:
+                                unique_results.append(file_result)
+                    
+                    self.logger.info(f"HYBRID_FILE_RETRIEVAL | Added {len(file_path_results)} file index results to {len(unique_results)} total")
+        
         # Filename keyword boost to help CODE_LOCATION find the right file
         # Also prioritize code chunks and filter out PR/issue chunks
         if query_type == QueryType.CODE_LOCATION and query_text:
