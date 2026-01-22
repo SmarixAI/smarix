@@ -101,17 +101,20 @@ class RerankingMixin:
                         meta_norm = MetadataNormalizer(results[idx].get('metadata', {}), results[idx])
                         file_path = meta_norm.get_file_path("")
                         filename = file_path.lower() if file_path else ""
+                        chunk_type = meta_norm.get_chunk_type("")
 
                         # Direct filename hit boost
                         q = query_text.lower().replace(" ", "").replace("_", "").replace("-", "")
                         f = filename.replace("_", "").replace("-", "")
                         if q in f or any(token in f for token in q.split()):
-                            results[idx]['score'] += 2.5
+                            results[idx]['score'] += 4.0  # Increased boost
 
-                        # Strong priority boost for pure code chunks
-                        chunk_type = meta_norm.get_chunk_type("")
+                        # Very strong priority boost for pure code chunks
                         if chunk_type == "code":
-                            results[idx]['score'] += 1.8
+                            results[idx]['score'] += 3.5  # Increased boost for code chunks
+                        elif chunk_type in ['pr', 'issue', 'email']:
+                            # Penalize PR/issue chunks for CODE_LOCATION queries
+                            results[idx]['score'] -= 2.0
                 except Exception:
                     pass
 

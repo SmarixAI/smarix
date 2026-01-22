@@ -113,16 +113,38 @@ class MultiIndexRetrievalMixin:
             return []
         
         # Filename keyword boost to help CODE_LOCATION find the right file
+        # Also prioritize code chunks and filter out PR/issue chunks
         if query_type == QueryType.CODE_LOCATION and query_text:
             normalized_query = query_text.lower().replace(" ", "").replace("_", "").replace("-", "")
+            filtered_results = []
+            
             for r in unique_results:
                 # Use metadata normalizer for unified file path access
                 meta_norm = MetadataNormalizer(r.get("metadata", {}), r)
+                chunk_type = meta_norm.get_chunk_type("")
+                
+                # For CODE_LOCATION queries, strongly prioritize code chunks
+                # Filter out PR/issue chunks unless they're highly relevant
+                if chunk_type in ['pr', 'issue', 'email']:
+                    # Only keep if it has a very high score (might be relevant)
+                    if r.get("score", 0) < 0.8:  # Threshold for keeping PR/issue chunks
+                        continue
+                
                 file_path = meta_norm.get_file_path("")
                 filename = file_path.lower() if file_path else ""
                 normalized_file = filename.replace(" ", "").replace("_", "").replace("-", "")
+                
+                # Strong boost for file path matches
                 if normalized_query in normalized_file or any(token in normalized_file for token in normalized_query.split()):
-                    r["score"] = r.get("score", 0) + 4.0   # very strong boost
+                    r["score"] = r.get("score", 0) + 5.0   # very strong boost
+                
+                # Additional boost for code chunks
+                if chunk_type == "code":
+                    r["score"] = r.get("score", 0) + 3.0   # prioritize code chunks
+                
+                filtered_results.append(r)
+            
+            unique_results = filtered_results
 
         # STEP 3: Cross-Encoder Reranking
         if query_text:

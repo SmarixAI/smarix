@@ -50,6 +50,21 @@ class ContextBuilderMixin:
     
     def build_context_from_chunks(self, chunks: List[Dict], query_type: str) -> str:
         """Build context string from retrieved chunks."""
+        # Special handling for CODE_LOCATION queries with file-specific results
+        if query_type == QueryType.CODE_LOCATION and chunks:
+            # Check if all chunks are from the same file (file-specific query)
+            file_paths = set()
+            for chunk in chunks:
+                meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+                file_path = meta_norm.get_file_path()
+                if file_path:
+                    file_paths.add(file_path)
+            
+            # If all chunks are from a single file, use file-specific context builder
+            if len(file_paths) == 1:
+                return self._build_file_specific_context(chunks, list(file_paths)[0])
+        
+        # Regular context building for other cases
         context_parts: List[str] = []
 
         if query_type == QueryType.FLOW_ARCHITECTURE:
@@ -125,6 +140,129 @@ class ContextBuilderMixin:
 
             context_parts.append("\n" + "=" * 60 + "\n")
 
+        return "\n".join(context_parts)
+    
+    def _build_file_specific_context(self, chunks: List[Dict], file_path: str) -> str:
+        """
+        Build context specifically for a single file query.
+        Organizes chunks: overview first, then code organized by type.
+        Shows actual code directly with proper structure.
+        """
+        from collections import defaultdict
+        
+        # Organize chunks by type
+        overview_chunks = []
+        function_chunks = []
+        class_chunks = []
+        method_chunks = []
+        code_chunks = []
+        other_chunks = []
+        
+        for chunk in chunks:
+            meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+            chunk_type = meta_norm.get_chunk_type('')
+            
+            if chunk_type == 'file_overview':
+                overview_chunks.append(chunk)
+            elif chunk_type == 'function':
+                function_chunks.append(chunk)
+            elif chunk_type == 'class':
+                class_chunks.append(chunk)
+            elif chunk_type == 'method':
+                method_chunks.append(chunk)
+            elif chunk_type == 'code':
+                code_chunks.append(chunk)
+            else:
+                other_chunks.append(chunk)
+        
+        context_parts = []
+        
+        # Header with file path
+        context_parts.append(f"# File: {file_path}\n")
+        
+        # 1. File Overview (if exists) - show as summary
+        if overview_chunks:
+            overview = overview_chunks[0]  # Usually only one overview
+            meta_norm = MetadataNormalizer(overview.get('metadata', {}), overview)
+            overview_content = meta_norm.get_content() or overview.get('content', '')
+            
+            if overview_content:
+                context_parts.append("## File Overview\n")
+                context_parts.append(overview_content)
+                context_parts.append("\n" + "=" * 70 + "\n")
+        
+        # 2. Classes (with their methods)
+        if class_chunks:
+            context_parts.append("## Classes\n")
+            for chunk in class_chunks:
+                meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+                metadata = chunk.get('metadata', {})
+                class_name = metadata.get('class_name') or metadata.get('name', 'Unknown')
+                content = meta_norm.get_content() or chunk.get('content', '')
+                
+                if content:
+                    context_parts.append(f"### Class: {class_name}\n")
+                    context_parts.append(content)
+                    context_parts.append("\n")
+            
+            context_parts.append("=" * 70 + "\n")
+        
+        # 3. Methods (standalone methods, not part of classes)
+        if method_chunks:
+            context_parts.append("## Methods\n")
+            for chunk in method_chunks:
+                meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+                metadata = chunk.get('metadata', {})
+                method_name = metadata.get('method_name') or metadata.get('name', 'Unknown')
+                content = meta_norm.get_content() or chunk.get('content', '')
+                
+                if content:
+                    context_parts.append(f"### Method: {method_name}\n")
+                    context_parts.append(content)
+                    context_parts.append("\n")
+            
+            context_parts.append("=" * 70 + "\n")
+        
+        # 4. Functions
+        if function_chunks:
+            context_parts.append("## Functions\n")
+            for chunk in function_chunks:
+                meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+                metadata = chunk.get('metadata', {})
+                function_name = metadata.get('function_name') or metadata.get('name', 'Unknown')
+                content = meta_norm.get_content() or chunk.get('content', '')
+                
+                if content:
+                    context_parts.append(f"### Function: {function_name}\n")
+                    context_parts.append(content)
+                    context_parts.append("\n")
+            
+            context_parts.append("=" * 70 + "\n")
+        
+        # 5. Other code chunks (general code blocks)
+        if code_chunks:
+            context_parts.append("## Code\n")
+            for chunk in code_chunks:
+                content = MetadataNormalizer(chunk.get('metadata', {}), chunk).get_content() or chunk.get('content', '')
+                if content:
+                    # Add line numbers if available
+                    metadata = chunk.get('metadata', {})
+                    if metadata.get('line_start') and metadata.get('line_end'):
+                        context_parts.append(f"### Lines {metadata['line_start']}-{metadata['line_end']}\n")
+                    context_parts.append(content)
+                    context_parts.append("\n")
+            
+            context_parts.append("=" * 70 + "\n")
+        
+        # 6. Other chunks (if any)
+        if other_chunks:
+            context_parts.append("## Other Content\n")
+            for chunk in other_chunks:
+                content = MetadataNormalizer(chunk.get('metadata', {}), chunk).get_content() or chunk.get('content', '')
+                if content:
+                    context_parts.append(content)
+                    context_parts.append("\n")
+        
         return "\n".join(context_parts)
 
     def build_email_context(self, emails: List[Dict]) -> str:

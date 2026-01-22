@@ -631,12 +631,14 @@ Instructions:
         for i, result in enumerate(github_results[:limit], 1):
             from utils.metadata_normalizer import MetadataNormalizer
             meta_norm = MetadataNormalizer(result.get('metadata', {}), result)
+            # Get chunk_id from result or metadata
+            chunk_id = result.get('chunk_id') or result.get('metadata', {}).get('chunk_id', '')
             sources.append({
                 "rank": i,
                 "file": meta_norm.get_file_path("unknown"),
                 "type": meta_norm.get_chunk_type("unknown"),
                 "score": result.get("score", 0.0),
-                "chunk_id": meta.get("chunk_id", "")
+                "chunk_id": chunk_id
             })
         
         return sources

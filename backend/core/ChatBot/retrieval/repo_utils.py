@@ -143,10 +143,14 @@ class RepoFilterMixin:
                     file_paths.append(normalized)
         
         # Check query text for file paths
-        # Pattern: look for paths with extensions or common path separators
+        # Improved patterns to match various file path formats
         path_patterns = [
-            r'[\w\-_/\\]+\.(py|js|ts|dart|java|go|rs|cpp|c|h|hpp|md|txt|json|yaml|yml)',
-            r'[\w\-_/\\]+/[\w\-_/\\]+',  # directory/file pattern
+            # Pattern 1: Full paths with extensions (e.g., lib/app/models/filters.dart)
+            r'(?:^|\s)([\w\-_./\\]+\.(?:py|js|ts|dart|java|go|rs|cpp|c|h|hpp|md|txt|json|yaml|yml|xml|html|css|scss|less|vue|jsx|tsx|kt|swift|rb|php|r|m|mm|pl|sh|bash|zsh|fish|ps1|bat|cmd))',
+            # Pattern 2: Paths with slashes (e.g., lib/app/models/filters)
+            r'(?:^|\s)([\w\-_./\\]+/[\w\-_./\\]+)',
+            # Pattern 3: Just filename with extension (e.g., filters.dart)
+            r'(?:^|\s)([\w\-_]+\.[\w]+)',
         ]
         
         for pattern in path_patterns:
@@ -154,6 +158,10 @@ class RepoFilterMixin:
             for match in matches:
                 if isinstance(match, tuple):
                     match = ''.join(match)
+                # Clean up match (remove leading/trailing whitespace)
+                match = match.strip()
+                if not match:
+                    continue
                 from utils.path_normalizer import normalize_path
                 normalized = normalize_path(match, '')
                 if normalized and normalized not in file_paths:
@@ -177,29 +185,73 @@ class RepoFilterMixin:
             return []
         
         # Retrieve chunks for found file paths
+        # Prioritize 'code' index first, then 'all' index
         results = []
         
-        for index_type in ['code', 'all']:
-            if not hasattr(self, 'multi_index_store') or not self.multi_index_store:
-                continue
+        # First, try 'code' index (most relevant for file paths)
+        if hasattr(self, 'multi_index_store') and self.multi_index_store:
+            code_index_db = self.multi_index_store.indices.get('code')
+            if code_index_db and hasattr(code_index_db, 'get_by_file_paths'):
+                chunks = code_index_db.get_by_file_paths(file_paths)
                 
-            index_db = self.multi_index_store.indices.get(index_type)
-            if index_db and hasattr(index_db, 'get_by_file_paths'):
-                chunks = index_db.get_by_file_paths(file_paths)
-                
-                # Add score and format results
+                # Add score and format results - PRIORITIZE CODE CHUNKS
                 for chunk in chunks:
                     # Check repo filter
                     if not self._chunk_matches_repo(chunk):
                         continue
                     
-                    # Format result
+                    # Use metadata normalizer to check chunk type
+                    from utils.metadata_normalizer import MetadataNormalizer
+                    meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+                    chunk_type = meta_norm.get_chunk_type('')
+                    
+                    # FILTER OUT PR/ISSUE chunks - we want actual code files
+                    if chunk_type in ['pr', 'issue', 'email']:
+                        continue
+                    
+                    # Format result with high score for direct file path match
                     result = {
                         'chunk_id': chunk.get('chunk_id'),
                         'metadata': chunk.get('metadata', {}),
                         'content': chunk.get('content', ''),
-                        'score': 1.0,  # High score for direct file path match
-                        'source': index_type
+                        'score': 10.0,  # Very high score for direct file path match from code index
+                        'source': 'code'
+                    }
+                    results.append(result)
+        
+        # If we didn't find enough results, try 'all' index but still filter PR/issue chunks
+        # For file-specific queries, we want ALL chunks from the file, so don't limit
+        if hasattr(self, 'multi_index_store') and self.multi_index_store:
+            all_index_db = self.multi_index_store.indices.get('all')
+            if all_index_db and hasattr(all_index_db, 'get_by_file_paths'):
+                chunks = all_index_db.get_by_file_paths(file_paths)
+                
+                for chunk in chunks:
+                    # Check repo filter
+                    if not self._chunk_matches_repo(chunk):
+                        continue
+                    
+                    # Use metadata normalizer to check chunk type
+                    from utils.metadata_normalizer import MetadataNormalizer
+                    meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+                    chunk_type = meta_norm.get_chunk_type('')
+                    
+                    # FILTER OUT PR/ISSUE chunks - we want actual code files
+                    if chunk_type in ['pr', 'issue', 'email']:
+                        continue
+                    
+                    chunk_id = chunk.get('chunk_id')
+                    # Skip if already in results
+                    if any(r.get('chunk_id') == chunk_id for r in results):
+                        continue
+                    
+                    # Format result with lower score than code index
+                    result = {
+                        'chunk_id': chunk_id,
+                        'metadata': chunk.get('metadata', {}),
+                        'content': chunk.get('content', ''),
+                        'score': 8.0,  # High but lower than code index
+                        'source': 'all'
                     }
                     results.append(result)
         
@@ -212,6 +264,29 @@ class RepoFilterMixin:
                 seen.add(chunk_id)
                 unique_results.append(result)
         
+        # Sort by chunk type priority, then by score
+        # Priority: file_overview > code > function > class > method > others
+        def sort_key(r):
+            meta_norm = MetadataNormalizer(r.get('metadata', {}), r)
+            chunk_type = meta_norm.get_chunk_type('')
+            score = r.get('score', 0)
+            
+            # Type priority: overview first, then code chunks
+            type_priority_map = {
+                'file_overview': 0,
+                'code': 1,
+                'function': 2,
+                'class': 3,
+                'method': 4,
+            }
+            type_priority = type_priority_map.get(chunk_type, 10)
+            
+            return (type_priority, -score)
+        
+        unique_results.sort(key=sort_key)
+        
+        # For file-specific queries, return ALL chunks (no limit)
+        # This ensures we get the complete file content
         return unique_results
     
     def _chunk_matches_repo(self, chunk: Dict[str, Any]) -> bool:

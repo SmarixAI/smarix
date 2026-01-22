@@ -168,30 +168,56 @@ class FilePathIndex:
         query_lower = query.lower().strip()
         normalized_query = normalize_path(query, '')
         
+        # Extract filename from query if it looks like a path
+        query_filename = extract_filename(normalized_query) if normalized_query else None
+        if query_filename:
+            query_filename_lower = query_filename.lower()
+        else:
+            # If query doesn't have path separators, treat entire query as potential filename
+            query_filename_lower = query_lower
+        
         matches = set()
         
-        # Exact match
+        # 1. Exact path match (highest priority)
         if normalized_query in self._path_to_chunks:
             matches.add(normalized_query)
         
-        # Partial path match (contains query)
+        # 2. Filename exact match (high priority)
+        if query_filename_lower in self._filename_to_paths:
+            matches.update(self._filename_to_paths[query_filename_lower])
+        
+        # 3. Filename partial match (e.g., "filter" matches "filters.dart")
+        for filename, paths in self._filename_to_paths.items():
+            if query_filename_lower in filename or filename.startswith(query_filename_lower):
+                matches.update(paths)
+        
+        # 4. Partial path match (contains query)
         for path in self._path_to_chunks.keys():
-            if query_lower in path.lower():
+            path_lower = path.lower()
+            if query_lower in path_lower:
                 matches.add(path)
         
-        # Filename match
-        if normalized_query in self._filename_to_paths:
-            matches.update(self._filename_to_paths[normalized_query])
-        
-        # Directory match
+        # 5. Directory match
         if normalized_query in self._dir_to_files:
             matches.update(self._dir_to_files[normalized_query])
         
-        # Sort by relevance (exact matches first, then by length)
-        sorted_matches = sorted(matches, key=lambda p: (
-            0 if p == normalized_query else 1,  # Exact matches first
-            len(p)  # Shorter paths first
-        ))
+        # Sort by relevance:
+        # - Exact matches first
+        # - Filename matches before path matches
+        # - Shorter paths first
+        def sort_key(p):
+            p_lower = p.lower()
+            is_exact = (p == normalized_query)
+            is_filename_match = query_filename_lower and (
+                extract_filename(p).lower() == query_filename_lower or
+                extract_filename(p).lower().startswith(query_filename_lower)
+            )
+            return (
+                0 if is_exact else (1 if is_filename_match else 2),  # Exact > filename > path
+                len(p)  # Shorter paths first
+            )
+        
+        sorted_matches = sorted(matches, key=sort_key)
         
         if limit:
             return sorted_matches[:limit]

@@ -419,13 +419,17 @@ class LLMEmbeddingMixin:
         - Include 30-50 lines of relevant code""",
             QueryType.CODE_LOCATION: """
         CODE LOCATION QUERY:
-        - Exact file paths with line numbers
-        - Function/class names with COMPLETE implementations
-        - Show the actual code (30-100 lines per item)
-        - Include surrounding context code
-        - Brief descriptions
+        - When user asks about a specific file, show the ACTUAL CODE from that file directly
+        - Start with a top-level overview/summary if file overview is available in context
+        - Then show the complete code organized by structure (classes, functions, methods)
+        - Show COMPLETE code implementations (50-200+ lines per file/function)
+        - Include exact file paths with line numbers
+        - Format code in proper code blocks with language specification
+        - Organize code logically: Overview → Classes → Functions → Methods → Other code
+        - Show the actual, current code from the file (not from PRs/issues unless specifically asked)
         - ABSOLUTELY ZERO HALLUCINATIONS. Use only context info
-        - Related functions/classes""",
+        - If context shows file overview, use it to provide a summary before showing code
+        - Present code in a clear, readable format that the user can directly use""",
             QueryType.CONCEPTUAL: """
         CONCEPTUAL QUERY:
         - Explanation from documentation with CODE EXAMPLES
