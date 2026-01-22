@@ -686,17 +686,32 @@ class RepoFilterMixin:
                 repo_owner = getattr(self, 'repo_owner', None)
                 repo_name = getattr(self, 'repo_name', None)
                 
-                # Try exact file paths first - STRICT MATCHING ONLY
+                # Try exact file paths first
                 if file_paths:
                     self.logger.info(f"CODE_CHUNKS_JSON | Searching for {len(file_paths)} file paths: {file_paths}")
                     for file_path in file_paths:
-                        # Use exact_match_only=True to ensure we only get the exact file
+                        # First try by full path
                         chunks = code_loader.get_chunks_by_file_path(
                             file_path,
                             repo_owner,
                             repo_name,
-                            exact_match_only=True  # STRICT: Only exact matches
+                            exact_match_only=False  # Allow partial matches too
                         )
+                        
+                        # If no results, try by filename (in case user only provided filename)
+                        if not chunks:
+                            from utils.path_normalizer import extract_filename
+                            filename = extract_filename(file_path)
+                            if filename:
+                                self.logger.info(
+                                    f"CODE_CHUNKS_JSON | No results for path '{file_path}', "
+                                    f"trying filename search: '{filename}'"
+                                )
+                                chunks = code_loader.get_chunks_by_filename(
+                                    filename,
+                                    repo_owner,
+                                    repo_name
+                                )
                         
                         self.logger.info(
                             f"CODE_CHUNKS_JSON | File path '{file_path}': found {len(chunks)} chunks"
@@ -766,42 +781,25 @@ class RepoFilterMixin:
                                 })
                 
                 # Try filename search in code chunks - ONLY if no results from exact paths
-                # For filename-only queries, we need to be strict about matching
+                # For filename-only queries, search directly by filename
                 if not unique_results and filename_hints:
-                    self.logger.info(f"CODE_CHUNKS_JSON | No results from exact paths, trying filename hints: {filename_hints}")
+                    self.logger.info(
+                        f"CODE_CHUNKS_JSON | No results from exact paths, trying filename hints: {filename_hints}"
+                    )
                     for filename_hint in filename_hints:
-                        # Search for files matching this filename
-                        found_paths = code_loader.search_files(
-                            filename_hint, 
-                            repo_owner, 
-                            repo_name, 
-                            limit=10
+                        # Search directly by filename (this is the key fix!)
+                        chunks = code_loader.get_chunks_by_filename(
+                            filename_hint,
+                            repo_owner,
+                            repo_name
                         )
+                        
                         self.logger.info(
-                            f"CODE_CHUNKS_JSON | Filename hint '{filename_hint}': found {len(found_paths)} paths: {found_paths[:5]}"
+                            f"CODE_CHUNKS_JSON | Filename hint '{filename_hint}': found {len(chunks)} chunks directly by filename"
                         )
                         
-                        # Filter to only exact filename matches
-                        exact_filename_matches = []
-                        for file_path in found_paths:
-                            from utils.path_normalizer import extract_filename
-                            path_filename = extract_filename(file_path)
-                            if path_filename and path_filename.lower() == filename_hint.lower():
-                                exact_filename_matches.append(file_path)
-                                self.logger.info(
-                                    f"CODE_CHUNKS_JSON | Exact filename match: '{path_filename}' == '{filename_hint}'"
-                                )
-                        
-                        # Only use exact filename matches
-                        for file_path in exact_filename_matches:
-                            chunks = code_loader.get_chunks_by_file_path(
-                                file_path,
-                                repo_owner,
-                                repo_name,
-                                exact_match_only=True  # STRICT: Only exact matches
-                            )
-                            
-                            for chunk in chunks:
+                        # Process chunks found by filename
+                        for chunk in chunks:
                                 chunk_id = chunk.get('chunk_id')
                                 # Check both seen_chunk_ids and seen to avoid duplicates
                                 if chunk_id and chunk_id not in seen_chunk_ids and chunk_id not in seen:
