@@ -272,13 +272,31 @@ class RetrievalMixin(
                 if results:
                     # 🚨 HARD STOP ON AMBIGUITY
                     if any(r.get("_ambiguous_filename") for r in results):
+                        # Get filename and paths from first result
+                        first_result = results[0]
+                        filename = first_result.get("metadata", {}).get("filename", "")
+                        if not filename:
+                            # Try to extract from file_path
+                            file_path = first_result.get("metadata", {}).get("file_path", "") or first_result.get("file_path", "")
+                            if file_path:
+                                from utils.path_normalizer import extract_filename
+                                filename = extract_filename(file_path)
+                        
+                        paths = first_result.get("_all_matching_paths", [])
+                        
+                        if not filename and paths:
+                            # Extract filename from first path
+                            from utils.path_normalizer import extract_filename
+                            filename = extract_filename(paths[0]) if paths else "unknown"
+                        
                         self.logger.warning(
-                            "CODE_LOCATION | Ambiguous filename detected — stopping retrieval before context building"
+                            f"CODE_LOCATION | Ambiguous filename detected — stopping retrieval before context building. "
+                            f"Filename: '{filename}', {len(paths)} paths found"
                         )
                         return [{
                             "__ambiguous__": True,
-                            "filename": extract_filename(results[0].get("metadata", {}).get("file_path", "")),
-                            "paths": results[0].get("_all_matching_paths", [])
+                            "filename": filename or "unknown",
+                            "paths": paths
                         }]
 
                     return results[:self.top_k * 2]

@@ -352,7 +352,8 @@ class ResponseHandler:
         
         This can happen in two ways:
         1. Chunks are already marked with _ambiguous_filename flag (from code_chunks_loader)
-        2. Multiple unique file paths share the same filename (detected from all retrieval sources)
+        2. Special __ambiguous__ format returned from retrieval
+        3. Multiple unique file paths share the same filename (detected from all retrieval sources)
         
         Args:
             chunks: List of retrieved chunks
@@ -363,6 +364,19 @@ class ResponseHandler:
         """
         if not chunks:
             return None
+
+        # Method 0: Check for special __ambiguous__ format from retrieval (early return format)
+        if len(chunks) == 1 and chunks[0].get("__ambiguous__"):
+            filename = chunks[0].get("filename", "unknown")
+            paths = chunks[0].get("paths", [])
+            if filename and paths:
+                self.chatbot.logger.warning(
+                    f"AMBIGUITY_DETECTION | Detected __ambiguous__ format: filename='{filename}', paths={len(paths)}"
+                )
+                return {
+                    "filename": filename,
+                    "paths": paths
+                }
 
         # Method 1: Check if chunks are already marked as ambiguous (from code_chunks_loader)
         ambiguous_chunks = [c for c in chunks if c.get("_ambiguous_filename")]
@@ -692,16 +706,45 @@ Instructions:
         intent: Optional[str] = None
     ) -> Dict[str, Any]:
         
-        # 🚨 HARD STOP: Ambiguous filename (CODE_LOCATION)
+        # 🚨 HARD STOP: Ambiguous filename (CODE_LOCATION) - MUST BE FIRST CHECK
         if query_type == QueryType.CODE_LOCATION:
+            # Check for special __ambiguous__ format first (fast path)
+            if len(github_results) == 1 and github_results[0].get("__ambiguous__"):
+                ambiguity_info = github_results[0]
+                self.chatbot.logger.warning(
+                    f"AMBIGUITY_DETECTION | Early return for __ambiguous__ format: "
+                    f"filename='{ambiguity_info.get('filename')}', {len(ambiguity_info.get('paths', []))} paths"
+                )
+                return {
+                    "answer": (
+                        f"Multiple files named `{ambiguity_info.get('filename', 'unknown')}` were found:\n\n"
+                        + "\n".join(f"- {p}" for p in ambiguity_info.get("paths", []))
+                        + "\n\nPlease specify which file you're referring to by providing the full path."
+                    ),
+                    "sources": [],
+                    "chunks_retrieved": 0,
+                    "query_type": query_type,
+                    "context_quality": 0.0,
+                    "emails": [],
+                    "has_diagram": False,
+                    "related_knowledge": None,
+                    "is_metrics_query": False,
+                    "is_ambiguous": True
+                }
+            
+            # Check for _ambiguous_filename flag in chunks
             ambiguity = self._detect_ambiguous_filename(github_results, query)
 
             if ambiguity:
+                self.chatbot.logger.warning(
+                    f"AMBIGUITY_DETECTION | Returning ambiguity response: "
+                    f"filename='{ambiguity['filename']}', {len(ambiguity['paths'])} paths"
+                )
                 return {
                     "answer": (
                         f"Multiple files named `{ambiguity['filename']}` were found:\n\n"
                         + "\n".join(f"- {p}" for p in ambiguity["paths"])
-                        + "\n\nPlease specify the full file path."
+                        + "\n\nPlease specify which file you're referring to by providing the full path."
                     ),
                     "sources": [],
                     "chunks_retrieved": 0,
