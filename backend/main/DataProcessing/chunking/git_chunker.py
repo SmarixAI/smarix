@@ -683,9 +683,3 @@ def chunk_git_data(
         return chunks, entities, techstack
 
 
-
-class DataChunker:
-    ...
-    chunk_git_data = chunk_git_data
-
-

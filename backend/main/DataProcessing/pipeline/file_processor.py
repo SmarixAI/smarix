@@ -1,8 +1,9 @@
 import json
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Set
-from chunking.base_chunker import DataChunker
-from state.repo_state import REPO_OWNER, REPO_NAME
+from ..chunking.base_chunker import DataChunker
+from ..state.repo_state import REPO_OWNER, REPO_NAME
+from .multi_source import process_multi_source_data
 
 def process_file(
     input_file: str,
@@ -115,7 +116,7 @@ def process_file(
         
         # Check full format first: "owner/repo"
         # Use flexible repo matching with normalizer
-        from utils.repo_normalizer import repo_matches, normalize_repo_name, normalize_repo_owner, extract_repo_parts
+        from backend.utils.repo_normalizer import repo_matches, normalize_repo_name, normalize_repo_owner, extract_repo_parts
         
         # Normalize current repo
         normalized_current_owner, normalized_current_repo = extract_repo_parts(expected_repo_full)

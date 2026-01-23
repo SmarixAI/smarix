@@ -1,8 +1,8 @@
 
 from collections import Counter
-from backend.main.DataProcessing.pipeline.file_processor import process_file
-from backend.main.DataProcessing.chunking.base_chunker import DataChunker
-from state.repo_state import load_current_repo_from_state
+from ..pipeline.file_processor import process_file
+from ..chunking.base_chunker import DataChunker
+from ..state.repo_state import load_current_repo_from_state
 
 REPO_OWNER, REPO_NAME = load_current_repo_from_state()
 import os
@@ -77,7 +77,6 @@ def batch_process():
                 str(json_file),
                 output_dir,
                 chunker,
-                repo_owner=REPO_OWNER,
             )
             results.append((json_file.name, "Success", result))
 
@@ -132,7 +131,6 @@ def batch_process():
                     output_dir,
                     chunker,
                     merged_entities,
-                    repo_owner=REPO_OWNER,
                 )
 
                 results.append((json_file.name, "Success", result))

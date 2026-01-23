@@ -27,3 +27,13 @@ def load_current_repo_from_state():
         raise RuntimeError("❌ curr_repo.owner or curr_repo.name missing")
 
     return owner, name
+
+
+# Module-level constants for convenience
+try:
+    REPO_OWNER, REPO_NAME = load_current_repo_from_state()
+except RuntimeError:
+    # If state file is not available, set to None
+    # This allows the module to be imported even if state is not yet initialized
+    REPO_OWNER = None
+    REPO_NAME = None

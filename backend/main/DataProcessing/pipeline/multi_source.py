@@ -1,6 +1,6 @@
 from typing import Dict, Any, List, Optional, Set, Tuple
-from chunking.base_chunker import DataChunker
-from state.repo_state import REPO_OWNER
+from ..chunking.base_chunker import DataChunker
+from ..state.repo_state import REPO_OWNER
 
 
 def process_multi_source_data(

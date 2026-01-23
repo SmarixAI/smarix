@@ -1,11 +1,27 @@
 import os
 import sys
 import argparse
+from pathlib import Path
 
-from backend.main.DataProcessing.state.repo_state import load_current_repo_from_state
-from chunking.base_chunker import DataChunker
-from pipeline.file_processor import process_file
-from batch.batch_runner import batch_process
+# Handle both script execution and module import
+# When run as script, add parent directories to path for absolute imports
+try:
+    from .state.repo_state import load_current_repo_from_state
+    from .chunking.base_chunker import DataChunker
+    from .pipeline.file_processor import process_file
+    from .batch.batch_runner import batch_process
+except ImportError:
+    # If relative imports fail, we're running as a script
+    # Add parent directories to path
+    current_dir = Path(__file__).resolve().parent
+    backend_dir = current_dir.parent.parent.parent
+    if str(backend_dir) not in sys.path:
+        sys.path.insert(0, str(backend_dir))
+    
+    from backend.main.DataProcessing.state.repo_state import load_current_repo_from_state
+    from backend.main.DataProcessing.chunking.base_chunker import DataChunker
+    from backend.main.DataProcessing.pipeline.file_processor import process_file
+    from backend.main.DataProcessing.batch.batch_runner import batch_process
 
 
 REPO_OWNER, REPO_NAME = load_current_repo_from_state()

@@ -1,15 +1,15 @@
 import json
 import hashlib
 import re
-from typing import Dict, Any, Set
+from typing import Dict, Any, Set, List, Tuple, Optional
 from collections import defaultdict
 
-from analysis.code_analyzer import CodeAnalyzer
-from graph.graph_extractor import GraphExtractor
+from ..analysis.code_analyzer import CodeAnalyzer
+from ..graph.graph_extractor import GraphExtractor
 
-from .git_chunker import chunk_git_data
-from .gmail_chunker import chunk_gmail_data
-from .raw_fallback import create_raw_data_reference
+from .git_chunker import chunk_git_data as _chunk_git_data_func
+from .gmail_chunker import chunk_gmail_data as _chunk_gmail_data_func
+from .raw_fallback import create_raw_data_reference as _create_raw_data_reference_func
 
 
 class DataChunker:
@@ -113,7 +113,7 @@ class DataChunker:
                 if isinstance(user, dict) and user.get("login"):
                     entities["authors"].add(user["login"].lower())
 
-                from utils.path_normalizer import normalize_path
+                from backend.utils.path_normalizer import normalize_path
 
                 for f in pr.get("files", []):
                     if isinstance(f, dict) and f.get("filename"):
@@ -236,3 +236,48 @@ class DataChunker:
         print(f"         ✓ Classes: {self.code_analyzer.function_metrics['total_classes']}")
 
         return tech_stack
+
+    # ------------------------------------------------------------------
+    # Chunking methods (delegating to source-specific chunkers)
+    # ------------------------------------------------------------------
+
+    def chunk_git_data(
+        self, data: Dict[str, Any], repo_name: str = None
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, Set[str]], Dict[str, Any]]:
+        """
+        Chunk Git data with enhanced metadata, entity extraction, bidirectional linking, and code analysis.
+        Note: repo_name parameter is accepted for compatibility but uses self.repo_name internally.
+        """
+        # Use the imported function, binding self
+        return _chunk_git_data_func(self, data)
+
+    def chunk_gmail_data(
+        self,
+        data: Dict[str, Any],
+        repo_name: str,
+        git_entities: Dict[str, Set[str]] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Chunk Gmail data with GitHub correlation analysis.
+        Note: repo_owner is taken from self.repo_owner.
+        """
+        # Use the imported function, binding self
+        return _chunk_gmail_data_func(
+            self, data, repo_name, self.repo_owner, git_entities or {}
+        )
+
+    def create_raw_data_reference(
+        self,
+        data: Dict[str, Any],
+        source: str,
+        repo_name: str,
+        repo_owner: str = None,
+    ) -> Dict[str, Any]:
+        """
+        Create comprehensive raw data reference for edge case fallback.
+        Note: repo_owner defaults to self.repo_owner if not provided.
+        """
+        # Use the imported function, binding self
+        return _create_raw_data_reference_func(
+            self, data, source, repo_name, repo_owner or self.repo_owner
+        )
