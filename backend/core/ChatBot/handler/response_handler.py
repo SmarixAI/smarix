@@ -346,19 +346,122 @@ class ResponseHandler:
         """
         return str(self._get_metadata(chunk)).lower()
 
-    def _detect_ambiguous_filename(self, chunks: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    def _detect_ambiguous_filename(self, chunks: List[Dict[str, Any]], query: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """
+        Detect if multiple files with the same filename exist in the results.
+        
+        This can happen in two ways:
+        1. Chunks are already marked with _ambiguous_filename flag (from code_chunks_loader)
+        2. Multiple unique file paths share the same filename (detected from all retrieval sources)
+        
+        Args:
+            chunks: List of retrieved chunks
+            query: Original query text (optional, used to check if user provided full path)
+        
+        Returns:
+            Dict with 'filename' and 'paths' if ambiguity detected, None otherwise
+        """
         if not chunks:
             return None
 
+        # Method 1: Check if chunks are already marked as ambiguous (from code_chunks_loader)
         ambiguous_chunks = [c for c in chunks if c.get("_ambiguous_filename")]
-        if not ambiguous_chunks:
-            return None
+        if ambiguous_chunks:
+            first = ambiguous_chunks[0]
+            all_paths = first.get("_all_matching_paths", [])
+            
+            # If user provided a full path in query, check if it matches one of the ambiguous paths
+            # If it does, don't show ambiguity - just return that specific file
+            if query:
+                from utils.path_normalizer import normalize_path, extract_filename
+                from utils.metadata_normalizer import MetadataNormalizer
+                
+                # Check if query contains a full path
+                query_lower = query.lower()
+                for path in all_paths:
+                    path_lower = path.lower()
+                    # Check if query contains this path (as substring or exact match)
+                    if path_lower in query_lower or query_lower in path_lower:
+                        # User specified a path, filter chunks to only this path
+                        matching_chunks = []
+                        for chunk in chunks:
+                            meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+                            chunk_path = normalize_path(meta_norm.get_file_path(''), '')
+                            if chunk_path and (chunk_path.lower() == path_lower or chunk_path.lower().endswith(path_lower)):
+                                matching_chunks.append(chunk)
+                        
+                        # If we found chunks for the specified path, don't show ambiguity
+                        if matching_chunks:
+                            return None
+            
+            return {
+                "filename": extract_filename(first.get("file_path", "")),
+                "paths": all_paths,
+            }
 
-        first = ambiguous_chunks[0]
-        return {
-            "filename": extract_filename(first.get("file_path", "")),
-            "paths": first.get("_all_matching_paths", []),
-        }
+        # Method 2: Detect ambiguity by checking if multiple unique file paths share the same filename
+        # This handles cases where chunks come from file path index, vector search, etc.
+        from utils.metadata_normalizer import MetadataNormalizer
+        from utils.path_normalizer import normalize_path
+        
+        # Group chunks by filename
+        filename_to_paths = {}
+        
+        for chunk in chunks:
+            meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+            file_path = meta_norm.get_file_path('')
+            chunk_type = meta_norm.get_chunk_type('')
+            
+            # Only check code chunks, ignore PR/issue/email chunks
+            if chunk_type in ['pr', 'issue', 'email']:
+                continue
+            
+            if not file_path:
+                continue
+            
+            # Normalize the file path
+            normalized_path = normalize_path(file_path, '')
+            if not normalized_path:
+                continue
+            
+            # Extract filename
+            filename = extract_filename(normalized_path)
+            if not filename:
+                continue
+            
+            filename_lower = filename.lower()
+            
+            # Track unique paths for this filename
+            if filename_lower not in filename_to_paths:
+                filename_to_paths[filename_lower] = set()
+            filename_to_paths[filename_lower].add(normalized_path)
+        
+        # Check if any filename has multiple unique paths
+        for filename_lower, paths in filename_to_paths.items():
+            if len(paths) > 1:
+                # If user provided a full path in query, check if it matches one of the ambiguous paths
+                if query:
+                    query_lower = query.lower()
+                    matching_path = None
+                    for path in paths:
+                        path_lower = path.lower()
+                        # Check if query contains this path
+                        if path_lower in query_lower or query_lower in path_lower:
+                            matching_path = path
+                            break
+                    
+                    # If user specified a path, don't show ambiguity
+                    if matching_path:
+                        return None
+                
+                # Ambiguity detected!
+                sorted_paths = sorted(paths)
+                return {
+                    "filename": filename_lower,
+                    "paths": sorted_paths,
+                }
+        
+        return None
 
 
     def _slice_pr_context_by_intent(
@@ -553,14 +656,14 @@ Instructions:
 
         # 🔴 STEP 1.5: Ambiguous filename guard (CODE_LOCATION only)
         if query_type == QueryType.CODE_LOCATION:
-            ambiguity = self._detect_ambiguous_filename(github_results)
+            ambiguity = self._detect_ambiguous_filename(github_results, query)
 
             if ambiguity:
                 return {
                     "answer": (
                         f"Multiple files named `{ambiguity['filename']}` were found:\n\n"
                         + "\n".join(f"- {p}" for p in ambiguity["paths"])
-                        + "\n\nPlease specify the full path."
+                        + "\n\nPlease specify which file you're referring to by providing the full path."
                     ),
                     "sources": [],
                     "chunks_retrieved": 0,

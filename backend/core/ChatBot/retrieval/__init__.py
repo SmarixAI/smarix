@@ -146,14 +146,21 @@ class RetrievalMixin(
                                         'language': chunk.get('language', ''),
                                     }
                                 
-                                results.append({
+                                result_dict = {
                                     'chunk_id': chunk_id,
                                     'metadata': chunk_metadata,
                                     'content': content_text,
                                     'score': 10.0,  # High score for exact file matches
                                     'source': 'code_chunks_loader',
                                     'match_type': 'exact_file_match'
-                                })
+                                }
+                                
+                                # Preserve ambiguity flags if present
+                                if chunk.get('_ambiguous_filename'):
+                                    result_dict['_ambiguous_filename'] = True
+                                    result_dict['_all_matching_paths'] = chunk.get('_all_matching_paths', [])
+                                
+                                results.append(result_dict)
                 
                 # Try filename hints if no results from file paths
                 if not results and filename_hints:
@@ -206,14 +213,21 @@ class RetrievalMixin(
                                         'language': chunk.get('language', ''),
                                     }
                                 
-                                results.append({
+                                result_dict = {
                                     'chunk_id': chunk_id,
                                     'metadata': chunk_metadata,
                                     'content': content_text,
                                     'score': 9.0,  # Slightly lower than exact path match
                                     'source': 'code_chunks_loader',
                                     'match_type': 'exact_filename_match'
-                                })
+                                }
+                                
+                                # Preserve ambiguity flags if present
+                                if chunk.get('_ambiguous_filename'):
+                                    result_dict['_ambiguous_filename'] = True
+                                    result_dict['_all_matching_paths'] = chunk.get('_all_matching_paths', [])
+                                
+                                results.append(result_dict)
                 
                 # If found results from code_chunks_loader, return immediately (no vector search, no routing, no reranking)
                 if results:
