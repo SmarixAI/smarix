@@ -83,7 +83,7 @@ class RetrievalMixin(
                 if file_paths:
                     self.logger.info(f"CODE_LOCATION | Searching code_chunks_loader for {len(file_paths)} file paths: {file_paths}")
                     for file_path in file_paths:
-                        # Try by full path with exact match
+                        # Try by full path with exact match first
                         chunks = code_loader.get_chunks_by_file_path(
                             file_path,
                             repo_owner,
@@ -91,7 +91,19 @@ class RetrievalMixin(
                             exact_match_only=True  # Exact match only for code location queries
                         )
                         
-                        # If no results, try by filename (in case user only provided filename)
+                        # If no exact match, try without exact_match_only (partial match)
+                        if not chunks:
+                            self.logger.info(
+                                f"CODE_LOCATION | No exact match for path '{file_path}', trying partial match"
+                            )
+                            chunks = code_loader.get_chunks_by_file_path(
+                                file_path,
+                                repo_owner,
+                                repo_name,
+                                exact_match_only=False  # Allow partial matches
+                            )
+                        
+                        # If still no results, try by filename (in case user only provided filename)
                         if not chunks and filename_hints:
                             from utils.path_normalizer import extract_filename
                             filename = extract_filename(file_path)
@@ -270,7 +282,7 @@ class RetrievalMixin(
                 
                 # If found results from code_chunks_loader, return immediately (no vector search, no routing, no reranking)
                 if results:
-                    # 🚨 HARD STOP ON AMBIGUITY
+                    # 🚨 CHECK FOR AMBIGUITY, but first check if user provided a full path
                     if any(r.get("_ambiguous_filename") for r in results):
                         # Get filename and paths from first result
                         first_result = results[0]
@@ -289,9 +301,75 @@ class RetrievalMixin(
                             from utils.path_normalizer import extract_filename
                             filename = extract_filename(paths[0]) if paths else "unknown"
                         
+                        # 🚨 CRITICAL: Check if user provided a full path in the query
+                        # If they did, filter results to only that path and return normally (not ambiguous)
+                        if query_text:
+                            from utils.path_normalizer import normalize_path
+                            
+                            # Normalize query to handle different formats
+                            query_normalized = normalize_path(query_text, '').lower().replace('\\', '/').strip('/')
+                            
+                            # Check if query contains any of the ambiguous paths
+                            matching_path = None
+                            for path in paths:
+                                path_normalized = normalize_path(path, '').lower().replace('\\', '/').strip('/')
+                                
+                                # More robust matching:
+                                # 1. Exact match (after normalization)
+                                # 2. Query ends with path
+                                # 3. Path ends with query (partial path provided)
+                                # 4. Either contains the other (substring match)
+                                if (path_normalized == query_normalized or
+                                    query_normalized.endswith('/' + path_normalized) or
+                                    query_normalized.endswith(path_normalized) or
+                                    path_normalized.endswith('/' + query_normalized) or
+                                    path_normalized.endswith(query_normalized) or
+                                    path_normalized in query_normalized or
+                                    query_normalized in path_normalized):
+                                    matching_path = path
+                                    self.logger.info(
+                                        f"CODE_LOCATION | User specified full path in query: '{query_text}' matches '{path}' "
+                                        f"(normalized: '{query_normalized}' == '{path_normalized}'), "
+                                        f"filtering results to this path only"
+                                    )
+                                    break
+                            
+                            # If user specified a path, filter results to only that path
+                            if matching_path:
+                                matching_path_normalized = normalize_path(matching_path, '').lower().replace('\\', '/').strip('/')
+                                filtered_results = []
+                                for result in results:
+                                    result_path = result.get("metadata", {}).get("file_path", "") or result.get("file_path", "")
+                                    if result_path:
+                                        result_path_normalized = normalize_path(result_path, '').lower().replace('\\', '/').strip('/')
+                                        
+                                        # Match if paths are the same after normalization
+                                        if (result_path_normalized == matching_path_normalized or
+                                            result_path_normalized.endswith('/' + matching_path_normalized) or
+                                            result_path_normalized.endswith(matching_path_normalized) or
+                                            matching_path_normalized.endswith('/' + result_path_normalized) or
+                                            matching_path_normalized.endswith(result_path_normalized)):
+                                            # Remove ambiguity flags since we're filtering to one path
+                                            result.pop("_ambiguous_filename", None)
+                                            result.pop("_all_matching_paths", None)
+                                            filtered_results.append(result)
+                                
+                                if filtered_results:
+                                    self.logger.info(
+                                        f"CODE_LOCATION | Filtered {len(filtered_results)} chunks for specified path '{matching_path}' "
+                                        f"(from {len(results)} ambiguous chunks)"
+                                    )
+                                    return filtered_results[:self.top_k * 2]
+                                else:
+                                    self.logger.warning(
+                                        f"CODE_LOCATION | User specified path '{matching_path}' but no matching chunks found. "
+                                        f"This might indicate a path mismatch."
+                                    )
+                        
+                        # No matching path found in query, return ambiguity
                         self.logger.warning(
                             f"CODE_LOCATION | Ambiguous filename detected — stopping retrieval before context building. "
-                            f"Filename: '{filename}', {len(paths)} paths found"
+                            f"Filename: '{filename}', {len(paths)} paths found. User query: '{query_text}'"
                         )
                         return [{
                             "__ambiguous__": True,

@@ -370,6 +370,28 @@ class ResponseHandler:
             filename = chunks[0].get("filename", "unknown")
             paths = chunks[0].get("paths", [])
             if filename and paths:
+                # 🚨 CRITICAL: Check if user provided a full path in query
+                # If they did, don't show ambiguity - the retrieval should have filtered it
+                if query:
+                    from utils.path_normalizer import normalize_path
+                    query_lower = query.lower().replace('\\', '/')
+                    
+                    # Check if query contains any of the ambiguous paths
+                    for path in paths:
+                        path_normalized = normalize_path(path, '').lower().replace('\\', '/')
+                        
+                        # Check if query contains this path (exact match, ends with, or contains)
+                        if (path_normalized in query_lower or 
+                            query_lower in path_normalized or
+                            query_lower.endswith(path_normalized) or
+                            path_normalized.endswith(query_lower)):
+                            self.chatbot.logger.info(
+                                f"AMBIGUITY_DETECTION | User specified path '{path}' in query '{query}', "
+                                f"but retrieval still returned ambiguous format. This should not happen."
+                            )
+                            # Don't show ambiguity - return None so processing continues
+                            return None
+                
                 self.chatbot.logger.warning(
                     f"AMBIGUITY_DETECTION | Detected __ambiguous__ format: filename='{filename}', paths={len(paths)}"
                 )
