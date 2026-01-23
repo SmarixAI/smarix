@@ -370,6 +370,13 @@ class ResponseHandler:
             first = ambiguous_chunks[0]
             all_paths = first.get("_all_matching_paths", [])
             
+            # Log for debugging
+            self.chatbot.logger.info(
+                f"AMBIGUITY_DETECTION | Found {len(ambiguous_chunks)} chunks with _ambiguous_filename flag. "
+                f"Filename: {extract_filename(first.get('metadata', {}).get('file_path', '') or first.get('file_path', ''))}, "
+                f"Paths: {all_paths}"
+            )
+            
             # If user provided a full path in query, check if it matches one of the ambiguous paths
             # If it does, don't show ambiguity - just return that specific file
             if query:
@@ -392,12 +399,34 @@ class ResponseHandler:
                         
                         # If we found chunks for the specified path, don't show ambiguity
                         if matching_chunks:
+                            self.chatbot.logger.info(
+                                f"AMBIGUITY_DETECTION | User specified path in query, filtering to {len(matching_chunks)} chunks"
+                            )
                             return None
             
-            return {
-                "filename": extract_filename(first.get("file_path", "")),
-                "paths": all_paths,
-            }
+            # Get filename from metadata or directly from chunk
+            filename = None
+            if first.get('metadata', {}).get('file_path'):
+                filename = extract_filename(first.get('metadata', {}).get('file_path'))
+            elif first.get('file_path'):
+                filename = extract_filename(first.get('file_path'))
+            elif all_paths:
+                filename = extract_filename(all_paths[0])
+            
+            if not filename:
+                # Try to extract from any chunk
+                for chunk in ambiguous_chunks:
+                    meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+                    file_path = meta_norm.get_file_path('')
+                    if file_path:
+                        filename = extract_filename(file_path)
+                        break
+            
+            if filename and all_paths:
+                return {
+                    "filename": filename,
+                    "paths": all_paths,
+                }
 
         # Method 2: Detect ambiguity by checking if multiple unique file paths share the same filename
         # This handles cases where chunks come from file path index, vector search, etc.
@@ -415,6 +444,10 @@ class ResponseHandler:
             # Only check code chunks, ignore PR/issue/email chunks
             if chunk_type in ['pr', 'issue', 'email']:
                 continue
+            
+            if not file_path:
+                # Try to get file_path directly from chunk if not in metadata
+                file_path = chunk.get('file_path', '')
             
             if not file_path:
                 continue
@@ -439,6 +472,11 @@ class ResponseHandler:
         # Check if any filename has multiple unique paths
         for filename_lower, paths in filename_to_paths.items():
             if len(paths) > 1:
+                # Log for debugging
+                self.chatbot.logger.info(
+                    f"AMBIGUITY_DETECTION | Found {len(paths)} files with same filename '{filename_lower}': {sorted(paths)}"
+                )
+                
                 # If user provided a full path in query, check if it matches one of the ambiguous paths
                 if query:
                     query_lower = query.lower()
@@ -452,10 +490,16 @@ class ResponseHandler:
                     
                     # If user specified a path, don't show ambiguity
                     if matching_path:
+                        self.chatbot.logger.info(
+                            f"AMBIGUITY_DETECTION | User specified path '{matching_path}' in query, not showing ambiguity"
+                        )
                         return None
                 
                 # Ambiguity detected!
                 sorted_paths = sorted(paths)
+                self.chatbot.logger.warning(
+                    f"AMBIGUITY_DETECTION | Ambiguity detected for filename '{filename_lower}' with {len(sorted_paths)} paths"
+                )
                 return {
                     "filename": filename_lower,
                     "paths": sorted_paths,

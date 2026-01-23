@@ -129,22 +129,29 @@ class RetrievalMixin(
                                 else:
                                     content_text = str(content) if content else ''
                                 
-                                # Build metadata in expected format
+                                # Build metadata in expected format - get file_path from chunk directly or from metadata
                                 chunk_metadata = chunk.get('metadata', {})
                                 if not chunk_metadata:
                                     from utils.metadata_normalizer import MetadataNormalizer
                                     meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
                                     chunk_type = meta_norm.get_chunk_type('')
                                     
+                                    # Get file_path from chunk directly first, then from metadata
+                                    file_path = chunk.get('file_path', '') or meta_norm.get_file_path('')
+                                    
                                     chunk_metadata = {
-                                        'file_path': chunk.get('file_path', ''),
-                                        'filename': chunk.get('filename', ''),
-                                        'directory': chunk.get('directory', ''),
+                                        'file_path': file_path,
+                                        'filename': chunk.get('filename', '') or meta_norm.get_filename(''),
+                                        'directory': chunk.get('directory', '') or meta_norm.get_directory(''),
                                         'chunk_type': chunk_type,
-                                        'repo_name': chunk.get('repo_name', ''),
-                                        'repo_owner': chunk.get('repo_owner', ''),
-                                        'language': chunk.get('language', ''),
+                                        'repo_name': chunk.get('repo_name', '') or meta_norm.get_repo_name(''),
+                                        'repo_owner': chunk.get('repo_owner', '') or meta_norm.get_repo_owner(''),
+                                        'language': chunk.get('language', '') or meta_norm.get_language(''),
                                     }
+                                else:
+                                    # If metadata exists, ensure file_path is set
+                                    if 'file_path' not in chunk_metadata or not chunk_metadata.get('file_path'):
+                                        chunk_metadata['file_path'] = chunk.get('file_path', '')
                                 
                                 result_dict = {
                                     'chunk_id': chunk_id,
@@ -155,10 +162,15 @@ class RetrievalMixin(
                                     'match_type': 'exact_file_match'
                                 }
                                 
-                                # Preserve ambiguity flags if present
+                                # Preserve ambiguity flags if present (CRITICAL for ambiguity detection)
                                 if chunk.get('_ambiguous_filename'):
                                     result_dict['_ambiguous_filename'] = True
                                     result_dict['_all_matching_paths'] = chunk.get('_all_matching_paths', [])
+                                    self.logger.info(
+                                        f"CODE_LOCATION | Preserving ambiguity flags for chunk {chunk_id}: "
+                                        f"filename={chunk.get('filename', 'unknown')}, "
+                                        f"paths={chunk.get('_all_matching_paths', [])}"
+                                    )
                                 
                                 results.append(result_dict)
                 
@@ -196,22 +208,39 @@ class RetrievalMixin(
                                 else:
                                     content_text = str(content) if content else ''
                                 
-                                # Build metadata
+                                # Build metadata - get file_path from chunk directly or from metadata
                                 chunk_metadata = chunk.get('metadata', {})
                                 if not chunk_metadata:
                                     from utils.metadata_normalizer import MetadataNormalizer
                                     meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
                                     chunk_type = meta_norm.get_chunk_type('')
                                     
+                                    # Get file_path from chunk directly first, then from metadata, then from entities/content
+                                    from utils.path_normalizer import extract_filename
+                                    file_path = (
+                                        chunk.get('file_path', '') or 
+                                        meta_norm.get_file_path('') or
+                                        chunk.get('entities', {}).get('path', '') or
+                                        chunk.get('content', {}).get('file_path', '')
+                                    )
+                                    
                                     chunk_metadata = {
-                                        'file_path': chunk.get('file_path', ''),
-                                        'filename': chunk.get('filename', ''),
-                                        'directory': chunk.get('directory', ''),
+                                        'file_path': file_path,
+                                        'filename': chunk.get('filename', '') or meta_norm.get_filename('') or (extract_filename(file_path) if file_path else ''),
+                                        'directory': chunk.get('directory', '') or meta_norm.get_directory(''),
                                         'chunk_type': chunk_type,
-                                        'repo_name': chunk.get('repo_name', ''),
-                                        'repo_owner': chunk.get('repo_owner', ''),
-                                        'language': chunk.get('language', ''),
+                                        'repo_name': chunk.get('repo_name', '') or meta_norm.get_repo_name(''),
+                                        'repo_owner': chunk.get('repo_owner', '') or meta_norm.get_repo_owner(''),
+                                        'language': chunk.get('language', '') or meta_norm.get_language(''),
                                     }
+                                else:
+                                    # If metadata exists, ensure file_path is set from chunk if missing
+                                    if 'file_path' not in chunk_metadata or not chunk_metadata.get('file_path'):
+                                        chunk_metadata['file_path'] = (
+                                            chunk.get('file_path', '') or
+                                            chunk.get('entities', {}).get('path', '') or
+                                            chunk.get('content', {}).get('file_path', '')
+                                        )
                                 
                                 result_dict = {
                                     'chunk_id': chunk_id,
@@ -222,10 +251,20 @@ class RetrievalMixin(
                                     'match_type': 'exact_filename_match'
                                 }
                                 
-                                # Preserve ambiguity flags if present
+                                # Also set file_path directly on result_dict for easier access
+                                if chunk_metadata.get('file_path'):
+                                    result_dict['file_path'] = chunk_metadata['file_path']
+                                
+                                # Preserve ambiguity flags if present (CRITICAL for ambiguity detection)
                                 if chunk.get('_ambiguous_filename'):
                                     result_dict['_ambiguous_filename'] = True
                                     result_dict['_all_matching_paths'] = chunk.get('_all_matching_paths', [])
+                                    self.logger.warning(
+                                        f"CODE_LOCATION | AMBIGUITY DETECTED - Preserving ambiguity flags for chunk {chunk_id}: "
+                                        f"filename={chunk.get('filename', chunk_metadata.get('filename', 'unknown'))}, "
+                                        f"file_path={chunk_metadata.get('file_path', 'unknown')}, "
+                                        f"paths={chunk.get('_all_matching_paths', [])}"
+                                    )
                                 
                                 results.append(result_dict)
                 
