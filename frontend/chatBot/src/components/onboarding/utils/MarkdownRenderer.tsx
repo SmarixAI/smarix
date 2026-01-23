@@ -409,8 +409,8 @@ const CodeBlock = ({
       >
         {/* Vertical scroll container */}
         <div className="max-h-[600px] overflow-y-auto">
-          <pre className="p-4 overflow-x-auto text-sm text-white font-mono leading-relaxed">
-            <code>{code}</code>
+          <pre className="p-4 overflow-x-auto text-sm text-white font-mono leading-relaxed max-w-full">
+            <code className="block min-w-0 max-w-full overflow-x-auto">{code}</code>
           </pre>
         </div>
       </div>
@@ -703,12 +703,13 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
 
       // 1️⃣ Links (highest priority)
       if (linkMatches.some((lm) => lm === match)) {
-        const isGitHub = match.url.includes('github.com');
+        const linkMatch = match as { start: number; end: number; text: string; url: string };
+        const isGitHub = linkMatch.url.includes('github.com');
 
         parts.push(
           <a
             key={`link-${idx}`}
-            href={match.url}
+            href={linkMatch.url}
             target="_blank"
             rel="noopener noreferrer"
             className={`

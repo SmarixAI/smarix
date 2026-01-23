@@ -1299,12 +1299,12 @@ export default function ChatPage() {
                 )}
 
                 <div
-                  className={`max-w-4xl flex-1 ${
+                  className={`max-w-4xl flex-1 min-w-0 ${
                     message.role === "user" ? "order-first" : ""
                   }`}
                 >
                   <div
-                    className={`p-5 rounded-2xl ${
+                    className={`p-5 rounded-2xl max-w-full overflow-x-auto ${
                       message.role === "user"
                         ? "bg-[#0E1B2E] text-white border border-[#0E1B2E] shadow-md"
                         : "bg-white/60 backdrop-blur-sm border border-[#0E1B2E]/10 shadow-sm"
@@ -1378,7 +1378,7 @@ export default function ChatPage() {
                             </div>
                           )}
 
-                        <div className="markdown-content prose max-w-none antialiased">
+                        <div className="markdown-content prose max-w-none antialiased overflow-x-auto">
                           <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
                             rehypePlugins={[rehypeHighlight, rehypeRaw]}
@@ -1614,7 +1614,7 @@ export default function ChatPage() {
                         </div>
                       </div>
                     ) : (
-                      <div className="text-white whitespace-pre-wrap">
+                      <div className="text-white whitespace-pre-wrap break-words max-w-full overflow-x-auto">
                         {message.content}
                       </div>
                     )}

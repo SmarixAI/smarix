@@ -350,6 +350,21 @@ export default function Chatbot({ role = 'onboarding' }: ChatbotProps) {
           -webkit-box-orient: vertical;
           overflow: hidden;
         }
+        /* Horizontal scrollbar styling for wide content */
+        .overflow-x-auto::-webkit-scrollbar {
+          height: 8px;
+        }
+        .overflow-x-auto::-webkit-scrollbar-track {
+          background: transparent;
+          border-radius: 10px;
+        }
+        .overflow-x-auto::-webkit-scrollbar-thumb {
+          background: #0E1B2E20;
+          border-radius: 10px;
+        }
+        .overflow-x-auto::-webkit-scrollbar-thumb:hover {
+          background: #0E1B2E30;
+        }
       `}</style>
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -702,13 +717,17 @@ export default function Chatbot({ role = 'onboarding' }: ChatbotProps) {
                         : isFullscreen
                         ? 'bg-white/35 backdrop-blur-xl text-[#0E1B2E] border border-white/25 shadow-md shadow-black/5'
                         : 'bg-white/90 backdrop-blur-sm text-[#0E1B2E] border border-gray-200/50 shadow-sm'
-                    }`}
+                    } max-w-full overflow-x-auto`}
                   >
-                    {message.role === 'user' ? (
-                      <p className={`${spaceGrotesk.className} ${isFullscreen ? 'text-base' : 'text-sm'} whitespace-pre-wrap break-words leading-relaxed`}>{message.content}</p>
-                    ) : (
-                      <MarkdownRenderer content={message.content} isFullscreen={isFullscreen} />
-                    )}
+                    <div className="min-w-0 max-w-full">
+                      {message.role === 'user' ? (
+                        <p className={`${spaceGrotesk.className} ${isFullscreen ? 'text-base' : 'text-sm'} whitespace-pre-wrap break-words leading-relaxed max-w-full overflow-x-auto`}>{message.content}</p>
+                      ) : (
+                        <div className="max-w-full overflow-x-auto">
+                          <MarkdownRenderer content={message.content} isFullscreen={isFullscreen} />
+                        </div>
+                      )}
+                    </div>
                     <p
                       className={`${firaCode.className} text-xs mt-2 ${
                         message.role === 'user'
