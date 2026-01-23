@@ -270,12 +270,19 @@ class RetrievalMixin(
                 
                 # If found results from code_chunks_loader, return immediately (no vector search, no routing, no reranking)
                 if results:
-                    self.logger.info(
-                        f"CODE_LOCATION | Found {len(results)} chunks from code_chunks_loader, "
-                        f"returning immediately without vector search, routing, or reranking"
-                    )
-                    results = sorted(results, key=lambda x: x.get('score', 0), reverse=True)
+                    # 🚨 HARD STOP ON AMBIGUITY
+                    if any(r.get("_ambiguous_filename") for r in results):
+                        self.logger.warning(
+                            "CODE_LOCATION | Ambiguous filename detected — stopping retrieval before context building"
+                        )
+                        return [{
+                            "__ambiguous__": True,
+                            "filename": extract_filename(results[0].get("metadata", {}).get("file_path", "")),
+                            "paths": results[0].get("_all_matching_paths", [])
+                        }]
+
                     return results[:self.top_k * 2]
+
             
             # If code_chunks_loader didn't find results, do simple vector search
             # Skip multi-index routing and complex file index merging

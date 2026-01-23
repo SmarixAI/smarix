@@ -691,14 +691,8 @@ Instructions:
         role: Optional[str] = None,
         intent: Optional[str] = None
     ) -> Dict[str, Any]:
-
-        # 🔒 STEP 1: Slice context HARD by PR/Issue intent
-        if query_type == QueryType.PR_SPECIFIC and intent:
-            github_results = self._slice_pr_context_by_intent(github_results, intent)
-        elif query_type == QueryType.ISSUE_SPECIFIC and intent:
-            github_results = self._slice_issue_context_by_intent(github_results, intent)
-
-        # 🔴 STEP 1.5: Ambiguous filename guard (CODE_LOCATION only)
+        
+        # 🚨 HARD STOP: Ambiguous filename (CODE_LOCATION)
         if query_type == QueryType.CODE_LOCATION:
             ambiguity = self._detect_ambiguous_filename(github_results, query)
 
@@ -707,7 +701,7 @@ Instructions:
                     "answer": (
                         f"Multiple files named `{ambiguity['filename']}` were found:\n\n"
                         + "\n".join(f"- {p}" for p in ambiguity["paths"])
-                        + "\n\nPlease specify which file you're referring to by providing the full path."
+                        + "\n\nPlease specify the full file path."
                     ),
                     "sources": [],
                     "chunks_retrieved": 0,
@@ -716,10 +710,18 @@ Instructions:
                     "emails": [],
                     "has_diagram": False,
                     "related_knowledge": None,
-                    "is_metrics_query": False
+                    "is_metrics_query": False,
+                    "is_ambiguous": True
                 }
 
 
+        # 🔒 STEP 1: Slice context HARD by PR/Issue intent
+        if query_type == QueryType.PR_SPECIFIC and intent:
+            github_results = self._slice_pr_context_by_intent(github_results, intent)
+        elif query_type == QueryType.ISSUE_SPECIFIC and intent:
+            github_results = self._slice_issue_context_by_intent(github_results, intent)
+
+        
         # 🔒 STEP 2: Build context ONLY from sliced chunks
         context = self.chatbot.build_context_from_chunks(github_results, query_type)
 
@@ -869,6 +871,8 @@ Instructions:
             
         Returns:
             Context quality score (0.0 to 1.0)
+
+            
         """
         if not github_results:
             return 0.0

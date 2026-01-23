@@ -105,6 +105,36 @@ class MultiIndexRetrievalMixin:
         
         # CRITICAL: Filter by repo after deduplication
         unique_results = self._filter_by_repo(unique_results)
+
+        # 🚨 HARD STOP: Ambiguous filename for CODE_LOCATION
+        if query_type == QueryType.CODE_LOCATION and query_text:
+            # Normalize filename from query (e.g. Contents.json)
+            query_filename = query_text.strip().lower()
+
+            matching_paths = {
+                MetadataNormalizer(r.get("metadata", {}), r).get_file_path()
+                for r in unique_results
+                if MetadataNormalizer(r.get("metadata", {}), r)
+                .get_file_path()
+                .lower()
+                .endswith(query_filename)
+            }
+
+            if len(matching_paths) > 1:
+                self.logger.warning(
+                    "AMBIGUOUS_FILENAME | '%s' found in multiple paths: %s",
+                    query_filename,
+                    sorted(matching_paths),
+                )
+
+                # Annotate for ResponseHandler
+                for r in unique_results:
+                    r["_ambiguous_filename"] = True
+                    r["_all_matching_paths"] = sorted(matching_paths)
+
+                return unique_results
+
+
         
         self.logger.info(f"RETRIEVAL | Total unique chunks retrieved: {len(unique_results)} (target: 15+)")
         
