@@ -491,41 +491,37 @@ class GeneralQueryHandler:
                 filename = ambiguity_info.get("filename", "unknown")
                 paths = ambiguity_info.get("paths", [])
             else:
-            # Fallback: try to detect from chunks
-            ambiguous_chunks = [r for r in github_results if r.get("_ambiguous_filename")]
-            if ambiguous_chunks:
-                first = ambiguous_chunks[0]
-                from utils.path_normalizer import extract_filename
-                filename = extract_filename(first.get("metadata", {}).get("file_path", ""))
-                paths = first.get("_all_matching_paths", [])
-            else:
-                # Last resort: detect from file paths
-                from utils.metadata_normalizer import MetadataNormalizer
-                from utils.path_normalizer import normalize_path, extract_filename
-                filename_to_paths = {}
-                for result in github_results:
-                    meta_norm = MetadataNormalizer(result.get('metadata', {}), result)
-                    file_path = meta_norm.get_file_path('')
-                    if file_path:
-                        normalized_path = normalize_path(file_path, '')
-                        if normalized_path:
-                            fn = extract_filename(normalized_path)
-                            if fn:
-                                fn_lower = fn.lower()
-                                if fn_lower not in filename_to_paths:
-                                    filename_to_paths[fn_lower] = set()
-                                filename_to_paths[fn_lower].add(normalized_path)
-                
-                # Get first ambiguous filename
-                for fn_lower, path_set in filename_to_paths.items():
-                    if len(path_set) > 1:
-                        filename = fn_lower
-                        paths = sorted(path_set)
-                        break
+                # Fallback: try to detect from chunks
+                ambiguous_chunks = [r for r in github_results if r.get("_ambiguous_filename")]
+                if ambiguous_chunks:
+                    first = ambiguous_chunks[0]
+                    from utils.path_normalizer import extract_filename
+                    filename = extract_filename(first.get("metadata", {}).get("file_path", ""))
+                    paths = first.get("_all_matching_paths", [])
                 else:
-                    filename = "unknown"
-                    paths = []
-        
+                    # Last resort: detect from file paths
+                    from utils.metadata_normalizer import MetadataNormalizer
+                    from utils.path_normalizer import normalize_path, extract_filename
+
+                    filename_to_paths = {}
+                    for result in github_results:
+                        meta_norm = MetadataNormalizer(result.get('metadata', {}), result)
+                        file_path = meta_norm.get_file_path('')
+                        if file_path:
+                            normalized_path = normalize_path(file_path, '')
+                            if normalized_path:
+                                fn = extract_filename(normalized_path)
+                                if fn:
+                                    filename_to_paths.setdefault(fn.lower(), set()).add(normalized_path)
+
+                    filename, paths = "unknown", []
+                    for fn, path_set in filename_to_paths.items():
+                        if len(path_set) > 1:
+                            filename = fn
+                            paths = sorted(path_set)
+                            break
+
+
         answer = (
             f"Multiple files named `{filename}` were found:\n\n"
             + "\n".join(f"- {p}" for p in paths)
