@@ -6,6 +6,8 @@ Handles response packaging, formatting, and multi-query merging.
 import re
 from typing import Dict, Any, List, Optional, Callable, Tuple
 from ..query_type import QueryType
+from utils.path_normalizer import extract_filename
+
 
 # Constants for response limits
 MAX_MERGED_SOURCES = 10
@@ -344,6 +346,21 @@ class ResponseHandler:
         """
         return str(self._get_metadata(chunk)).lower()
 
+    def _detect_ambiguous_filename(self, chunks: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        if not chunks:
+            return None
+
+        ambiguous_chunks = [c for c in chunks if c.get("_ambiguous_filename")]
+        if not ambiguous_chunks:
+            return None
+
+        first = ambiguous_chunks[0]
+        return {
+            "filename": extract_filename(first.get("file_path", "")),
+            "paths": first.get("_all_matching_paths", []),
+        }
+
+
     def _slice_pr_context_by_intent(
         self, 
         chunks: List[Dict[str, Any]], 
@@ -533,6 +550,28 @@ Instructions:
             github_results = self._slice_pr_context_by_intent(github_results, intent)
         elif query_type == QueryType.ISSUE_SPECIFIC and intent:
             github_results = self._slice_issue_context_by_intent(github_results, intent)
+
+        # 🔴 STEP 1.5: Ambiguous filename guard (CODE_LOCATION only)
+        if query_type == QueryType.CODE_LOCATION:
+            ambiguity = self._detect_ambiguous_filename(github_results)
+
+            if ambiguity:
+                return {
+                    "answer": (
+                        f"Multiple files named `{ambiguity['filename']}` were found:\n\n"
+                        + "\n".join(f"- {p}" for p in ambiguity["paths"])
+                        + "\n\nPlease specify the full path."
+                    ),
+                    "sources": [],
+                    "chunks_retrieved": 0,
+                    "query_type": query_type,
+                    "context_quality": 0.0,
+                    "emails": [],
+                    "has_diagram": False,
+                    "related_knowledge": None,
+                    "is_metrics_query": False
+                }
+
 
         # 🔒 STEP 2: Build context ONLY from sliced chunks
         context = self.chatbot.build_context_from_chunks(github_results, query_type)

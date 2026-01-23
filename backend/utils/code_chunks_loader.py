@@ -277,23 +277,49 @@ class CodeChunksLoader:
             logger.debug(f"CODE_CHUNKS_LOADER | Empty filename for '{filename}'")
             return []
         
-        # Get all paths that match this filename
-        #matching_paths = self._filename_index.get(filename_lower, [])
-        
-        # if not matching_paths:
-        #     logger.debug(f"CODE_CHUNKS_LOADER | No paths found for filename '{filename_lower}'")
-        #     return []
-        
+        logger.info(
+            "CODE_CHUNKS_LOADER | Filename lookup started: '%s' (repo=%s/%s)",
+            filename_lower,
+            repo_owner,
+            repo_name,
+        )
+
         # Get all chunks for these paths
         all_chunks = list(self._filename_index.get(filename_lower, []))
-        # for path in matching_paths:
-        #     chunks = self._file_path_index.get(path, [])
-        #     all_chunks.extend(chunks)
+
+        logger.info(
+            "CODE_CHUNKS_LOADER | Filename '%s' matched %d chunks",
+            filename_lower,
+            len(all_chunks),
+        )
         
-        # logger.info(
-        #     f"CODE_CHUNKS_LOADER | Found {len(all_chunks)} chunks for filename '{filename_lower}' "
-        #     f"across {len(matching_paths)} paths: {matching_paths[:3]}"
-        # )
+        # -------------------------------------------------
+        # AMBIGUOUS FILENAME DETECTION
+        # -------------------------------------------------
+        unique_paths = {
+            normalize_path(chunk.get("file_path", ""), "")
+            for chunk in all_chunks
+            if chunk.get("file_path")
+        }
+
+        if len(unique_paths) > 1:
+            paths = sorted(unique_paths)
+
+            logger.warning(
+                "AMBIGUOUS_FILENAME | '%s' found in multiple paths: %s",
+                filename_lower,
+                paths,
+            )
+
+            # Annotate chunks
+            for chunk in all_chunks:
+                chunk["_ambiguous_filename"] = True
+                chunk["_all_matching_paths"] = paths
+
+            # 🔴 CRITICAL: STOP NORMAL FLOW
+            return all_chunks
+
+
         
         # Filter by repo if specified
         if repo_name:

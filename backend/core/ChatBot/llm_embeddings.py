@@ -420,7 +420,8 @@ class LLMEmbeddingMixin:
             QueryType.CODE_LOCATION: """
         CODE LOCATION QUERY:
         - When user asks about a specific file, show the ACTUAL CODE from that file directly
-        - Start with a top-level overview/summary if file overview is available in context
+        - Start with a factual file header: file path, class names, and inheritance only
+        - DO NOT include high-level summaries, intent descriptions, or behavioral explanations.
         - Then show the complete code organized by structure (classes, functions, methods)
         - Show actual code from the file; full code only if explicitly requested
         - Include exact file paths with line numbers
