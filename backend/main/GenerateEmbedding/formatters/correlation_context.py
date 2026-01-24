@@ -1,5 +1,4 @@
-from typing import Dict
-from transformers import Any
+from typing import Dict, Any
 
 def format_correlation_context(chunk: Dict[str, Any]) -> str:
     if not chunk.get('is_git_related'):

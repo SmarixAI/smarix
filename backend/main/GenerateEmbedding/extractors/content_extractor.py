@@ -1,7 +1,18 @@
 from typing import Dict, Any, Tuple, List
 import json
+import sys
 from datetime import datetime
-from backend.main.GenerateEmbedding.extractors.commit_extractor import extract_commit_data
+from pathlib import Path
+
+# Handle both relative and absolute imports
+try:
+    from .commit_extractor import extract_commit_data
+except ImportError:
+    # If relative import fails, use absolute import
+    workspace_root = Path(__file__).resolve().parents[4]
+    if str(workspace_root) not in sys.path:
+        sys.path.insert(0, str(workspace_root))
+    from backend.main.GenerateEmbedding.extractors.commit_extractor import extract_commit_data
 
 
 def extract_main_content(chunk: Dict[str, Any]) -> str:

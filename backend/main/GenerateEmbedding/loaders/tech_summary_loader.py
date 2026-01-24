@@ -1,6 +1,6 @@
 
 
-from anyio import Path
+from pathlib import Path
 from typing import List, Dict, Any
 import json
 from datetime import datetime, timezone
@@ -49,3 +49,10 @@ def load_and_inject_aggregated_tech_summary(processed_dir: Path, chunks: List[Di
         'skip_embedding': False,
     }
     return [tech_chunk] + chunks
+
+
+def inject_tech_summary(processed_dir, chunks):
+    """Alias for load_and_inject_aggregated_tech_summary for backward compatibility"""
+    if isinstance(processed_dir, str):
+        processed_dir = Path(processed_dir)
+    return load_and_inject_aggregated_tech_summary(processed_dir, chunks)

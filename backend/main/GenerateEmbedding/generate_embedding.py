@@ -11,24 +11,34 @@ from pathlib import Path
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 from collections import defaultdict
-from analytics.graph_nodes import prepare_graph_nodes
-from utils.file_utils import get_size
-from loaders.source_detector import detect_source_type
-from config.state import load_current_repo_from_state
-from preparation.chunk_preparer import prepare_chunks_for_embedding
-from analytics.repo_metrics import compute_repo_metrics
-from analytics.cost_estimator import estimate_cost
-from core.GenerateEmbedding.generator import EmbeddingGenerator
-from config.provider import auto_detect_provider
-from loaders.tech_summary_loader import inject_tech_summary
-from utils.repo_normalizer import repo_matches, normalize_repo_name, normalize_repo_owner, extract_repo_parts
-                
-load_dotenv()
 
+# Add workspace root (parent of backend) to path BEFORE any imports to support both script and module execution
+# This allows importing 'backend' as a module
+_workspace_root = Path(__file__).resolve().parents[3]  # Go up to workspace root
+_workspace_root_str = str(_workspace_root)
+if _workspace_root_str not in sys.path:
+    sys.path.insert(0, _workspace_root_str)
+
+# Also add backend directory for core imports
 _backend_dir = Path(__file__).resolve().parents[2]
 _backend_dir_str = str(_backend_dir)
 if _backend_dir_str not in sys.path:
     sys.path.insert(0, _backend_dir_str)
+
+# Now import using absolute imports (works for both script and module)
+from backend.main.GenerateEmbedding.analytics.graph_nodes import prepare_graph_nodes
+from backend.main.GenerateEmbedding.utils.file_utils import get_size
+from backend.main.GenerateEmbedding.loaders.source_detector import detect_source_type
+from backend.main.GenerateEmbedding.config.state import load_current_repo_from_state
+from backend.main.GenerateEmbedding.preparation.chunk_preparer import prepare_chunks_for_embedding
+from backend.main.GenerateEmbedding.analytics.repo_metrics import compute_repo_metrics
+from backend.main.GenerateEmbedding.analytics.cost_estimator import estimate_cost
+from backend.main.GenerateEmbedding.config.provider import auto_detect_provider
+from backend.main.GenerateEmbedding.loaders.tech_summary_loader import inject_tech_summary
+from core.GenerateEmbedding.generator import EmbeddingGenerator
+from backend.utils.repo_normalizer import repo_matches, normalize_repo_name, normalize_repo_owner, extract_repo_parts
+                
+load_dotenv()
 
 
 REPO_OWNER, REPO_NAME = load_current_repo_from_state()

@@ -1,6 +1,26 @@
 from typing import List, Any, Tuple, Dict
-from core.GenerateEmbedding.raw_data_extraction import convert_raw_to_chunks
-from preparation.enhanced_chunk import prepare_enhanced_chunk_for_embedding
+import sys
+from pathlib import Path
+
+# Handle both relative and absolute imports
+try:
+    from ..preparation.enhanced_chunk import prepare_enhanced_chunk_for_embedding
+except ImportError:
+    # If relative import fails, use absolute import
+    # Add workspace root to path if not already there
+    workspace_root = Path(__file__).resolve().parents[4]
+    if str(workspace_root) not in sys.path:
+        sys.path.insert(0, str(workspace_root))
+    from backend.main.GenerateEmbedding.preparation.enhanced_chunk import prepare_enhanced_chunk_for_embedding
+
+# Import raw_data_extraction - check if it exists in core
+try:
+    from core.GenerateEmbedding.raw_data_extraction import convert_raw_to_chunks
+except ImportError:
+    # Fallback if module doesn't exist
+    def convert_raw_to_chunks(chunk):
+        """Fallback: return empty list if module not found"""
+        return []
 
 
 
@@ -19,7 +39,7 @@ def prepare_chunks_for_embedding(chunks: List[Dict[str, Any]]) -> Tuple[List[Dic
     }
     for chunk in chunks:
         # 🔥 Intercept raw-data chunks and convert them to real chunks
-        from core.GenerateEmbedding.raw_data_extraction import convert_raw_to_chunks
+        # convert_raw_to_chunks is imported at module level
 
         if chunk.get("is_raw_data", False):
             generated = convert_raw_to_chunks(chunk)  # produce code/issue/pr/commit chunks

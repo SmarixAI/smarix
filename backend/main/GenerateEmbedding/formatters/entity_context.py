@@ -1,5 +1,4 @@
-from typing import Dict
-from transformers import Any
+from typing import Dict, Any
 
 def format_entity_context(entities: Dict[str, Any], chunk_type: str) -> str:
     if not entities:

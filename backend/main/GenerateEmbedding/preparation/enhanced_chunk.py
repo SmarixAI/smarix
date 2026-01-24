@@ -1,12 +1,26 @@
-from formatters.entity_context import format_entity_context
-from formatters.temporal_context import format_temporal_context
-from formatters.correlation_context import format_correlation_context
-from extractors.content_extractor import extract_main_content
 from typing import Dict, Any, Tuple, List
 import json
 import re
+import sys
 from pathlib import Path
-from config.state import load_current_repo_from_state
+
+# Handle both relative and absolute imports
+try:
+    from ..formatters.entity_context import format_entity_context
+    from ..formatters.temporal_context import format_temporal_context
+    from ..formatters.correlation_context import format_correlation_context
+    from ..extractors.content_extractor import extract_main_content
+    from ..config.state import load_current_repo_from_state
+except ImportError:
+    # If relative imports fail, use absolute imports
+    workspace_root = Path(__file__).resolve().parents[4]
+    if str(workspace_root) not in sys.path:
+        sys.path.insert(0, str(workspace_root))
+    from backend.main.GenerateEmbedding.formatters.entity_context import format_entity_context
+    from backend.main.GenerateEmbedding.formatters.temporal_context import format_temporal_context
+    from backend.main.GenerateEmbedding.formatters.correlation_context import format_correlation_context
+    from backend.main.GenerateEmbedding.extractors.content_extractor import extract_main_content
+    from backend.main.GenerateEmbedding.config.state import load_current_repo_from_state
 
 REPO_OWNER, REPO_NAME = load_current_repo_from_state()
 
@@ -145,7 +159,7 @@ def prepare_enhanced_chunk_for_embedding(chunk: Dict[str, Any]) -> Dict[str, Any
     final_content = f"{' | '.join(context_parts)}\n\n{main_content}" if context_parts else main_content
 
     # --- derive file path/filename/directory/language for metadata ---
-    from utils.path_normalizer import normalize_path, extract_filename, extract_directory
+    from backend.utils.path_normalizer import normalize_path, extract_filename, extract_directory
     
     file_path_raw = entities.get('path') or chunk.get('path') or chunk.get('repo_file_path') or chunk.get('file_path')
     # Normalize file path using path normalizer
