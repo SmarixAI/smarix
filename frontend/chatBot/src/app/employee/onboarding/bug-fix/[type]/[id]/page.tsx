@@ -439,31 +439,92 @@ export default function BugFixDetailPage() {
 
                       {/* Markdown Description */}
                       <div className="bg-white rounded-xl border border-[#0E1B2E]/10 shadow-sm p-6">
-                        <div className="prose prose-sm max-w-none prose-slate">
+                        <div className="max-w-none">
                           <ReactMarkdown
                             components={{
+                              h1: ({ children }) => (
+                                <h1 className={`${inter.className} text-2xl font-bold mb-4 pb-3 border-b-2 border-[#0E1B2E]/20 text-[#0E1B2E] mt-8 first:mt-0`}>
+                                  {children}
+                                </h1>
+                              ),
+                              h2: ({ children }) => (
+                                <h2 className={`${inter.className} text-xl font-bold mb-3 mt-6 text-[#0E1B2E] flex items-center gap-2`}>
+                                  <div className="w-1 h-5 bg-[#0E1B2E] rounded-full" />
+                                  {children}
+                                </h2>
+                              ),
+                              h3: ({ children }) => (
+                                <h3 className={`${inter.className} text-lg font-semibold mb-2 mt-4 text-[#0E1B2E]`}>
+                                  {children}
+                                </h3>
+                              ),
+                              h4: ({ children }) => (
+                                <h4 className={`${inter.className} text-base font-semibold mb-2 mt-3 text-[#0E1B2E]`}>
+                                  {children}
+                                </h4>
+                              ),
+                              p: ({ children }) => (
+                                <p className={`${inter.className} mb-4 leading-relaxed text-[15px] text-[#0E1B2E]`}>
+                                  {children}
+                                </p>
+                              ),
+                              ul: ({ children }) => (
+                                <ul className="list-disc list-outside mb-4 space-y-2 ml-5 text-[#0E1B2E]">
+                                  {children}
+                                </ul>
+                              ),
+                              ol: ({ children }) => (
+                                <ol className="list-decimal list-outside mb-4 space-y-2 ml-5 text-[#0E1B2E]">
+                                  {children}
+                                </ol>
+                              ),
+                              li: ({ children }) => (
+                                <li className={`${inter.className} leading-relaxed text-[15px] text-[#0E1B2E]`}>
+                                  {children}
+                                </li>
+                              ),
+                              strong: ({ children }) => (
+                                <strong className={`${inter.className} font-semibold text-[#0E1B2E]`}>
+                                  {children}
+                                </strong>
+                              ),
+                              em: ({ children }) => (
+                                <em className={`${inter.className} italic text-[#0E1B2E]`}>
+                                  {children}
+                                </em>
+                              ),
+                              blockquote: ({ children }) => (
+                                <blockquote className="border-l-4 border-blue-500/40 bg-blue-50/60 pl-4 py-3 pr-4 rounded-r my-4 text-[#0E1B2E] italic">
+                                  {children}
+                                </blockquote>
+                              ),
                               code({ children, className }) {
                                 const match = /language-(\w+)/.exec(className || '');
                                 return match ? (
                                   <div className="my-4 rounded-xl overflow-hidden border border-[#0E1B2E]/10 bg-white">
-                                    <div className="px-3 py-1.5 bg-[#0E1B2E]/5 border-b text-xs font-bold uppercase">
+                                    <div className="px-3 py-1.5 bg-[#0E1B2E]/5 border-b text-xs font-bold uppercase text-[#0E1B2E]">
                                       {match[1]}
                                     </div>
                                     <SyntaxHighlighter
                                       PreTag="div"
                                       language={match[1]}
                                       style={oneLight}
-                                      customStyle={{ margin: 0, padding: '1rem' }}
+                                      customStyle={{ margin: 0, padding: '1rem', fontSize: '0.875rem' }}
                                     >
                                       {String(children).replace(/\n$/, '')}
                                     </SyntaxHighlighter>
                                   </div>
                                 ) : (
-                                  <code className="px-1.5 py-0.5 rounded bg-[#0E1B2E]/5 border text-sm">
+                                  <code className={`${jetbrainsMono.className} px-1.5 py-0.5 rounded bg-[#0E1B2E]/5 border border-[#0E1B2E]/10 text-sm text-[#0E1B2E]`}>
                                     {children}
                                   </code>
                                 );
                               },
+                              a: ({ children, href }) => (
+                                <a href={href} className="text-blue-600 hover:text-blue-800 underline" target="_blank" rel="noopener noreferrer">
+                                  {children}
+                                </a>
+                              ),
                             }}
                           >
                             {challengeContent ||
@@ -480,8 +541,8 @@ export default function BugFixDetailPage() {
                   {activeTab === 'hints' && (
                     <div className="max-w-4xl mx-auto">
                       <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-6 max-w-2xl mx-auto">
-                        <h4 className="font-bold mb-3">Helpful Hints</h4>
-                        <ul className="space-y-2 text-sm">
+                        <h4 className={`${inter.className} font-bold mb-3 text-[#0E1B2E]`}>Helpful Hints</h4>
+                        <ul className="space-y-2 text-sm text-[#0E1B2E]">
                           <li>Read the problem carefully</li>
                           <li>Identify affected files</li>
                           <li>Handle edge cases</li>
@@ -495,8 +556,8 @@ export default function BugFixDetailPage() {
                   {activeTab === 'solution' && (
                     <div className="max-w-4xl mx-auto">
                       <div className="rounded-xl border bg-slate-50 p-8 text-center max-w-2xl mx-auto">
-                        <CheckCircle2 className="mx-auto mb-3 opacity-40" />
-                        <p className="text-sm text-slate-600">
+                        <CheckCircle2 className="mx-auto mb-3 opacity-40 text-[#0E1B2E]" />
+                        <p className={`${inter.className} text-sm text-[#0E1B2E]`}>
                           Solution is hidden until you attempt the challenge.
                         </p>
                       </div>
