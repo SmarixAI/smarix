@@ -296,7 +296,6 @@ export default function CodeEditor({
             </div>
             <div>
               <h3 className="text-lg font-semibold text-white">Code Editor</h3>
-              <p className="text-xs text-gray-400">PR #{prData.pr_number}</p>
             </div>
           </div>
 

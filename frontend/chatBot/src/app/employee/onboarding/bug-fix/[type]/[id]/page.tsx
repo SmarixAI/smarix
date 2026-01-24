@@ -379,36 +379,9 @@ export default function BugFixDetailPage() {
 
   return (
     <div className="min-h-screen bg-[#FAFAFA]">
-      {/* Header with back button */}
-      <div className="sticky top-0 z-30 bg-white border-b border-slate-200 px-6 py-4 shadow-sm">
-        <button
-          onClick={() => router.back()}
-          className="flex items-center gap-2 text-slate-600 hover:text-slate-900 transition mb-3 group"
-        >
-          <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-          <span className="text-sm font-medium">Back to Bug Fix List</span>
-        </button>
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 mb-2">
-              {data.pr_title || `PR #${data.pr_number || id}`}
-            </h1>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">
-                {type === 'tutorial' ? 'Tutorial' : 'Challenge'}
-              </span>
-              {data.difficulty && (
-                <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold border ${getDifficultyColor(data.difficulty)}`}>
-                  {data.difficulty}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* Two Column Layout */}
-      <div className="h-[calc(100vh-120px)] flex gap-0 bugfix-detail-container relative rounded-2xl border-2 border-[#0E1B2E]/10 overflow-hidden bg-white shadow-xl shadow-[#0E1B2E]/5">
+      <div className="h-screen w-screen flex gap-0 bugfix-detail-container relative overflow-hidden bg-white">
         {/* Left Panel - Problem Details */}
         <div
           className={`flex flex-col relative bg-white overflow-hidden ${
@@ -418,41 +391,7 @@ export default function BugFixDetailPage() {
         >
           {type === 'challenge' ? (
             <>
-              {/* Header */}
-              <div className="px-6 py-5 border-b border-[#0E1B2E]/10 bg-gradient-to-r from-white to-slate-50/50 flex-shrink-0">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <span
-                      className={`${jetbrainsMono.className} text-xs font-bold text-[#0E1B2E]/60 bg-[#0E1B2E]/10 px-2.5 py-1 rounded-md border border-[#0E1B2E]/10`}
-                    >
-                      #{data.question_number || data.pr_number || id}
-                    </span>
-                    <h1
-                      className={`${inter.className} text-lg font-bold text-[#0E1B2E]`}
-                    >
-                      Problem Statement
-                    </h1>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`${inter.className} inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-semibold uppercase tracking-wide border ${getDifficultyColor(difficulty)}`}
-                    >
-                      {difficulty}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 flex-wrap mb-4">
-                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-[#0E1B2E]/70 bg-[#0E1B2E]/5 border border-[#0E1B2E]/10">
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>{time}</span>
-                  </div>
-                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-[#0E1B2E]/70 bg-[#0E1B2E]/5 border border-[#0E1B2E]/10">
-                    <Code2 className="w-3.5 h-3.5" />
-                    <span>{data.category || 'Bug Fix'}</span>
-                  </div>
-                </div>
-
+              <div className="px-6 pt-5 pb-3 border-b border-[#0E1B2E]/10 bg-white flex-shrink-0">
                 {/* Tabs */}
                 <div className="flex p-1 bg-[#0E1B2E]/5 rounded-lg border border-[#0E1B2E]/5">
                   {[
@@ -463,225 +402,113 @@ export default function BugFixDetailPage() {
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id as any)}
-                      className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-xs font-bold transition-all duration-200 ${
+                      className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-xs font-bold transition-all ${
                         activeTab === tab.id
                           ? 'bg-white text-[#0E1B2E] shadow-sm ring-1 ring-[#0E1B2E]/5'
                           : 'text-[#0E1B2E]/60 hover:text-[#0E1B2E] hover:bg-[#0E1B2E]/5'
                       }`}
                     >
                       <tab.icon className="w-3.5 h-3.5" />
-                      <span>{tab.label}</span>
+                      {tab.label}
                     </button>
                   ))}
                 </div>
               </div>
 
               {/* Scrollable Content */}
-              <div className="flex-1 overflow-y-auto px-8 py-6 bg-slate-50/50">
+              <div className="flex-1 overflow-y-auto bg-slate-50">
+                <div className="px-6 py-6 max-w-4xl mx-auto">
+                  {/* DESCRIPTION TAB */}
                   {activeTab === 'description' && (
-                    <div className="max-w-none">
-                      {/* Challenge Overview Section */}
-                      <div className="mb-6 p-5 bg-white rounded-xl border border-[#0E1B2E]/10 shadow-sm">
-                        <h2 className={`${inter.className} text-base font-bold text-[#0E1B2E] mb-4 flex items-center gap-2`}>
-                          <div className="w-1 h-5 bg-[#0E1B2E] rounded-full" />
-                          Challenge Overview
-                        </h2>
-                        <div className="space-y-3 text-sm">
-                          {prMatch && (
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-[#0E1B2E]/80 min-w-[120px]">Question:</span>
-                              <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium text-[#0E1B2E]/70 bg-[#0E1B2E]/5 border border-[#0E1B2E]/10">
-                                Based on Issue/PR #{prNumber}
-                              </span>
-                            </div>
-                          )}
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-[#0E1B2E]/80 min-w-[120px]">Difficulty:</span>
-                            <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold border ${getDifficultyColor(difficulty)}`}>
-                              {difficulty}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-[#0E1B2E]/80 min-w-[120px]">Estimated time:</span>
-                            <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium text-[#0E1B2E]/70 bg-[#0E1B2E]/5 border border-[#0E1B2E]/10">
+                    <div className="space-y-6">
+                      {/* Problem Meta */}
+                      <div className="bg-white rounded-xl border border-[#0E1B2E]/10 shadow-sm overflow-hidden">
+                        <div className="p-5">
+                          <div className="flex items-center gap-3 mb-4">
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-[#0E1B2E]/70 bg-[#0E1B2E]/5 border">
+                              <Clock className="w-3.5 h-3.5" />
                               {time}
-                            </span>
-                          </div>
-                          {skills.length > 0 && (
-                            <div className="flex items-start gap-2">
-                              <span className="font-semibold text-[#0E1B2E]/80 min-w-[120px] pt-1">Skills tested:</span>
-                              <div className="flex flex-wrap gap-2">
-                                {skills.map((skill: string, idx: number) => (
-                                  <span
-                                    key={idx}
-                                    className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200"
-                                  >
-                                    {skill}
-                                  </span>
-                                ))}
-                              </div>
                             </div>
-                          )}
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-[#0E1B2E]/70 bg-[#0E1B2E]/5 border">
+                              <Code2 className="w-3.5 h-3.5" />
+                              {data.category || 'Bug Fix'}
+                            </div>
+                          </div>            
                         </div>
                       </div>
 
-                      {/* Problem Description Section */}
-                      <div className="prose prose-sm max-w-none prose-slate">
-                        <ReactMarkdown
-                          components={{
-                          code(props) {
-                            const { children, className } = props;
-                            const match = /language-(\w+)/.exec(className || '');
-                            return match ? (
-                              <div className="my-4 rounded-xl overflow-hidden border border-[#0E1B2E]/10 shadow-sm bg-white">
-                                <div className="px-3 py-1.5 bg-[#0E1B2E]/5 border-b border-[#0E1B2E]/5 flex items-center justify-between">
-                                  <span
-                                    className={`${jetbrainsMono.className} text-[10px] font-bold text-[#0E1B2E]/60 uppercase`}
-                                  >
-                                    {match[1]}
-                                  </span>
-                                </div>
-                                <SyntaxHighlighter
-                                  PreTag="div"
-                                  language={match[1]}
-                                  style={oneLight}
-                                  customStyle={{
-                                    margin: 0,
-                                    padding: '1rem',
-                                    fontSize: '0.85rem',
-                                    background: 'white',
-                                  }}
-                                >
-                                  {String(children).replace(/\n$/, '')}
-                                </SyntaxHighlighter>
-                              </div>
-                            ) : (
-                              <code
-                                className={`${jetbrainsMono.className} px-1.5 py-0.5 rounded text-[13px] bg-[#0E1B2E]/5 text-[#0E1B2E] border border-[#0E1B2E]/10`}
-                              >
-                                {children}
-                              </code>
-                            );
-                          },
-                          h1: ({ children }) => (
-                            <h1
-                              className={`${inter.className} text-xl font-bold mb-4 pb-3 border-b-2 border-[#0E1B2E]/20 text-[#0E1B2E] mt-8 first:mt-0`}
-                            >
-                              {children}
-                            </h1>
-                          ),
-                          h2: ({ children }) => (
-                            <h2
-                              className={`${inter.className} text-lg font-bold mb-3 mt-6 text-[#0E1B2E] flex items-center gap-2`}
-                            >
-                              <div className="w-1 h-5 bg-[#0E1B2E] rounded-full" />
-                              {children}
-                            </h2>
-                          ),
-                          h3: ({ children }) => (
-                            <h3
-                              className={`${inter.className} text-base font-semibold mb-2 mt-4 text-[#0E1B2E]/90`}
-                            >
-                              {children}
-                            </h3>
-                          ),
-                          p: ({ children }) => (
-                            <p
-                              className={`${inter.className} mb-4 leading-relaxed text-[15px] text-[#0E1B2E]/80`}
-                            >
-                              {children}
-                            </p>
-                          ),
-                          ul: ({ children }) => (
-                            <ul className="list-disc list-outside mb-4 space-y-2 ml-5 text-[#0E1B2E]/80">
-                              {children}
-                            </ul>
-                          ),
-                          ol: ({ children }) => (
-                            <ol className="list-decimal list-outside mb-4 space-y-2 ml-5 text-[#0E1B2E]/80">
-                              {children}
-                            </ol>
-                          ),
-                          li: ({ children }) => (
-                            <li
-                              className={`${inter.className} leading-relaxed text-[15px]`}
-                            >
-                              {children}
-                            </li>
-                          ),
-                          blockquote: ({ children }) => (
-                            <blockquote className="border-l-4 border-blue-500/40 bg-blue-50/60 pl-4 py-3 pr-4 rounded-r my-4 text-[#0E1B2E]/80 italic">
-                              {children}
-                            </blockquote>
-                          ),
-                          strong: ({ children }) => (
-                            <strong className={`${inter.className} font-semibold text-[#0E1B2E]`}>
-                              {children}
-                            </strong>
-                          ),
-                        }}
-                      >
-                        {challengeContent || data.brief_description || data.description || 'No description available.'}
-                      </ReactMarkdown>
-                      </div>
-                    </div>
-                  )}
-
-                  {activeTab === 'hints' && (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-6">
-                      <div className="flex items-start gap-4">
-                        <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
-                          <Lightbulb className="w-4 h-4 text-amber-600" />
-                        </div>
-                        <div>
-                          <h4
-                            className={`${inter.className} font-bold text-[#0E1B2E] mb-3`}
+                      {/* Markdown Description */}
+                      <div className="bg-white rounded-xl border border-[#0E1B2E]/10 shadow-sm p-6">
+                        <div className="prose prose-sm max-w-none prose-slate">
+                          <ReactMarkdown
+                            components={{
+                              code({ children, className }) {
+                                const match = /language-(\w+)/.exec(className || '');
+                                return match ? (
+                                  <div className="my-4 rounded-xl overflow-hidden border border-[#0E1B2E]/10 bg-white">
+                                    <div className="px-3 py-1.5 bg-[#0E1B2E]/5 border-b text-xs font-bold uppercase">
+                                      {match[1]}
+                                    </div>
+                                    <SyntaxHighlighter
+                                      PreTag="div"
+                                      language={match[1]}
+                                      style={oneLight}
+                                      customStyle={{ margin: 0, padding: '1rem' }}
+                                    >
+                                      {String(children).replace(/\n$/, '')}
+                                    </SyntaxHighlighter>
+                                  </div>
+                                ) : (
+                                  <code className="px-1.5 py-0.5 rounded bg-[#0E1B2E]/5 border text-sm">
+                                    {children}
+                                  </code>
+                                );
+                              },
+                            }}
                           >
-                            Helpful Hints
-                          </h4>
-                          <ul className="space-y-3">
-                            {[
-                              'Carefully read through the problem description and understand the requirements',
-                              'Look at the file structure and identify which files need to be modified',
-                              'Test your changes with different scenarios and edge cases',
-                              'Make sure your code follows best practices and is well-documented',
-                            ].map((hint, i) => (
-                              <li
-                                key={i}
-                                className="flex gap-3 text-sm text-[#0E1B2E]/70"
-                              >
-                                <span className="text-amber-500 mt-0.5">•</span>
-                                <span>{hint}</span>
-                              </li>
-                            ))}
-                          </ul>
+                            {challengeContent ||
+                              data.brief_description ||
+                              data.description ||
+                              'No description available.'}
+                          </ReactMarkdown>
                         </div>
                       </div>
                     </div>
                   )}
 
-                  {activeTab === 'solution' && (
-                    <div className="rounded-xl border border-[#0E1B2E]/10 bg-slate-50 p-8 text-center">
-                      <div className="w-12 h-12 rounded-xl bg-[#0E1B2E]/5 flex items-center justify-center mx-auto mb-4">
-                        <CheckCircle2 className="w-6 h-6 text-[#0E1B2E]/40" />
+                  {/* HINTS TAB */}
+                  {activeTab === 'hints' && (
+                    <div className="max-w-4xl mx-auto">
+                      <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-6 max-w-2xl mx-auto">
+                        <h4 className="font-bold mb-3">Helpful Hints</h4>
+                        <ul className="space-y-2 text-sm">
+                          <li>Read the problem carefully</li>
+                          <li>Identify affected files</li>
+                          <li>Handle edge cases</li>
+                          <li>Test thoroughly</li>
+                        </ul>
                       </div>
-                      <h4
-                        className={`${inter.className} font-bold text-[#0E1B2E] mb-2`}
-                      >
-                        Solution Hidden
-                      </h4>
-                      <p
-                        className={`${inter.className} text-sm text-[#0E1B2E]/60 max-w-sm mx-auto`}
-                      >
-                        Try to solve the challenge on your own first! The solution
-                        will be revealed after you attempt the challenge.
-                      </p>
                     </div>
                   )}
+
+                  {/* SOLUTION TAB */}
+                  {activeTab === 'solution' && (
+                    <div className="max-w-4xl mx-auto">
+                      <div className="rounded-xl border bg-slate-50 p-8 text-center max-w-2xl mx-auto">
+                        <CheckCircle2 className="mx-auto mb-3 opacity-40" />
+                        <p className="text-sm text-slate-600">
+                          Solution is hidden until you attempt the challenge.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                </div>
               </div>
+
             </>
           ) : type === 'tutorial' && parsedContent ? (
-            <div className="flex-1 overflow-y-auto px-8 py-6 bg-slate-50/50">
+            <div className="flex-1 overflow-y-auto px-8 py-6 bg-slate-50">
               <div className="max-w-4xl mx-auto space-y-8">
                 {/* Left side content for tutorials */}
                 {parsedContent.overview && (
@@ -711,7 +538,7 @@ export default function BugFixDetailPage() {
               e.preventDefault();
               setIsResizing(true);
             }}
-            className={`w-[1px] cursor-col-resize transition-colors flex-shrink-0 relative z-10 group ${
+            className={`w-[3px] cursor-col-resize transition-colors flex-shrink-0 relative z-10 group ${
               isResizing ? 'bg-blue-500' : 'bg-[#0E1B2E]/10 hover:bg-blue-500'
             }`}
           >
@@ -727,7 +554,7 @@ export default function BugFixDetailPage() {
               e.preventDefault();
               setIsResizing(true);
             }}
-            className="w-[1px] cursor-col-resize hover:bg-blue-500 transition-colors flex-shrink-0 relative z-10 group bg-slate-200"
+            className="w-[3px] cursor-col-resize hover:bg-blue-500 transition-colors flex-shrink-0 relative z-10 group bg-slate-200"
           >
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-8 bg-white border border-slate-300 rounded-full flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
               <div className="w-0.5 h-4 bg-slate-400 rounded-full" />
@@ -737,13 +564,16 @@ export default function BugFixDetailPage() {
 
         {/* Right Panel - Code Steps & Explanation (for tutorials) or Code Editor (for challenges) */}
         <div
-          className={`flex flex-col flex-1 overflow-hidden ${
+          className={`flex flex-col overflow-hidden ${
             type === 'challenge' ? 'bg-[#1e1e1e]' : 'bg-white'
-          } ${isFullscreen ? 'w-full' : ''}`}
-          style={!isFullscreen ? { width: `${100 - leftPanelWidth}%` } : {}}
+          } ${
+            isFullscreen
+              ? 'fixed inset-0 z-50 w-screen h-screen'
+              : 'relative flex-1'
+          }`}
         >
           {type === 'tutorial' && parsedContent ? (
-            <div className="flex-1 overflow-y-auto px-8 py-6 bg-slate-50/50">
+            <div className="flex-1 overflow-y-auto px-8 py-6 bg-slate-50">
               <div className="max-w-4xl mx-auto space-y-8">
                 {/* Right side content for tutorials: Steps and Code Explanation */}
                 {parsedContent.steps.length > 0 && (
