@@ -14,17 +14,17 @@ export async function GET(request: Request) {
           // If repo is provided, try owner/repo structure first
           if (repo) {
             const [owner, repoName] = repo.split('/');
-            // Try new structure: owner/repo/onboarding_bugfix_data/
-            const newPath = path.join(basePath, owner, repoName, 'onboarding_bugfix_data', fileName);
+            // Try bugfix/ folder first (most common location)
+            const bugfixPath = path.join(basePath, owner, repoName, 'bugfix', fileName);
             try {
-              await fs.access(newPath);
-              return newPath;
+              await fs.access(bugfixPath);
+              return bugfixPath;
             } catch {
-              // Try alternative: owner/repo/bugfix/
-              const altPath = path.join(basePath, owner, repoName, 'bugfix', fileName);
+              // Try new structure: owner/repo/onboarding_bugfix_data/
+              const newPath = path.join(basePath, owner, repoName, 'onboarding_bugfix_data', fileName);
               try {
-                await fs.access(altPath);
-                return altPath;
+                await fs.access(newPath);
+                return newPath;
               } catch {
                 // Continue to scan
               }
@@ -41,17 +41,17 @@ export async function GET(request: Request) {
                 const ownerEntries = await fs.readdir(ownerPath, { withFileTypes: true });
                 for (const repoEntry of ownerEntries) {
                   if (repoEntry.isDirectory()) {
-                    // Try new structure: owner/repo/onboarding_bugfix_data/
-                    const newPath = path.join(ownerPath, repoEntry.name, 'onboarding_bugfix_data', fileName);
+                    // Try bugfix/ folder first (most common location)
+                    const bugfixPath = path.join(ownerPath, repoEntry.name, 'bugfix', fileName);
                     try {
-                      await fs.access(newPath);
-                      return newPath;
+                      await fs.access(bugfixPath);
+                      return bugfixPath;
                     } catch {
-                      // Try alternative: owner/repo/bugfix/
-                      const altPath = path.join(ownerPath, repoEntry.name, 'bugfix', fileName);
+                      // Try new structure: owner/repo/onboarding_bugfix_data/
+                      const newPath = path.join(ownerPath, repoEntry.name, 'onboarding_bugfix_data', fileName);
                       try {
-                        await fs.access(altPath);
-                        return altPath;
+                        await fs.access(newPath);
+                        return newPath;
                       } catch {
                         continue;
                       }
@@ -62,13 +62,20 @@ export async function GET(request: Request) {
                 // Not owner/repo structure, try flat
               }
               
-              // Try flat repo structure: repo_name/onboarding_bugfix_data/
-              const flatPath = path.join(ownerPath, entry.name, 'onboarding_bugfix_data', fileName);
+              // Try flat repo structure: repo_name/bugfix/ first
+              const flatBugfixPath = path.join(ownerPath, entry.name, 'bugfix', fileName);
               try {
-                await fs.access(flatPath);
-                return flatPath;
+                await fs.access(flatBugfixPath);
+                return flatBugfixPath;
               } catch {
-                continue;
+                // Try flat repo structure: repo_name/onboarding_bugfix_data/
+                const flatPath = path.join(ownerPath, entry.name, 'onboarding_bugfix_data', fileName);
+                try {
+                  await fs.access(flatPath);
+                  return flatPath;
+                } catch {
+                  continue;
+                }
               }
             }
           }

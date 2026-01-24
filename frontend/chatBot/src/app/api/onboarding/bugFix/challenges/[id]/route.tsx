@@ -2,10 +2,14 @@ import { NextResponse } from 'next/server';
 import fs from 'fs/promises';
 import path from 'path';
 
-export async function GET(request: Request) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const { searchParams } = new URL(request.url);
     const repo = searchParams.get('repo');
+    const { id } = await params;
 
     // Helper function to find file in repo folders
     const findFileInRepos = async (basePaths: string[], fileName: string, repo?: string | null): Promise<string | null> => {
@@ -14,17 +18,17 @@ export async function GET(request: Request) {
           // If repo is provided, try owner/repo structure first
           if (repo) {
             const [owner, repoName] = repo.split('/');
-            // Try bugfix/ folder first (most common location)
-            const bugfixPath = path.join(basePath, owner, repoName, 'bugfix', fileName);
+            // Try new structure: owner/repo/onboarding_bugfix_data/
+            const newPath = path.join(basePath, owner, repoName, 'onboarding_bugfix_data', fileName);
             try {
-              await fs.access(bugfixPath);
-              return bugfixPath;
+              await fs.access(newPath);
+              return newPath;
             } catch {
-              // Try new structure: owner/repo/onboarding_bugfix_data/
-              const newPath = path.join(basePath, owner, repoName, 'onboarding_bugfix_data', fileName);
+              // Try alternative: owner/repo/bugfix/
+              const altPath = path.join(basePath, owner, repoName, 'bugfix', fileName);
               try {
-                await fs.access(newPath);
-                return newPath;
+                await fs.access(altPath);
+                return altPath;
               } catch {
                 // Continue to scan
               }
@@ -94,11 +98,11 @@ export async function GET(request: Request) {
       path.join(process.cwd(), 'backend', 'data', 'Onboarding'),
     ];
 
-    const filePath = await findFileInRepos(possibleBasePaths, 'onboarding_pr_tutorials.json', repo);
+    const filePath = await findFileInRepos(possibleBasePaths, 'onboarding_coding_questions.json', repo);
     
     if (!filePath) {
       return NextResponse.json(
-        { error: 'PR tutorials file not found' },
+        { error: 'Coding questions file not found' },
         { status: 404 }
       );
     }
@@ -106,15 +110,35 @@ export async function GET(request: Request) {
     const fileContent = await fs.readFile(filePath, 'utf-8');
     const jsonData = JSON.parse(fileContent);
 
-    return NextResponse.json(jsonData, {
+    // Find the challenge by PR number or question_number (id)
+    const challenge = jsonData.questions?.find(
+      (q: any) => 
+        q.pr_number === parseInt(id) || 
+        q.pr_number?.toString() === id ||
+        q.question_number === parseInt(id) ||
+        q.question_number?.toString() === id
+    );
+
+    if (!challenge) {
+      return NextResponse.json(
+        { 
+          error: 'Challenge not found',
+          details: `No challenge found with id: ${id}. Available challenges: ${jsonData.questions?.map((q: any) => q.pr_number || q.question_number).join(', ')}`
+        },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json(challenge, {
       headers: {
         'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
       },
     });
   } catch (error) {
     return NextResponse.json({
-      error: 'Failed to load PR tutorials',
+      error: 'Failed to load challenge',
       details: error instanceof Error ? error.message : 'Unknown error',
     }, { status: 500 });
   }
 }
+

@@ -2,10 +2,14 @@ import { NextResponse } from 'next/server';
 import fs from 'fs/promises';
 import path from 'path';
 
-export async function GET(request: Request) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const { searchParams } = new URL(request.url);
     const repo = searchParams.get('repo');
+    const { id } = await params;
 
     // Helper function to find file in repo folders
     const findFileInRepos = async (basePaths: string[], fileName: string, repo?: string | null): Promise<string | null> => {
@@ -106,15 +110,28 @@ export async function GET(request: Request) {
     const fileContent = await fs.readFile(filePath, 'utf-8');
     const jsonData = JSON.parse(fileContent);
 
-    return NextResponse.json(jsonData, {
+    // Find the tutorial by ID (tutorial_number)
+    const tutorial = jsonData.tutorials?.find(
+      (t: any) => t.tutorial_number === parseInt(id) || t.tutorial_number?.toString() === id
+    );
+
+    if (!tutorial) {
+      return NextResponse.json(
+        { error: 'Tutorial not found' },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json(tutorial, {
       headers: {
         'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
       },
     });
   } catch (error) {
     return NextResponse.json({
-      error: 'Failed to load PR tutorials',
+      error: 'Failed to load tutorial',
       details: error instanceof Error ? error.message : 'Unknown error',
     }, { status: 500 });
   }
 }
+

@@ -15,6 +15,9 @@ type FilterType = 'all' | 'tutorials' | 'challenges';
 
 interface BugFixingProps {
   activeRepos?: string[];
+  employeeId?: string | null;
+  onboardingData?: any;
+  onUpdateProgress?: (section: string, itemId: string, updates: any) => void;
 }
 
 /* ===================== UI HELPERS ===================== */
@@ -40,7 +43,12 @@ interface BugListItem {
   filesChanged: number;
 }
 
-export default function BugFixing({ activeRepos = [] }: BugFixingProps) {
+export default function BugFixing({ 
+  activeRepos = [],
+  employeeId,
+  onboardingData,
+  onUpdateProgress
+}: BugFixingProps) {
   const router = useRouter();
 
   const [tutorials, setTutorials] =
@@ -67,8 +75,18 @@ export default function BugFixing({ activeRepos = [] }: BugFixingProps) {
           fetch(`/api/onboarding/bugFix/challenges${repoParam}`),
         ]);
 
-        if (tutRes.ok) setTutorials(await tutRes.json());
-        if (chalRes.ok) setChallenges(await chalRes.json());
+        if (tutRes.ok) {
+          const tutData = await tutRes.json();
+          setTutorials(tutData);
+        }
+        if (chalRes.ok) {
+          const chalData = await chalRes.json();
+          console.log('Challenges API response:', chalData);
+          console.log('Challenges questions:', chalData?.questions);
+          setChallenges(chalData);
+        }
+      } catch (error) {
+        console.error('Error fetching bug fix data:', error);
       } finally {
         setLoading(false);
       }
@@ -81,29 +99,66 @@ export default function BugFixing({ activeRepos = [] }: BugFixingProps) {
 
   const bugs: BugListItem[] = useMemo(() => {
     const tutorialItems =
-      tutorials?.tutorials.map(t => ({
-        id: t.tutorial_number,
-        type: 'tutorial',
-        title: t.pr_title,
-        description: t.brief_description,
-        difficulty: t.difficulty ?? 'Easy',
-        prNumber: t.pr_number,
-        filesChanged: t.code_files_modified,
-      })) ?? [];
+      tutorials?.tutorials
+        ?.filter(t => t.tutorial_number != null) // Filter out items without tutorial_number
+        .map(t => ({
+          id: t.tutorial_number!,
+          type: 'tutorial' as const,
+          title: t.pr_title,
+          description: t.brief_description,
+          difficulty: (t.difficulty ?? 'Easy') as 'Easy' | 'Medium' | 'Hard',
+          prNumber: t.pr_number,
+          filesChanged: t.code_files_modified,
+        })) ?? [];
+
+    // Handle challenges - check both questions array and direct array
+    const challengesArray = challenges?.questions || (Array.isArray(challenges) ? challenges : []);
+    
+    console.log('Processing challenges:', {
+      challenges,
+      questions: challenges?.questions,
+      challengesArray,
+      length: challengesArray?.length,
+      firstItem: challengesArray?.[0]
+    });
 
     const challengeItems =
-      challenges?.questions.map(c => ({
-        id: c.pr_number,
-        type: 'challenge',
-        title: `Fix issues in PR #${c.pr_number}`,
-        description:
-          c.file_changes?.length
-            ? `Resolve code issues across ${c.file_changes.length} modified file(s).`
-            : 'Resolve the reported code issues in this pull request.',
-        difficulty: 'Medium',
-        prNumber: c.pr_number,
-        filesChanged: c.file_changes?.length ?? 0,
-      })) ?? [];
+      challengesArray
+        ?.filter((c: any) => {
+          // Check for pr_number or question_number (some might use question_number)
+          const hasPrNumber = (c.pr_number != null && c.pr_number !== undefined) || 
+                              (c.question_number != null && c.question_number !== undefined);
+          if (!hasPrNumber) {
+            console.log('Filtered out challenge (no pr_number/question_number):', c);
+          }
+          return hasPrNumber;
+        })
+        .map((c: any) => {
+          // Use pr_number if available, otherwise question_number
+          const prNumber = c.pr_number ?? c.question_number;
+          const item = {
+            id: prNumber!,
+            type: 'challenge' as const,
+            title: c.pr_title || c.title || `Fix issues in PR #${prNumber}`,
+            description:
+              c.brief_description ||
+              c.description ||
+              (c.file_changes?.length
+                ? `Resolve code issues across ${c.file_changes.length} modified file(s).`
+                : 'Resolve the reported code issues in this pull request.'),
+            difficulty: (c.difficulty || 'Medium') as 'Easy' | 'Medium' | 'Hard',
+            prNumber: prNumber!,
+            filesChanged: c.file_changes?.length ?? c.code_files_modified ?? 0,
+          };
+          console.log('Mapped challenge item:', item);
+          return item;
+        }) ?? [];
+
+    console.log('Final bugs array:', {
+      tutorialItems: tutorialItems.length,
+      challengeItems: challengeItems.length,
+      total: tutorialItems.length + challengeItems.length
+    });
 
     return [...tutorialItems, ...challengeItems].filter(item => {
       if (filter === 'tutorials' && item.type !== 'tutorial') return false;
@@ -127,12 +182,18 @@ export default function BugFixing({ activeRepos = [] }: BugFixingProps) {
     );
   }
 
-  /* ===================== UI ===================== */
+  /* ===================== HANDLERS ===================== */
 
+  const handleBugClick = (bug: BugListItem) => {
+    // Navigate to the detail page
+    router.push(`/employee/onboarding/bug-fix/${bug.type}/${bug.id}`);
+  };
+
+  /* ===================== UI ===================== */
   return (
     <div className={`${inter.className} h-full flex flex-col bg-[#FAFAFA]`}>
       {/* ================= HEADER ================= */}
-      <div className="sticky top-0 z-20 bg-gradient-to-b from-white to-[#FAFAFA] border-b border-slate-200">
+      <div className="sticky top-0 z-20 bg-gradient-to-b from-white to-[#FAFAFA] border-b border-slate-200 flex-shrink-0">
         <div className="px-6 pt-5 pb-3">
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">
             Bug Fix Training
@@ -183,14 +244,8 @@ export default function BugFixing({ activeRepos = [] }: BugFixingProps) {
         <div className="bg-white border rounded-xl divide-y">
           {bugs.map((bug, idx) => (
             <div
-              key={`${bug.type}-${bug.id}`}
-              onClick={() =>
-                router.push(
-                  bug.type === 'tutorial'
-                    ? `/bug-fix/tutorial/${bug.id}`
-                    : `/bug-fix/challenge/${bug.id}`
-                )
-              }
+              key={`${bug.type}-${bug.id ?? idx}-${bug.prNumber ?? idx}`}
+              onClick={() => handleBugClick(bug)}
               className={`group relative px-6 py-5 cursor-pointer transition ${
                 idx === activeIndex
                   ? 'bg-blue-50'

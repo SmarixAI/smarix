@@ -199,6 +199,8 @@ export default function OnboardingPage() {
           />
         );
       case "bugfix":
+        const bugfixTutorials = onboardingData?.onboarding?.bugfix?.tutorials || [];
+        const bugfixChallenges = onboardingData?.onboarding?.bugfix?.challenges || [];
         return <BugFixing
           activeRepos={activeRepos}
           employeeId={employeeId}
@@ -240,7 +242,7 @@ export default function OnboardingPage() {
 
               {/* LEFT SIDEBAR */}
               {(activeTab === "practice" || activeTab === "bugfix") && (
-                <div className="col-span-3 h-full">
+                <div className="col-span-3 h-full overflow-y-auto overflow-x-hidden">
                   <Sidebar
                     completedModules={completedModules}
                     totalModules={totalModules}
@@ -250,6 +252,8 @@ export default function OnboardingPage() {
                     onSelectPracticeTask={(n: number | null) =>
                       setSelectedPracticeTask(n)
                     }
+                    tutorialsCount={onboardingData?.onboarding?.bugfix?.tutorials?.length || 0}
+                    challengesCount={onboardingData?.onboarding?.bugfix?.challenges?.length || 0}
                   />
                 </div>
               )}
@@ -270,7 +274,7 @@ export default function OnboardingPage() {
 
               {/* RIGHT SIDEBAR */}
               {activeTab === "bugfix" && (
-                <aside className="col-span-3 h-full overflow-y-auto border-l border-slate-200 bg-[#FAFAFA]">
+                <aside className="col-span-3 h-full overflow-y-auto overflow-x-hidden border-l border-slate-200 bg-[#FAFAFA]">
                   <RightSidebar />
                 </aside>
               )}
