@@ -80,7 +80,7 @@ const sanitizeMermaidCode = (code: string): string => {
   return sanitizedLines.join("\n");
 };
 
-const MermaidDiagram = ({ code }: { code: string }) => {
+export const MermaidDiagram = ({ code }: { code: string }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
