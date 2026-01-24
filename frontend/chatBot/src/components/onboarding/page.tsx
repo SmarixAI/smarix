@@ -7,6 +7,8 @@ import ReadingOverview from "@/components/onboarding/tabs/ReadingOverview";
 import PracticeTasks from "@/components/onboarding/tabs/PracticeTasks";
 import BugFixing from "@/components/onboarding/tabs/BugFixing";
 import Chatbot from "@/components/onboarding/Chatbot";
+import RightSidebar from "@/components/onboarding/RightSidebar";
+
 
 export default function OnboardingPage() {
   const [activeTab, setActiveTab] = useState("reading");
@@ -216,43 +218,71 @@ export default function OnboardingPage() {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-[#FAFAFA] text-[#0E1B2E]">
-      <div className="relative z-10 min-h-screen">
-        {/* Conditionally render Header */}
-        {isHeaderVisible && (
-          <Header
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-          />
-        )}
-
-        <div className="max-w-[1800px] mx-auto px-6 py-6 relative">
-          {activeTab !== "practice" && (
-            <div className="absolute inset-0 bg-[linear-gradient(to_right,#0E1B2E05_1px,transparent_1px),linear-gradient(to_bottom,#0E1B2E05_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
+    return (
+      <div className="min-h-screen bg-[#FAFAFA] text-[#0E1B2E]">
+        <div className="relative z-10 min-h-screen">
+          {/* Conditionally render Header */}
+          {isHeaderVisible && (
+            <Header
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+            />
           )}
-          
-          <div className={`relative z-10 ${activeTab === "practice" ? "flex gap-4 items-start" : "grid grid-cols-12 gap-4"}`} style={activeTab === "practice" ? { minHeight: 'calc(100vh - 180px)' } : {}}>
-            {activeTab === "practice" && (
-              <Sidebar
-                completedModules={completedModules}
-                totalModules={totalModules}
-                activeTab={activeTab}
-                practiceTasks={practiceTasks}
-                selectedPracticeTask={selectedPracticeTask}
-                onSelectPracticeTask={(n: number | null) => setSelectedPracticeTask(n)}
-              />
+
+          <div className="max-w-[1800px] mx-auto px-3 py-4 relative">
+            {activeTab !== "practice" && (
+              <div className="absolute inset-0 bg-[linear-gradient(to_right,#0E1B2E05_1px,transparent_1px),linear-gradient(to_bottom,#0E1B2E05_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
             )}
 
-            <main className={`${activeTab === "practice" ? "flex-1 min-w-0 bg-[#FAFAFA]" : "col-span-12"}`} style={activeTab === "practice" ? { height: 'calc(100vh - 180px)', overflowY: 'auto', overflowX: 'hidden' } : {}}>
-              {renderTabContent()}
-            </main>
+            <div
+              className="relative z-10 grid grid-cols-12 gap-2 h-[calc(100vh-180px)]"
+            >
+
+              {/* LEFT SIDEBAR */}
+              {(activeTab === "practice" || activeTab === "bugfix") && (
+                <div className="col-span-3 h-full">
+                  <Sidebar
+                    completedModules={completedModules}
+                    totalModules={totalModules}
+                    activeTab={activeTab}
+                    practiceTasks={practiceTasks}
+                    selectedPracticeTask={selectedPracticeTask}
+                    onSelectPracticeTask={(n: number | null) =>
+                      setSelectedPracticeTask(n)
+                    }
+                  />
+                </div>
+              )}
+
+              {/* MIDDLE CONTENT */}
+              <main
+                className={`${
+                  activeTab === "bugfix"
+                    ? "col-span-6"
+                    : activeTab === "practice"
+                    ? "col-span-9"
+                    : "col-span-12"
+                } h-full overflow-y-auto overflow-x-hidden bg-[#FAFAFA] min-w-0`}
+              >
+                {renderTabContent()}
+              </main>
+
+
+              {/* RIGHT SIDEBAR */}
+              {activeTab === "bugfix" && (
+                <aside className="col-span-3 h-full overflow-y-auto border-l border-slate-200 bg-[#FAFAFA]">
+                  <RightSidebar />
+                </aside>
+              )}
+
+            </div>
+
           </div>
         </div>
-      </div>
 
-      {/* Chatbot */}
-      <Chatbot role="onboarding" />
-    </div>
-  );
+        {/* Chatbot */}
+        <Chatbot role="onboarding" />
+      </div>
+    );
+
 }
