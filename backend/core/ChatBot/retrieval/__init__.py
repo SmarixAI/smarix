@@ -60,16 +60,75 @@ class RetrievalMixin(
         """
 
         # -------------------------------------------------------
-        # CODE_LOCATION: Try code_chunks_loader first (exact filename + path), then vector search if not found
+        # FILE_LOOKUP: Try code_chunks_loader first (exact filename + path), then vector search if not found
         # This must happen BEFORE multi-index routing to avoid unnecessary processing
-        if query_type == QueryType.CODE_LOCATION and query_text:
-            self.logger.info(f"CODE_LOCATION | Processing code location query: {query_text}")
+        if query_type == QueryType.FILE_LOOKUP and query_text:
+            self.logger.info(f"FILE_LOOKUP | Processing code location query: {query_text}")
             
             # Detect file query intent
             file_intent = self._detect_file_query_intent(query_text, keywords)
             file_paths = file_intent.get('file_paths', [])
             filename_hints = file_intent.get('filename_hints', [])
-            
+
+            # -------------------------------------------------------
+            # 🔴 CRITICAL FALLBACK: extract filename when intent detection fails
+            # Handles queries like: "tell me about file taskc_details_controller"
+            # -------------------------------------------------------
+            if not file_paths and not filename_hints:
+                import re
+
+                STOPWORDS = {
+                    "tell", "me", "about", "file", "files",
+                    "show", "give", "details", "of"
+                }
+
+                # Extract identifier-like tokens only
+                tokens = re.findall(r"\b[a-zA-Z_][a-zA-Z0-9_]*\b", query_text)
+
+                # Remove stopwords
+                candidates = [t for t in tokens if t.lower() not in STOPWORDS]
+
+                fallback_filename = candidates[-1] if candidates else None
+
+                if fallback_filename:
+                    self.logger.info(
+                        f"FILE_LOOKUP | Clean fallback filename extracted: '{fallback_filename}'"
+                    )
+                    filename_hints = [fallback_filename]
+
+            # -------------------------------------------------------
+            # 🔴 CRITICAL PROMOTION: filename → virtual file path
+            # This ensures filename-only queries behave like path queries
+            # -------------------------------------------------------
+            if filename_hints and not file_paths:
+                promoted_paths = []
+
+                for name in filename_hints:
+                    # common repo-wide filename assumptions
+                    promoted_paths.extend([
+                        name,
+                        f"lib/{name}",
+                        f"lib/app/{name}",
+                        f"lib/app/modules/{name}",
+                        f"lib/app/modules/**/{name}",
+                    ])
+
+                    # add extension fallback
+                    if "." not in name:
+                        promoted_paths.extend([
+                            f"{name}.dart",
+                            f"lib/{name}.dart",
+                            f"lib/app/{name}.dart",
+                            f"lib/app/modules/{name}.dart",
+                        ])
+
+                # de-duplicate
+                file_paths = list(dict.fromkeys(promoted_paths))
+
+                self.logger.info(
+                    f"FILE_LOOKUP | Promoted filename_hints to file_paths: {file_paths}"
+                )
+
             # Try code_chunks_loader first with exact filename + path
             code_loader = self._get_code_chunks_loader()
             if code_loader:
@@ -81,20 +140,20 @@ class RetrievalMixin(
                 
                 # Try exact file paths first
                 if file_paths:
-                    self.logger.info(f"CODE_LOCATION | Searching code_chunks_loader for {len(file_paths)} file paths: {file_paths}")
+                    self.logger.info(f"FILE_LOOKUP | Searching code_chunks_loader for {len(file_paths)} file paths: {file_paths}")
                     for file_path in file_paths:
                         # Try by full path with exact match first
                         chunks = code_loader.get_chunks_by_file_path(
                             file_path,
                             repo_owner,
                             repo_name,
-                            exact_match_only=True  # Exact match only for code location queries
+                            exact_match_only=False  # Exact match only for code location queries
                         )
                         
                         # If no exact match, try without exact_match_only (partial match)
                         if not chunks:
                             self.logger.info(
-                                f"CODE_LOCATION | No exact match for path '{file_path}', trying partial match"
+                                f"FILE_LOOKUP | No exact match for path '{file_path}', trying partial match"
                             )
                             chunks = code_loader.get_chunks_by_file_path(
                                 file_path,
@@ -109,7 +168,7 @@ class RetrievalMixin(
                             filename = extract_filename(file_path)
                             if filename:
                                 self.logger.info(
-                                    f"CODE_LOCATION | No results for path '{file_path}', "
+                                    f"FILE_LOOKUP | No results for path '{file_path}', "
                                     f"trying filename search: '{filename}'"
                                 )
                                 chunks = code_loader.get_chunks_by_filename(
@@ -119,7 +178,7 @@ class RetrievalMixin(
                                 )
                         
                         self.logger.info(
-                            f"CODE_LOCATION | File path '{file_path}': found {len(chunks)} chunks from code_chunks_loader"
+                            f"FILE_LOOKUP | File path '{file_path}': found {len(chunks)} chunks from code_chunks_loader"
                         )
                         
                         # Convert chunks to expected format
@@ -179,7 +238,7 @@ class RetrievalMixin(
                                     result_dict['_ambiguous_filename'] = True
                                     result_dict['_all_matching_paths'] = chunk.get('_all_matching_paths', [])
                                     self.logger.info(
-                                        f"CODE_LOCATION | Preserving ambiguity flags for chunk {chunk_id}: "
+                                        f"FILE_LOOKUP | Preserving ambiguity flags for chunk {chunk_id}: "
                                         f"filename={chunk.get('filename', 'unknown')}, "
                                         f"paths={chunk.get('_all_matching_paths', [])}"
                                     )
@@ -189,7 +248,7 @@ class RetrievalMixin(
                 # Try filename hints if no results from file paths
                 if not results and filename_hints:
                     self.logger.info(
-                        f"CODE_LOCATION | No results from exact paths, trying filename hints: {filename_hints}"
+                        f"FILE_LOOKUP | No results from exact paths, trying filename hints: {filename_hints}"
                     )
                     for filename_hint in filename_hints:
                         chunks = code_loader.get_chunks_by_filename(
@@ -199,7 +258,7 @@ class RetrievalMixin(
                         )
                         
                         self.logger.info(
-                            f"CODE_LOCATION | Filename hint '{filename_hint}': found {len(chunks)} chunks"
+                            f"FILE_LOOKUP | Filename hint '{filename_hint}': found {len(chunks)} chunks"
                         )
                         
                         for chunk in chunks:
@@ -272,7 +331,7 @@ class RetrievalMixin(
                                     result_dict['_ambiguous_filename'] = True
                                     result_dict['_all_matching_paths'] = chunk.get('_all_matching_paths', [])
                                     self.logger.warning(
-                                        f"CODE_LOCATION | AMBIGUITY DETECTED - Preserving ambiguity flags for chunk {chunk_id}: "
+                                        f"FILE_LOOKUP | AMBIGUITY DETECTED - Preserving ambiguity flags for chunk {chunk_id}: "
                                         f"filename={chunk.get('filename', chunk_metadata.get('filename', 'unknown'))}, "
                                         f"file_path={chunk_metadata.get('file_path', 'unknown')}, "
                                         f"paths={chunk.get('_all_matching_paths', [])}"
@@ -328,7 +387,7 @@ class RetrievalMixin(
                                     query_normalized in path_normalized):
                                     matching_path = path
                                     self.logger.info(
-                                        f"CODE_LOCATION | User specified full path in query: '{query_text}' matches '{path}' "
+                                        f"FILE_LOOKUP | User specified full path in query: '{query_text}' matches '{path}' "
                                         f"(normalized: '{query_normalized}' == '{path_normalized}'), "
                                         f"filtering results to this path only"
                                     )
@@ -356,19 +415,19 @@ class RetrievalMixin(
                                 
                                 if filtered_results:
                                     self.logger.info(
-                                        f"CODE_LOCATION | Filtered {len(filtered_results)} chunks for specified path '{matching_path}' "
+                                        f"FILE_LOOKUP | Filtered {len(filtered_results)} chunks for specified path '{matching_path}' "
                                         f"(from {len(results)} ambiguous chunks)"
                                     )
                                     return filtered_results[:self.top_k * 2]
                                 else:
                                     self.logger.warning(
-                                        f"CODE_LOCATION | User specified path '{matching_path}' but no matching chunks found. "
+                                        f"FILE_LOOKUP | User specified path '{matching_path}' but no matching chunks found. "
                                         f"This might indicate a path mismatch."
                                     )
                         
                         # No matching path found in query, return ambiguity
                         self.logger.warning(
-                            f"CODE_LOCATION | Ambiguous filename detected — stopping retrieval before context building. "
+                            f"FILE_LOOKUP | Ambiguous filename detected — stopping retrieval before context building. "
                             f"Filename: '{filename}', {len(paths)} paths found. User query: '{query_text}'"
                         )
                         return [{
@@ -383,7 +442,7 @@ class RetrievalMixin(
             # If code_chunks_loader didn't find results, do simple vector search
             # Skip multi-index routing and complex file index merging
             self.logger.info(
-                f"CODE_LOCATION | No results from code_chunks_loader, doing simple vector search"
+                f"FILE_LOOKUP | No results from code_chunks_loader, doing simple vector search"
             )
             
             # Simple vector search - search 'code' index directly in multi-index mode, or regular db in single-index mode
@@ -396,16 +455,16 @@ class RetrievalMixin(
                 if code_index:
                     vector_results = code_index.search(query_embedding, top_k=retrieve_k)
                     vector_results = self._filter_by_repo(vector_results)
-                    self.logger.info(f"CODE_LOCATION | Found {len(vector_results)} results from 'code' index")
+                    self.logger.info(f"FILE_LOOKUP | Found {len(vector_results)} results from 'code' index")
                     return vector_results[:self.top_k * 2]
                 else:
-                    self.logger.warning("CODE_LOCATION | 'code' index not found in multi-index store")
+                    self.logger.warning("FILE_LOOKUP | 'code' index not found in multi-index store")
                     return []
             else:
                 # Single-index mode: simple vector search
                 vector_results = self.db.search(query_embedding, top_k=retrieve_k, filters=repo_filters)
                 vector_results = self._filter_by_repo(vector_results)
-                self.logger.info(f"CODE_LOCATION | Found {len(vector_results)} results from vector search")
+                self.logger.info(f"FILE_LOOKUP | Found {len(vector_results)} results from vector search")
                 return vector_results[:self.top_k * 2]
 
         if query_type in ["impact_analysis", "traceability"] and self.multi_index_store:
@@ -467,14 +526,14 @@ class RetrievalMixin(
         # -------------------------------------------------------
 
         # Normal retrieve logic
-        # NOTE: CODE_LOCATION is handled above - if it reaches here, code_chunks_loader didn't find results
+        # NOTE: FILE_LOOKUP is handled above - if it reaches here, code_chunks_loader didn't find results
         # so we do a simple vector search without complex file index merging
         if query_type == QueryType.FLOW_ARCHITECTURE:
             retrieve_k = top_k or self.top_k * 6
         elif query_type == QueryType.HOW_TO:
             retrieve_k = top_k or self.top_k * 4
-        elif query_type == QueryType.CODE_LOCATION:
-            # CODE_LOCATION: Simple vector search fallback (code_chunks_loader already checked above)
+        elif query_type == QueryType.FILE_LOOKUP:
+            # FILE_LOOKUP: Simple vector search fallback (code_chunks_loader already checked above)
             retrieve_k = top_k or self.top_k * 4
         elif query_type in [QueryType.PR_ISSUE_TUTORIAL, QueryType.PR_ISSUE_CODING_QUESTION]:
             retrieve_k = top_k or self.top_k * 8
@@ -515,10 +574,10 @@ class RetrievalMixin(
         # CRITICAL: Post-filter to ensure only current repo (safeguard)
         vector_results = self._filter_by_repo(vector_results)
         
-        # For CODE_LOCATION queries: Simple vector search only (code_chunks_loader already checked above)
+        # For FILE_LOOKUP queries: Simple vector search only (code_chunks_loader already checked above)
         # Skip complex file index merging - just return vector results
-        if query_type == QueryType.CODE_LOCATION:
-            self.logger.info(f"CODE_LOCATION | Returning {len(vector_results)} vector search results (code_chunks_loader had no matches)")
+        if query_type == QueryType.FILE_LOOKUP:
+            self.logger.info(f"FILE_LOOKUP | Returning {len(vector_results)} vector search results (code_chunks_loader had no matches)")
             results = vector_results
         # For HOW_TO queries: Merge file index results with vector search (if needed)
         elif query_type == QueryType.HOW_TO and query_text:
@@ -586,7 +645,7 @@ class RetrievalMixin(
                                 break
                     
                     # Only add vector results that match the file query
-                    # For CODE_LOCATION queries, we want STRICT matching - only exact file matches
+                    # For FILE_LOOKUP queries, we want STRICT matching - only exact file matches
                     if not matches_file_query:
                         # Filter out non-matching files from vector search
                         self.logger.debug(
@@ -672,7 +731,7 @@ class RetrievalMixin(
                 
                 results = sorted(results, key=lambda x: x.get('score', 0), reverse=True)
         else:
-            # Non-CODE_LOCATION queries: use vector search as before
+            # Non-FILE_LOOKUP queries: use vector search as before
             results = vector_results
         
         # Hybrid metadata boost (unchanged)

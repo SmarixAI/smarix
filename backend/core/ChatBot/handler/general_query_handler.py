@@ -79,7 +79,7 @@ class GeneralQueryHandler:
                     expanded_query, query_type, entity, keywords
                 )
                 # Check for ambiguity
-                if query_type == QueryType.CODE_LOCATION:
+                if query_type == QueryType.FILE_LOOKUP:
                     if len(github_results) == 1 and github_results[0].get("__ambiguous__"):
                         return self._handle_ambiguity_response(query, query_type, active_session_id, schema_name, github_results[0])
                     elif github_results and any(r.get("_ambiguous_filename") for r in github_results):
@@ -93,7 +93,7 @@ class GeneralQueryHandler:
             )
 
         # 🚨 CRITICAL: Check for ambiguity BEFORE any context building or LLM calls
-        if query_type == QueryType.CODE_LOCATION:
+        if query_type == QueryType.FILE_LOOKUP:
             # Check for special __ambiguous__ format (fast path)
             if len(github_results) == 1 and github_results[0].get("__ambiguous__"):
                 self.chatbot.logger.warning(
@@ -351,7 +351,7 @@ class GeneralQueryHandler:
         
         # 🚨 CRITICAL: Check for ambiguity BEFORE any further processing
         is_ambiguous = False
-        if query_type == QueryType.CODE_LOCATION:
+        if query_type == QueryType.FILE_LOOKUP:
             # Check for special __ambiguous__ format (fast path)
             if len(github_results) == 1 and github_results[0].get("__ambiguous__"):
                 self.chatbot.logger.warning(
@@ -459,7 +459,7 @@ class GeneralQueryHandler:
         
         Args:
             query: Original user query
-            query_type: Query type (should be CODE_LOCATION)
+            query_type: Query type (should be FILE_LOOKUP)
             active_session_id: Current session ID
             schema_name: Optional schema name
             

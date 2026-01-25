@@ -417,7 +417,7 @@ class LLMEmbeddingMixin:
         - ABSOLUTELY ZERO HALLUCINATIONS. Use only context info
         - Format: Problem -> Solution -> Prevention
         - Include 30-50 lines of relevant code""",
-            QueryType.CODE_LOCATION: """
+            QueryType.FILE_LOOKUP: """
         CODE LOCATION QUERY:
         - When user asks about a specific file, show the ACTUAL CODE from that file directly
         - Start with a factual file header: file path, class names, and inheritance only
@@ -848,7 +848,7 @@ class LLMEmbeddingMixin:
         if needs_diagram and query_type not in [
             QueryType.CODE_STRUCTURE,
             QueryType.QUESTION_GENERATION,
-            QueryType.CODE_LOCATION,
+            QueryType.FILE_LOOKUP,
         ]:
             specific_prompt += "\n\nIMPORTANT: This query requires a mermaid flowchart diagram. Include it first in your response."
 
@@ -1140,7 +1140,7 @@ class LLMEmbeddingMixin:
             prompt_parts.append(
                 "6. Provide clear, actionable steps based on the context provided"
             )
-        elif query_type == QueryType.CODE_LOCATION:
+        elif query_type == QueryType.FILE_LOOKUP:
             prompt_parts.append(
                 "You are explaining a SINGLE source code file."
             )

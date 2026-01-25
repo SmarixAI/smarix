@@ -234,7 +234,7 @@ export const MermaidDiagram = ({ code }: { code: string }) => {
   }
 
   return (
-    <div className="my-4 rounded-xl border border-[#0E1B2E]/10 bg-white/60 backdrop-blur-sm shadow-sm overflow-hidden">
+    <div className="relative my-4 rounded-xl border border-[#0E1B2E]/10 bg-white/60 backdrop-blur-sm shadow-sm overflow-hidden">
 
       {/* Loading overlay */}
       {isLoading && (
@@ -561,6 +561,33 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
         );
       }
 
+      
+
+      // ###### Sub-labels
+      if (line.match(/^###### /)) {
+        return (
+          <h6
+            key={`h6-${baseKey}-${lineIndex}`}
+            className="text-xs font-medium text-[#0E1B2E]/70 mt-2 mb-1 italic"
+          >
+            {line.replace(/^###### /, '').trim()}
+          </h6>
+        );
+      }
+
+      // ##### Fields / Section titles
+      if (line.match(/^##### /)) {
+        return (
+          <h5
+            key={`h5-${baseKey}-${lineIndex}`}
+            className="text-sm font-semibold text-[#0E1B2E] mt-3 mb-1 uppercase tracking-wide"
+          >
+            {line.replace(/^##### /, '').trim()}
+          </h5>
+        );
+      }
+
+
       if (line.match(/^#### /)) {
         return (
           <h4
@@ -604,6 +631,18 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
           </h1>
         );
       }
+
+      if (line.startsWith('> ')) {
+        return (
+          <blockquote
+            key={`quote-${baseKey}-${lineIndex}`}
+            className="border-l-4 border-[#3B82F6] pl-4 py-1 my-2 text-[#0E1B2E]/80 italic bg-[#3B82F6]/5 rounded-r"
+          >
+            {renderInlinElements(line.replace(/^> /, '').trim())}
+          </blockquote>
+        );
+      }
+
 
       if (
         (line.match(/^- /) || line.match(/^• /)) &&
@@ -658,6 +697,20 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
       });
     }
 
+    const italicRegex = /(?<!\*)\*(?!\*)([^*]+)\*(?!\*)|_([^_]+)_/g;
+    const italicMatches: Array<{ start: number; end: number; text: string }> = [];
+    let italicMatch;
+    while ((italicMatch = italicRegex.exec(text)) !== null) {
+      italicMatches.push({
+        start: italicMatch.index,
+        end: italicMatch.index + italicMatch[0].length,
+        text: italicMatch[1] || italicMatch[2],
+      });
+    }
+
+    
+
+
     // Handle links [text](url)
     const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
     let linkMatch;
@@ -691,12 +744,18 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
       ...linkMatches,
       ...codeMatches,
       ...boldMatches,
+      ...italicMatches,
     ].sort((a, b) => a.start - b.start);
 
 
     let currentIndex = 0;
 
     allMatches.forEach((match, idx) => {
+
+        if (match.start < currentIndex) {
+          return; // ⛔ skip overlapping match
+        }
+
       if (match.start > currentIndex) {
         parts.push(text.substring(currentIndex, match.start));
       }
@@ -745,7 +804,14 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
             {match.text}
           </strong>
         );
+      } else if (italicMatches.some(im => im === match)) {
+        parts.push(
+          <em key={`italic-${idx}`} className="italic text-[#0E1B2E]/90">
+            {match.text}
+          </em>
+        );
       }
+
 
       currentIndex = match.end;
     });

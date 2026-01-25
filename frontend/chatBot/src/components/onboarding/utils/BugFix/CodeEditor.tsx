@@ -226,7 +226,7 @@ export default function CodeEditor({
                   onEvaluationComplete(evalResult);
                 }
               } else {
-                throw new Error(evalResult.detail || 'Evaluation failed');
+                //throw new Error(evalResult.detail || 'Evaluation failed');
               }
             } catch (evalError) {
               console.error('Evaluation error:', evalError);
@@ -288,57 +288,52 @@ export default function CodeEditor({
   return (
     <div className="rounded-lg border border-gray-200 overflow-hidden shadow-sm h-full flex flex-col bg-white">
       {/* Header */}
-      <div className="px-6 py-4 border-b flex-shrink-0 bg-gray-900 border-gray-700">
+      <div className="px-6 py-2.5 border-b flex-shrink-0 bg-gray-900 border-gray-700">
         <div className="flex items-center justify-between">
+
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center">
-              <FileCode className="w-5 h-5 text-white" />
+            <div className="w-8 h-8 rounded-md bg-gray-800 flex items-center justify-center">
+              <FileCode className="w-4 h-4 text-white" />
             </div>
-            <div>
-              <h3 className="text-lg font-semibold text-white">Code Editor</h3>
-            </div>
+            <h3 className="text-base font-semibold text-white">
+              Code Editor
+            </h3>
           </div>
 
           <div className="flex items-center space-x-2">
             {onToggleFullscreen && (
               <button
                 onClick={onToggleFullscreen}
-                className="px-3 py-2 rounded-lg text-white text-sm font-medium transition-all flex items-center space-x-2 bg-gray-700 hover:bg-gray-600"
+                className="px-2.5 py-1.5 rounded-md text-white text-xs font-medium transition-all flex items-center bg-gray-700 hover:bg-gray-600"
                 title={isFullscreen ? 'Collapse Width Horizontally' : 'Expand Width Horizontally'}
               >
-                {isFullscreen ? <ChevronsLeftRight className="w-4 h-4" /> : <MoveHorizontal className="w-4 h-4" />}
+                {isFullscreen
+                  ? <ChevronsLeftRight className="w-4 h-4" />
+                  : <MoveHorizontal className="w-4 h-4" />
+                }
               </button>
             )}
-            
+
             <button
               onClick={handleReset}
               disabled={isSubmitting}
-              className={`px-3 py-2 rounded-lg text-white text-sm font-medium transition-all flex items-center space-x-2 ${
-                isSubmitting 
-                  ? 'opacity-50 cursor-not-allowed bg-gray-700'
-                  : 'bg-gray-700 hover:bg-gray-600'
-              }`}
-              title="Reset Code"
+              className="px-2.5 py-1.5 rounded-md text-xs font-medium text-white bg-gray-700 hover:bg-gray-600 disabled:opacity-50"
             >
               <RotateCcw className="w-4 h-4" />
-              <span>Reset</span>
             </button>
 
             <button
               onClick={handleDownload}
               disabled={!selectedFile || isSubmitting}
-              className={`px-3 py-2 rounded-lg text-white text-sm font-medium transition-all flex items-center space-x-2 ${
-                !selectedFile || isSubmitting ? 'opacity-50 cursor-not-allowed bg-gray-700' :
-                'bg-gray-700 hover:bg-gray-600'
-              }`}
-              title="Download File"
+              className="px-2.5 py-1.5 rounded-md text-xs font-medium text-white bg-gray-700 hover:bg-gray-600 disabled:opacity-50"
             >
               <Download className="w-4 h-4" />
-              <span>Download</span>
             </button>
           </div>
+
         </div>
       </div>
+
 
       {/* Editor Area */}
       <div className="flex flex-1 min-h-0 code-editor-container">

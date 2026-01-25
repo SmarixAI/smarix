@@ -345,6 +345,21 @@ class ResponseHandler:
             Lowercase string representation of metadata
         """
         return str(self._get_metadata(chunk)).lower()
+    
+    def _needs_full_code_header(self, query: str) -> bool:
+        query_lower = query.lower()
+        return any(
+            phrase in query_lower
+            for phrase in [
+                "full code",
+                "complete code",
+                "entire code",
+                "whole code",
+                "give me full code",
+                "show full file",
+            ]
+        )
+
 
     def _detect_ambiguous_filename(self, chunks: List[Dict[str, Any]], query: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
@@ -728,14 +743,55 @@ Instructions:
         intent: Optional[str] = None
     ) -> Dict[str, Any]:
         
-        # 🚨 HARD STOP: Ambiguous filename (CODE_LOCATION) - MUST BE FIRST CHECK
-        if query_type == QueryType.CODE_LOCATION:
-            # Check for special __ambiguous__ format first (fast path)
-            if len(github_results) == 1 and github_results[0].get("__ambiguous__"):
+        # 🚨 HARD STOP: Ambiguous filename (FILE_LOOKUP) - MUST BE FIRST CHECK
+        # 🚨 FILE LOOKUP RESOLUTION (with smart fallbacks)
+        if query_type == QueryType.FILE_LOOKUP:
+
+            inferred: Optional[str] = None
+            class_guess: Optional[str] = None
+
+            # 0️⃣ Run fallbacks ONLY if nothing found initially
+            if not github_results:
+                # Fallback 1: infer filename from query
+                inferred = extract_filename(query)
+
+                if inferred and not inferred.endswith(".dart"):
+                    inferred = inferred + ".dart"
+
+                self.chatbot.logger.info(
+                    f"FILE_LOOKUP | No exact match. Retrying with inferred filename: {inferred}"
+                )
+
+                github_results = self.chatbot.retrieve_by_filename(inferred)
+
+                # Fallback 2: infer class name (snake_case → PascalCase)
+                if not github_results and inferred:
+                    class_guess = ''.join(
+                        part.capitalize()
+                        for part in inferred.replace(".dart", "").split("_")
+                    )
+
+                    self.chatbot.logger.info(
+                        f"FILE_LOOKUP | Trying class-name based fallback: {class_guess}"
+                    )
+
+                    github_results = self.chatbot.retrieve_by_class_name(class_guess)
+
+                # Fallback 3: reference-based lookup (bindings, imports, usage)
+                if not github_results and class_guess:
+                    self.chatbot.logger.info(
+                        f"FILE_LOOKUP | Trying reference-based fallback for: {class_guess}"
+                    )
+
+                    github_results = self.chatbot.retrieve_files_referencing(class_guess)
+
+            # 1️⃣ Fast-path ambiguity handling (__ambiguous__ format)
+            if github_results and len(github_results) == 1 and github_results[0].get("__ambiguous__"):
                 ambiguity_info = github_results[0]
                 self.chatbot.logger.warning(
                     f"AMBIGUITY_DETECTION | Early return for __ambiguous__ format: "
-                    f"filename='{ambiguity_info.get('filename')}', {len(ambiguity_info.get('paths', []))} paths"
+                    f"filename='{ambiguity_info.get('filename')}', "
+                    f"{len(ambiguity_info.get('paths', []))} paths"
                 )
                 return {
                     "answer": (
@@ -753,10 +809,9 @@ Instructions:
                     "is_metrics_query": False,
                     "is_ambiguous": True
                 }
-            
-            # Check for _ambiguous_filename flag in chunks
-            ambiguity = self._detect_ambiguous_filename(github_results, query)
 
+            # 2️⃣ General ambiguity detection (same filename, multiple paths)
+            ambiguity = self._detect_ambiguous_filename(github_results, query)
             if ambiguity:
                 self.chatbot.logger.warning(
                     f"AMBIGUITY_DETECTION | Returning ambiguity response: "
@@ -780,43 +835,61 @@ Instructions:
                 }
 
 
-        # 🔒 STEP 1: Slice context HARD by PR/Issue intent
-        if query_type == QueryType.PR_SPECIFIC and intent:
-            github_results = self._slice_pr_context_by_intent(github_results, intent)
-        elif query_type == QueryType.ISSUE_SPECIFIC and intent:
-            github_results = self._slice_issue_context_by_intent(github_results, intent)
+            # 🔒 STEP 1: Slice context HARD by PR/Issue intent
+            if query_type == QueryType.PR_SPECIFIC and intent:
+                github_results = self._slice_pr_context_by_intent(github_results, intent)
+            elif query_type == QueryType.ISSUE_SPECIFIC and intent:
+                github_results = self._slice_issue_context_by_intent(github_results, intent)
 
-        
-        # 🔒 STEP 2: Build context ONLY from sliced chunks
-        context = self.chatbot.build_context_from_chunks(github_results, query_type)
+            
+            # 🔒 STEP 2: Build context ONLY from sliced chunks
+            context = self.chatbot.build_context_from_chunks(github_results, query_type)
 
-        email_results = self.chatbot.retrieve_gmail_correlated(
-            github_results,
-            self.chatbot.get_query_embedding(expanded_query),
-            []
-        )
+            email_results = self.chatbot.retrieve_gmail_correlated(
+                github_results,
+                self.chatbot.get_query_embedding(expanded_query),
+                []
+            )
 
-        email_context = self.chatbot.build_email_context(email_results)
+            email_context = self.chatbot.build_email_context(email_results)
 
-        # 🔒 STEP 3: INTENT-AWARE PROMPTING
-        system_prompt, user_prompt = self._build_prompts(
-            query_type, expanded_query, context, email_context, intent, role
-        )
+            # 🔒 STEP 3: INTENT-AWARE PROMPTING
+            system_prompt, user_prompt = self._build_prompts(
+                query_type, expanded_query, context, email_context, intent, role
+            )
 
-        # 🔒 STEP 4: LLM call
-        answer = self.chatbot.call_llm(system_prompt, user_prompt)
+            # 🔒 STEP 4: LLM call
+            answer = self.chatbot.call_llm(system_prompt, user_prompt)
 
-        refined = self.chatbot.verify_and_refine_response(
-            answer, query, query_type
-        )
+            refined = self.chatbot.verify_and_refine_response(
+                answer, query, query_type
+            )
 
-        return self.package_response(
-            refined,
-            github_results,
-            email_results,
-            query_type,
-            intent=intent
-        )
+            # ✅ Friendly header for full-file requests
+            if query_type == QueryType.FILE_LOOKUP and self._needs_full_code_header(query):
+                # Try to extract file path from first source
+                file_path = None
+                if github_results:
+                    from utils.metadata_normalizer import MetadataNormalizer
+                    meta = MetadataNormalizer(github_results[0].get("metadata", {}), github_results[0])
+                    file_path = meta.get_file_path(None)
+
+                header = (
+                    "Here’s the complete implementation of the requested file"
+                    + (f" `{file_path}`" if file_path else "")
+                    + ", exactly as it exists in the codebase.\n\n"
+                )
+
+                refined = header + refined
+
+
+            return self.package_response(
+                refined,
+                github_results,
+                email_results,
+                query_type,
+                intent=intent
+            )
 
 
     def package_response(

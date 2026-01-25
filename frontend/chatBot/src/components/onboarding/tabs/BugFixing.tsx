@@ -240,30 +240,20 @@ export default function BugFixing({
       </div>
 
       {/* ================= LIST ================= */}
-      <div className="flex-1 overflow-y-auto px-6 py-4">
-        <div className="bg-white border rounded-xl divide-y">
+      <div className="flex-1 overflow-y-auto px-0 py-4">
+        <div className="bg-white border border-slate-200 divide-y divide-slate-200 rounded-xl overflow-hidden">
           {bugs.map((bug, idx) => (
             <div
               key={`${bug.type}-${bug.id ?? idx}-${bug.prNumber ?? idx}`}
               onClick={() => handleBugClick(bug)}
-              className={`group relative px-6 py-5 cursor-pointer transition ${
-                idx === activeIndex
-                  ? 'bg-blue-50'
-                  : 'hover:bg-slate-50'
-              }`}
+              className="group relative px-6 py-5 cursor-pointer transition hover:bg-slate-50 rounded-lg"
+
             >
-              {/* Left accent */}
-              <div
-                className={`absolute left-0 top-0 h-full w-1 rounded-r ${
-                  idx === activeIndex
-                    ? 'bg-blue-500'
-                    : 'bg-transparent group-hover:bg-slate-300'
-                }`}
-              />
+              
 
               <div className="flex gap-5">
                 {bug.type === 'tutorial' ? (
-                  <BookOpen className="w-6 h-6 text-blue-600 mt-1" />
+                  <BookOpen className="w-6 h-6 text-slate-500 mt-1 group-hover:text-slate-700 transition-colors" />
                 ) : (
                   <Code2 className="w-6 h-6 text-amber-600 mt-1" />
                 )}

@@ -106,8 +106,8 @@ class MultiIndexRetrievalMixin:
         # CRITICAL: Filter by repo after deduplication
         unique_results = self._filter_by_repo(unique_results)
 
-        # 🚨 HARD STOP: Ambiguous filename for CODE_LOCATION
-        if query_type == QueryType.CODE_LOCATION and query_text:
+        # 🚨 HARD STOP: Ambiguous filename for FILE_LOOKUP
+        if query_type == QueryType.FILE_LOOKUP and query_text:
             # Normalize filename from query (e.g. Contents.json)
             query_filename = query_text.strip().lower()
 
@@ -142,8 +142,8 @@ class MultiIndexRetrievalMixin:
             self.logger.warning("RETRIEVAL | No results found, returning empty list")
             return []
         
-        # For CODE_LOCATION: Try file path index first, then merge with vector results
-        if query_type == QueryType.CODE_LOCATION and query_text:
+        # For FILE_LOOKUP: Try file path index first, then merge with vector results
+        if query_type == QueryType.FILE_LOOKUP and query_text:
             # Get file index results (from RepoFilterMixin)
             if hasattr(self, '_retrieve_by_file_path'):
                 file_path_results = self._retrieve_by_file_path(query_text, keywords)
@@ -166,9 +166,9 @@ class MultiIndexRetrievalMixin:
                     
                     self.logger.info(f"HYBRID_FILE_RETRIEVAL | Added {len(file_path_results)} file index results to {len(unique_results)} total")
         
-        # Filename keyword boost to help CODE_LOCATION find the right file
+        # Filename keyword boost to help FILE_LOOKUP find the right file
         # Also prioritize code chunks and filter out PR/issue chunks
-        if query_type == QueryType.CODE_LOCATION and query_text:
+        if query_type == QueryType.FILE_LOOKUP and query_text:
             normalized_query = query_text.lower().replace(" ", "").replace("_", "").replace("-", "")
             filtered_results = []
             
@@ -177,7 +177,7 @@ class MultiIndexRetrievalMixin:
                 meta_norm = MetadataNormalizer(r.get("metadata", {}), r)
                 chunk_type = meta_norm.get_chunk_type("")
                 
-                # For CODE_LOCATION queries, strongly prioritize code chunks
+                # For FILE_LOOKUP queries, strongly prioritize code chunks
                 # Filter out PR/issue chunks unless they're highly relevant
                 if chunk_type in ['pr', 'issue', 'email']:
                     # Only keep if it has a very high score (might be relevant)

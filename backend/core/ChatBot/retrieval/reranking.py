@@ -96,7 +96,7 @@ class RerankingMixin:
                 # === Intent-aware reranking boost ===
                 try:
                     from ..query_type import QueryType
-                    if hasattr(self, "last_query_type") and self.last_query_type == QueryType.CODE_LOCATION:
+                    if hasattr(self, "last_query_type") and self.last_query_type == QueryType.FILE_LOOKUP:
                         # Use metadata normalizer for unified file path access
                         meta_norm = MetadataNormalizer(results[idx].get('metadata', {}), results[idx])
                         file_path = meta_norm.get_file_path("")
@@ -113,7 +113,7 @@ class RerankingMixin:
                         if chunk_type == "code":
                             results[idx]['score'] += 3.5  # Increased boost for code chunks
                         elif chunk_type in ['pr', 'issue', 'email']:
-                            # Penalize PR/issue chunks for CODE_LOCATION queries
+                            # Penalize PR/issue chunks for FILE_LOOKUP queries
                             results[idx]['score'] -= 2.0
                 except Exception:
                     pass

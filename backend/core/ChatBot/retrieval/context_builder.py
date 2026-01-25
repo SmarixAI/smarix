@@ -50,8 +50,8 @@ class ContextBuilderMixin:
     
     def build_context_from_chunks(self, chunks: List[Dict], query_type: str) -> str:
         """Build context string from retrieved chunks."""
-        # Special handling for CODE_LOCATION queries with file-specific results
-        if query_type == QueryType.CODE_LOCATION and chunks:
+        # Special handling for FILE_LOOKUP queries with file-specific results
+        if query_type == QueryType.FILE_LOOKUP and chunks:
             # Check if all chunks are from the same file (file-specific query)
             file_paths = set()
             for chunk in chunks:
@@ -69,7 +69,7 @@ class ContextBuilderMixin:
 
         if query_type == QueryType.FLOW_ARCHITECTURE:
             max_chunks = 15
-        elif query_type in [QueryType.HOW_TO, QueryType.CODE_LOCATION, QueryType.QUESTION_GENERATION]:
+        elif query_type in [QueryType.HOW_TO, QueryType.FILE_LOOKUP, QueryType.QUESTION_GENERATION]:
             max_chunks = 10
         elif query_type in [QueryType.PR_ISSUE_TUTORIAL, QueryType.PR_ISSUE_CODING_QUESTION]:
             max_chunks = 20
@@ -114,7 +114,7 @@ class ContextBuilderMixin:
             if content:
                 if query_type == QueryType.FLOW_ARCHITECTURE:
                     max_length = 5000
-                elif query_type in [QueryType.HOW_TO, QueryType.CODE_LOCATION, QueryType.CONCEPTUAL, QueryType.QUESTION_GENERATION]:
+                elif query_type in [QueryType.HOW_TO, QueryType.FILE_LOOKUP, QueryType.CONCEPTUAL, QueryType.QUESTION_GENERATION]:
                     max_length = 3500
                 elif query_type in [QueryType.PR_ISSUE_TUTORIAL, QueryType.PR_ISSUE_CODING_QUESTION]:
                     max_length = 6000

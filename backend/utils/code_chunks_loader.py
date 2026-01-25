@@ -162,13 +162,19 @@ class CodeChunksLoader:
                 
                 # Index by filename - use chunk filename if available, otherwise extract from path
                 if filename:
-                    # Use the filename from chunk directly
-                    self._filename_index[filename.lower()].append(chunk)
+                    fname = filename.lower()
                 else:
-                    # Extract filename from path
-                    extracted_filename = extract_filename(normalized_path)
-                    if extracted_filename:
-                        self._filename_index[extracted_filename.lower()].append(chunk)
+                    fname = extract_filename(normalized_path).lower()
+
+                if fname:
+                    # index full filename
+                    self._filename_index[fname].append(chunk)
+
+                    # index filename WITHOUT extension (critical)
+                    if "." in fname:
+                        name_without_ext = fname.rsplit(".", 1)[0]
+                        self._filename_index[name_without_ext].append(chunk)
+
                             
             self._loaded_repos.add(repo_key)
             logger.info(f"Loaded {len(chunks)} code chunks for {repo_key} from {chunks_file}")
@@ -201,6 +207,15 @@ class CodeChunksLoader:
         repo_key = self._get_repo_key(repo_owner, repo_name)
         if repo_key not in self._loaded_repos and repo_name:
             self.load_repo_chunks(repo_owner, repo_name)
+
+        # If input looks like a filename (no slashes), redirect to filename lookup
+        if "/" not in file_path and "\\" not in file_path:
+            return self.get_chunks_by_filename(
+                file_path,
+                repo_owner=repo_owner,
+                repo_name=repo_name
+            )
+
         
         # Normalize the search path
         normalized_path = normalize_path(file_path, '')
@@ -285,7 +300,33 @@ class CodeChunksLoader:
         )
 
         # Get all chunks for these paths
+        # Extension fallback (taskc_details_controller → taskc_details_controller.dart)
+        # Get all chunks for this filename
         all_chunks = list(self._filename_index.get(filename_lower, []))
+
+        # Extension fallback (taskc_details_controller → taskc_details_controller.dart)
+        if not all_chunks and "." not in filename_lower:
+            dart_name = f"{filename_lower}.dart"
+            all_chunks = list(self._filename_index.get(dart_name, []))
+
+        # Deduplicate chunks (same chunk may appear via multiple filename keys)
+        seen_chunk_ids = set()
+        deduped_chunks = []
+
+        for chunk in all_chunks:
+            cid = chunk.get("chunk_id")
+            if cid:
+                if cid not in seen_chunk_ids:
+                    seen_chunk_ids.add(cid)
+                    deduped_chunks.append(chunk)
+            else:
+                # fallback: keep chunk without id
+                deduped_chunks.append(chunk)
+
+        all_chunks = deduped_chunks
+
+
+
 
         logger.info(
             "CODE_CHUNKS_LOADER | Filename '%s' matched %d chunks",

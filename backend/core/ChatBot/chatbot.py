@@ -422,7 +422,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
                     return self.multi_query_handler.handle_multi_query(subqueries, query, active_session_id, schema_name=schema_name)
 
         # STEP 3: Classify query into QueryType (using rewritten/expanded query)
-        #         Determines query category: HOW_TO, CODE_LOCATION, CONCEPTUAL, etc.
+        #Determines query category: HOW_TO, FILE_LOOKUP, CONCEPTUAL, etc.
         query_type = self.classify_query(expanded_query)
 
         # Direct lookup for Issue / PR numbers (skip semantic search)

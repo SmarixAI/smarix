@@ -114,7 +114,7 @@ export default function OverviewModal({
     if (isOpen && moduleId) {
       setIsLoading(true);
       MermaidRenderer.initialize(false);
-      document.body.style.overflow = "hidden";
+      
 
       const fetchModuleContent = async () => {
         try {
@@ -178,7 +178,7 @@ export default function OverviewModal({
 
       fetchModuleContent();
     } else {
-      document.body.style.overflow = "unset";
+      
       setModuleContent([]);
       setRenderedMermaid({});
       setScrollProgress(0);
@@ -186,7 +186,7 @@ export default function OverviewModal({
     }
 
     return () => {
-      document.body.style.overflow = "unset";
+      
       if (scrollTimeoutRef.current) {
         cancelAnimationFrame(scrollTimeoutRef.current);
       }
@@ -323,7 +323,7 @@ export default function OverviewModal({
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center p-6"
+      className="fixed inset-0 z-[200]"
       onClick={handleBackdropClick}
     >
       <style jsx global>{`
@@ -394,7 +394,7 @@ export default function OverviewModal({
       />
 
       <div
-        className="relative w-full max-w-6xl h-[95vh] flex flex-col overflow-hidden modal-content bg-white/95 backdrop-blur-xl rounded-3xl border border-slate-200/60 shadow-2xl shadow-slate-900/20"
+        className="w-screen h-screen flex flex-col overflow-hidden bg-white"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="absolute top-0 left-0 right-0 h-1 z-20 bg-slate-200/50 rounded-t-3xl overflow-hidden">
@@ -404,54 +404,111 @@ export default function OverviewModal({
           />
         </div>
 
+        {/* TOP HEADER */}
         <div className="flex-shrink-0 px-8 py-5 border-b bg-white/60 backdrop-blur-xl border-slate-200/60">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4 flex-1">
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200/50 shadow-sm">
-                <BookOpen className="w-6 h-6 text-blue-600" />
+          <div className="grid grid-cols-[260px_1fr_320px] items-center">
+
+            {/* LEFT HEADER — Reading / Overview */}
+            <div className="px-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  Employee
+                </span>
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                  Onboarding
+                </span>
               </div>
 
-              <div className="flex items-center space-x-4">
-                <h2 className={`${inter.className} text-xl font-semibold text-[#0E1B2E] tracking-tight`}>
+              <h1
+                className={`${inter.className} mt-1 text-xl font-bold text-[#0E1B2E] tracking-tight`}
+              >
+                Reading Overview
+              </h1>
+            </div>
+
+            {/* CENTER HEADER — Module Title + Meta */}
+            <div className="flex items-center gap-4 px-4 min-w-0">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-blue-50 border border-blue-200/50 flex-shrink-0">
+                <BookOpen className="w-5 h-5 text-blue-600" />
+              </div>
+
+              <div className="min-w-0">
+                <h2
+                  className={`${inter.className} text-lg font-semibold text-[#0E1B2E] tracking-tight truncate`}
+                  title={title}
+                >
                   {title}
                 </h2>
 
-                <div className="flex items-center space-x-3">
-                  <div className="flex items-center space-x-2 px-3 py-2 rounded-xl bg-slate-50/80 backdrop-blur-sm border border-slate-200/60">
-                    <Clock className="w-4 h-4 text-slate-600" />
-                    <span className={`${jetbrainsMono.className} text-xs font-medium text-slate-700`}>
-                      {stats.estimatedReadTime} min read
-                    </span>
+                <div className="flex items-center gap-3 mt-1">
+                  <div className="flex items-center gap-1 text-xs text-slate-600">
+                    <Clock className="w-3.5 h-3.5" />
+                    {stats.estimatedReadTime} min read
                   </div>
 
-                  <div className="flex items-center space-x-2 px-3 py-2 rounded-xl bg-blue-50/80 backdrop-blur-sm border border-blue-200/60">
-                    <FileText className="w-4 h-4 text-blue-600" />
-                    <span className={`${jetbrainsMono.className} text-xs font-medium text-blue-700`}>
-                      Section {currentSectionIndex + 1} of {moduleContent.length}
-                    </span>
+                  <div className="flex items-center gap-1 text-xs text-blue-600">
+                    <FileText className="w-3.5 h-3.5" />
+                    Section {currentSectionIndex + 1} of {moduleContent.length}
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            {/* RIGHT HEADER — Back / Close */}
+            <div className="flex items-center justify-end gap-3 pr-2">
+              {/* Close (optional but recommended) */}
               <button
                 onClick={onClose}
-                className="flex items-center justify-center w-10 h-10 rounded-xl transition-all bg-white/80 backdrop-blur-sm border border-red-200 hover:bg-red-500 hover:border-red-500 group shadow-sm hover:shadow-md"
-                aria-label="Close modal"
+                className="flex items-center justify-center w-10 h-10 rounded-xl bg-white border border-red-200 hover:bg-red-500 hover:border-red-500 group transition-all shadow-sm"
+                aria-label="Close"
                 title="Close (Esc)"
               >
-                <X className="w-5 h-5 transition-colors text-red-600 group-hover:text-white" />
+                <X className="w-5 h-5 text-red-600 group-hover:text-white" />
               </button>
             </div>
+
           </div>
         </div>
 
+
+
         <div
-          className="flex-1 overflow-y-auto custom-scrollbar relative"
-          onScroll={handleScroll}
+          className="flex-1 grid grid-cols-[260px_1fr_320px] overflow-hidden"
         >
-          <div className="p-8">
+
+          {/* LEFT SIDEBAR */}
+          <aside className="h-full overflow-y-auto border-r border-slate-200 bg-white/70 backdrop-blur-xl p-4">
+            <h3 className={`${inter.className} text-xs font-bold text-slate-500 mb-4`}>
+              Sections
+            </h3>
+
+            <div className="space-y-2">
+              {moduleContent.map((mod, idx) => {
+                const isActive = idx === currentSectionIndex;
+                return (
+                  <button
+                    key={mod.moduleId}
+                    onClick={() => setCurrentSectionIndex(idx)}
+                    className={`w-full text-left px-4 py-3 rounded-xl transition-all ${
+                      isActive
+                        ? 'bg-blue-600 text-white shadow'
+                        : 'hover:bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    <div className="text-[11px] font-semibold opacity-70">
+                      Section {idx + 1}
+                    </div>
+                    <div className="text-sm font-medium truncate">
+                      {mod.moduleTitle}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </aside>
+
+          {/* CENTER CONTENT */}
+          <main className="overflow-y-auto custom-scrollbar p-4" onScroll={handleScroll}>
             {isLoading && moduleContent.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-32">
                 <div className="relative">
@@ -483,7 +540,8 @@ export default function OverviewModal({
                     >
                       {!moduleData.isQnASection && (
                         <div className="px-6 py-4 border-b border-slate-200/60 bg-gradient-to-r from-slate-50/80 to-blue-50/40 backdrop-blur-sm">
-                          <div className="flex items-center justify-between">
+                          <div className="grid grid-cols-[260px_1fr_320px] items-center">
+
                             <div className="flex items-center space-x-3">
                               <span className={`${jetbrainsMono.className} text-sm font-semibold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg`}>
                                 {currentSectionIndex + 1}
@@ -517,8 +575,6 @@ export default function OverviewModal({
                           )}
                         </div>
                       )}
-
-
                       <div className="px-6 py-6">
                         {moduleData.isQnASection ? (
                           // Use QnATest component for ALL QnA sections
@@ -562,70 +618,151 @@ export default function OverviewModal({
                 })()}
               </div>
             ) : null}
-          </div>
+          </main>
+
+          {/* RIGHT SIDEBAR */}
+          <aside className="h-full overflow-y-auto p-4 space-y-6 border-l border-slate-200 bg-gradient-to-b from-white/80 to-blue-50/40 backdrop-blur-xl">
+            {/* Progress */}
+            <div className="rounded-2xl p-4 bg-white shadow-sm border">
+              <p className="text-xs font-semibold text-slate-500 mb-2">
+                Progress
+              </p>
+
+              <p className="text-sm font-bold text-[#0E1B2E] mb-1">
+                Section 2 of 6
+              </p>
+
+              <div className="w-full h-2 rounded-full bg-slate-200 overflow-hidden mt-2">
+                <div
+                  className="h-full bg-gradient-to-r from-blue-500 to-indigo-500"
+                  style={{ width: "35%" }}
+                />
+              </div>
+
+              <p className="mt-2 text-xs text-slate-500">
+                35% completed
+              </p>
+            </div>
+            {/* Key Takeaways */}
+            <div className="rounded-2xl p-4 bg-white shadow-sm border">
+              <h4 className="text-sm font-bold mb-3">
+                Key Takeaways
+              </h4>
+
+              <ul className="space-y-2 text-sm text-slate-700">
+                {[
+                  "Understand the problem before touching the code",
+                  "Identify edge cases early",
+                  "Prefer small, incremental fixes",
+                  "Write readable and maintainable logic",
+                ].map((item, i) => (
+                  <li key={i} className="flex gap-2">
+                    <span className="w-1.5 h-1.5 mt-2 bg-blue-500 rounded-full flex-shrink-0" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Resources */}
+            <div className="rounded-2xl p-4 bg-white shadow-sm border">
+              <h4 className="text-sm font-bold mb-3">
+                Resources
+              </h4>
+
+              <div className="space-y-2 text-sm">
+                {[
+                  { label: "Official Documentation", hint: "API & reference" },
+                  { label: "Code Style Guide", hint: "Best practices" },
+                  { label: "Common Pitfalls", hint: "Avoid mistakes" },
+                  { label: "Related Challenges", hint: "Practice more" },
+                ].map((res, i) => (
+                  <div
+                    key={i}
+                    className="px-3 py-2 rounded-lg bg-slate-50 hover:bg-slate-100 cursor-pointer transition-colors"
+                  >
+                    <p className="font-medium text-slate-800">
+                      {res.label}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {res.hint}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+          </aside>
         </div>
 
         <div className="flex-shrink-0 px-8 py-5 border-t border-slate-200/60 bg-white/60 backdrop-blur-xl">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={handlePreviousSection}
-              disabled={currentSectionIndex === 0}
-              className={`${inter.className} flex items-center space-x-2 px-6 py-3 rounded-xl font-semibold transition-all ${
-                currentSectionIndex === 0
-                  ? "bg-slate-100 text-slate-400 cursor-not-allowed"
-                  : "bg-gradient-to-r from-[#0E1B2E] to-blue-900 text-white hover:shadow-lg hover:scale-105"
-              }`}
-            >
-              <ChevronLeft className="w-5 h-5" />
-              <span>Previous</span>
-            </button>
+          <div className="flex items-center justify-center gap-10">
 
-            <div className="flex items-center space-x-2">
-              {moduleContent.map((module, index) => {
-                const isQnA = module.isQnASection;
-                const isActive = index === currentSectionIndex;
-                
-                return (
-                  <button
-                    key={index}
-                    onClick={() => setCurrentSectionIndex(index)}
-                    className={`transition-all duration-300 ${
-                      isQnA
-                        ? `p-2 rounded-xl border ${
-                            isActive
-                              ? "bg-gradient-to-br from-blue-500 to-indigo-500 border-blue-400 shadow-md"
-                              : "bg-white border-slate-300 hover:bg-slate-50 hover:border-slate-400"
-                          }`
-                        : `h-2 rounded-full ${
-                            isActive
-                              ? "bg-gradient-to-r from-blue-500 to-indigo-500 w-10 shadow-md"
-                              : "bg-slate-300 hover:bg-slate-400 w-2"
-                          }`
-                    }`}
-                    aria-label={`Go to section ${index + 1}${isQnA ? " (QnA)" : ""}`}
-                    title={isQnA ? "QnA Section" : `Section ${index + 1}`}
-                  >
-                    {isQnA ? (
-                      <ClipboardCheck className={`w-4 h-4 ${isActive ? "text-white" : "text-slate-600"}`} />
-                    ) : null}
-                  </button>
-                );
-              })}
-            </div>
+  {/* Previous */}
+  <button
+    onClick={handlePreviousSection}
+    disabled={currentSectionIndex === 0}
+    className={`${inter.className} flex items-center space-x-2 px-6 py-3 rounded-xl font-semibold transition-all ${
+      currentSectionIndex === 0
+        ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+        : "bg-gradient-to-r from-[#0E1B2E] to-blue-900 text-white hover:shadow-lg hover:scale-105"
+    }`}
+  >
+    <ChevronLeft className="w-5 h-5" />
+    <span>Previous</span>
+  </button>
 
-            <button
-              onClick={handleNextSection}
-              disabled={currentSectionIndex === moduleContent.length - 1}
-              className={`${inter.className} flex items-center space-x-2 px-6 py-3 rounded-xl font-semibold transition-all ${
-                currentSectionIndex === moduleContent.length - 1
-                  ? "bg-slate-100 text-slate-400 cursor-not-allowed"
-                  : "bg-gradient-to-r from-[#0E1B2E] to-blue-900 text-white hover:shadow-lg hover:scale-105"
-              }`}
-            >
-              <span>Next</span>
-              <ChevronRight className="w-5 h-5" />
-            </button>
-          </div>
+  {/* Indicators */}
+  <div className="flex items-center space-x-2">
+    {moduleContent.map((module, index) => {
+      const isQnA = module.isQnASection;
+      const isActive = index === currentSectionIndex;
+
+      return (
+        <button
+          key={index}
+          onClick={() => setCurrentSectionIndex(index)}
+          className={`transition-all duration-300 ${
+            isQnA
+              ? `p-2 rounded-xl border ${
+                  isActive
+                    ? "bg-gradient-to-br from-blue-500 to-indigo-500 border-blue-400 shadow-md"
+                    : "bg-white border-slate-300 hover:bg-slate-50 hover:border-slate-400"
+                }`
+              : `h-2 rounded-full ${
+                  isActive
+                    ? "bg-gradient-to-r from-blue-500 to-indigo-500 w-10 shadow-md"
+                    : "bg-slate-300 hover:bg-slate-400 w-2"
+                }`
+          }`}
+          aria-label={`Go to section ${index + 1}${isQnA ? " (QnA)" : ""}`}
+        >
+          {isQnA && (
+            <ClipboardCheck
+              className={`w-4 h-4 ${isActive ? "text-white" : "text-slate-600"}`}
+            />
+          )}
+        </button>
+      );
+    })}
+  </div>
+
+  {/* Next */}
+  <button
+    onClick={handleNextSection}
+    disabled={currentSectionIndex === moduleContent.length - 1}
+    className={`${inter.className} flex items-center space-x-2 px-6 py-3 rounded-xl font-semibold transition-all ${
+      currentSectionIndex === moduleContent.length - 1
+        ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+        : "bg-gradient-to-r from-[#0E1B2E] to-blue-900 text-white hover:shadow-lg hover:scale-105"
+    }`}
+  >
+    <span>Next</span>
+    <ChevronRight className="w-5 h-5" />
+  </button>
+
+</div>
+
         </div>
       </div>
     </div>

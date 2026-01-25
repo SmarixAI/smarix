@@ -68,11 +68,12 @@ export default function OnboardingPage() {
               setOnboardingData(data);
               
               // Calculate progress - if no data exists, show 0%
-              const reading = data.onboarding?.reading?.modules || [];
-          const practice = data.onboarding?.practice?.tasks || [];
+          const reading = data.onboarding?.reading?.modules || [];
           const bugfixTutorials = data.onboarding?.bugfix?.tutorials || [];
           const bugfixChallenges = data.onboarding?.bugfix?.challenges || [];
           const bugfixQuestions = data.onboarding?.bugfix?.coding_questions || [];
+          const practice = data.onboarding?.practice?.tasks || [];
+
           
           const allItems = [...reading, ...practice, ...bugfixTutorials, ...bugfixChallenges, ...bugfixQuestions];
               const total = allItems.length;
@@ -82,16 +83,6 @@ export default function OnboardingPage() {
               setTotalModules(total);
               setCompletedModules(completed);
               
-              // Set practice tasks from data
-              if (practice.length > 0) {
-                setPracticeTasks(practice);
-                if (selectedPracticeTask === null && practice.length > 0) {
-                  setSelectedPracticeTask(practice[0].question_number);
-                }
-              } else {
-                // If no practice tasks, set empty array
-                setPracticeTasks([]);
-              }
             } else {
               // If API call fails, set empty data
               setOnboardingData({
@@ -115,6 +106,36 @@ export default function OnboardingPage() {
     
     fetchEmployeeData();
   }, []);
+
+
+  // 🔹 Fetch practice tasks for sidebar + main panel
+  useEffect(() => {
+    if (activeTab !== 'practice') return;
+
+    const fetchPracticeTasks = async () => {
+      try {
+        const repo = activeRepos?.[0];
+        const repoParam = repo ? `?repo=${encodeURIComponent(repo)}` : '';
+
+        const res = await fetch(`/api/onboarding/practice/practice1${repoParam}`);
+        if (!res.ok) return;
+
+        const json = await res.json();
+        const tasks = json.tasks || [];
+
+        setPracticeTasks(tasks);
+
+        if (tasks.length > 0 && selectedPracticeTask == null) {
+          setSelectedPracticeTask(tasks[0].question_number);
+        }
+      } catch (e) {
+        console.error('Failed to load practice tasks', e);
+      }
+    };
+
+    fetchPracticeTasks();
+  }, [activeTab, activeRepos?.[0]]);
+
 
 
   // Auto-select first task when practice tab becomes active and tasks are loaded

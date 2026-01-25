@@ -124,12 +124,11 @@ export default function BugFixDetailPage() {
   }, [type, activeRepos]);
 
   // Update challenge prData when challengeSolutionData or data changes
-  // Uses tutorial_number as primary matching key (new field added by user)
+  // Uses question_number as primary matching key for challenges
   useEffect(() => {
     if (type === 'challenge' && data) {
       console.log('🔍 Processing challenge data:', {
         id,
-        tutorial_number: data.tutorial_number,
         pr_number: data.pr_number,
         question_number: data.question_number,
         has_file_changes: !!data.file_changes,
@@ -140,7 +139,7 @@ export default function BugFixDetailPage() {
       
       // First, check if challenge has file_changes directly (most reliable)
       if (data.file_changes && Array.isArray(data.file_changes) && data.file_changes.length > 0) {
-        const prNumber = data.pr_number || data.question_number || parseInt(id) || 0;
+        const prNumber = data.question_number ?? data.pr_number ?? 0;
         const computedPrData = {
           pr_number: prNumber,
           file_changes: data.file_changes.map((file: any) => ({
@@ -164,13 +163,13 @@ export default function BugFixDetailPage() {
       // If no file_changes in challenge data, try to find in solution data
       if (challengeSolutionData && challengeSolutionData.pull_requests) {
         // PRIORITY 1: Match by tutorial_number (new field - most reliable)
-        if (data.tutorial_number) {
+        if (data.question_number) {
           const prByTutorialNumber = challengeSolutionData.pull_requests.find(
-            (p: any) => p.tutorial_number === data.tutorial_number
+            (p: any) => p.question_number === data.question_number
           );
           if (prByTutorialNumber && prByTutorialNumber.file_changes && prByTutorialNumber.file_changes.length > 0) {
             setChallengePrData(prByTutorialNumber);
-            console.log('✅ Challenge prData from solution data (tutorial_number match):', prByTutorialNumber);
+            console.log('✅ Challenge prData from solution data (question_number match):', prByTutorialNumber);
             return;
           }
         }
@@ -206,7 +205,7 @@ export default function BugFixDetailPage() {
         // PRIORITY 4: question_number match
         if (data.question_number) {
           const pr = challengeSolutionData.pull_requests.find(
-            (p: any) => p.pr_number === data.question_number || p.tutorial_number === data.question_number
+            (p: any) => p.pr_number === data.question_number || p.question_number === data.question_number
           );
           if (pr && pr.file_changes && pr.file_changes.length > 0) {
             setChallengePrData(pr);
@@ -215,25 +214,6 @@ export default function BugFixDetailPage() {
           }
         }
         
-        // PRIORITY 5: ID match (try both pr_number and tutorial_number)
-        const prById = challengeSolutionData.pull_requests.find(
-          (p: any) => p.pr_number === parseInt(id) || p.tutorial_number === parseInt(id)
-        );
-        if (prById && prById.file_changes && prById.file_changes.length > 0) {
-          setChallengePrData(prById);
-          console.log('✅ Challenge prData from solution data (ID match):', prById);
-          return;
-        }
-        
-        // PRIORITY 6: Use first available PR with file_changes
-        const prWithFiles = challengeSolutionData.pull_requests.find(
-          (p: any) => p.file_changes && Array.isArray(p.file_changes) && p.file_changes.length > 0
-        );
-        if (prWithFiles) {
-          setChallengePrData(prWithFiles);
-          console.log('✅ Challenge prData from solution data (first with files):', prWithFiles);
-          return;
-        }
       }
       
       // If still nothing after checking solution data, log for debugging
@@ -241,7 +221,7 @@ export default function BugFixDetailPage() {
       if (challengeSolutionData) {
         console.log('⚠️ Available PRs in solution:', challengeSolutionData.pull_requests?.map((p: any) => ({
           pr_number: p.pr_number,
-          tutorial_number: p.tutorial_number,
+          question_number: p.question_number,
           file_changes_count: p.file_changes?.length || 0
         })));
       }
@@ -355,8 +335,12 @@ export default function BugFixDetailPage() {
 
   const difficulty = difficultyMatch?.[1] || data.difficulty || 'Medium';
   const time = timeMatch?.[1] || '30-60 min';
-  const prNumber = prMatch?.[1] || data.pr_number || data.question_number || id;
-  
+  const prNumber =
+    data.question_number ??
+    data.pr_number ??
+    prMatch?.[1] ??
+    'N/A';
+    
   // Extract skills from the content
   const skills = skillsMatch?.[1]
     ? skillsMatch[1]
@@ -421,21 +405,8 @@ export default function BugFixDetailPage() {
                   {/* DESCRIPTION TAB */}
                   {activeTab === 'description' && (
                     <div className="space-y-6">
-                      {/* Problem Meta */}
-                      <div className="bg-white rounded-xl border border-[#0E1B2E]/10 shadow-sm overflow-hidden">
-                        <div className="p-5">
-                          <div className="flex items-center gap-3 mb-4">
-                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-[#0E1B2E]/70 bg-[#0E1B2E]/5 border">
-                              <Clock className="w-3.5 h-3.5" />
-                              {time}
-                            </div>
-                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-[#0E1B2E]/70 bg-[#0E1B2E]/5 border">
-                              <Code2 className="w-3.5 h-3.5" />
-                              {data.category || 'Bug Fix'}
-                            </div>
-                          </div>            
-                        </div>
-                      </div>
+
+                    
 
                       {/* Markdown Description */}
                       <div className="bg-white rounded-xl border border-[#0E1B2E]/10 shadow-sm p-6">
@@ -573,7 +544,7 @@ export default function BugFixDetailPage() {
               <div className="max-w-4xl mx-auto space-y-8">
                 {/* Left side content for tutorials */}
                 {parsedContent.overview && (
-                  <ContentSection title="Overview" content={parsedContent.overview} />
+                  <ContentSection title="Lesson Overview" content={parsedContent.overview} />
                 )}
                 {parsedContent.problemContext && (
                   <ContentSection title="Problem Context" content={parsedContent.problemContext} />
@@ -643,8 +614,14 @@ export default function BugFixDetailPage() {
                   </div>
                 )}
                 {parsedContent.codeExplanation && (
-                  <ContentSection title="Code Explanation" content={parsedContent.codeExplanation} />
+                  <div className="max-h-[420px] overflow-y-auto rounded-xl border border-slate-200 bg-white">
+                    <ContentSection
+                      title="Code Explanation"
+                      content={parsedContent.codeExplanation}
+                    />
+                  </div>
                 )}
+
               </div>
             </div>
           ) : type === 'challenge' ? (

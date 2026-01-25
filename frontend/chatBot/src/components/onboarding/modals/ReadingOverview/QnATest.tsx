@@ -142,7 +142,7 @@ export default function QnATest({ questions, sectionTitle, employeeId, moduleId,
   return (
     <div className="space-y-6">
       {/* Header with Timer */}
-      <div className="flex items-center justify-between p-4 rounded-xl border-2 border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50/50">
+      <div className="flex items-center justify-between px-6 py-4 rounded-2xl bg-white border border-slate-200 shadow-sm">
         <div>
           <h3 className={`${inter.className} text-lg font-bold text-[#0E1B2E] mb-1`}>
             {sectionTitle || "Tech Stack Assessment"}
@@ -153,7 +153,7 @@ export default function QnATest({ questions, sectionTitle, employeeId, moduleId,
         </div>
         <div className="flex items-center gap-3">
           <div
-            className={`${jetbrainsMono.className} flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-lg ${
+            className={`${jetbrainsMono.className} flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold ${
               timeRemaining < 60
                 ? 'bg-red-100 text-red-700 border-2 border-red-300'
                 : timeRemaining < 300
@@ -177,7 +177,7 @@ export default function QnATest({ questions, sectionTitle, employeeId, moduleId,
           return (
             <div
               key={qnaIndex}
-              className="border-2 border-slate-200 rounded-2xl p-6 bg-white shadow-sm hover:shadow-md transition-shadow"
+              className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-5"
             >
               <div className="mb-4">
                 <div className="flex items-center space-x-2 mb-3">
@@ -193,10 +193,10 @@ export default function QnATest({ questions, sectionTitle, employeeId, moduleId,
                   )}
                   {showResults && (
                     <span
-                      className={`${inter.className} ml-auto text-xs font-bold px-3 py-1.5 rounded-lg ${
+                      className={`text-xs font-semibold px-3 py-1 rounded-full ${
                         isCorrect
-                          ? 'bg-green-100 text-green-700 border border-green-300'
-                          : 'bg-red-100 text-red-700 border border-red-300'
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-rose-50 text-rose-700"
                       }`}
                     >
                       {isCorrect ? (
@@ -291,7 +291,7 @@ export default function QnATest({ questions, sectionTitle, employeeId, moduleId,
               )}
 
               {showResults && qnaItem.explanation && (
-                <div className="mt-5 p-5 rounded-xl border-2 bg-gradient-to-br from-blue-50 to-indigo-50/50 border-blue-200">
+                <div className="mt-4 p-4 rounded-xl bg-slate-50 border border-slate-200">
                   <h5
                     className={`${inter.className} text-sm font-bold text-blue-900 mb-3 flex items-center gap-2`}
                   >
@@ -333,7 +333,7 @@ export default function QnATest({ questions, sectionTitle, employeeId, moduleId,
 
       {/* Results Summary */}
       {isSubmitted && score && (
-        <div className="mt-8 p-6 rounded-2xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 via-indigo-50/50 to-purple-50/50">
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center space-y-4">
           <div className="text-center mb-4">
             <h3 className={`${inter.className} text-2xl font-bold text-[#0E1B2E] mb-2`}>
               Test Results
