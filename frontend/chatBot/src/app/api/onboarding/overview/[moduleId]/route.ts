@@ -37,57 +37,35 @@ function groupTeachingThenQna(teachingContent: any[], qna: any[], prefix: string
   return grouped;
 }
 
-function extractSections(jsonData: JSONData): Record<string, any> {
-  if (jsonData.data && typeof jsonData.data === 'object') {
-    // Check if data has teaching_content and qna arrays
-    const teachingContent = jsonData.data.teaching_content;
-    const qna = jsonData.data.qna;
-    
-    if (Array.isArray(teachingContent) && Array.isArray(qna)) {
-      return groupTeachingThenQna(teachingContent, qna);
-    }
-    
-    return jsonData.data;
+
+function extractGroupedSections(jsonData: JSONData) {
+  if (!jsonData.sections || typeof jsonData.sections !== 'object') {
+    return [];
   }
-  
-  if (jsonData.sections && typeof jsonData.sections === 'object') {
-    const firstValue = Object.values(jsonData.sections)[0];
-    
-    // Check if it's a QnA-only structure (old format)
-    if (firstValue && typeof firstValue === 'object' && ('question' in firstValue || 'answer' in firstValue)) {
-      return jsonData.sections;
-    }
-    
-    // Process sections structure - handle both sections.data and sections.{section_name}
-    const interleavedSections: Record<string, any> = {};
-    
-    for (const [sectionKey, sectionValue] of Object.entries(jsonData.sections)) {
-      if (typeof sectionValue === 'object' && !Array.isArray(sectionValue)) {
-        const teachingContent = sectionValue.teaching_content;
-        const qna = sectionValue.qna;
-        
-        if (Array.isArray(teachingContent) && Array.isArray(qna)) {
-          // Group all teaching_content first, then all qna for this section
-          const grouped = groupTeachingThenQna(teachingContent, qna, sectionKey);
-          Object.assign(interleavedSections, grouped);
-        } else {
-          // If no interleaving needed, keep original structure
-          interleavedSections[sectionKey] = sectionValue;
-        }
-      }
-    }
-    
-    return interleavedSections;
-  }
-  
-  for (const [key, value] of Object.entries(jsonData)) {
-    if (key !== 'metadata' && value && typeof value === 'object' && !Array.isArray(value)) {
-      return value;
-    }
-  }
-  
-  return {};
+
+  return Object.entries(jsonData.sections).map(([sectionKey, sectionValue]) => {
+    const teaching = sectionValue.teaching_content ?? [];
+    const qna = sectionValue.qna ?? [];
+
+    const items = [
+      ...teaching.map((t: any) => ({ type: 'teaching_content', ...t })),
+      ...(qna.length > 0 ? [{
+        type: 'qna',
+        questions: qna,
+        sectionKey
+      }] : [])
+    ];
+
+    return {
+      sectionId: sectionKey,
+      sectionTitle: sectionKey
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, l => l.toUpperCase()),
+      items
+    };
+  });
 }
+
 
 export async function GET(
   request: Request,
@@ -206,28 +184,9 @@ export async function GET(
     const fileContent = await fs.readFile(filePath, 'utf-8');
 
     const jsonData: JSONData = JSON.parse(fileContent);
-    const moduleData = extractSections(jsonData);
+    const sections = extractGroupedSections(jsonData);
 
-    const sections = Object.entries(moduleData).map(([key, value], index) => {
-      // Handle interleaved structure with type field
-      let sectionTitle: string;
-      if (value?.type === 'qna' && value?.questions && Array.isArray(value.questions)) {
-        // For QnA sections with multiple questions, use a descriptive title
-        sectionTitle = value.sectionKey 
-          ? `QnA: ${value.sectionKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`
-          : 'QnA Questions';
-      } else {
-        sectionTitle = value?.title || value?.question || key;
-      }
-      const content = value;
-      
-      return {
-        sectionId: `${moduleId}-${index + 1}`,
-        sectionTitle: sectionTitle,
-        content: content,
-      };
-    });
-
+    
     return NextResponse.json({
       moduleId,
       jsonFile: jsonFileName,
