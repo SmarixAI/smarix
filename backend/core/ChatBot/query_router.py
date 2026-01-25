@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 # Constants for routing
 VALID_INDEX_TYPES = [
     'documentation', 'code', 'pr', 'commit', 'email', 'issue', 
-    'impact_analysis', 'traceability', 'multi', 'direct_id',
+    'impact_analysis', 'traceability', 'multi',
     'pr_issue_tutorial', 'pr_issue_coding_question', 'random_pr_generator'
 ]
 
@@ -264,9 +264,10 @@ class QueryRouter:
         query_lower = query.lower().strip()
 
         # 1️⃣ NEW: detect direct ID queries
-        match = re.search(r'\b(?:issue|pr|ticket|bug|id)\s*#?\s*(\d+)\b', query_lower)
+        match = re.search(r'\b(?:pr|pull request)\s*#?\s*(\d+)\b', query_lower)
         if match:
-            return "direct_id"   # new special route
+            return "pr"
+
 
 
         if self.routing_method == "keyword":

@@ -45,31 +45,42 @@ class PRHandler:
             return None
             
         num = str(entity["number"]).strip()
-        possible_keys = ["pr_number", "number", "id", "pr_id"]
-        
-        for key in possible_keys:
-            pr_results = self.chatbot.vector_db.find(where={key: num}, top_k=self.chatbot.top_k)
+
+        possible_where_clauses = [
+            {"type": "pr", "pr_number": int(num)},
+            {"entities.pr_number": int(num)},
+        ]
+
+
+        for where in possible_where_clauses:
+            pr_results = self.chatbot.vector_db.find(
+                where=where,
+                top_k=self.chatbot.top_k
+            )
             if pr_results:
-                self.chatbot.logger.info(f"DIRECT LOOKUP | Match via key '{key}' → {len(pr_results)} chunks")
+                self.chatbot.logger.info(f"DIRECT LOOKUP | Match via {where}")
                 result = self.chatbot.response_handler.respond_with_results(
                     pr_results, QueryType.PR_SPECIFIC, query, expanded_query, role=role
                 )
-                
                 self._update_caches(query, result, active_session_id)
                 self._save_conversation(active_session_id, query, result)
-                
                 return result
+
         
         # Fallback — match numeric substring inside title
-        pr_results = self.chatbot.vector_db.find(where={"title": f"contains: {num}"}, top_k=self.chatbot.top_k)
-        if pr_results:
-            self.chatbot.logger.info(f"DIRECT LOOKUP | Fallback match in title → {len(pr_results)} chunks")
-            result = self.chatbot.response_handler.respond_with_results(
-                pr_results, QueryType.PR_SPECIFIC, query, expanded_query, role=role
-            )
-            self._update_caches(query, result, active_session_id)
-            self._save_conversation(active_session_id, query, result)
-            return result
+        # pr_results = self.chatbot.vector_db.search(
+        #     query=f"pull request {num}",
+        #     top_k=self.chatbot.top_k
+        # )
+
+        # if pr_results:
+        #     self.chatbot.logger.info(f"DIRECT LOOKUP | Fallback match in title → {len(pr_results)} chunks")
+        #     result = self.chatbot.response_handler.respond_with_results(
+        #         pr_results, QueryType.PR_SPECIFIC, query, expanded_query, role=role
+        #     )
+        #     self._update_caches(query, result, active_session_id)
+        #     self._save_conversation(active_session_id, query, result)
+        #     return result
         
         self.chatbot.logger.warning(f"DIRECT LOOKUP | No match for PR #{num} across metadata keys")
         return None
@@ -132,9 +143,14 @@ class PRHandler:
         ):
             return None
         
-        num = int(raw_num.group(1))
+
+        num = raw_num.group(1)
         self.chatbot.logger.info(f"DIRECT LOOKUP (PR override) | PR #{num}")
-        pr_results = self.chatbot.vector_db.find(where={"pr_number": str(num)}, top_k=self.chatbot.top_k)
+        pr_results = self.chatbot.vector_db.find(
+            where={"type": "pr", "pr_number": int(num)},
+            top_k=self.chatbot.top_k
+        )
+
         
         if pr_results:
             self.chatbot.logger.info(f"DIRECT LOOKUP (PR override) | {len(pr_results)} chunks returned")
@@ -177,7 +193,7 @@ class PRHandler:
         if query_type != QueryType.PR_SPECIFIC or not raw_num:
             return None
         
-        num = int(raw_num.group(1))
+        num = raw_num.group(1)
         self.chatbot.logger.info(f"DIRECT LOOKUP FINAL | PR #{num} not found — stopping without semantic search")
         not_found_answer = f"PR #{num} was not found in the repository. It may not exist or was not indexed."
         result = self.chatbot.response_handler.package_response(not_found_answer, [], [], QueryType.PR_SPECIFIC)
@@ -212,7 +228,10 @@ class PRHandler:
         query_embedding = self.chatbot.get_query_embedding(expanded_query)
         
         if entity_type == 'pr':
-            github_results = self.chatbot.vector_db.find(where={"pr_number": str(entity_number)}, top_k=20)
+            github_results = self.chatbot.vector_db.find(
+                where={"type": "pr", "pr_number": int(entity_number)},
+                top_k=20
+            )
         else:  # issue
             github_results = self.chatbot.vector_db.find(where={"issue_number": str(entity_number)}, top_k=20)
         
@@ -322,7 +341,10 @@ class PRHandler:
         query_embedding = self.chatbot.get_query_embedding(expanded_query)
         
         if entity_type == 'pr':
-            github_results = self.chatbot.vector_db.find(where={"pr_number": str(entity_number)}, top_k=20)
+            github_results = self.chatbot.vector_db.find(
+                where={"type": "pr", "pr_number": int(entity_number)},
+                top_k=20
+            )
         else:  # issue
             github_results = self.chatbot.vector_db.find(where={"issue_number": str(entity_number)}, top_k=20)
         
