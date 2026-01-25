@@ -78,6 +78,9 @@ class CacheHandler:
             quality_score: Optional quality score (defaults to context_quality from result)
         """
         if self.chatbot.query_rewriter and self.chatbot.query_rewriter.semantic_cache:
+            if result is None:  # ← ADD THIS
+                self.chatbot.logger.warning(f"Skipping cache set: result is None for query '{query[:50]}'")
+                return
             if quality_score is None:
                 quality_score = result.get('context_quality', 0.8)
             self.chatbot.query_rewriter.semantic_cache.set(
@@ -113,6 +116,10 @@ class CacheHandler:
             session_id: Current session ID
             quality_score: Optional quality score (defaults to context_quality from result)
         """
+
+        if result is None:  # ← ADD THIS
+            self.chatbot.logger.warning(f"Skipping cache update: result is None")
+            return
         self.set_semantic_cache(query, result, session_id, quality_score)
         self.set_response_cache(query, result, session_id)
     
@@ -267,4 +274,3 @@ Adjusted Response (keep all cached info, just reframe for new question):"""
         if self.chatbot.query_rewriter and self.chatbot.query_rewriter.semantic_cache:
             return self.chatbot.query_rewriter.semantic_cache.get_stats()
         return None
-

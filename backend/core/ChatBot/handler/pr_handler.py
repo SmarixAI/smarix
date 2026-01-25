@@ -419,4 +419,3 @@ class PRHandler:
             )
         except Exception as e:
             self.chatbot.logger.error(f"CONVERSATION_STORE | Failed to save user query: {e}")
-
