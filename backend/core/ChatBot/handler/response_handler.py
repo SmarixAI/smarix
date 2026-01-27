@@ -6,6 +6,8 @@ Handles response packaging, formatting, and multi-query merging.
 import re
 from typing import Dict, Any, List, Optional, Callable, Tuple
 from ..query_type import QueryType
+from utils.path_normalizer import extract_filename
+
 
 # Constants for response limits
 MAX_MERGED_SOURCES = 10
@@ -318,15 +320,19 @@ class ResponseHandler:
 
     def _get_metadata(self, chunk: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Extract metadata from chunk with safe access.
+        Extract metadata from chunk with safe access and normalization support.
         
         Args:
             chunk: Chunk dictionary
             
         Returns:
-            Metadata dictionary
+            Normalized metadata dictionary
         """
-        return chunk.get("metadata", {})
+        from utils.metadata_normalizer import MetadataNormalizer
+        metadata = chunk.get('metadata', {})
+        # Return normalized metadata for consistent access
+        meta_norm = MetadataNormalizer(metadata, chunk)
+        return meta_norm.normalize() if metadata else {}
     
     def _get_metadata_str_lower(self, chunk: Dict[str, Any]) -> str:
         """
@@ -339,6 +345,219 @@ class ResponseHandler:
             Lowercase string representation of metadata
         """
         return str(self._get_metadata(chunk)).lower()
+    
+    def _needs_full_code_header(self, query: str) -> bool:
+        query_lower = query.lower()
+        return any(
+            phrase in query_lower
+            for phrase in [
+                "full code",
+                "complete code",
+                "entire code",
+                "whole code",
+                "give me full code",
+                "show full file",
+            ]
+        )
+
+
+    def _detect_ambiguous_filename(self, chunks: List[Dict[str, Any]], query: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """
+        Detect if multiple files with the same filename exist in the results.
+        
+        This can happen in two ways:
+        1. Chunks are already marked with _ambiguous_filename flag (from code_chunks_loader)
+        2. Special __ambiguous__ format returned from retrieval
+        3. Multiple unique file paths share the same filename (detected from all retrieval sources)
+        
+        Args:
+            chunks: List of retrieved chunks
+            query: Original query text (optional, used to check if user provided full path)
+        
+        Returns:
+            Dict with 'filename' and 'paths' if ambiguity detected, None otherwise
+        """
+        if not chunks:
+            return None
+
+        # Method 0: Check for special __ambiguous__ format from retrieval (early return format)
+        if len(chunks) == 1 and chunks[0].get("__ambiguous__"):
+            filename = chunks[0].get("filename", "unknown")
+            paths = chunks[0].get("paths", [])
+            if filename and paths:
+                # 🚨 CRITICAL: Check if user provided a full path in query
+                # If they did, don't show ambiguity - the retrieval should have filtered it
+                if query:
+                    from utils.path_normalizer import normalize_path
+                    query_lower = query.lower().replace('\\', '/')
+                    
+                    # Check if query contains any of the ambiguous paths
+                    for path in paths:
+                        path_normalized = normalize_path(path, '').lower().replace('\\', '/')
+                        
+                        # Check if query contains this path (exact match, ends with, or contains)
+                        if (path_normalized in query_lower or 
+                            query_lower in path_normalized or
+                            query_lower.endswith(path_normalized) or
+                            path_normalized.endswith(query_lower)):
+                            self.chatbot.logger.info(
+                                f"AMBIGUITY_DETECTION | User specified path '{path}' in query '{query}', "
+                                f"but retrieval still returned ambiguous format. This should not happen."
+                            )
+                            # Don't show ambiguity - return None so processing continues
+                            return None
+                
+                self.chatbot.logger.warning(
+                    f"AMBIGUITY_DETECTION | Detected __ambiguous__ format: filename='{filename}', paths={len(paths)}"
+                )
+                return {
+                    "filename": filename,
+                    "paths": paths
+                }
+
+        # Method 1: Check if chunks are already marked as ambiguous (from code_chunks_loader)
+        ambiguous_chunks = [c for c in chunks if c.get("_ambiguous_filename")]
+        if ambiguous_chunks:
+            first = ambiguous_chunks[0]
+            all_paths = first.get("_all_matching_paths", [])
+            
+            # Log for debugging
+            self.chatbot.logger.info(
+                f"AMBIGUITY_DETECTION | Found {len(ambiguous_chunks)} chunks with _ambiguous_filename flag. "
+                f"Filename: {extract_filename(first.get('metadata', {}).get('file_path', '') or first.get('file_path', ''))}, "
+                f"Paths: {all_paths}"
+            )
+            
+            # If user provided a full path in query, check if it matches one of the ambiguous paths
+            # If it does, don't show ambiguity - just return that specific file
+            if query:
+                from utils.path_normalizer import normalize_path, extract_filename
+                from utils.metadata_normalizer import MetadataNormalizer
+                
+                # Check if query contains a full path
+                query_lower = query.lower()
+                for path in all_paths:
+                    path_lower = path.lower()
+                    # Check if query contains this path (as substring or exact match)
+                    if path_lower in query_lower or query_lower in path_lower:
+                        # User specified a path, filter chunks to only this path
+                        matching_chunks = []
+                        for chunk in chunks:
+                            meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+                            chunk_path = normalize_path(meta_norm.get_file_path(''), '')
+                            if chunk_path and (chunk_path.lower() == path_lower or chunk_path.lower().endswith(path_lower)):
+                                matching_chunks.append(chunk)
+                        
+                        # If we found chunks for the specified path, don't show ambiguity
+                        if matching_chunks:
+                            self.chatbot.logger.info(
+                                f"AMBIGUITY_DETECTION | User specified path in query, filtering to {len(matching_chunks)} chunks"
+                            )
+                            return None
+            
+            # Get filename from metadata or directly from chunk
+            filename = None
+            if first.get('metadata', {}).get('file_path'):
+                filename = extract_filename(first.get('metadata', {}).get('file_path'))
+            elif first.get('file_path'):
+                filename = extract_filename(first.get('file_path'))
+            elif all_paths:
+                filename = extract_filename(all_paths[0])
+            
+            if not filename:
+                # Try to extract from any chunk
+                for chunk in ambiguous_chunks:
+                    meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+                    file_path = meta_norm.get_file_path('')
+                    if file_path:
+                        filename = extract_filename(file_path)
+                        break
+            
+            if filename and all_paths:
+                return {
+                    "filename": filename,
+                    "paths": all_paths,
+                }
+
+        # Method 2: Detect ambiguity by checking if multiple unique file paths share the same filename
+        # This handles cases where chunks come from file path index, vector search, etc.
+        from utils.metadata_normalizer import MetadataNormalizer
+        from utils.path_normalizer import normalize_path
+        
+        # Group chunks by filename
+        filename_to_paths = {}
+        
+        for chunk in chunks:
+            meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+            file_path = meta_norm.get_file_path('')
+            chunk_type = meta_norm.get_chunk_type('')
+            
+            # Only check code chunks, ignore PR/issue/email chunks
+            if chunk_type in ['pr', 'issue', 'email']:
+                continue
+            
+            if not file_path:
+                # Try to get file_path directly from chunk if not in metadata
+                file_path = chunk.get('file_path', '')
+            
+            if not file_path:
+                continue
+            
+            # Normalize the file path
+            normalized_path = normalize_path(file_path, '')
+            if not normalized_path:
+                continue
+            
+            # Extract filename
+            filename = extract_filename(normalized_path)
+            if not filename:
+                continue
+            
+            filename_lower = filename.lower()
+            
+            # Track unique paths for this filename
+            if filename_lower not in filename_to_paths:
+                filename_to_paths[filename_lower] = set()
+            filename_to_paths[filename_lower].add(normalized_path)
+        
+        # Check if any filename has multiple unique paths
+        for filename_lower, paths in filename_to_paths.items():
+            if len(paths) > 1:
+                # Log for debugging
+                self.chatbot.logger.info(
+                    f"AMBIGUITY_DETECTION | Found {len(paths)} files with same filename '{filename_lower}': {sorted(paths)}"
+                )
+                
+                # If user provided a full path in query, check if it matches one of the ambiguous paths
+                if query:
+                    query_lower = query.lower()
+                    matching_path = None
+                    for path in paths:
+                        path_lower = path.lower()
+                        # Check if query contains this path
+                        if path_lower in query_lower or query_lower in path_lower:
+                            matching_path = path
+                            break
+                    
+                    # If user specified a path, don't show ambiguity
+                    if matching_path:
+                        self.chatbot.logger.info(
+                            f"AMBIGUITY_DETECTION | User specified path '{matching_path}' in query, not showing ambiguity"
+                        )
+                        return None
+                
+                # Ambiguity detected!
+                sorted_paths = sorted(paths)
+                self.chatbot.logger.warning(
+                    f"AMBIGUITY_DETECTION | Ambiguity detected for filename '{filename_lower}' with {len(sorted_paths)} paths"
+                )
+                return {
+                    "filename": filename_lower,
+                    "paths": sorted_paths,
+                }
+        
+        return None
+
 
     def _slice_pr_context_by_intent(
         self, 
@@ -524,13 +743,98 @@ Instructions:
         intent: Optional[str] = None
     ) -> Dict[str, Any]:
 
-        # 🔒 STEP 1: Slice context HARD by PR/Issue intent
+        # ============================================================
+        # FILE LOOKUP FLOW (special-cased, must short-circuit)
+        # ============================================================
+        if query_type == QueryType.FILE_LOOKUP:
+
+            inferred: Optional[str] = None
+            class_guess: Optional[str] = None
+
+            # 0️⃣ Run fallbacks ONLY if nothing found initially
+            if not github_results:
+                inferred = extract_filename(query)
+
+                if inferred and not inferred.endswith(".dart"):
+                    inferred = inferred + ".dart"
+
+                self.chatbot.logger.info(
+                    f"FILE_LOOKUP | No exact match. Retrying with inferred filename: {inferred}"
+                )
+
+                github_results = self.chatbot.retrieve_by_filename(inferred)
+
+                # Fallback 2: class-name inference
+                if not github_results and inferred:
+                    class_guess = ''.join(
+                        part.capitalize()
+                        for part in inferred.replace(".dart", "").split("_")
+                    )
+
+                    self.chatbot.logger.info(
+                        f"FILE_LOOKUP | Trying class-name based fallback: {class_guess}"
+                    )
+
+                    github_results = self.chatbot.retrieve_by_class_name(class_guess)
+
+                # Fallback 3: reference-based lookup
+                if not github_results and class_guess:
+                    self.chatbot.logger.info(
+                        f"FILE_LOOKUP | Trying reference-based fallback for: {class_guess}"
+                    )
+                    github_results = self.chatbot.retrieve_files_referencing(class_guess)
+
+            # 1️⃣ Fast-path ambiguity (__ambiguous__ format)
+            if github_results and len(github_results) == 1 and github_results[0].get("__ambiguous__"):
+                ambiguity_info = github_results[0]
+                return {
+                    "answer": (
+                        f"Multiple files named `{ambiguity_info.get('filename', 'unknown')}` were found:\n\n"
+                        + "\n".join(f"- {p}" for p in ambiguity_info.get("paths", []))
+                        + "\n\nPlease specify which file you're referring to by providing the full path."
+                    ),
+                    "sources": [],
+                    "chunks_retrieved": 0,
+                    "query_type": query_type,
+                    "context_quality": 0.0,
+                    "emails": [],
+                    "has_diagram": False,
+                    "related_knowledge": None,
+                    "is_metrics_query": False,
+                    "is_ambiguous": True
+                }
+
+            # 2️⃣ General ambiguity detection
+            ambiguity = self._detect_ambiguous_filename(github_results, query)
+            if ambiguity:
+                return {
+                    "answer": (
+                        f"Multiple files named `{ambiguity['filename']}` were found:\n\n"
+                        + "\n".join(f"- {p}" for p in ambiguity["paths"])
+                        + "\n\nPlease specify which file you're referring to by providing the full path."
+                    ),
+                    "sources": [],
+                    "chunks_retrieved": 0,
+                    "query_type": query_type,
+                    "context_quality": 0.0,
+                    "emails": [],
+                    "has_diagram": False,
+                    "related_knowledge": None,
+                    "is_metrics_query": False,
+                    "is_ambiguous": True
+                }
+
+        # ============================================================
+        # SHARED FLOW (PR / ISSUE / GENERAL)  ✅ FIXED
+        # ============================================================
+
+        # 🔒 STEP 1: Intent slicing
         if query_type == QueryType.PR_SPECIFIC and intent:
             github_results = self._slice_pr_context_by_intent(github_results, intent)
         elif query_type == QueryType.ISSUE_SPECIFIC and intent:
             github_results = self._slice_issue_context_by_intent(github_results, intent)
 
-        # 🔒 STEP 2: Build context ONLY from sliced chunks
+        # 🔒 STEP 2: Build context
         context = self.chatbot.build_context_from_chunks(github_results, query_type)
 
         email_results = self.chatbot.retrieve_gmail_correlated(
@@ -541,7 +845,7 @@ Instructions:
 
         email_context = self.chatbot.build_email_context(email_results)
 
-        # 🔒 STEP 3: INTENT-AWARE PROMPTING
+        # 🔒 STEP 3: Prompt building
         system_prompt, user_prompt = self._build_prompts(
             query_type, expanded_query, context, email_context, intent, role
         )
@@ -551,6 +855,28 @@ Instructions:
 
         refined = self.chatbot.verify_and_refine_response(
             answer, query, query_type
+        )
+
+        # ✅ Friendly header for full-file requests
+        if query_type == QueryType.FILE_LOOKUP and self._needs_full_code_header(query):
+            file_path = None
+            if github_results:
+                from utils.metadata_normalizer import MetadataNormalizer
+                meta = MetadataNormalizer(
+                    github_results[0].get("metadata", {}),
+                    github_results[0]
+                )
+                file_path = meta.get_file_path(None)
+
+            refined = (
+                "Here’s the complete implementation of the requested file"
+                + (f" `{file_path}`" if file_path else "")
+                + ", exactly as it exists in the codebase.\n\n"
+                + refined
+            )
+
+        self.chatbot.logger.info(
+            f"RESPOND_WITH_RESULTS | Returning response for {query_type}"
         )
 
         return self.package_response(
@@ -625,13 +951,16 @@ Instructions:
             limit = len(github_results)
 
         for i, result in enumerate(github_results[:limit], 1):
-            meta = self._get_metadata(result)
+            from utils.metadata_normalizer import MetadataNormalizer
+            meta_norm = MetadataNormalizer(result.get('metadata', {}), result)
+            # Get chunk_id from result or metadata
+            chunk_id = result.get('chunk_id') or result.get('metadata', {}).get('chunk_id', '')
             sources.append({
                 "rank": i,
-                "file": meta.get("file_path", "unknown"),
-                "type": meta.get("type", "unknown"),
+                "file": meta_norm.get_file_path("unknown"),
+                "type": meta_norm.get_chunk_type("unknown"),
                 "score": result.get("score", 0.0),
-                "chunk_id": meta.get("chunk_id", "")
+                "chunk_id": chunk_id
             })
         
         return sources
@@ -676,6 +1005,8 @@ Instructions:
             
         Returns:
             Context quality score (0.0 to 1.0)
+
+            
         """
         if not github_results:
             return 0.0

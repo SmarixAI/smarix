@@ -161,7 +161,8 @@ class MultiQueryHandler:
         self,
         subqueries: List[str],
         original_query: str,
-        session_id: str
+        session_id: str,
+        schema_name: str
     ) -> Dict[str, Any]:
         """
         Process sub-queries and merge responses into a single answer.
@@ -191,10 +192,10 @@ class MultiQueryHandler:
         # Save merged response
         try:
             self.chatbot.conversation_store.add_message(
-                session_id, "user", original_query, tokens_used=0
+                session_id, "user", original_query, schema_name=schema_name, tokens_used=0
             )
             self.chatbot.conversation_store.add_message(
-                session_id, "assistant", merged["answer"], tokens_used=0
+                session_id, "assistant", merged["answer"], schema_name=schema_name, tokens_used=0
             )
         except Exception as e:
             self.chatbot.logger.error(

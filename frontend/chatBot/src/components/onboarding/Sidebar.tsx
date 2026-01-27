@@ -7,15 +7,24 @@ import { Inter } from 'next/font/google';
 interface SidebarProps {
   completedModules: number;
   totalModules: number;
-  activeTab: string;             
+  activeTab: string;
+
+  // 🔹 PRACTICE TAB
   practiceTasks?: any[];
   selectedPracticeTask?: number | null;
   onSelectPracticeTask?: (key: number) => void;
+
+  // 🔹 BUG FIX TAB
   tutorialsCount?: number;
   challengesCount?: number;
+  completedTutorials?: number;
+  completedChallenges?: number;
+
   activeMode?: 'tutorials' | 'challenges';
   onSwitchMode?: (mode: 'tutorials' | 'challenges') => void;
 }
+
+
 
 const inter = Inter({ subsets: ['latin'], weight: ['400', '500', '600', '700'] });
 
@@ -28,6 +37,8 @@ export default function Sidebar({
   onSelectPracticeTask,
   tutorialsCount,
   challengesCount,
+  completedTutorials = 0,
+  completedChallenges = 0,
   activeMode,
   onSwitchMode
 }: SidebarProps) {
@@ -50,7 +61,7 @@ export default function Sidebar({
     const completionPercent = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
 
     return (
-      <aside className="w-80 flex-shrink-0 flex flex-col bg-white/70 backdrop-blur-xl rounded-2xl border-2 border-slate-200/60 shadow-lg shadow-slate-200/30 overflow-hidden" style={{ height: 'calc(100vh - 200px)' }}>
+      <aside className="flex-shrink-0 flex flex-col bg-white/70 backdrop-blur-xl rounded-2xl border-2 border-slate-200/60 shadow-lg shadow-slate-200/30 overflow-hidden" style={{ height: 'calc(100vh - 200px)' }}>
 
         {/* PRACTICE HEADER CARD */}
         <div className="p-5 border-b-2 border-slate-200/60 flex-shrink-0 bg-gradient-to-br from-white to-blue-50/30">
@@ -188,17 +199,24 @@ export default function Sidebar({
     );
   }
 
-  if (activeTab === "bugfix") {
-    const total = (tutorialsCount ?? 0) + (challengesCount ?? 0);
-    const progress =
-      total > 0
-        ? activeMode === "tutorials"
-          ? (tutorialsCount! / total) * 100
-          : (challengesCount! / total) * 100
-        : 0;
+  const totalTutorials = tutorialsCount ?? 0;
+  const totalChallenges = challengesCount ?? 0;
+
+  const completedTuts = completedTutorials ?? 0;
+  const completedChals = completedChallenges ?? 0;
+
+  const progress =
+    activeMode === "tutorials"
+      ? totalTutorials > 0
+        ? (completedTuts / totalTutorials) * 100
+        : 0
+      : totalChallenges > 0
+      ? (completedChals / totalChallenges) * 100
+      : 0;
+
 
     return (
-      <aside className="w-80 flex-shrink-0 space-y-5 max-h-screen overflow-y-auto pr-2 custom-scrollbar">
+      <aside className="flex-shrink-0 space-y-5 max-h-screen overflow-y-auto pr-2 custom-scrollbar">
 
         {/* BUG FIX OVERVIEW */}
         <div className="rounded-2xl p-5 bg-white/70 backdrop-blur-sm border-2 border-slate-200/60 shadow-lg shadow-slate-200/30">
@@ -235,7 +253,9 @@ export default function Sidebar({
           {/* PROGRESS BAR */}
           <div className="mt-4">
             <div className={`${inter.className} flex justify-between text-xs font-semibold mb-2`}>
-              <span className="text-[#0E1B2E]">Mode Progress</span>
+              <span className="text-[#0E1B2E]">
+                {activeMode === 'tutorials' ? 'Tutorial Progress' : 'Challenge Progress'}
+              </span>
               <span className="text-blue-600">{Math.round(progress)}%</span>
             </div>
             <div className="h-2.5 rounded-full overflow-hidden bg-slate-100 border border-slate-200/60">
@@ -247,30 +267,6 @@ export default function Sidebar({
           </div>
         </div>
 
-        {/* MODE SWITCH */}
-        <div className="rounded-2xl p-5 bg-white/70 backdrop-blur-sm border-2 border-slate-200/60 shadow-lg shadow-slate-200/30">
-          <h4 className={`${inter.className} text-sm font-bold mb-3 text-[#0E1B2E]`}>Focus Mode</h4>
-
-          <div className="grid grid-cols-2 gap-3">
-            {(["tutorials", "challenges"] as const).map((mode) => {
-              const isActive = activeMode === mode;
-
-              return (
-                <button
-                  key={mode}
-                  onClick={() => onSwitchMode?.(mode)}
-                  className={`${inter.className} px-4 py-3 rounded-xl text-xs font-bold transition-all border-2 ${
-                    isActive
-                      ? "bg-gradient-to-r from-[#0E1B2E] to-blue-900 text-white border-blue-600 shadow-lg"
-                      : "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200 hover:border-slate-300"
-                  }`}
-                >
-                  {mode === "tutorials" ? "🎓 Tutorials" : "🎯 Challenges"}
-                </button>
-              );
-            })}
-          </div>
-        </div>
 
         {/* DEBUG WORKFLOW */}
         <div className="rounded-2xl p-5 bg-gradient-to-br from-blue-50/50 to-white border-2 border-blue-200/60 shadow-md">
@@ -339,7 +335,7 @@ export default function Sidebar({
   }
 
   return (
-    <aside className="w-80 flex-shrink-0">
+    <aside className="flex-shrink-0">
       <div className="rounded-2xl p-5 mb-5 bg-white/70 backdrop-blur-sm border-2 border-slate-200/60 shadow-lg shadow-slate-200/30">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#0E1B2E] to-blue-900 flex items-center justify-center shadow-md">
@@ -366,4 +362,3 @@ export default function Sidebar({
       </div>
     </aside>
   );
-}

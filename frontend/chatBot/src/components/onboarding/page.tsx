@@ -7,6 +7,8 @@ import ReadingOverview from "@/components/onboarding/tabs/ReadingOverview";
 import PracticeTasks from "@/components/onboarding/tabs/PracticeTasks";
 import BugFixing from "@/components/onboarding/tabs/BugFixing";
 import Chatbot from "@/components/onboarding/Chatbot";
+import RightSidebar from "@/components/onboarding/RightSidebar";
+
 
 export default function OnboardingPage() {
   const [activeTab, setActiveTab] = useState("reading");
@@ -66,11 +68,12 @@ export default function OnboardingPage() {
               setOnboardingData(data);
               
               // Calculate progress - if no data exists, show 0%
-              const reading = data.onboarding?.reading?.modules || [];
-          const practice = data.onboarding?.practice?.tasks || [];
+          const reading = data.onboarding?.reading?.modules || [];
           const bugfixTutorials = data.onboarding?.bugfix?.tutorials || [];
           const bugfixChallenges = data.onboarding?.bugfix?.challenges || [];
           const bugfixQuestions = data.onboarding?.bugfix?.coding_questions || [];
+          const practice = data.onboarding?.practice?.tasks || [];
+
           
           const allItems = [...reading, ...practice, ...bugfixTutorials, ...bugfixChallenges, ...bugfixQuestions];
               const total = allItems.length;
@@ -80,16 +83,6 @@ export default function OnboardingPage() {
               setTotalModules(total);
               setCompletedModules(completed);
               
-              // Set practice tasks from data
-              if (practice.length > 0) {
-                setPracticeTasks(practice);
-                if (selectedPracticeTask === null && practice.length > 0) {
-                  setSelectedPracticeTask(practice[0].question_number);
-                }
-              } else {
-                // If no practice tasks, set empty array
-                setPracticeTasks([]);
-              }
             } else {
               // If API call fails, set empty data
               setOnboardingData({
@@ -113,6 +106,36 @@ export default function OnboardingPage() {
     
     fetchEmployeeData();
   }, []);
+
+
+  // 🔹 Fetch practice tasks for sidebar + main panel
+  useEffect(() => {
+    if (activeTab !== 'practice') return;
+
+    const fetchPracticeTasks = async () => {
+      try {
+        const repo = activeRepos?.[0];
+        const repoParam = repo ? `?repo=${encodeURIComponent(repo)}` : '';
+
+        const res = await fetch(`/api/onboarding/practice/practice1${repoParam}`);
+        if (!res.ok) return;
+
+        const json = await res.json();
+        const tasks = json.tasks || [];
+
+        setPracticeTasks(tasks);
+
+        if (tasks.length > 0 && selectedPracticeTask == null) {
+          setSelectedPracticeTask(tasks[0].question_number);
+        }
+      } catch (e) {
+        console.error('Failed to load practice tasks', e);
+      }
+    };
+
+    fetchPracticeTasks();
+  }, [activeTab, activeRepos?.[0]]);
+
 
 
   // Auto-select first task when practice tab becomes active and tasks are loaded
@@ -197,6 +220,8 @@ export default function OnboardingPage() {
           />
         );
       case "bugfix":
+        const bugfixTutorials = onboardingData?.onboarding?.bugfix?.tutorials || [];
+        const bugfixChallenges = onboardingData?.onboarding?.bugfix?.challenges || [];
         return <BugFixing
           activeRepos={activeRepos}
           employeeId={employeeId}
@@ -216,43 +241,73 @@ export default function OnboardingPage() {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-[#FAFAFA] text-[#0E1B2E]">
-      <div className="relative z-10 min-h-screen">
-        {/* Conditionally render Header */}
-        {isHeaderVisible && (
-          <Header
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-          />
-        )}
-
-        <div className="max-w-[1800px] mx-auto px-6 py-6 relative">
-          {activeTab !== "practice" && (
-            <div className="absolute inset-0 bg-[linear-gradient(to_right,#0E1B2E05_1px,transparent_1px),linear-gradient(to_bottom,#0E1B2E05_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
+    return (
+      <div className="min-h-screen bg-[#FAFAFA] text-[#0E1B2E]">
+        <div className="relative z-10 min-h-screen">
+          {/* Conditionally render Header */}
+          {isHeaderVisible && (
+            <Header
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+            />
           )}
-          
-          <div className={`relative z-10 ${activeTab === "practice" ? "flex gap-4 items-start" : "grid grid-cols-12 gap-4"}`} style={activeTab === "practice" ? { minHeight: 'calc(100vh - 180px)' } : {}}>
-            {activeTab === "practice" && (
-              <Sidebar
-                completedModules={completedModules}
-                totalModules={totalModules}
-                activeTab={activeTab}
-                practiceTasks={practiceTasks}
-                selectedPracticeTask={selectedPracticeTask}
-                onSelectPracticeTask={(n: number | null) => setSelectedPracticeTask(n)}
-              />
+
+          <div className="max-w-[1800px] mx-auto px-3 py-4 relative">
+            {activeTab !== "practice" && (
+              <div className="absolute inset-0 bg-[linear-gradient(to_right,#0E1B2E05_1px,transparent_1px),linear-gradient(to_bottom,#0E1B2E05_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
             )}
 
-            <main className={`${activeTab === "practice" ? "flex-1 min-w-0 bg-[#FAFAFA]" : "col-span-12"}`} style={activeTab === "practice" ? { height: 'calc(100vh - 180px)', overflowY: 'auto', overflowX: 'hidden' } : {}}>
-              {renderTabContent()}
-            </main>
+            <div
+              className="relative z-10 grid grid-cols-12 gap-2 h-[calc(100vh-180px)]"
+            >
+
+              {/* LEFT SIDEBAR */}
+              {(activeTab === "practice" || activeTab === "bugfix") && (
+                <div className="col-span-3 h-full overflow-y-auto overflow-x-hidden">
+                  <Sidebar
+                    completedModules={completedModules}
+                    totalModules={totalModules}
+                    activeTab={activeTab}
+                    practiceTasks={practiceTasks}
+                    selectedPracticeTask={selectedPracticeTask}
+                    onSelectPracticeTask={(n: number | null) =>
+                      setSelectedPracticeTask(n)
+                    }
+                    tutorialsCount={onboardingData?.onboarding?.bugfix?.tutorials?.length || 0}
+                    challengesCount={onboardingData?.onboarding?.bugfix?.challenges?.length || 0}
+                  />
+                </div>
+              )}
+
+              {/* MIDDLE CONTENT */}
+              <main
+                className={`${
+                  activeTab === "bugfix"
+                    ? "col-span-6"
+                    : activeTab === "practice"
+                    ? "col-span-9"
+                    : "col-span-12"
+                } h-full overflow-y-auto overflow-x-hidden bg-[#FAFAFA] min-w-0`}
+              >
+                {renderTabContent()}
+              </main>
+
+
+              {/* RIGHT SIDEBAR */}
+              {activeTab === "bugfix" && (
+                <aside className="col-span-3 h-full overflow-y-auto overflow-x-hidden border-l border-slate-200 bg-[#FAFAFA]">
+                  <RightSidebar />
+                </aside>
+              )}
+
+            </div>
+
           </div>
         </div>
-      </div>
 
-      {/* Chatbot */}
-      <Chatbot role="onboarding" />
-    </div>
-  );
+        {/* Chatbot */}
+        <Chatbot role="onboarding" />
+      </div>
+    );
+
 }

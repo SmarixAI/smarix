@@ -1,140 +1,303 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Bug, Loader2, BookOpen, Code2, Sparkles } from 'lucide-react';
-import type { PRTutorialsResponse, CodingQuestionsResponse } from '../../../../types/onboarding';
-import TutorialSection from '../modals/BugFix/Tutorial/ContentModal';
-import ChallengeSection from '../modals/BugFix/Challenge/ContentModal';
-import { Inter, JetBrains_Mono } from 'next/font/google';
+import { useEffect, useMemo, useState } from 'react';
+import { BookOpen, Code2, Sparkles } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import type {
+  PRTutorialsResponse,
+  CodingQuestionsResponse,
+} from '../../../../types/onboarding';
+import { Inter } from 'next/font/google';
 
 const inter = Inter({ subsets: ['latin'], weight: ['400', '500', '600', '700'] });
-const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], weight: ['400', '500', '600'] });
+
+type FilterType = 'all' | 'tutorials' | 'challenges';
 
 interface BugFixingProps {
+  activeRepos?: string[];
   employeeId?: string | null;
   onboardingData?: any;
-  activeRepos?: string[];
   onUpdateProgress?: (section: string, itemId: string, updates: any) => void;
 }
 
-export default function BugFixing({ employeeId, onboardingData, activeRepos = [], onUpdateProgress }: BugFixingProps) {
-  const [tutorials, setTutorials] = useState<PRTutorialsResponse | null>(null);
-  const [challenges, setChallenges] = useState<CodingQuestionsResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'tutorials' | 'challenges'>('tutorials');
+/* ===================== UI HELPERS ===================== */
+
+const DIFFICULTY_STYLES: Record<string, string> = {
+  Easy: 'bg-green-100 text-green-700',
+  Medium: 'bg-yellow-100 text-yellow-700',
+  Hard: 'bg-red-100 text-red-700',
+};
+
+const TYPE_STYLES: Record<'tutorial' | 'challenge', string> = {
+  tutorial: 'bg-blue-100 text-blue-700',
+  challenge: 'bg-amber-100 text-amber-700',
+};
+
+interface BugListItem {
+  id: number;
+  type: 'tutorial' | 'challenge';
+  title: string;
+  description: string;
+  difficulty: 'Easy' | 'Medium' | 'Hard';
+  prNumber: number;
+  filesChanged: number;
+}
+
+export default function BugFixing({ 
+  activeRepos = [],
+  employeeId,
+  onboardingData,
+  onUpdateProgress
+}: BugFixingProps) {
+  const router = useRouter();
+
+  const [tutorials, setTutorials] =
+    useState<PRTutorialsResponse | null>(null);
+  const [challenges, setChallenges] =
+    useState<CodingQuestionsResponse | null>(null);
+
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<FilterType>('all');
+  const [search, setSearch] = useState('');
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  /* ===================== FETCH ===================== */
 
   useEffect(() => {
     const fetchData = async () => {
-      setIsLoading(true);
-      // Use the first active repo if available
-      const repo = activeRepos.length > 0 ? activeRepos[0] : undefined;
+      setLoading(true);
+      const repo = activeRepos[0];
       const repoParam = repo ? `?repo=${encodeURIComponent(repo)}` : '';
-      
+
       try {
-        const [tutorialsRes, challengesRes] = await Promise.all([
+        const [tutRes, chalRes] = await Promise.all([
           fetch(`/api/onboarding/bugFix/tutorials${repoParam}`),
           fetch(`/api/onboarding/bugFix/challenges${repoParam}`),
         ]);
 
-        if (tutorialsRes.ok) {
-          const tutData = await tutorialsRes.json();
+        if (tutRes.ok) {
+          const tutData = await tutRes.json();
           setTutorials(tutData);
         }
-
-        if (challengesRes.ok) {
-          const chalData = await challengesRes.json();
+        if (chalRes.ok) {
+          const chalData = await chalRes.json();
+          console.log('Challenges API response:', chalData);
+          console.log('Challenges questions:', chalData?.questions);
           setChallenges(chalData);
         }
       } catch (error) {
         console.error('Error fetching bug fix data:', error);
       } finally {
-        setIsLoading(false);
+        setLoading(false);
       }
     };
 
     fetchData();
-  }, []);
+  }, [activeRepos]);
 
-  if (isLoading) {
+  /* ===================== DATA ===================== */
+
+  const bugs: BugListItem[] = useMemo(() => {
+    const tutorialItems =
+      tutorials?.tutorials
+        ?.filter(t => t.tutorial_number != null) // Filter out items without tutorial_number
+        .map(t => ({
+          id: t.tutorial_number!,
+          type: 'tutorial' as const,
+          title: t.pr_title,
+          description: t.brief_description,
+          difficulty: (t.difficulty ?? 'Easy') as 'Easy' | 'Medium' | 'Hard',
+          prNumber: t.pr_number,
+          filesChanged: t.code_files_modified,
+        })) ?? [];
+
+    // Handle challenges - check both questions array and direct array
+    const challengesArray = challenges?.questions || (Array.isArray(challenges) ? challenges : []);
+    
+    console.log('Processing challenges:', {
+      challenges,
+      questions: challenges?.questions,
+      challengesArray,
+      length: challengesArray?.length,
+      firstItem: challengesArray?.[0]
+    });
+
+    const challengeItems =
+      challengesArray
+        ?.filter((c: any) => {
+          // Check for pr_number or question_number (some might use question_number)
+          const hasPrNumber = (c.pr_number != null && c.pr_number !== undefined) || 
+                              (c.question_number != null && c.question_number !== undefined);
+          if (!hasPrNumber) {
+            console.log('Filtered out challenge (no pr_number/question_number):', c);
+          }
+          return hasPrNumber;
+        })
+        .map((c: any) => {
+          // Use pr_number if available, otherwise question_number
+          const prNumber = c.pr_number ?? c.question_number;
+          const item = {
+            id: prNumber!,
+            type: 'challenge' as const,
+            title: c.pr_title || c.title || `Fix issues in PR #${prNumber}`,
+            description:
+              c.brief_description ||
+              c.description ||
+              (c.file_changes?.length
+                ? `Resolve code issues across ${c.file_changes.length} modified file(s).`
+                : 'Resolve the reported code issues in this pull request.'),
+            difficulty: (c.difficulty || 'Medium') as 'Easy' | 'Medium' | 'Hard',
+            prNumber: prNumber!,
+            filesChanged: c.file_changes?.length ?? c.code_files_modified ?? 0,
+          };
+          console.log('Mapped challenge item:', item);
+          return item;
+        }) ?? [];
+
+    console.log('Final bugs array:', {
+      tutorialItems: tutorialItems.length,
+      challengeItems: challengeItems.length,
+      total: tutorialItems.length + challengeItems.length
+    });
+
+    return [...tutorialItems, ...challengeItems].filter(item => {
+      if (filter === 'tutorials' && item.type !== 'tutorial') return false;
+      if (filter === 'challenges' && item.type !== 'challenge') return false;
+      if (search)
+        return (
+          item.title.toLowerCase().includes(search.toLowerCase()) ||
+          item.description.toLowerCase().includes(search.toLowerCase())
+        );
+      return true;
+    });
+  }, [tutorials, challenges, filter, search]);
+
+  /* ===================== LOADING ===================== */
+
+  if (loading) {
     return (
-      <div className="p-4 flex items-center justify-center min-h-[300px]">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4" />
-          <p className={`${inter.className} text-sm text-slate-600 font-medium`}>Loading bug fix modules...</p>
-        </div>
+      <div className="flex justify-center items-center h-full">
+        <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
       </div>
     );
   }
 
+  /* ===================== HANDLERS ===================== */
+
+  const handleBugClick = (bug: BugListItem) => {
+    // Navigate to the detail page
+    router.push(`/employee/onboarding/bug-fix/${bug.type}/${bug.id}`);
+  };
+
+  /* ===================== UI ===================== */
   return (
-    <div className="w-full relative space-y-6">
-      {/* Header Section */}
-      <div className="rounded-2xl border-2 border-slate-200 p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white/70 backdrop-blur-sm shadow-md shadow-slate-200/40">
-        <div className="flex items-center gap-5">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#0E1B2E] to-blue-900 flex items-center justify-center shadow-lg shadow-blue-900/20">
-            <Bug className="w-8 h-8 text-white" />
-          </div>
-          <div>
-            <h2 className={`${inter.className} text-2xl font-bold tracking-tight text-[#0E1B2E] mb-1.5`}>
-              Bug Fix Training
-            </h2>
-            <p className={`${inter.className} text-[15px] text-slate-600 leading-relaxed max-w-xl`}>
-              Master debugging with hands-on tutorials and real-world challenges designed to improve your problem-solving skills.
-            </p>
-          </div>
+    <div className={`${inter.className} h-full flex flex-col bg-[#FAFAFA]`}>
+      {/* ================= HEADER ================= */}
+      <div className="sticky top-0 z-20 bg-gradient-to-b from-white to-[#FAFAFA] border-b border-slate-200 flex-shrink-0">
+        <div className="px-6 pt-5 pb-3">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+            Bug Fix Training
+          </h1>
+          <p className="text-sm text-slate-600">
+            Debug real-world pull requests like production issues
+          </p>
         </div>
 
-        {/* Tabs - Styled as a Segmented Control */}
-        <div className="flex items-center p-1.5 bg-slate-100/80 rounded-xl border border-slate-200">
-          <button
-            onClick={() => setActiveTab('tutorials')}
-            className={`${inter.className} flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-300 ${
-              activeTab === 'tutorials'
-                ? 'bg-white text-[#0E1B2E] shadow-sm ring-1 ring-black/5'
-                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
-            }`}
-          >
-            <BookOpen className={`w-4 h-4 ${activeTab === 'tutorials' ? 'text-blue-600' : ''}`} />
-            <span>Tutorial Bugs</span>
-            <span className={`${jetbrainsMono.className} text-xs ml-1.5 px-2 py-0.5 rounded-md ${
-              activeTab === 'tutorials'
-                ? 'bg-[#0E1B2E] text-white'
-                : 'bg-slate-200 text-slate-600'
-            }`}>
-              {tutorials?.tutorials.length || 0}
-            </span>
-          </button>
-          
-          <button
-            onClick={() => setActiveTab('challenges')}
-            className={`${inter.className} flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-300 ${
-              activeTab === 'challenges'
-                ? 'bg-white text-[#0E1B2E] shadow-sm ring-1 ring-black/5'
-                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
-            }`}
-          >
-            <Code2 className={`w-4 h-4 ${activeTab === 'challenges' ? 'text-amber-600' : ''}`} />
-            <span>Challenge Bugs</span>
-            <span className={`${jetbrainsMono.className} text-xs ml-1.5 px-2 py-0.5 rounded-md ${
-              activeTab === 'challenges'
-                ? 'bg-[#0E1B2E] text-white'
-                : 'bg-slate-200 text-slate-600'
-            }`}>
-              {challenges?.questions.length || 0}
-            </span>
-          </button>
+        {/* Filters */}
+        <div className="px-6 pb-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex bg-slate-100 p-1 rounded-xl">
+              {(['all', 'tutorials', 'challenges'] as FilterType[]).map(f => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={`px-4 py-1.5 text-sm rounded-lg transition font-medium ${
+                    filter === f
+                      ? 'bg-white shadow-sm text-slate-900'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  {f === 'all'
+                    ? 'All'
+                    : f === 'tutorials'
+                    ? 'Tutorials'
+                    : 'Challenges'}
+                </button>
+              ))}
+            </div>
+
+            <div className="relative w-72">
+              <Sparkles className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search bugs, PRs, descriptions"
+                className="w-full pl-9 pr-4 py-2 text-sm border rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-        {activeTab === 'tutorials' && tutorials && (
-          <TutorialSection data={tutorials} />
-        )}
-        
-        {activeTab === 'challenges' && challenges && (
-          <ChallengeSection data={challenges} activeRepos={activeRepos} />
-        )}
+      {/* ================= LIST ================= */}
+      <div className="flex-1 overflow-y-auto px-0 py-4">
+        <div className="bg-white border border-slate-200 divide-y divide-slate-200 rounded-xl overflow-hidden">
+          {bugs.map((bug, idx) => (
+            <div
+              key={`${bug.type}-${bug.id ?? idx}-${bug.prNumber ?? idx}`}
+              onClick={() => handleBugClick(bug)}
+              className="group relative px-6 py-5 cursor-pointer transition hover:bg-slate-50 rounded-lg"
+
+            >
+              
+
+              <div className="flex gap-5">
+                {bug.type === 'tutorial' ? (
+                  <BookOpen className="w-6 h-6 text-slate-500 mt-1 group-hover:text-slate-700 transition-colors" />
+                ) : (
+                  <Code2 className="w-6 h-6 text-amber-600 mt-1" />
+                )}
+
+                <div className="flex-1 space-y-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span
+                      className={`px-2.5 py-0.5 rounded text-xs font-medium ${TYPE_STYLES[bug.type]}`}
+                    >
+                      {bug.type === 'tutorial' ? 'Tutorial' : 'Challenge'}
+                    </span>
+
+                    <p className="text-sm font-semibold text-slate-900">
+                      PR #{bug.prNumber} · {bug.title}
+                    </p>
+                  </div>
+
+                  <p className="text-sm text-slate-600 leading-relaxed max-w-4xl">
+                    {bug.description}
+                  </p>
+
+                  <div className="flex items-center gap-4 text-xs pt-1">
+                    <span
+                      className={`px-2 py-0.5 rounded ${DIFFICULTY_STYLES[bug.difficulty]}`}
+                    >
+                      {bug.difficulty}
+                    </span>
+
+                    <span className="text-slate-500">
+                      {bug.filesChanged} file
+                      {bug.filesChanged !== 1 && 's'} changed
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {bugs.length === 0 && (
+            <div className="py-12 text-center text-sm text-slate-500">
+              No bugs found
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -68,13 +68,14 @@ def fix_file(path: Path):
         extracted_path, extracted_lang = extract_from_content(text)
 
         if extracted_path:
-            extracted_path = extracted_path.replace("\\", "/").strip()
-            target["file_path"] = extracted_path
-
-            p = Path(extracted_path)
-            target["filename"] = p.name
-            target["directory"] = "" if str(p.parent) == "." else str(p.parent)
-            changed = True
+            # Use path normalizer for consistent normalization
+            from utils.path_normalizer import normalize_path, extract_filename, extract_directory
+            normalized_path = normalize_path(extracted_path, '')
+            if normalized_path:
+                target["file_path"] = normalized_path
+                target["filename"] = extract_filename(normalized_path) or ''
+                target["directory"] = extract_directory(normalized_path) or ''
+                changed = True
 
         if (not lang) and extracted_lang:
             target["language"] = extracted_lang

@@ -18,3 +18,6 @@ class QueryType:
     RANDOM_PR_GENERATOR = "random_pr_generator"
     IMPACT_ANALYSIS = "impact_analysis"
     TRACEABILITY = "traceability"
+    FILE_LOOKUP = "file_lookup"
+
+

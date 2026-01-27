@@ -94,7 +94,8 @@ class CommitHandler:
         query_lower: str,
         query_type: str,
         active_session_id: str,
-        role: Optional[str] = None
+        role: Optional[str] = None,
+        schema_name: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
         """
         Handle Commit override when query contains commit keywords and a SHA.
@@ -128,7 +129,7 @@ class CommitHandler:
             self.chatbot.logger.info(f"DIRECT LOOKUP (COMMIT override) | {len(commit_results)} chunks returned")
             
             try:
-                self.chatbot.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
+                self.chatbot.conversation_store.add_message(active_session_id, "user", query, schema_name=schema_name, tokens_used=0)
             except Exception as e:
                 self.chatbot.logger.error(f"CONVERSATION_STORE | Failed to save user query: {e}")
             
@@ -176,12 +177,12 @@ class CommitHandler:
         """Update semantic and response caches."""
         self.chatbot.cache_handler.update_caches(query, result, active_session_id)
     
-    def _save_conversation(self, active_session_id: str, query: str, result: Dict[str, Any], context: str = "commit"):
+    def _save_conversation(self, active_session_id: str, query: str, result: Dict[str, Any], context: str = "commit", schema_name: Optional[str] = None):
         """Save conversation to conversation store."""
         try:
-            self.chatbot.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
+            self.chatbot.conversation_store.add_message(active_session_id, "user", query, schema_name=schema_name, tokens_used=0)
             self.chatbot.conversation_store.add_message(
-                active_session_id, "assistant", result.get("answer", ""), tokens_used=0
+                active_session_id, "assistant", result.get("answer", ""), schema_name=schema_name, tokens_used=0
             )
         except Exception as e:
             self.chatbot.logger.error(f"CONVERSATION_STORE | Failed to save {context} exchange: {e}")

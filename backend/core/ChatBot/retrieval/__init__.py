@@ -59,6 +59,414 @@ class RetrievalMixin(
             query_text: Original query text (for routing in multi-index mode)
         """
 
+        # -------------------------------------------------------
+        # FILE_LOOKUP: Try code_chunks_loader first (exact filename + path), then vector search if not found
+        # This must happen BEFORE multi-index routing to avoid unnecessary processing
+        if query_type == QueryType.FILE_LOOKUP and query_text:
+            self.logger.info(f"FILE_LOOKUP | Processing code location query: {query_text}")
+            
+            # Detect file query intent
+            file_intent = self._detect_file_query_intent(query_text, keywords)
+            file_paths = file_intent.get('file_paths', [])
+            filename_hints = file_intent.get('filename_hints', [])
+
+            # -------------------------------------------------------
+            # 🔴 CRITICAL FALLBACK: extract filename when intent detection fails
+            # Handles queries like: "tell me about file taskc_details_controller"
+            # -------------------------------------------------------
+            if not file_paths and not filename_hints:
+                import re
+
+                STOPWORDS = {
+                    "tell", "me", "about", "file", "files",
+                    "show", "give", "details", "of"
+                }
+
+                # Extract identifier-like tokens only
+                tokens = re.findall(r"\b[a-zA-Z_][a-zA-Z0-9_]*\b", query_text)
+
+                # Remove stopwords
+                candidates = [t for t in tokens if t.lower() not in STOPWORDS]
+
+                fallback_filename = candidates[-1] if candidates else None
+
+                if fallback_filename:
+                    self.logger.info(
+                        f"FILE_LOOKUP | Clean fallback filename extracted: '{fallback_filename}'"
+                    )
+                    filename_hints = [fallback_filename]
+
+            # -------------------------------------------------------
+            # 🔴 CRITICAL PROMOTION: filename → virtual file path
+            # This ensures filename-only queries behave like path queries
+            # -------------------------------------------------------
+            if filename_hints and not file_paths:
+                promoted_paths = []
+
+                for name in filename_hints:
+                    # common repo-wide filename assumptions
+                    promoted_paths.extend([
+                        name,
+                        f"lib/{name}",
+                        f"lib/app/{name}",
+                        f"lib/app/modules/{name}",
+                        f"lib/app/modules/**/{name}",
+                    ])
+
+                    # add extension fallback
+                    if "." not in name:
+                        promoted_paths.extend([
+                            f"{name}.dart",
+                            f"lib/{name}.dart",
+                            f"lib/app/{name}.dart",
+                            f"lib/app/modules/{name}.dart",
+                        ])
+
+                # de-duplicate
+                file_paths = list(dict.fromkeys(promoted_paths))
+
+                self.logger.info(
+                    f"FILE_LOOKUP | Promoted filename_hints to file_paths: {file_paths}"
+                )
+
+            # Try code_chunks_loader first with exact filename + path
+            code_loader = self._get_code_chunks_loader()
+            if code_loader:
+                repo_owner = getattr(self, 'repo_owner', None)
+                repo_name = getattr(self, 'repo_name', None)
+                
+                results = []
+                seen_chunk_ids = set()
+                
+                # Try exact file paths first
+                if file_paths:
+                    self.logger.info(f"FILE_LOOKUP | Searching code_chunks_loader for {len(file_paths)} file paths: {file_paths}")
+                    for file_path in file_paths:
+                        # Try by full path with exact match first
+                        chunks = code_loader.get_chunks_by_file_path(
+                            file_path,
+                            repo_owner,
+                            repo_name,
+                            exact_match_only=False  # Exact match only for code location queries
+                        )
+                        
+                        # If no exact match, try without exact_match_only (partial match)
+                        if not chunks:
+                            self.logger.info(
+                                f"FILE_LOOKUP | No exact match for path '{file_path}', trying partial match"
+                            )
+                            chunks = code_loader.get_chunks_by_file_path(
+                                file_path,
+                                repo_owner,
+                                repo_name,
+                                exact_match_only=False  # Allow partial matches
+                            )
+                        
+                        # If still no results, try by filename (in case user only provided filename)
+                        if not chunks and filename_hints:
+                            from utils.path_normalizer import extract_filename
+                            filename = extract_filename(file_path)
+                            if filename:
+                                self.logger.info(
+                                    f"FILE_LOOKUP | No results for path '{file_path}', "
+                                    f"trying filename search: '{filename}'"
+                                )
+                                chunks = code_loader.get_chunks_by_filename(
+                                    filename,
+                                    repo_owner,
+                                    repo_name
+                                )
+                        
+                        self.logger.info(
+                            f"FILE_LOOKUP | File path '{file_path}': found {len(chunks)} chunks from code_chunks_loader"
+                        )
+                        
+                        # Convert chunks to expected format
+                        for chunk in chunks:
+                            chunk_id = chunk.get('chunk_id')
+                            if chunk_id and chunk_id not in seen_chunk_ids:
+                                seen_chunk_ids.add(chunk_id)
+                                
+                                # Extract content from code_chunks.json format
+                                content = chunk.get('content', {})
+                                if isinstance(content, dict):
+                                    content_text = content.get('content', '')
+                                    if not content_text:
+                                        raw_data = chunk.get('raw_data', {})
+                                        if isinstance(raw_data, dict):
+                                            content_text = raw_data.get('content', '')
+                                    if not content_text:
+                                        content_text = str(content)
+                                else:
+                                    content_text = str(content) if content else ''
+                                
+                                # Build metadata in expected format - get file_path from chunk directly or from metadata
+                                chunk_metadata = chunk.get('metadata', {})
+                                if not chunk_metadata:
+                                    from utils.metadata_normalizer import MetadataNormalizer
+                                    meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+                                    chunk_type = meta_norm.get_chunk_type('')
+                                    
+                                    # Get file_path from chunk directly first, then from metadata
+                                    file_path = chunk.get('file_path', '') or meta_norm.get_file_path('')
+                                    
+                                    chunk_metadata = {
+                                        'file_path': file_path,
+                                        'filename': chunk.get('filename', '') or meta_norm.get_filename(''),
+                                        'directory': chunk.get('directory', '') or meta_norm.get_directory(''),
+                                        'chunk_type': chunk_type,
+                                        'repo_name': chunk.get('repo_name', '') or meta_norm.get_repo_name(''),
+                                        'repo_owner': chunk.get('repo_owner', '') or meta_norm.get_repo_owner(''),
+                                        'language': chunk.get('language', '') or meta_norm.get_language(''),
+                                    }
+                                else:
+                                    # If metadata exists, ensure file_path is set
+                                    if 'file_path' not in chunk_metadata or not chunk_metadata.get('file_path'):
+                                        chunk_metadata['file_path'] = chunk.get('file_path', '')
+                                
+                                result_dict = {
+                                    'chunk_id': chunk_id,
+                                    'metadata': chunk_metadata,
+                                    'content': content_text,
+                                    'score': 10.0,  # High score for exact file matches
+                                    'source': 'code_chunks_loader',
+                                    'match_type': 'exact_file_match'
+                                }
+                                
+                                # Preserve ambiguity flags if present (CRITICAL for ambiguity detection)
+                                if chunk.get('_ambiguous_filename'):
+                                    result_dict['_ambiguous_filename'] = True
+                                    result_dict['_all_matching_paths'] = chunk.get('_all_matching_paths', [])
+                                    self.logger.info(
+                                        f"FILE_LOOKUP | Preserving ambiguity flags for chunk {chunk_id}: "
+                                        f"filename={chunk.get('filename', 'unknown')}, "
+                                        f"paths={chunk.get('_all_matching_paths', [])}"
+                                    )
+                                
+                                results.append(result_dict)
+                
+                # Try filename hints if no results from file paths
+                if not results and filename_hints:
+                    self.logger.info(
+                        f"FILE_LOOKUP | No results from exact paths, trying filename hints: {filename_hints}"
+                    )
+                    for filename_hint in filename_hints:
+                        chunks = code_loader.get_chunks_by_filename(
+                            filename_hint,
+                            repo_owner,
+                            repo_name
+                        )
+                        
+                        self.logger.info(
+                            f"FILE_LOOKUP | Filename hint '{filename_hint}': found {len(chunks)} chunks"
+                        )
+                        
+                        for chunk in chunks:
+                            chunk_id = chunk.get('chunk_id')
+                            if chunk_id and chunk_id not in seen_chunk_ids:
+                                seen_chunk_ids.add(chunk_id)
+                                
+                                # Extract content
+                                content = chunk.get('content', {})
+                                if isinstance(content, dict):
+                                    content_text = content.get('content', '')
+                                    if not content_text:
+                                        raw_data = chunk.get('raw_data', {})
+                                        if isinstance(raw_data, dict):
+                                            content_text = raw_data.get('content', '')
+                                    if not content_text:
+                                        content_text = str(content)
+                                else:
+                                    content_text = str(content) if content else ''
+                                
+                                # Build metadata - get file_path from chunk directly or from metadata
+                                chunk_metadata = chunk.get('metadata', {})
+                                if not chunk_metadata:
+                                    from utils.metadata_normalizer import MetadataNormalizer
+                                    meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+                                    chunk_type = meta_norm.get_chunk_type('')
+                                    
+                                    # Get file_path from chunk directly first, then from metadata, then from entities/content
+                                    from utils.path_normalizer import extract_filename
+                                    file_path = (
+                                        chunk.get('file_path', '') or 
+                                        meta_norm.get_file_path('') or
+                                        chunk.get('entities', {}).get('path', '') or
+                                        chunk.get('content', {}).get('file_path', '')
+                                    )
+                                    
+                                    chunk_metadata = {
+                                        'file_path': file_path,
+                                        'filename': chunk.get('filename', '') or meta_norm.get_filename('') or (extract_filename(file_path) if file_path else ''),
+                                        'directory': chunk.get('directory', '') or meta_norm.get_directory(''),
+                                        'chunk_type': chunk_type,
+                                        'repo_name': chunk.get('repo_name', '') or meta_norm.get_repo_name(''),
+                                        'repo_owner': chunk.get('repo_owner', '') or meta_norm.get_repo_owner(''),
+                                        'language': chunk.get('language', '') or meta_norm.get_language(''),
+                                    }
+                                else:
+                                    # If metadata exists, ensure file_path is set from chunk if missing
+                                    if 'file_path' not in chunk_metadata or not chunk_metadata.get('file_path'):
+                                        chunk_metadata['file_path'] = (
+                                            chunk.get('file_path', '') or
+                                            chunk.get('entities', {}).get('path', '') or
+                                            chunk.get('content', {}).get('file_path', '')
+                                        )
+                                
+                                result_dict = {
+                                    'chunk_id': chunk_id,
+                                    'metadata': chunk_metadata,
+                                    'content': content_text,
+                                    'score': 9.0,  # Slightly lower than exact path match
+                                    'source': 'code_chunks_loader',
+                                    'match_type': 'exact_filename_match'
+                                }
+                                
+                                # Also set file_path directly on result_dict for easier access
+                                if chunk_metadata.get('file_path'):
+                                    result_dict['file_path'] = chunk_metadata['file_path']
+                                
+                                # Preserve ambiguity flags if present (CRITICAL for ambiguity detection)
+                                if chunk.get('_ambiguous_filename'):
+                                    result_dict['_ambiguous_filename'] = True
+                                    result_dict['_all_matching_paths'] = chunk.get('_all_matching_paths', [])
+                                    self.logger.warning(
+                                        f"FILE_LOOKUP | AMBIGUITY DETECTED - Preserving ambiguity flags for chunk {chunk_id}: "
+                                        f"filename={chunk.get('filename', chunk_metadata.get('filename', 'unknown'))}, "
+                                        f"file_path={chunk_metadata.get('file_path', 'unknown')}, "
+                                        f"paths={chunk.get('_all_matching_paths', [])}"
+                                    )
+                                
+                                results.append(result_dict)
+                
+                # If found results from code_chunks_loader, return immediately (no vector search, no routing, no reranking)
+                if results:
+                    # 🚨 CHECK FOR AMBIGUITY, but first check if user provided a full path
+                    if any(r.get("_ambiguous_filename") for r in results):
+                        # Get filename and paths from first result
+                        first_result = results[0]
+                        filename = first_result.get("metadata", {}).get("filename", "")
+                        if not filename:
+                            # Try to extract from file_path
+                            file_path = first_result.get("metadata", {}).get("file_path", "") or first_result.get("file_path", "")
+                            if file_path:
+                                from utils.path_normalizer import extract_filename
+                                filename = extract_filename(file_path)
+                        
+                        paths = first_result.get("_all_matching_paths", [])
+                        
+                        if not filename and paths:
+                            # Extract filename from first path
+                            from utils.path_normalizer import extract_filename
+                            filename = extract_filename(paths[0]) if paths else "unknown"
+                        
+                        # 🚨 CRITICAL: Check if user provided a full path in the query
+                        # If they did, filter results to only that path and return normally (not ambiguous)
+                        if query_text:
+                            from utils.path_normalizer import normalize_path
+                            
+                            # Normalize query to handle different formats
+                            query_normalized = normalize_path(query_text, '').lower().replace('\\', '/').strip('/')
+                            
+                            # Check if query contains any of the ambiguous paths
+                            matching_path = None
+                            for path in paths:
+                                path_normalized = normalize_path(path, '').lower().replace('\\', '/').strip('/')
+                                
+                                # More robust matching:
+                                # 1. Exact match (after normalization)
+                                # 2. Query ends with path
+                                # 3. Path ends with query (partial path provided)
+                                # 4. Either contains the other (substring match)
+                                if (path_normalized == query_normalized or
+                                    query_normalized.endswith('/' + path_normalized) or
+                                    query_normalized.endswith(path_normalized) or
+                                    path_normalized.endswith('/' + query_normalized) or
+                                    path_normalized.endswith(query_normalized) or
+                                    path_normalized in query_normalized or
+                                    query_normalized in path_normalized):
+                                    matching_path = path
+                                    self.logger.info(
+                                        f"FILE_LOOKUP | User specified full path in query: '{query_text}' matches '{path}' "
+                                        f"(normalized: '{query_normalized}' == '{path_normalized}'), "
+                                        f"filtering results to this path only"
+                                    )
+                                    break
+                            
+                            # If user specified a path, filter results to only that path
+                            if matching_path:
+                                matching_path_normalized = normalize_path(matching_path, '').lower().replace('\\', '/').strip('/')
+                                filtered_results = []
+                                for result in results:
+                                    result_path = result.get("metadata", {}).get("file_path", "") or result.get("file_path", "")
+                                    if result_path:
+                                        result_path_normalized = normalize_path(result_path, '').lower().replace('\\', '/').strip('/')
+                                        
+                                        # Match if paths are the same after normalization
+                                        if (result_path_normalized == matching_path_normalized or
+                                            result_path_normalized.endswith('/' + matching_path_normalized) or
+                                            result_path_normalized.endswith(matching_path_normalized) or
+                                            matching_path_normalized.endswith('/' + result_path_normalized) or
+                                            matching_path_normalized.endswith(result_path_normalized)):
+                                            # Remove ambiguity flags since we're filtering to one path
+                                            result.pop("_ambiguous_filename", None)
+                                            result.pop("_all_matching_paths", None)
+                                            filtered_results.append(result)
+                                
+                                if filtered_results:
+                                    self.logger.info(
+                                        f"FILE_LOOKUP | Filtered {len(filtered_results)} chunks for specified path '{matching_path}' "
+                                        f"(from {len(results)} ambiguous chunks)"
+                                    )
+                                    return filtered_results[:self.top_k * 2]
+                                else:
+                                    self.logger.warning(
+                                        f"FILE_LOOKUP | User specified path '{matching_path}' but no matching chunks found. "
+                                        f"This might indicate a path mismatch."
+                                    )
+                        
+                        # No matching path found in query, return ambiguity
+                        self.logger.warning(
+                            f"FILE_LOOKUP | Ambiguous filename detected — stopping retrieval before context building. "
+                            f"Filename: '{filename}', {len(paths)} paths found. User query: '{query_text}'"
+                        )
+                        return [{
+                            "__ambiguous__": True,
+                            "filename": filename or "unknown",
+                            "paths": paths
+                        }]
+
+                    return results[:self.top_k * 2]
+
+            
+            # If code_chunks_loader didn't find results, do simple vector search
+            # Skip multi-index routing and complex file index merging
+            self.logger.info(
+                f"FILE_LOOKUP | No results from code_chunks_loader, doing simple vector search"
+            )
+            
+            # Simple vector search - search 'code' index directly in multi-index mode, or regular db in single-index mode
+            retrieve_k = top_k or self.top_k * 4
+            repo_filters = self._get_repo_filters()
+            
+            if self.multi_index_store:
+                # Multi-index mode: search 'code' index directly (no routing, no reranking)
+                code_index = self.multi_index_store.indices.get('code')
+                if code_index:
+                    vector_results = code_index.search(query_embedding, top_k=retrieve_k)
+                    vector_results = self._filter_by_repo(vector_results)
+                    self.logger.info(f"FILE_LOOKUP | Found {len(vector_results)} results from 'code' index")
+                    return vector_results[:self.top_k * 2]
+                else:
+                    self.logger.warning("FILE_LOOKUP | 'code' index not found in multi-index store")
+                    return []
+            else:
+                # Single-index mode: simple vector search
+                vector_results = self.db.search(query_embedding, top_k=retrieve_k, filters=repo_filters)
+                vector_results = self._filter_by_repo(vector_results)
+                self.logger.info(f"FILE_LOOKUP | Found {len(vector_results)} results from vector search")
+                return vector_results[:self.top_k * 2]
+
         if query_type in ["impact_analysis", "traceability"] and self.multi_index_store:
             print(f"Executing Graph-Enhanced Retrieval ({query_type})...")
             
@@ -114,12 +522,18 @@ class RetrievalMixin(
                 final = sorted(merged.values(), key=lambda x: x["score"], reverse=True)
                 return final[:self.top_k]
 
+        
         # -------------------------------------------------------
 
-        # Normal retrieve logic (unchanged)
+        # Normal retrieve logic
+        # NOTE: FILE_LOOKUP is handled above - if it reaches here, code_chunks_loader didn't find results
+        # so we do a simple vector search without complex file index merging
         if query_type == QueryType.FLOW_ARCHITECTURE:
             retrieve_k = top_k or self.top_k * 6
-        elif query_type in [QueryType.HOW_TO, QueryType.CODE_LOCATION]:
+        elif query_type == QueryType.HOW_TO:
+            retrieve_k = top_k or self.top_k * 4
+        elif query_type == QueryType.FILE_LOOKUP:
+            # FILE_LOOKUP: Simple vector search fallback (code_chunks_loader already checked above)
             retrieve_k = top_k or self.top_k * 4
         elif query_type in [QueryType.PR_ISSUE_TUTORIAL, QueryType.PR_ISSUE_CODING_QUESTION]:
             retrieve_k = top_k or self.top_k * 8
@@ -155,11 +569,171 @@ class RetrievalMixin(
 
         # Regular similarity search
         repo_filters = self._get_repo_filters()
-        results = self.db.search(query_embedding, top_k=retrieve_k, filters=repo_filters)
+        vector_results = self.db.search(query_embedding, top_k=retrieve_k, filters=repo_filters)
         
         # CRITICAL: Post-filter to ensure only current repo (safeguard)
-        results = self._filter_by_repo(results)
-
+        vector_results = self._filter_by_repo(vector_results)
+        
+        # For FILE_LOOKUP queries: Simple vector search only (code_chunks_loader already checked above)
+        # Skip complex file index merging - just return vector results
+        if query_type == QueryType.FILE_LOOKUP:
+            self.logger.info(f"FILE_LOOKUP | Returning {len(vector_results)} vector search results (code_chunks_loader had no matches)")
+            results = vector_results
+        # For HOW_TO queries: Merge file index results with vector search (if needed)
+        elif query_type == QueryType.HOW_TO and query_text:
+            file_path_results = self._retrieve_by_file_path(query_text, keywords)
+            
+            if file_path_results:
+                # Merge file index results with vector search results
+                # File index results have higher priority
+                merged_results = {}
+                seen_chunk_ids = set()
+                
+                # Add file index results first (highest priority)
+                for result in file_path_results:
+                    chunk_id = result.get('chunk_id')
+                    if chunk_id:
+                        merged_results[chunk_id] = result
+                        seen_chunk_ids.add(chunk_id)
+                
+                # Add vector search results with path-based boost
+                # BUT: For file queries, only add vector results if they match the exact file
+                file_intent = self._detect_file_query_intent(query_text, keywords)
+                filename_hints = file_intent.get('filename_hints', [])
+                directory_hints = file_intent.get('directory_hints', [])
+                requested_file_paths = file_intent.get('file_paths', [])
+                
+                self.logger.info(
+                    f"FILE_RETRIEVAL | Merging vector results: "
+                    f"file_paths={requested_file_paths}, filename_hints={filename_hints}, "
+                    f"vector_results_count={len(vector_results)}"
+                )
+                
+                for result in vector_results:
+                    from utils.metadata_normalizer import MetadataNormalizer
+                    meta_norm = MetadataNormalizer(result.get('metadata', {}), result)
+                    result_file_path = meta_norm.get_file_path('')
+                    result_filename = meta_norm.get_filename('')
+                    chunk_type = meta_norm.get_chunk_type('')
+                    
+                    # For file queries, STRICTLY filter vector results to only exact matches
+                    matches_file_query = False
+                    
+                    # Check if this result matches any requested file path
+                    if requested_file_paths:
+                        for requested_path in requested_file_paths:
+                            if result_file_path and (
+                                result_file_path.lower() == requested_path.lower() or
+                                result_file_path.lower().endswith(requested_path.lower())
+                            ):
+                                matches_file_query = True
+                                self.logger.info(
+                                    f"FILE_RETRIEVAL | Vector result matches file path: "
+                                    f"'{result_file_path}' matches '{requested_path}'"
+                                )
+                                break
+                    
+                    # Check if this result matches any requested filename
+                    if not matches_file_query and filename_hints:
+                        for filename_hint in filename_hints:
+                            if result_filename and result_filename.lower() == filename_hint.lower():
+                                matches_file_query = True
+                                self.logger.info(
+                                    f"FILE_RETRIEVAL | Vector result matches filename: "
+                                    f"'{result_filename}' matches '{filename_hint}'"
+                                )
+                                break
+                    
+                    # Only add vector results that match the file query
+                    # For FILE_LOOKUP queries, we want STRICT matching - only exact file matches
+                    if not matches_file_query:
+                        # Filter out non-matching files from vector search
+                        self.logger.debug(
+                            f"FILE_RETRIEVAL | Filtering out vector result: "
+                            f"file='{result_file_path}', filename='{result_filename}', "
+                            f"type='{chunk_type}', score={result.get('score', 0)}, "
+                            f"doesn't match requested files {requested_file_paths} or filename hints {filename_hints}"
+                        )
+                        continue
+                    
+                    chunk_id = result.get('chunk_id')
+                    if not chunk_id:
+                        chunk_id = id(result)
+                    
+                    if chunk_id in seen_chunk_ids:
+                        # Already have this from file index, skip
+                        self.logger.debug(
+                            f"FILE_RETRIEVAL | Skipping duplicate chunk_id: {chunk_id}"
+                        )
+                        continue
+                    
+                    # Apply path-based boost if file path matches
+                    file_path_lower = result_file_path.lower() if result_file_path else ''
+                    original_score = result.get('score', 0)
+                    
+                    if file_path_lower:
+                        # Boost for exact filename matches
+                        for filename_hint in filename_hints:
+                            if result_filename and result_filename.lower() == filename_hint.lower():
+                                result['score'] = original_score + 5.0  # Very strong boost for exact match
+                                self.logger.info(
+                                    f"FILE_RETRIEVAL | Exact filename match boost: "
+                                    f"'{result_filename}' == '{filename_hint}', "
+                                    f"score: {original_score} -> {result['score']}"
+                                )
+                                break
+                        
+                        # Boost for directory matches
+                        for dir_hint in directory_hints:
+                            if dir_hint in file_path_lower:
+                                result['score'] = result.get('score', original_score) + 1.5
+                                break
+                    
+                    self.logger.info(
+                        f"FILE_RETRIEVAL | Adding vector result: "
+                        f"file='{result_file_path}', filename='{result_filename}', "
+                        f"score={result.get('score', 0)}, chunk_id={chunk_id}"
+                    )
+                    merged_results[chunk_id] = result
+                
+                # Convert back to list and sort by score
+                results = list(merged_results.values())
+                results = sorted(results, key=lambda x: x.get('score', 0), reverse=True)
+                
+                self.logger.info(f"HYBRID_FILE_RETRIEVAL | Merged {len(file_path_results)} file index + {len(vector_results)} vector results = {len(results)} total")
+            else:
+                # No file index results, use vector search with path-based boosts
+                results = vector_results
+                
+                # Apply path-based boosts to vector results
+                file_intent = self._detect_file_query_intent(query_text, keywords)
+                filename_hints = file_intent.get('filename_hints', [])
+                directory_hints = file_intent.get('directory_hints', [])
+                
+                for result in results:
+                    from utils.metadata_normalizer import MetadataNormalizer
+                    meta_norm = MetadataNormalizer(result.get('metadata', {}), result)
+                    file_path = meta_norm.get_file_path('')
+                    
+                    if file_path:
+                        file_path_lower = file_path.lower()
+                        original_score = result.get('score', 0)
+                        
+                        for filename_hint in filename_hints:
+                            if filename_hint in file_path_lower:
+                                result['score'] = original_score + 3.0
+                                break
+                        
+                        for dir_hint in directory_hints:
+                            if dir_hint in file_path_lower:
+                                result['score'] = result.get('score', original_score) + 1.5
+                                break
+                
+                results = sorted(results, key=lambda x: x.get('score', 0), reverse=True)
+        else:
+            # Non-FILE_LOOKUP queries: use vector search as before
+            results = vector_results
+        
         # Hybrid metadata boost (unchanged)
         if self.use_hybrid_retrieval:
             results = self.boost_by_metadata(results, keywords, query_type)
@@ -187,21 +761,23 @@ class RetrievalMixin(
         repo_filters = self._get_repo_filters()
         results = self.db.search(query_embedding, top_k=100, filters=repo_filters)
 
+        from utils.metadata_normalizer import MetadataNormalizer
         matching_entities = []
         for result in results:
-            metadata = result.get('metadata', {})
-            chunk_type = metadata.get('type', '')
+            # Use metadata normalizer for unified access
+            meta_norm = MetadataNormalizer(result.get('metadata', {}), result)
+            chunk_type = meta_norm.get_chunk_type('')
 
             if entity_type == 'issue' and chunk_type == 'issue':
-                issue_num = metadata.get('issue_number')
-                if issue_num:
+                issue_num = meta_norm.get_issue_number()
+                if issue_num is not None:
                     matching_entities.append({
                         'number': issue_num,
                         'result': result
                     })
             elif entity_type == 'pr' and chunk_type == 'pr':
-                pr_num = metadata.get('pr_number')
-                if pr_num:
+                pr_num = meta_norm.get_pr_number()
+                if pr_num is not None:
                     matching_entities.append({
                         'number': pr_num,
                         'result': result

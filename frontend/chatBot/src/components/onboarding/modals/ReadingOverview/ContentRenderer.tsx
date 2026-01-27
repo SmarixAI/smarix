@@ -8,12 +8,10 @@ import remarkGfm from 'remark-gfm';
 import type { ContentSection } from '../../../../../types/onboarding';
 import { Inter, JetBrains_Mono, Source_Code_Pro } from 'next/font/google';
 import React, { useEffect, useState } from 'react';
-
-
+import { MermaidDiagram } from '../../utils/MarkdownRenderer';
 
 interface ContentRendererProps {
   sections: ContentSection[];
-  renderedMermaid: { [key: number]: string };
 }
 
 const inter = Inter({ subsets: ['latin'], weight: ['400', '500', '600', '700'] });
@@ -21,7 +19,7 @@ const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], weight: ['400', '500'
 const sourceCodePro = Source_Code_Pro({ subsets: ['latin'], weight: ['400', '500', '600'] });
 
 
-export default function ContentRenderer({ sections, renderedMermaid }: ContentRendererProps) {
+export default function ContentRenderer({ sections }: ContentRendererProps) {
 
   const [collapsedCodes, setCollapsedCodes] = useState<Record<number, boolean>>({});
   const [copiedCodeIdx, setCopiedCodeIdx] = useState<number | null>(null);
@@ -33,6 +31,7 @@ export default function ContentRenderer({ sections, renderedMermaid }: ContentRe
       [idx]: !prev[idx],
     }));
   };
+
 
 
   useEffect(() => {
@@ -288,7 +287,6 @@ export default function ContentRenderer({ sections, renderedMermaid }: ContentRe
                     className="max-h-[420px] overflow-y-auto overflow-x-auto"
                     onScroll={() => copiedCodeIdx === idx && setCopiedCodeIdx(null)}
                   >
-
                     <SyntaxHighlighter
                       language={section.language || 'text'}
                       style={oneDark}
@@ -311,23 +309,9 @@ export default function ContentRenderer({ sections, renderedMermaid }: ContentRe
                 )}
               </div>
             )}
-
-
-
-            {section.type === 'mermaid' && (
-              <div className="my-6">
-                {section.index !== undefined && renderedMermaid[section.index] ? (
-                  <div
-                    className="rounded-xl overflow-hidden border-2 border-slate-200/60 bg-white shadow-lg p-6"
-                    dangerouslySetInnerHTML={{ __html: renderedMermaid[section.index] }}
-                  />
-                ) : (
-                  <div className={`${inter.className} text-sm italic text-slate-500 text-center py-8 bg-slate-50 rounded-xl border border-slate-200/60`}>
-                    <span className="opacity-60">[Diagram unavailable]</span>
-                  </div>
-                )}
-              </div>
-            )}
+           {section.type === 'mermaid' && section.content && (
+            <MermaidDiagram code={section.content} />
+          )}
           </div>
         );
       })}

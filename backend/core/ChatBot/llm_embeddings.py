@@ -417,15 +417,20 @@ class LLMEmbeddingMixin:
         - ABSOLUTELY ZERO HALLUCINATIONS. Use only context info
         - Format: Problem -> Solution -> Prevention
         - Include 30-50 lines of relevant code""",
-            QueryType.CODE_LOCATION: """
+            QueryType.FILE_LOOKUP: """
         CODE LOCATION QUERY:
-        - Exact file paths with line numbers
-        - Function/class names with COMPLETE implementations
-        - Show the actual code (30-100 lines per item)
-        - Include surrounding context code
-        - Brief descriptions
+        - When user asks about a specific file, show the ACTUAL CODE from that file directly
+        - Start with a factual file header: file path, class names, and inheritance only
+        - DO NOT include high-level summaries, intent descriptions, or behavioral explanations.
+        - Then show the complete code organized by structure (classes, functions, methods)
+        - Show actual code from the file; full code only if explicitly requested
+        - Include exact file paths with line numbers
+        - Format code in proper code blocks with language specification
+        - Organize code logically: Overview → Classes → Functions → Methods → Other code
+        - Show the actual, current code from the file (not from PRs/issues unless specifically asked)
         - ABSOLUTELY ZERO HALLUCINATIONS. Use only context info
-        - Related functions/classes""",
+        - If context shows file overview, use it to provide a summary before showing code
+        - Present code in a clear, readable format that the user can directly use""",
             QueryType.CONCEPTUAL: """
         CONCEPTUAL QUERY:
         - Explanation from documentation with CODE EXAMPLES
@@ -843,6 +848,7 @@ class LLMEmbeddingMixin:
         if needs_diagram and query_type not in [
             QueryType.CODE_STRUCTURE,
             QueryType.QUESTION_GENERATION,
+            QueryType.FILE_LOOKUP,
         ]:
             specific_prompt += "\n\nIMPORTANT: This query requires a mermaid flowchart diagram. Include it first in your response."
 
@@ -1134,7 +1140,31 @@ class LLMEmbeddingMixin:
             prompt_parts.append(
                 "6. Provide clear, actionable steps based on the context provided"
             )
-        elif query_type in [QueryType.CODE_LOCATION, QueryType.FLOW_ARCHITECTURE]:
+        elif query_type == QueryType.FILE_LOOKUP:
+            prompt_parts.append(
+                "You are explaining a SINGLE source code file."
+            )
+            prompt_parts.append("\n# STRICT GROUNDING RULES - MANDATORY:")
+            prompt_parts.append(
+                "1. Mention ONLY classes, enums, methods, fields, and functions that appear in the file."
+            )
+            prompt_parts.append(
+                "2. Do NOT infer intent, UI behavior, or usage beyond what the code explicitly shows."
+            )
+            prompt_parts.append(
+                "3. If something is referenced but not implemented in this file, write: "
+                "'Not implemented in this file.'"
+            )
+            prompt_parts.append(
+                "4. Prefer STRUCTURAL explanation over narrative (what exists, not why)."
+            )
+            prompt_parts.append(
+                "5. Include SHORT, relevant code excerpts only when they help understanding."
+            )
+            prompt_parts.append(
+                "6. Do NOT enforce any minimum line count."
+            )
+        elif query_type == QueryType.FLOW_ARCHITECTURE:
             # For code queries, require actual code
             prompt_parts.append(
                 "Include extensive code examples from context when relevant."

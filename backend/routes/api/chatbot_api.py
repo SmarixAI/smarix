@@ -21,6 +21,8 @@ from openai import OpenAI
 import subprocess
 import threading
 from concurrent.futures import ThreadPoolExecutor, Future
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 load_dotenv()
 
@@ -79,6 +81,7 @@ def find_vector_databases():
     
     # Try to find runtime_state.json to get current repo
     possible_state_files = [
+        repo_root / "data" / "Admin" / "state" / "runtime_state.json",
         Path("../../data/Admin/state/runtime_state.json"),
         Path("data/Admin/state/runtime_state.json"),
         Path("backend/data/Admin/state/runtime_state.json"),
@@ -109,6 +112,7 @@ def find_vector_databases():
             if owner and repo_name:
                 # New structure: data/VectorDB/{owner}/{repo_name}/
                 possible_db_dirs = [
+                    repo_root / "data" / "VectorDB" / owner / repo_name,
                     Path("../../data/VectorDB") / owner / repo_name,
                     Path("data/VectorDB") / owner / repo_name,
                     Path("backend/data/VectorDB") / owner / repo_name,
@@ -145,6 +149,14 @@ async def startup():
     print("\n" + "=" * 70)
     print("SUPER EMPLOYEE RAG CHATBOT API v2.1")
     print("=" * 70 + "\n")
+
+    db_url = os.getenv("MEMORY_DB_URL", "")
+    if not db_url.startswith("postgresql"):
+        print("🚨 CRITICAL WARNING: MEMORY_DB_URL is not set to PostgreSQL.")
+        print("   Multi-tenancy (Schema Isolation) will NOT work.")
+        print("   Fallback to SQLite (Shared Mode).")
+    else:
+        print("✓ Database Mode: PostgreSQL Multi-Tenancy (Schemas Enabled)")
 
     print("Checking API Keys...")
     shared.available_providers = check_api_keys()
@@ -271,6 +283,16 @@ app = FastAPI(
     version="2.1.0",
     lifespan=lifespan,
 )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    print(f"❌ VALIDATION ERROR at {request.url}")
+    print(f"   Body: {exc.body}")
+    print(f"   Errors: {exc.errors()}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors(), "body": str(exc.body)},
+    )
 
 from core.Auth import routes as auth_routes
 

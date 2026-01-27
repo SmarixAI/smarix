@@ -6,6 +6,9 @@ from sqlalchemy.orm import sessionmaker
 from typing import List
 from pydantic import BaseModel
 import os
+import psycopg2
+from psycopg2.extras import RealDictCursor
+import re
 
 from . import models, schemas, utils
 
@@ -55,6 +58,60 @@ if DATABASE_URL.startswith("sqlite"):
 engine = create_engine(DATABASE_URL, connect_args=connect_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+# ========================================
+# NEW: Schema Management Functions
+# ========================================
+
+def get_user_schema_name(username: str) -> str:
+    """Generate safe schema name from username"""
+    # logic must match what is used in chat api
+    sanitized = re.sub(r"[^a-z0-9_]", "_", username.lower())
+    return f"user_{sanitized}"
+
+
+def create_user_schema_postgres(username: str, schema_name: str):
+    """
+    Create a new schema for a user in PostgreSQL by cloning templates.
+    """
+    if not use_postgres: return
+
+    try:
+        conn = psycopg2.connect(MEMORY_DB_URL)
+        conn.autocommit = True
+        with conn.cursor() as cur:
+            # 1. Check if exists
+            cur.execute("SELECT 1 FROM information_schema.schemata WHERE schema_name = %s", (schema_name,))
+            if cur.fetchone():
+                return
+
+            # 2. Create Schema
+            cur.execute(f"CREATE SCHEMA IF NOT EXISTS {schema_name}")
+
+            # 3. Clone Tables from Template
+            # We assume template_schema exists from init_db.sql
+            for table in ['conversations', 'messages', 'tasks']:
+                cur.execute(f"CREATE TABLE {schema_name}.{table} (LIKE template_schema.{table} INCLUDING ALL)")
+
+            # 4. Re-establish Foreign Keys (messages -> conversations)
+            cur.execute(f"""
+                ALTER TABLE {schema_name}.messages 
+                ADD CONSTRAINT fk_conversation 
+                FOREIGN KEY (conversation_id) 
+                REFERENCES {schema_name}.conversations(id) ON DELETE CASCADE
+            """)
+
+            # 5. Create Indexes
+            cur.execute(f"CREATE INDEX idx_msg_conv_time ON {schema_name}.messages(conversation_id, created_at DESC)")
+
+            print(f"✓ Created schema {schema_name} for {username}")
+        conn.close()
+    except Exception as e:
+        print(f"⚠ Error creating schema {schema_name}: {e}")
+
+
+router = APIRouter(prefix="/auth", tags=["Authentication"])
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
+
 def sync_users_from_json(db: Session):
     """Sync users from users.json file to database"""
     try:
@@ -99,6 +156,8 @@ def sync_users_from_json(db: Session):
                     last_day = datetime.strptime(user_data['lastDay'], '%Y-%m-%d').date()
                 except:
                     pass
+
+            schema_name = get_user_schema_name(username)
             
             if existing_user:
                 # Update existing user with data from JSON file
@@ -109,6 +168,12 @@ def sync_users_from_json(db: Session):
                 existing_user.employee_id = user_data.get('employeeId') or user_data.get('employee_id') or existing_user.employee_id
                 existing_user.last_day = last_day if last_day else existing_user.last_day
                 existing_user.managers = user_data.get('managers', []) if isinstance(user_data.get('managers'), list) else []
+                
+                if use_postgres:
+                    if not existing_user.schema_name:
+                        existing_user.schema_name = schema_name
+                    create_user_schema_postgres(username, schema_name)
+
                 skipped_count += 1
             else:
                 # Create new user
@@ -123,7 +188,8 @@ def sync_users_from_json(db: Session):
                     designation=user_data.get('designation'),
                     employee_id=user_data.get('employeeId') or user_data.get('employee_id'),
                     last_day=last_day,
-                    managers=user_data.get('managers', []) if isinstance(user_data.get('managers'), list) else []
+                    managers=user_data.get('managers', []) if isinstance(user_data.get('managers'), list) else [],
+                    schema_name=(schema_name if use_postgres else None)
                 )
                 
                 db.add(new_user)
@@ -168,8 +234,20 @@ def get_db():
     finally:
         db.close()
 
-router = APIRouter(prefix="/auth", tags=["Authentication"])
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
+def get_postgres_connection(schema_name: str = None):
+    """
+    Get a raw connection for schema operations.
+    Needed because ORM is hard to switch schemas dynamically per request.
+    """
+    if not use_postgres:
+         raise HTTPException(status_code=501, detail="Schema operations require PostgreSQL")
+    
+    conn = psycopg2.connect(MEMORY_DB_URL)
+    if schema_name:
+        with conn.cursor() as cur:
+            cur.execute(f"SET search_path TO {schema_name}, public")
+        conn.commit()
+    return conn
 
 @router.post("/signup", response_model=schemas.UserResponse)
 def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):

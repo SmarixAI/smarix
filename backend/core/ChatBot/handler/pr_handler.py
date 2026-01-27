@@ -45,31 +45,42 @@ class PRHandler:
             return None
             
         num = str(entity["number"]).strip()
-        possible_keys = ["pr_number", "number", "id", "pr_id"]
-        
-        for key in possible_keys:
-            pr_results = self.chatbot.vector_db.find(where={key: num}, top_k=self.chatbot.top_k)
+
+        possible_where_clauses = [
+            {"type": "pr", "pr_number": int(num)},
+            {"entities.pr_number": int(num)},
+        ]
+
+
+        for where in possible_where_clauses:
+            pr_results = self.chatbot.vector_db.find(
+                where=where,
+                top_k=self.chatbot.top_k
+            )
             if pr_results:
-                self.chatbot.logger.info(f"DIRECT LOOKUP | Match via key '{key}' → {len(pr_results)} chunks")
+                self.chatbot.logger.info(f"DIRECT LOOKUP | Match via {where}")
                 result = self.chatbot.response_handler.respond_with_results(
                     pr_results, QueryType.PR_SPECIFIC, query, expanded_query, role=role
                 )
-                
                 self._update_caches(query, result, active_session_id)
                 self._save_conversation(active_session_id, query, result)
-                
                 return result
+
         
         # Fallback — match numeric substring inside title
-        pr_results = self.chatbot.vector_db.find(where={"title": f"contains: {num}"}, top_k=self.chatbot.top_k)
-        if pr_results:
-            self.chatbot.logger.info(f"DIRECT LOOKUP | Fallback match in title → {len(pr_results)} chunks")
-            result = self.chatbot.response_handler.respond_with_results(
-                pr_results, QueryType.PR_SPECIFIC, query, expanded_query, role=role
-            )
-            self._update_caches(query, result, active_session_id)
-            self._save_conversation(active_session_id, query, result)
-            return result
+        # pr_results = self.chatbot.vector_db.search(
+        #     query=f"pull request {num}",
+        #     top_k=self.chatbot.top_k
+        # )
+
+        # if pr_results:
+        #     self.chatbot.logger.info(f"DIRECT LOOKUP | Fallback match in title → {len(pr_results)} chunks")
+        #     result = self.chatbot.response_handler.respond_with_results(
+        #         pr_results, QueryType.PR_SPECIFIC, query, expanded_query, role=role
+        #     )
+        #     self._update_caches(query, result, active_session_id)
+        #     self._save_conversation(active_session_id, query, result)
+        #     return result
         
         self.chatbot.logger.warning(f"DIRECT LOOKUP | No match for PR #{num} across metadata keys")
         return None
@@ -102,7 +113,8 @@ class PRHandler:
         query_lower: str,
         query_type: str,
         active_session_id: str,
-        role: Optional[str] = None
+        role: Optional[str] = None,
+        schema_name: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
         """
         Handle PR override when query contains PR keywords and a number.
@@ -131,15 +143,20 @@ class PRHandler:
         ):
             return None
         
-        num = int(raw_num.group(1))
+
+        num = raw_num.group(1)
         self.chatbot.logger.info(f"DIRECT LOOKUP (PR override) | PR #{num}")
-        pr_results = self.chatbot.vector_db.find(where={"pr_number": str(num)}, top_k=self.chatbot.top_k)
+        pr_results = self.chatbot.vector_db.find(
+            where={"type": "pr", "pr_number": int(num)},
+            top_k=self.chatbot.top_k
+        )
+
         
         if pr_results:
             self.chatbot.logger.info(f"DIRECT LOOKUP (PR override) | {len(pr_results)} chunks returned")
             
             try:
-                self.chatbot.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
+                self.chatbot.conversation_store.add_message(active_session_id, "user", query, schema_name=schema_name, tokens_used=0)
             except Exception as e:
                 self.chatbot.logger.error(f"CONVERSATION_STORE | Failed to save user query: {e}")
             
@@ -176,7 +193,7 @@ class PRHandler:
         if query_type != QueryType.PR_SPECIFIC or not raw_num:
             return None
         
-        num = int(raw_num.group(1))
+        num = raw_num.group(1)
         self.chatbot.logger.info(f"DIRECT LOOKUP FINAL | PR #{num} not found — stopping without semantic search")
         not_found_answer = f"PR #{num} was not found in the repository. It may not exist or was not indexed."
         result = self.chatbot.response_handler.package_response(not_found_answer, [], [], QueryType.PR_SPECIFIC)
@@ -211,7 +228,10 @@ class PRHandler:
         query_embedding = self.chatbot.get_query_embedding(expanded_query)
         
         if entity_type == 'pr':
-            github_results = self.chatbot.vector_db.find(where={"pr_number": str(entity_number)}, top_k=20)
+            github_results = self.chatbot.vector_db.find(
+                where={"type": "pr", "pr_number": int(entity_number)},
+                top_k=20
+            )
         else:  # issue
             github_results = self.chatbot.vector_db.find(where={"issue_number": str(entity_number)}, top_k=20)
         
@@ -265,15 +285,17 @@ class PRHandler:
         self.chatbot.logger.info(f"TUTORIAL GENERATION | Completed, Length: {len(tutorial_answer)} chars")
         
         # Extract sources
+        from utils.metadata_normalizer import MetadataNormalizer
         sources = []
         for i, result in enumerate(github_results[:10], 1):
-            metadata = result.get('metadata', {})
+            # Use metadata normalizer for unified access
+            meta_norm = MetadataNormalizer(result.get('metadata', {}), result)
             sources.append({
                 'rank': i,
-                'file': metadata.get('file_path') or metadata.get('file') or 'unknown',
-                'type': metadata.get('type') or 'unknown',
+                'file': meta_norm.get_file_path('unknown'),
+                'type': meta_norm.get_chunk_type('unknown'),
                 'score': result.get('score', 0.0),
-                'chunk_id': metadata.get('chunk_id', '')
+                'chunk_id': result.get('chunk_id', '') or meta_norm.get('chunk_id', '')
             })
         
         self.chatbot.history.append({'role': 'user', 'content': original_query})
@@ -319,7 +341,10 @@ class PRHandler:
         query_embedding = self.chatbot.get_query_embedding(expanded_query)
         
         if entity_type == 'pr':
-            github_results = self.chatbot.vector_db.find(where={"pr_number": str(entity_number)}, top_k=20)
+            github_results = self.chatbot.vector_db.find(
+                where={"type": "pr", "pr_number": int(entity_number)},
+                top_k=20
+            )
         else:  # issue
             github_results = self.chatbot.vector_db.find(where={"issue_number": str(entity_number)}, top_k=20)
         
@@ -374,15 +399,17 @@ class PRHandler:
         self.chatbot.logger.info(f"CODING QUESTION GENERATION | Completed, Length: {len(question_answer)} chars")
         
         # Extract sources
+        from utils.metadata_normalizer import MetadataNormalizer
         sources = []
         for i, result in enumerate(github_results[:10], 1):
-            metadata = result.get('metadata', {})
+            # Use metadata normalizer for unified access
+            meta_norm = MetadataNormalizer(result.get('metadata', {}), result)
             sources.append({
                 'rank': i,
-                'file': metadata.get('file_path') or metadata.get('file') or 'unknown',
-                'type': metadata.get('type') or 'unknown',
+                'file': meta_norm.get_file_path('unknown'),
+                'type': meta_norm.get_chunk_type('unknown'),
                 'score': result.get('score', 0.0),
-                'chunk_id': metadata.get('chunk_id', '')
+                'chunk_id': result.get('chunk_id', '') or meta_norm.get('chunk_id', '')
             })
         
         self.chatbot.history.append({'role': 'user', 'content': original_query})
@@ -404,14 +431,13 @@ class PRHandler:
     def _update_caches(self, query: str, result: Dict[str, Any], active_session_id: str):
         """Update semantic and response caches."""
         self.chatbot.cache_handler.update_caches(query, result, active_session_id)
-    
-    def _save_conversation(self, active_session_id: str, query: str, result: Dict[str, Any]):
+
+    def _save_conversation(self, active_session_id: str, query: str, result: Dict[str, Any], schema_name: Optional[str] = None):
         """Save conversation to conversation store."""
         try:
-            self.chatbot.conversation_store.add_message(active_session_id, "user", query, tokens_used=0)
+            self.chatbot.conversation_store.add_message(active_session_id, "user", query, schema_name=schema_name, tokens_used=0)
             self.chatbot.conversation_store.add_message(
-                active_session_id, "assistant", result.get("answer", ""), tokens_used=0
+                active_session_id, "assistant", result.get("answer", ""), schema_name=schema_name, tokens_used=0
             )
         except Exception as e:
             self.chatbot.logger.error(f"CONVERSATION_STORE | Failed to save user query: {e}")
-

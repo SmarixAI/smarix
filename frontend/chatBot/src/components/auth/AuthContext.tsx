@@ -18,13 +18,15 @@ export interface User {
   name?: string;
   designation?: string;
   status?: string;
+  schema_name?: string;
+  db_identifier?: string;
 }
 
 interface AuthContextType {
   user: User | null;
   login: (
     username: string,
-    password: string
+    password: string,
   ) => Promise<{ success: boolean; error?: string }>;
   signup: (userData: any) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
@@ -48,7 +50,7 @@ function parseJwt(token: string) {
         .map(function (c) {
           return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
         })
-        .join("")
+        .join(""),
     );
     return JSON.parse(jsonPayload);
   } catch (e) {
@@ -62,44 +64,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
+  // FIX: Simplified initialization logic
+  // Removed the 'logout_in_progress' check to prevent loops on refresh
   useEffect(() => {
-    // Check if logout was just performed - if so, don't restore user state
-    const logoutInProgress = sessionStorage.getItem("logout_in_progress");
-    if (logoutInProgress === "true") {
-      // Clear any stale tokens
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("user");
-      setToken(null);
-      setUser(null);
-      setLoading(false);
-      return;
-    }
-    
-    const storedToken = localStorage.getItem("access_token");
+    const initializeAuth = () => {
+      const storedToken = localStorage.getItem("access_token");
 
-    if (storedToken) {
-      const decoded = parseJwt(storedToken);
+      if (storedToken) {
+        const decoded = parseJwt(storedToken);
 
-      if (decoded && decoded.exp * 1000 > Date.now()) {
-        setToken(storedToken);
-        setUser({
-          username: decoded.sub,
-          role: decoded.role as UserRole,
-          status: decoded.status,
-          employeeId: decoded.employeeId,
-          name: decoded.name,
-        });
-      } else {
-        localStorage.removeItem("access_token");
-        localStorage.removeItem("user");
+        // Check if token is valid and not expired
+        if (decoded && decoded.exp * 1000 > Date.now()) {
+          setToken(storedToken);
+          setUser({
+            username: decoded.sub,
+            role: decoded.role as UserRole,
+            status: decoded.status,
+            employeeId: decoded.employeeId,
+            name: decoded.name,
+            schema_name: decoded.schema_name,
+            db_identifier: decoded.db_identifier,
+          });
+        } else {
+          // Token expired or invalid
+          localStorage.removeItem("access_token");
+          localStorage.removeItem("user");
+          setToken(null);
+          setUser(null);
+        }
       }
-    }
-    setLoading(false);
+      setLoading(false);
+    };
+
+    initializeAuth();
   }, []);
 
   const login = async (
     username: string,
-    password: string
+    password: string,
   ): Promise<{ success: boolean; error?: string }> => {
     try {
       const formData = new URLSearchParams();
@@ -129,10 +131,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         status: decoded.status,
         employeeId: decoded.employeeId,
         name: decoded.name,
+        schema_name: decoded.schema_name,
+        db_identifier: decoded.db_identifier,
       };
 
       setUser(userData);
       localStorage.setItem("user", JSON.stringify(userData));
+
+      // Clear any legacy flags just in case
+      sessionStorage.removeItem("logout_in_progress");
 
       return { success: true };
     } catch (error) {
@@ -142,7 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signup = async (
-    userData: any
+    userData: any,
   ): Promise<{ success: boolean; error?: string }> => {
     try {
       const response = await fetch(`${API_URL}/auth/signup`, {
@@ -160,28 +167,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
-    // Set a flag to indicate logout is in progress
-    sessionStorage.setItem("logout_in_progress", "true");
-    
-    // Check if user came from try-our-product page
+    // FIX: Removed setting 'logout_in_progress' to avoid stuck loops
     const fromTryProduct = sessionStorage.getItem("from_try_product");
-    const redirectPath = fromTryProduct === "true" ? "/try-our-product" : "/login";
-    
-    // Clear localStorage first
+    const redirectPath =
+      fromTryProduct === "true" ? "/try-our-product" : "/login";
+
     localStorage.removeItem("access_token");
     localStorage.removeItem("user");
 
-    // Clear state immediately
     setUser(null);
     setToken(null);
 
-    // Remove the flag
     if (fromTryProduct === "true") {
       sessionStorage.removeItem("from_try_product");
     }
 
-    // Use window.location.replace to prevent back navigation
-    // Force immediate redirect
+    // Force immediate redirect using window.location to ensure state is cleared
     window.location.replace(redirectPath);
   };
 

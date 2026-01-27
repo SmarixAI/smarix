@@ -80,7 +80,7 @@ const sanitizeMermaidCode = (code: string): string => {
   return sanitizedLines.join("\n");
 };
 
-const MermaidDiagram = ({ code }: { code: string }) => {
+export const MermaidDiagram = ({ code }: { code: string }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
@@ -234,7 +234,7 @@ const MermaidDiagram = ({ code }: { code: string }) => {
   }
 
   return (
-    <div className="my-4 rounded-xl border border-[#0E1B2E]/10 bg-white/60 backdrop-blur-sm shadow-sm overflow-hidden">
+    <div className="relative my-4 rounded-xl border border-[#0E1B2E]/10 bg-white/60 backdrop-blur-sm shadow-sm overflow-hidden">
 
       {/* Loading overlay */}
       {isLoading && (
@@ -409,8 +409,8 @@ const CodeBlock = ({
       >
         {/* Vertical scroll container */}
         <div className="max-h-[600px] overflow-y-auto">
-          <pre className="p-4 overflow-x-auto text-sm text-white font-mono leading-relaxed">
-            <code>{code}</code>
+          <pre className="p-4 overflow-x-auto text-sm text-white font-mono leading-relaxed max-w-full">
+            <code className="block min-w-0 max-w-full overflow-x-auto">{code}</code>
           </pre>
         </div>
       </div>
@@ -477,8 +477,62 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   const parseTextContent = (text: string, baseKey: number): ReactNode[] => {
     const lines = text.split('\n');
     let inDiffBlock = false;
+    let inTable = false;
+    let tableRows: string[] = [];
+    let tableStartIndex = -1;
 
-    return lines.map((line, lineIndex) => {
+    // First pass: detect and extract tables
+    const processedLines: Array<{ type: 'table' | 'line'; content: string; index: number }> = [];
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmedLine = line.trim();
+      
+      // Check if line is a table row (contains |)
+      const isTableRow = trimmedLine.includes('|') && trimmedLine.split('|').length >= 3;
+      const isTableSeparator = /^\|[\s\-:]+\|/.test(trimmedLine);
+      
+      if (isTableRow && !inTable) {
+        // Start of table
+        inTable = true;
+        tableStartIndex = i;
+        tableRows = [trimmedLine];
+      } else if (inTable) {
+        if (isTableSeparator) {
+          // Table separator row
+          tableRows.push(trimmedLine);
+        } else if (isTableRow) {
+          // Table data row
+          tableRows.push(trimmedLine);
+        } else {
+          // End of table - process it
+          if (tableRows.length >= 2) {
+            processedLines.push({ type: 'table', content: tableRows.join('\n'), index: tableStartIndex });
+          }
+          inTable = false;
+          tableRows = [];
+          tableStartIndex = -1;
+          // Process current line normally
+          processedLines.push({ type: 'line', content: line, index: i });
+        }
+      } else {
+        processedLines.push({ type: 'line', content: line, index: i });
+      }
+    }
+    
+    // Handle table at end of text
+    if (inTable && tableRows.length >= 2) {
+      processedLines.push({ type: 'table', content: tableRows.join('\n'), index: tableStartIndex });
+    }
+
+    // Second pass: render processed lines
+    return processedLines.map((item, itemIndex) => {
+      if (item.type === 'table') {
+        return renderTable(item.content, baseKey + itemIndex * 1000);
+      }
+      
+      const line = item.content;
+      const lineIndex = item.index;
 
       // --- DIFF BLOCK DETECTION (ADD THIS FIRST) ---
       if (
@@ -506,6 +560,33 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
           </pre>
         );
       }
+
+      
+
+      // ###### Sub-labels
+      if (line.match(/^###### /)) {
+        return (
+          <h6
+            key={`h6-${baseKey}-${lineIndex}`}
+            className="text-xs font-medium text-[#0E1B2E]/70 mt-2 mb-1 italic"
+          >
+            {line.replace(/^###### /, '').trim()}
+          </h6>
+        );
+      }
+
+      // ##### Fields / Section titles
+      if (line.match(/^##### /)) {
+        return (
+          <h5
+            key={`h5-${baseKey}-${lineIndex}`}
+            className="text-sm font-semibold text-[#0E1B2E] mt-3 mb-1 uppercase tracking-wide"
+          >
+            {line.replace(/^##### /, '').trim()}
+          </h5>
+        );
+      }
+
 
       if (line.match(/^#### /)) {
         return (
@@ -550,6 +631,18 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
           </h1>
         );
       }
+
+      if (line.startsWith('> ')) {
+        return (
+          <blockquote
+            key={`quote-${baseKey}-${lineIndex}`}
+            className="border-l-4 border-[#3B82F6] pl-4 py-1 my-2 text-[#0E1B2E]/80 italic bg-[#3B82F6]/5 rounded-r"
+          >
+            {renderInlinElements(line.replace(/^> /, '').trim())}
+          </blockquote>
+        );
+      }
+
 
       if (
         (line.match(/^- /) || line.match(/^• /)) &&
@@ -604,6 +697,20 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
       });
     }
 
+    const italicRegex = /(?<!\*)\*(?!\*)([^*]+)\*(?!\*)|_([^_]+)_/g;
+    const italicMatches: Array<{ start: number; end: number; text: string }> = [];
+    let italicMatch;
+    while ((italicMatch = italicRegex.exec(text)) !== null) {
+      italicMatches.push({
+        start: italicMatch.index,
+        end: italicMatch.index + italicMatch[0].length,
+        text: italicMatch[1] || italicMatch[2],
+      });
+    }
+
+    
+
+
     // Handle links [text](url)
     const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
     let linkMatch;
@@ -637,24 +744,31 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
       ...linkMatches,
       ...codeMatches,
       ...boldMatches,
+      ...italicMatches,
     ].sort((a, b) => a.start - b.start);
 
 
     let currentIndex = 0;
 
     allMatches.forEach((match, idx) => {
+
+        if (match.start < currentIndex) {
+          return; // ⛔ skip overlapping match
+        }
+
       if (match.start > currentIndex) {
         parts.push(text.substring(currentIndex, match.start));
       }
 
       // 1️⃣ Links (highest priority)
       if (linkMatches.some((lm) => lm === match)) {
-        const isGitHub = match.url.includes('github.com');
+        const linkMatch = match as { start: number; end: number; text: string; url: string };
+        const isGitHub = linkMatch.url.includes('github.com');
 
         parts.push(
           <a
             key={`link-${idx}`}
-            href={match.url}
+            href={linkMatch.url}
             target="_blank"
             rel="noopener noreferrer"
             className={`
@@ -690,7 +804,14 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
             {match.text}
           </strong>
         );
+      } else if (italicMatches.some(im => im === match)) {
+        parts.push(
+          <em key={`italic-${idx}`} className="italic text-[#0E1B2E]/90">
+            {match.text}
+          </em>
+        );
       }
+
 
       currentIndex = match.end;
     });
@@ -701,6 +822,117 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
     }
 
     return parts.length > 0 ? parts : text;
+  };
+
+  const renderTable = (tableText: string, key: number): ReactNode => {
+    const rows = tableText.split('\n').filter(row => row.trim());
+    if (rows.length < 2) return null;
+
+    // Parse header
+    const headerRow = rows[0].split('|').map(cell => cell.trim()).filter(cell => cell);
+    const separatorRow = rows[1];
+    const dataRows = rows.slice(2);
+
+    // Check if this looks like a file changes table
+    const isFileTable = headerRow.some(h => 
+      h.toLowerCase().includes('file') || 
+      h.toLowerCase().includes('status') || 
+      h.toLowerCase().includes('addition') || 
+      h.toLowerCase().includes('deletion')
+    );
+
+    return (
+      <div
+        key={`table-${key}`}
+        className="my-6 rounded-xl border border-[#0E1B2E]/15 bg-white/80 backdrop-blur-sm shadow-md overflow-hidden"
+      >
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-[#0E1B2E]/10 border-b border-[#0E1B2E]/20">
+                {headerRow.map((header, idx) => (
+                  <th
+                    key={`th-${key}-${idx}`}
+                    className={`px-4 py-3 text-left text-sm font-semibold text-[#0E1B2E] ${
+                      isFileTable && idx === 0 ? 'min-w-[200px]' : ''
+                    }`}
+                  >
+                    {header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {dataRows.map((row, rowIdx) => {
+                const cells = row.split('|').map(cell => cell.trim()).filter(cell => cell);
+                if (cells.length !== headerRow.length) return null;
+
+                return (
+                  <tr
+                    key={`tr-${key}-${rowIdx}`}
+                    className={`border-b border-[#0E1B2E]/10 transition-colors ${
+                      rowIdx % 2 === 0 ? 'bg-white/50' : 'bg-[#0E1B2E]/5'
+                    } hover:bg-[#0E1B2E]/10`}
+                  >
+                    {cells.map((cell, cellIdx) => {
+                      // Check if cell contains file path (starts with backtick or contains /)
+                      const isFilePath = cell.includes('`') || cell.includes('/');
+                      // Check if cell contains status (Modified, Added, Deleted)
+                      const isStatus = /^(Modified|Added|Deleted|Renamed)/i.test(cell);
+                      // Check if cell contains numbers with + or -
+                      const isChange = /^[+\-]\d+/.test(cell);
+
+                      return (
+                        <td
+                          key={`td-${key}-${rowIdx}-${cellIdx}`}
+                          className={`px-4 py-3 text-sm text-[#0E1B2E] ${
+                            isFilePath ? 'font-mono text-xs' : ''
+                          }`}
+                        >
+                          {isFilePath ? (
+                            <code className="bg-[#0E1B2E]/10 px-2 py-1 rounded text-[#0E1B2E] border border-[#0E1B2E]/20">
+                              {cell.replace(/`/g, '')}
+                            </code>
+                          ) : isStatus ? (
+                            <span
+                              className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+                                cell.toLowerCase().includes('added')
+                                  ? 'bg-green-100 text-green-800'
+                                  : cell.toLowerCase().includes('deleted')
+                                  ? 'bg-red-100 text-red-800'
+                                  : cell.toLowerCase().includes('modified')
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : 'bg-gray-100 text-gray-800'
+                              }`}
+                            >
+                              {cell}
+                            </span>
+                          ) : isChange ? (
+                            <span
+                              className={`font-mono font-semibold ${
+                                cell.startsWith('+')
+                                  ? 'text-green-600'
+                                  : cell.startsWith('-')
+                                  ? 'text-red-600'
+                                  : 'text-[#0E1B2E]'
+                              }`}
+                            >
+                              {cell}
+                            </span>
+                          ) : (
+                            cell
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
   };
 
   return (

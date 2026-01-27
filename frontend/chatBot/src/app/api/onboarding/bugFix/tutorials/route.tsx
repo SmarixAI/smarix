@@ -14,17 +14,17 @@ export async function GET(request: Request) {
           // If repo is provided, try owner/repo structure first
           if (repo) {
             const [owner, repoName] = repo.split('/');
-            // Try new structure: owner/repo/onboarding_bugfix_data/
-            const newPath = path.join(basePath, owner, repoName, 'onboarding_bugfix_data', fileName);
+            // Try bugfix/ folder first (most common location)
+            const bugfixPath = path.join(basePath, owner, repoName, 'bugfix', fileName);
             try {
-              await fs.access(newPath);
-              return newPath;
+              await fs.access(bugfixPath);
+              return bugfixPath;
             } catch {
-              // Try alternative: owner/repo/bugfix/
-              const altPath = path.join(basePath, owner, repoName, 'bugfix', fileName);
+              // Try new structure: owner/repo/onboarding_bugfix_data/
+              const newPath = path.join(basePath, owner, repoName, 'onboarding_bugfix_data', fileName);
               try {
-                await fs.access(altPath);
-                return altPath;
+                await fs.access(newPath);
+                return newPath;
               } catch {
                 // Continue to scan
               }

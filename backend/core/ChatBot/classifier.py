@@ -558,7 +558,7 @@ Feel free to ask me anything about the codebase!"""
         5. how_to - Questions asking how to do something, step-by-step guides
         6. conceptual - Questions asking what something is, explanations, definitions
         7. troubleshooting - Questions about bugs, errors, fixes, problems
-        8. code_location - Questions asking where code is located, finding code
+        8. FILE_LOOKUP - Questions asking where file is located, finding file
         9. repository_metrics - Questions about code statistics, lines of code, metrics
         10. tech_stack - Questions about technologies, frameworks, languages used
         11. code_structure - Questions about repository structure, organization
@@ -596,7 +596,7 @@ Feel free to ask me anything about the codebase!"""
                 QueryType.HOW_TO,
                 QueryType.CONCEPTUAL,
                 QueryType.TROUBLESHOOTING,
-                QueryType.CODE_LOCATION,
+                QueryType.FILE_LOOKUP,
                 QueryType.REPOSITORY_METRICS,
                 QueryType.TECH_STACK,
                 QueryType.CODE_STRUCTURE,
@@ -683,9 +683,25 @@ Feel free to ask me anything about the codebase!"""
             self.logger.info("CLASSIFICATION | Rule-based: TROUBLESHOOTING")
             return QueryType.TROUBLESHOOTING
 
-        if any(kw in query_lower for kw in ['where is', 'where can i find', 'locate', 'find', 'which file']):
-            self.logger.info("CLASSIFICATION | Rule-based: CODE_LOCATION")
-            return QueryType.CODE_LOCATION
+        # Enhanced file query detection - check for file-related patterns
+        file_query_patterns = [
+            'where is', 'where can i find', 'locate', 'find', 'which file',
+            'show me', 'tell me about', 'what is in', 'what\'s in',
+            'file', 'code in', 'implementation of', 'definition of',
+            # File extensions
+            r'\.(py|js|ts|dart|java|go|rs|cpp|c|h|hpp|md|txt|json|yaml|yml|xml|html|css|scss|less|vue|jsx|tsx|kt|swift|rb|php)',
+            # Path patterns
+            r'[\w\-_/\\]+\.(py|js|ts|dart|java|go|rs|cpp|c|h|hpp|md|txt|json|yaml|yml)',
+            r'[\w\-_/\\]+/[\w\-_/\\]+',
+        ]
+        
+        # Check for file path patterns
+        has_file_path = any(re.search(pattern, query_lower) for pattern in file_query_patterns[4:])
+        has_file_keywords = any(kw in query_lower for kw in file_query_patterns[:4])
+        
+        if has_file_path or has_file_keywords:
+            self.logger.info("CLASSIFICATION | Rule-based: FILE_LOOKUP (file query detected)")
+            return QueryType.FILE_LOOKUP
         
         if any(kw in query_lower for kw in IMPACT_KEYWORDS):
             self.logger.info("CLASSIFICATION | Rule-based: IMPACT_ANALYSIS")
@@ -810,5 +826,3 @@ Feel free to ask me anything about the codebase!"""
         except Exception as e:
             self.logger.warning(f"QUERY REWRITE | Failed to rewrite query: {e}, using original")
             return self.expand_query(query) 
-
-

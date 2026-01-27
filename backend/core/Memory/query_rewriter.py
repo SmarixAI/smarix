@@ -68,7 +68,7 @@ class LLMQueryRewriter:
 
         return cached
 
-    def rewrite(self, raw_query: str, session_id: str) -> str:
+    def rewrite(self, raw_query: str, session_id: str, schema_name: str) -> str:
         if not session_id:
             return raw_query
 
@@ -83,7 +83,7 @@ class LLMQueryRewriter:
                 return cached
 
         try:
-            messages = self.conversation_store.get_messages(session_id, limit=6)
+            messages = self.conversation_store.get_messages(session_id, schema_name=schema_name, limit=6)
         except Exception:
             return raw_query
 
@@ -99,7 +99,7 @@ class LLMQueryRewriter:
 
         return rewritten_query if rewritten_query else raw_query
 
-    def _is_self_contained(self, query: str, session_id: str = None) -> bool:
+    def _is_self_contained(self, query: str, session_id: str = None, schema_name: str = None) -> bool:
         """
         Decide whether a query has enough information to be used as-is
         without rewriting against prior context.
@@ -195,7 +195,7 @@ class LLMQueryRewriter:
         if session_id:
             try:
                 recent_messages = self.conversation_store.get_messages(
-                    session_id, limit=4
+                    session_id, schema_name=schema_name, limit=4
                 )
                 if recent_messages:
                     recent_queries = [

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, use } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -120,7 +120,7 @@ const sanitizeMermaidCode = (code: string): string => {
           }
         }
         return match;
-      }
+      },
     );
   });
 
@@ -159,7 +159,7 @@ const MermaidDiagram = ({ code }: { code: string }) => {
       } catch (err) {
         console.error("Mermaid rendering error:", err);
         setError(
-          err instanceof Error ? err.message : "Failed to render diagram"
+          err instanceof Error ? err.message : "Failed to render diagram",
         );
       } finally {
         setIsLoading(false);
@@ -199,7 +199,9 @@ const MermaidDiagram = ({ code }: { code: string }) => {
   if (error) {
     return (
       <div className="text-red-600 text-sm p-4 bg-red-50 border border-red-200 rounded-lg my-4">
-        <p className="font-semibold mb-1 text-[#0E1B2E]">Failed to render diagram</p>
+        <p className="font-semibold mb-1 text-[#0E1B2E]">
+          Failed to render diagram
+        </p>
         <p className="text-xs text-red-700/70">{error}</p>
         <details className="mt-2">
           <summary className="cursor-pointer text-xs text-[#0E1B2E]/70 hover:text-[#0E1B2E]">
@@ -363,7 +365,7 @@ export default function ChatPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showSources, setShowSources] = useState<{ [key: string]: boolean }>(
-    {}
+    {},
   );
   const [showRelatedKnowledge, setShowRelatedKnowledge] = useState<{
     [key: string]: boolean;
@@ -372,13 +374,19 @@ export default function ChatPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState([]);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
-    null
+    null,
   );
-  const [sidebarView, setSidebarView] = useState<"sessions" | "messages">("sessions");
-  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
-  const [selectedRole, setSelectedRole] = useState<"onboarding" | "offboarding" | "general">("general");
+  const [sidebarView, setSidebarView] = useState<"sessions" | "messages">(
+    "sessions",
+  );
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(
+    null,
+  );
+  const [selectedRole, setSelectedRole] = useState<
+    "onboarding" | "offboarding" | "general"
+  >("general");
   const messageRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
-  
+
   // Check if user has status "general"
   const showUserInfo = isAuthenticated && user && user.status === "general";
 
@@ -395,8 +403,8 @@ export default function ChatPage() {
 
   useEffect(() => {
     fetchStats();
-    loadSessions();
-  }, []);
+    if (user?.username) loadSessions();
+  }, [user]);
 
   const convertFlowDataToMermaid = (flowData: FlowData): string => {
     if (!flowData || !flowData.nodes || !flowData.edges) return "";
@@ -564,12 +572,17 @@ export default function ChatPage() {
   };
 
   const loadSessions = async () => {
+    if (!user?.username) return;
     try {
-      const response = await fetch(`${baseURL}/sessions`);
+      const response = await fetch(
+        `${baseURL}/sessions?username=${encodeURIComponent(user?.username || "")}`,
+      );
       const data = await response.json();
       console.log(
         "📋 Titles:",
-        (data.sessions || []).map((s: any) => `${s.title} (${s.message_count})`)
+        (data.sessions || []).map(
+          (s: any) => `${s.title} (${s.message_count})`,
+        ),
       );
       setSessions(data.sessions || []);
     } catch (error) {
@@ -578,24 +591,35 @@ export default function ChatPage() {
   };
 
   const loadSession = async (sessionId: string) => {
+    if (!user?.username) return;
     try {
       console.log(`Loading session: ${sessionId}`);
       const response = await fetch(
-        `${baseURL}/load-session/${sessionId}`
+        `${baseURL}/load-session/${sessionId}?username=${encodeURIComponent(user?.username || "")}`,
       );
       const data = await response.json();
-      console.log("Loaded messages:", data.messages);
+
+      // ✅ Add detailed logging
+      console.log("📦 Full response data:", data);
+      console.log("📨 Messages array:", data.messages);
+      console.log("📊 Messages length:", data.messages?.length);
+      console.log("📝 First message (if exists):", data.messages?.[0]);
 
       const formattedMessages = (data.messages || []).map(
-        (msg: any, index: number) => ({
-          id:
-            msg.id?.toString() ||
-            `msg-${index}-${sessionId.slice(-4)}-${Date.now()}`,
-          role: (msg.role as "user" | "assistant") || "assistant",
-          content: msg.content || "No content available",
-          timestamp: new Date(msg.created_at || Date.now()),
-        })
+        (msg: any, index: number) => {
+          console.log(`📄 Formatting message ${index}:`, msg); // ✅ Log each message
+          return {
+            id:
+              msg.id?.toString() ||
+              `msg-${index}-${sessionId.slice(-4)}-${Date.now()}`,
+            role: (msg.role as "user" | "assistant") || "assistant",
+            content: msg.content || "No content available",
+            timestamp: new Date(msg.created_at || Date.now()),
+          };
+        },
       );
+
+      console.log("✨ Formatted messages:", formattedMessages);
 
       setMessages(formattedMessages);
       setSessionId(data.session_id);
@@ -641,7 +665,8 @@ export default function ChatPage() {
   };
 
   const sendMessage = async () => {
-    if (!input.trim() || isLoading) return;
+    console.log(user.username);
+    if (!input.trim() || isLoading || !user?.username) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -655,29 +680,19 @@ export default function ChatPage() {
     setIsLoading(true);
 
     try {
-      // Try to get username from localStorage
-      let username: string | undefined;
-      try {
-        const storedUser = localStorage.getItem('user');
-        if (storedUser) {
-          const user = JSON.parse(storedUser);
-          username = user.username;
-        }
-      } catch (e) {
-        // Ignore errors getting username
-      }
-
-      const requestBody: { query: string; session_id?: string; username?: string; role?: string } = {
+      const requestBody: {
+        query: string;
+        session_id?: string;
+        username: string;
+        role?: string;
+      } = {
         query: input,
         role: selectedRole,
+        username: user.username,
       };
 
       if (sessionId) {
         requestBody.session_id = sessionId;
-      }
-
-      if (username) {
-        requestBody.username = username;
       }
 
       const response = await fetch(`${baseURL}/chat`, {
@@ -703,7 +718,7 @@ export default function ChatPage() {
       }
 
       const normalizedRelated = normalizeRelatedKnowledge(
-        data.related_knowledge
+        data.related_knowledge,
       );
 
       const assistantMessage: Message = {
@@ -749,7 +764,10 @@ export default function ChatPage() {
     if (!sessionId) return;
 
     try {
-      const requestBody = { session_id: sessionId };
+      const requestBody = {
+        session_id: sessionId,
+        username: user?.username || "",
+      };
 
       await fetch(`${baseURL}/clear-history`, {
         method: "POST",
@@ -838,19 +856,22 @@ export default function ChatPage() {
                   className="w-6 h-6 object-contain"
                 />
               </div>
-              <span className={`${spaceGrotesk.className} font-bold text-lg text-[#0E1B2E]`}>Smarix</span>
+              <span
+                className={`${spaceGrotesk.className} font-bold text-lg text-[#0E1B2E]`}
+              >
+                Smarix
+              </span>
             </Link>
 
             {/* New Chat Button */}
             <button
               onClick={async () => {
                 try {
-                  const response = await fetch(
-                    `${baseURL}/new-session`,
-                    {
-                      method: "POST",
-                    }
-                  );
+                  const response = await fetch(`${baseURL}/new-session`, {
+                    method: "POST",
+                    body: JSON.stringify({ username: user?.username || "" }),
+                    headers: { "Content-Type": "application/json" },
+                  });
                   const data = await response.json();
 
                   setSessionId(data.session_id);
@@ -863,7 +884,9 @@ export default function ChatPage() {
               className="w-full p-3 bg-[#0E1B2E] hover:bg-[#1a2f4d] text-white rounded-lg transition-all flex items-center justify-center gap-2 group hover:scale-[1.02] active:scale-[0.98] shadow-md hover:shadow-lg hover:shadow-[#0E1B2E]/20"
             >
               <MessageSquarePlus className="w-5 h-5 group-hover:rotate-12 transition-transform" />
-              <span className={`text-sm font-medium ${spaceGrotesk.className}`}>New Chat</span>
+              <span className={`text-sm font-medium ${spaceGrotesk.className}`}>
+                New Chat
+              </span>
             </button>
 
             {/* Stats */}
@@ -871,13 +894,19 @@ export default function ChatPage() {
               <div className="mt-4 p-3 bg-white/60 backdrop-blur-sm rounded-lg border border-[#0E1B2E]/10 shadow-sm">
                 <div className="flex items-center gap-2 mb-2">
                   <Database className="w-4 h-4 text-[#0E1B2E]" />
-                  <span className={`text-xs font-semibold text-[#0E1B2E] ${spaceGrotesk.className}`}>
+                  <span
+                    className={`text-xs font-semibold text-[#0E1B2E] ${spaceGrotesk.className}`}
+                  >
                     Database Stats
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-xs text-[#0E1B2E]/70">Total Chunks</span>
-                  <span className={`text-sm ${firaCode.className} text-[#0E1B2E]`}>
+                  <span className="text-xs text-[#0E1B2E]/70">
+                    Total Chunks
+                  </span>
+                  <span
+                    className={`text-sm ${firaCode.className} text-[#0E1B2E]`}
+                  >
                     {stats.total_chunks?.toLocaleString()}
                   </span>
                 </div>
@@ -889,95 +918,125 @@ export default function ChatPage() {
           <div className="px-3 pt-3 pb-2 border-b border-[#0E1B2E]/10 bg-white/30 flex-shrink-0">
             <div className="relative">
               <button
-                onClick={() => setSidebarView(sidebarView === "sessions" ? "messages" : "sessions")}
+                onClick={() =>
+                  setSidebarView(
+                    sidebarView === "sessions" ? "messages" : "sessions",
+                  )
+                }
                 className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-white/60 backdrop-blur-sm transition-colors group"
               >
                 <div className="flex items-center gap-2">
                   <Clock className="w-4 h-4 text-[#0E1B2E]" />
-                  <span className={`text-xs font-semibold text-[#0E1B2E] ${spaceGrotesk.className}`}>
-                    {sidebarView === "sessions" ? "Recent Chats" : "Chat History"}
+                  <span
+                    className={`text-xs font-semibold text-[#0E1B2E] ${spaceGrotesk.className}`}
+                  >
+                    {sidebarView === "sessions"
+                      ? "Recent Chats"
+                      : "Chat History"}
                   </span>
                   {sidebarView === "sessions" && messages.length > 0 && (
-                    <span className={`${firaCode.className} text-[10px] bg-[#0E1B2E]/10 text-[#0E1B2E] px-1.5 py-0.5 rounded`}>
+                    <span
+                      className={`${firaCode.className} text-[10px] bg-[#0E1B2E]/10 text-[#0E1B2E] px-1.5 py-0.5 rounded`}
+                    >
                       {messages.length}
                     </span>
                   )}
                 </div>
-                <ChevronDown className={`w-4 h-4 text-[#0E1B2E]/60 transition-transform ${sidebarView === "messages" ? "rotate-180" : ""}`} />
+                <ChevronDown
+                  className={`w-4 h-4 text-[#0E1B2E]/60 transition-transform ${sidebarView === "messages" ? "rotate-180" : ""}`}
+                />
               </button>
             </div>
           </div>
 
           {/* Sessions List */}
-          <div className="flex-1 overflow-y-auto p-3 bg-white/20" id="sessions-container">
+          <div
+            className="flex-1 overflow-y-auto p-3 bg-white/20"
+            id="sessions-container"
+          >
             {sidebarView === "sessions" && (
               <>
                 <div className="mb-2 flex items-center justify-between px-2">
-                  <span className={`text-xs font-semibold text-[#0E1B2E]/70 uppercase tracking-wider ${spaceGrotesk.className}`}>
+                  <span
+                    className={`text-xs font-semibold text-[#0E1B2E]/70 uppercase tracking-wider ${spaceGrotesk.className}`}
+                  >
                     Recent Chats
                   </span>
                   <Clock className="w-3.5 h-3.5 text-[#0E1B2E]/50" />
                 </div>
-            <AnimatePresence>
-              {sessions.map((session: any) => (
-                <motion.div
-                  key={session.session_id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 20 }}
-                  className={`p-3 cursor-pointer rounded-lg transition-all mb-2 group relative ${
-                    selectedSessionId === session.session_id
-                      ? "bg-[#0E1B2E] text-white border border-[#0E1B2E] shadow-lg"
-                      : "hover:bg-white/60 backdrop-blur-sm border border-transparent hover:border-[#0E1B2E]/20 bg-white/40"
-                  }`}
-                  onClick={() => loadSession(session.session_id)}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className={`text-sm font-medium truncate mb-1 ${selectedSessionId === session.session_id ? 'text-white' : 'text-[#0E1B2E]'} ${spaceGrotesk.className}`}>
-                        {session.title}
-                      </div>
-                      <div className={`flex items-center gap-2 text-xs ${selectedSessionId === session.session_id ? 'text-white/70' : 'text-[#0E1B2E]/60'}`}>
-                        <span className="flex items-center gap-1">
-                          <MessageSquarePlus className="w-3 h-3" />
-                          {session.message_count}
-                        </span>
-                        <span>•</span>
-                        <span className={`${firaCode.className} text-[10px]`}>
-                          {new Date(session.last_message).toLocaleDateString()}
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        if (confirm(`Delete "${session.title}"?`)) {
-                          try {
-                            await fetch(
-                              `${baseURL}/delete-session/${session.session_id}`,
-                              {
-                                method: "DELETE",
-                              }
-                            );
-                            await loadSessions();
-                          } catch (error) {
-                            console.error("Failed to delete session:", error);
-                            alert("Failed to delete session");
-                          }
-                        }
-                      }}
-                      className={`p-1.5 opacity-0 group-hover:opacity-100 hover:bg-red-100 rounded transition-all flex-shrink-0 ${selectedSessionId === session.session_id ? 'text-red-300 hover:text-red-200' : 'text-red-500 hover:text-red-600'}`}
-                      title="Delete chat"
+                <AnimatePresence>
+                  {sessions.map((session: any) => (
+                    <motion.div
+                      key={session.session_id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      className={`p-3 cursor-pointer rounded-lg transition-all mb-2 group relative ${
+                        selectedSessionId === session.session_id
+                          ? "bg-[#0E1B2E] text-white border border-[#0E1B2E] shadow-lg"
+                          : "hover:bg-white/60 backdrop-blur-sm border border-transparent hover:border-[#0E1B2E]/20 bg-white/40"
+                      }`}
+                      onClick={() => loadSession(session.session_id)}
                     >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </motion.div>
-              ))}
-            </AnimatePresence>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div
+                            className={`text-sm font-medium truncate mb-1 ${selectedSessionId === session.session_id ? "text-white" : "text-[#0E1B2E]"} ${spaceGrotesk.className}`}
+                          >
+                            {session.title}
+                          </div>
+                          <div
+                            className={`flex items-center gap-2 text-xs ${selectedSessionId === session.session_id ? "text-white/70" : "text-[#0E1B2E]/60"}`}
+                          >
+                            <span className="flex items-center gap-1">
+                              <MessageSquarePlus className="w-3 h-3" />
+                              {session.message_count}
+                            </span>
+                            <span>•</span>
+                            <span
+                              className={`${firaCode.className} text-[10px]`}
+                            >
+                              {new Date(
+                                session.last_message,
+                              ).toLocaleDateString()}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (confirm(`Delete "${session.title}"?`)) {
+                              try {
+                                await fetch(
+                                  `${baseURL}/delete-session/${session.session_id}?username=${encodeURIComponent(user?.username || "")}`,
+                                  {
+                                    method: "DELETE",
+                                  },
+                                );
+                                await loadSessions();
+                              } catch (error) {
+                                console.error(
+                                  "Failed to delete session:",
+                                  error,
+                                );
+                                alert("Failed to delete session");
+                              }
+                            }
+                          }}
+                          className={`p-1.5 opacity-0 group-hover:opacity-100 hover:bg-red-100 rounded transition-all flex-shrink-0 ${selectedSessionId === session.session_id ? "text-red-300 hover:text-red-200" : "text-red-500 hover:text-red-600"}`}
+                          title="Delete chat"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
 
                 {sessions.length === 0 && (
-                  <div className={`text-center text-xs text-[#0E1B2E]/60 py-8 ${spaceGrotesk.className}`}>
+                  <div
+                    className={`text-center text-xs text-[#0E1B2E]/60 py-8 ${spaceGrotesk.className}`}
+                  >
                     No conversations yet
                     <div className="text-[10px] mt-1 text-[#0E1B2E]/40">
                       Start chatting to see history
@@ -991,14 +1050,19 @@ export default function ChatPage() {
             {sidebarView === "messages" && (
               <>
                 <div className="mb-2 flex items-center justify-between px-2">
-                  <span className={`text-xs font-semibold text-[#0E1B2E]/70 uppercase tracking-wider ${spaceGrotesk.className}`}>
+                  <span
+                    className={`text-xs font-semibold text-[#0E1B2E]/70 uppercase tracking-wider ${spaceGrotesk.className}`}
+                  >
                     Current Chat
                   </span>
                   <MessageSquare className="w-3.5 h-3.5 text-[#0E1B2E]/50" />
                 </div>
                 <div className="px-2 mb-2">
-                  <p className={`${firaCode.className} text-xs text-[#0E1B2E]/60`}>
-                    {messages.length} {messages.length === 1 ? "message" : "messages"}
+                  <p
+                    className={`${firaCode.className} text-xs text-[#0E1B2E]/60`}
+                  >
+                    {messages.length}{" "}
+                    {messages.length === 1 ? "message" : "messages"}
                   </p>
                 </div>
                 <div className="space-y-1">
@@ -1021,8 +1085,8 @@ export default function ChatPage() {
                                 ? "bg-white/20"
                                 : "bg-[#0E1B2E]"
                               : selectedMessageId === message.id
-                              ? "bg-white/20"
-                              : "bg-[#0E1B2E]/80"
+                                ? "bg-white/20"
+                                : "bg-[#0E1B2E]/80"
                           }`}
                         >
                           {message.role === "user" ? (
@@ -1038,8 +1102,8 @@ export default function ChatPage() {
                                 selectedMessageId === message.id
                                   ? "text-white"
                                   : message.role === "user"
-                                  ? "text-[#0E1B2E]"
-                                  : "text-[#0E1B2E]/80"
+                                    ? "text-[#0E1B2E]"
+                                    : "text-[#0E1B2E]/80"
                               }`}
                             >
                               {message.role === "user" ? "You" : "Assistant"}
@@ -1072,7 +1136,9 @@ export default function ChatPage() {
                   ))}
                 </div>
                 {messages.length === 0 && (
-                  <div className={`text-center text-xs text-[#0E1B2E]/60 py-8 ${spaceGrotesk.className}`}>
+                  <div
+                    className={`text-center text-xs text-[#0E1B2E]/60 py-8 ${spaceGrotesk.className}`}
+                  >
                     No messages yet
                     <div className="text-[10px] mt-1 text-[#0E1B2E]/40">
                       Start chatting to see message history
@@ -1087,7 +1153,9 @@ export default function ChatPage() {
           {sessionId && (
             <div className="p-3 border-t border-[#0E1B2E]/10 bg-white/60 backdrop-blur-sm flex-shrink-0">
               <div className="flex items-center justify-between text-xs mb-2">
-                <span className={`text-[#0E1B2E]/70 font-semibold ${spaceGrotesk.className}`}>
+                <span
+                  className={`text-[#0E1B2E]/70 font-semibold ${spaceGrotesk.className}`}
+                >
                   Active Session
                 </span>
                 <button
@@ -1098,7 +1166,9 @@ export default function ChatPage() {
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
-              <div className={`${firaCode.className} text-xs text-[#0E1B2E] bg-[#0E1B2E]/5 px-2 py-1 rounded border border-[#0E1B2E]/10`}>
+              <div
+                className={`${firaCode.className} text-xs text-[#0E1B2E] bg-[#0E1B2E]/5 px-2 py-1 rounded border border-[#0E1B2E]/10`}
+              >
                 {sessionId.slice(0, 16)}...
               </div>
             </div>
@@ -1118,10 +1188,14 @@ export default function ChatPage() {
                 <ArrowLeft className="w-5 h-5 text-[#0E1B2E]" />
               </button>
               <div>
-                <h1 className={`text-xl font-bold text-[#0E1B2E] ${spaceGrotesk.className}`}>
+                <h1
+                  className={`text-xl font-bold text-[#0E1B2E] ${spaceGrotesk.className}`}
+                >
                   Chat with Your Codebase
                 </h1>
-                <p className={`text-sm text-[#0E1B2E]/70 mt-1 ${spaceGrotesk.className}`}>
+                <p
+                  className={`text-sm text-[#0E1B2E]/70 mt-1 ${spaceGrotesk.className}`}
+                >
                   Ask anything about your code, flows, issues, and PRs
                 </p>
               </div>
@@ -1130,7 +1204,9 @@ export default function ChatPage() {
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2 px-3 py-2 bg-white/80 rounded-lg border border-[#0E1B2E]/10">
                   <User className="w-4 h-4 text-[#0E1B2E]" />
-                  <span className={`text-sm font-medium text-[#0E1B2E] ${spaceGrotesk.className}`}>
+                  <span
+                    className={`text-sm font-medium text-[#0E1B2E] ${spaceGrotesk.className}`}
+                  >
                     {user.name || user.username}
                   </span>
                 </div>
@@ -1140,7 +1216,9 @@ export default function ChatPage() {
                   title="Logout"
                 >
                   <LogOut className="w-4 h-4" />
-                  <span className={`text-sm font-medium ${spaceGrotesk.className}`}>
+                  <span
+                    className={`text-sm font-medium ${spaceGrotesk.className}`}
+                  >
                     Logout
                   </span>
                 </button>
@@ -1162,7 +1240,9 @@ export default function ChatPage() {
                 />
               </div>
               <div className="text-center space-y-2">
-                <h2 className={`text-2xl font-bold text-[#0E1B2E] ${spaceGrotesk.className}`}>
+                <h2
+                  className={`text-2xl font-bold text-[#0E1B2E] ${spaceGrotesk.className}`}
+                >
                   How can I help you today?
                 </h2>
                 <p className={`text-[#0E1B2E]/70 ${spaceGrotesk.className}`}>
@@ -1183,7 +1263,9 @@ export default function ChatPage() {
                     onClick={() => setInput(example)}
                     className="p-4 text-left bg-white/60 backdrop-blur-sm hover:bg-white/80 border border-[#0E1B2E]/10 hover:border-[#0E1B2E]/30 rounded-lg transition-all duration-300 group shadow-sm hover:shadow-md"
                   >
-                    <span className={`text-sm text-[#0E1B2E] group-hover:text-[#1a2f4d] ${spaceGrotesk.className}`}>
+                    <span
+                      className={`text-sm text-[#0E1B2E] group-hover:text-[#1a2f4d] ${spaceGrotesk.className}`}
+                    >
                       {example}
                     </span>
                   </button>
@@ -1217,12 +1299,12 @@ export default function ChatPage() {
                 )}
 
                 <div
-                  className={`max-w-4xl flex-1 ${
+                  className={`max-w-4xl flex-1 min-w-0 ${
                     message.role === "user" ? "order-first" : ""
                   }`}
                 >
                   <div
-                    className={`p-5 rounded-2xl ${
+                    className={`p-5 rounded-2xl max-w-full overflow-x-auto ${
                       message.role === "user"
                         ? "bg-[#0E1B2E] text-white border border-[#0E1B2E] shadow-md"
                         : "bg-white/60 backdrop-blur-sm border border-[#0E1B2E]/10 shadow-sm"
@@ -1244,20 +1326,28 @@ export default function ChatPage() {
                                     <Workflow className="w-5 h-5 text-[#0E1B2E]" />
                                   </div>
                                   <div>
-                                    <h3 className={`text-lg font-semibold text-[#0E1B2E] ${spaceGrotesk.className}`}>
+                                    <h3
+                                      className={`text-lg font-semibold text-[#0E1B2E] ${spaceGrotesk.className}`}
+                                    >
                                       Code Flow Diagram
                                     </h3>
-                                    <p className={`text-xs text-[#0E1B2E]/60 mt-0.5 ${spaceGrotesk.className}`}>
+                                    <p
+                                      className={`text-xs text-[#0E1B2E]/60 mt-0.5 ${spaceGrotesk.className}`}
+                                    >
                                       Interactive visualization of code
                                       structure
                                     </p>
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-3 text-xs">
-                                  <span className={`px-2 py-1 bg-[#0E1B2E]/10 text-[#0E1B2E] rounded-full ${spaceGrotesk.className}`}>
+                                  <span
+                                    className={`px-2 py-1 bg-[#0E1B2E]/10 text-[#0E1B2E] rounded-full ${spaceGrotesk.className}`}
+                                  >
                                     {message.flow_data.nodes.length} nodes
                                   </span>
-                                  <span className={`px-2 py-1 bg-[#0E1B2E]/10 text-[#0E1B2E] rounded-full ${spaceGrotesk.className}`}>
+                                  <span
+                                    className={`px-2 py-1 bg-[#0E1B2E]/10 text-[#0E1B2E] rounded-full ${spaceGrotesk.className}`}
+                                  >
                                     {message.flow_data.edges.length} connections
                                   </span>
                                 </div>
@@ -1265,11 +1355,13 @@ export default function ChatPage() {
 
                               <MermaidDiagram
                                 code={convertFlowDataToMermaid(
-                                  message.flow_data
+                                  message.flow_data,
                                 )}
                               />
 
-                              <div className={`mt-3 flex items-center gap-2 text-xs text-[#0E1B2E]/70 ${spaceGrotesk.className}`}>
+                              <div
+                                className={`mt-3 flex items-center gap-2 text-xs text-[#0E1B2E]/70 ${spaceGrotesk.className}`}
+                              >
                                 <div className="flex items-center gap-1.5">
                                   <div className="w-3 h-3 bg-[#0E1B2E] rounded"></div>
                                   <span>Functions</span>
@@ -1286,7 +1378,7 @@ export default function ChatPage() {
                             </div>
                           )}
 
-                        <div className="markdown-content prose max-w-none antialiased">
+                        <div className="markdown-content prose max-w-none antialiased overflow-x-auto">
                           <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
                             rehypePlugins={[rehypeHighlight, rehypeRaw]}
@@ -1341,14 +1433,14 @@ export default function ChatPage() {
                                 ...props
                               }: any) => {
                                 const match = /language-(\w+)/.exec(
-                                  className || ""
+                                  className || "",
                                 );
                                 const language = match ? match[1] : "";
 
                                 if (!inline && language === "mermaid") {
                                   const mermaidCode = String(children).replace(
                                     /\n$/,
-                                    ""
+                                    "",
                                   );
                                   return <MermaidDiagram code={mermaidCode} />;
                                 }
@@ -1359,7 +1451,7 @@ export default function ChatPage() {
                                       <button
                                         onClick={() => {
                                           navigator.clipboard.writeText(
-                                            String(children)
+                                            String(children),
                                           );
                                         }}
                                         className="px-2 py-1 bg-[#0E1B2E]/10 hover:bg-[#0E1B2E]/20 rounded text-xs text-[#0E1B2E] opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1"
@@ -1403,26 +1495,100 @@ export default function ChatPage() {
                                   <ExternalLink className="w-3 h-3 inline" />
                                 </a>
                               ),
-                              table: ({ node, ...props }) => (
-                                <div className="overflow-x-auto my-4 rounded-lg border border-[#0E1B2E]/10">
-                                  <table className="min-w-full" {...props} />
-                                </div>
-                              ),
+                              table: ({ node, ...props }: any) => {
+                                // Check if this is a file changes table by examining children
+                                const isFileTable = node?.children?.some((child: any) => 
+                                  child?.children?.some((th: any) => 
+                                    th?.children?.some((text: any) => {
+                                      const textContent = typeof text === 'string' ? text : text?.value || '';
+                                      return /file|status|addition|deletion/i.test(textContent);
+                                    })
+                                  )
+                                );
+
+                                return (
+                                  <div className={`overflow-x-auto my-6 rounded-xl border border-[#0E1B2E]/15 bg-white/80 backdrop-blur-sm shadow-md ${isFileTable ? 'overflow-visible' : ''}`}>
+                                    <table className="min-w-full border-collapse" {...props} />
+                                  </div>
+                                );
+                              },
                               thead: ({ node, ...props }) => (
-                                <thead className="bg-[#0E1B2E]/5" {...props} />
+                                <thead className="bg-[#0E1B2E]/10 border-b border-[#0E1B2E]/20" {...props} />
                               ),
-                              th: ({ node, ...props }) => (
-                                <th
-                                  className={`px-4 py-3 text-left text-[#0E1B2E] font-semibold border-b border-[#0E1B2E]/10 ${spaceGrotesk.className}`}
-                                  {...props}
-                                />
-                              ),
-                              td: ({ node, ...props }) => (
-                                <td
-                                  className={`px-4 py-3 text-[#0E1B2E]/80 border-b border-[#0E1B2E]/10 ${spaceGrotesk.className}`}
-                                  {...props}
-                                />
-                              ),
+                              th: ({ node, ...props }: any) => {
+                                const textContent = typeof props.children === 'string' 
+                                  ? props.children 
+                                  : props.children?.props?.children || '';
+                                const isFileColumn = /file/i.test(textContent);
+                                
+                                return (
+                                  <th
+                                    className={`px-4 py-3 text-left text-sm font-semibold text-[#0E1B2E] ${isFileColumn ? 'min-w-[200px]' : ''} ${spaceGrotesk.className}`}
+                                    {...props}
+                                  />
+                                );
+                              },
+                              td: ({ node, ...props }: any) => {
+                                const cellContent = typeof props.children === 'string' 
+                                  ? props.children 
+                                  : props.children?.props?.children || '';
+                                
+                                // Check if cell contains file path
+                                const isFilePath = /`[^`]+`/.test(cellContent) || /\//.test(cellContent);
+                                // Check if cell contains status
+                                const isStatus = /^(Modified|Added|Deleted|Renamed)/i.test(cellContent);
+                                // Check if cell contains change numbers
+                                const isChange = /^[+\-]\d+/.test(cellContent);
+                                
+                                return (
+                                  <td
+                                    className={`px-4 py-3 text-sm text-[#0E1B2E] border-b border-[#0E1B2E]/10 ${
+                                      isFilePath ? 'font-mono text-xs' : ''
+                                    } ${spaceGrotesk.className}`}
+                                    {...props}
+                                  >
+                                    {isFilePath ? (
+                                      <code className="bg-[#0E1B2E]/10 px-2 py-1 rounded text-[#0E1B2E] border border-[#0E1B2E]/20">
+                                        {cellContent.replace(/`/g, '')}
+                                      </code>
+                                    ) : isStatus ? (
+                                      <span
+                                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+                                          cellContent.toLowerCase().includes('added')
+                                            ? 'bg-green-100 text-green-800'
+                                            : cellContent.toLowerCase().includes('deleted')
+                                            ? 'bg-red-100 text-red-800'
+                                            : cellContent.toLowerCase().includes('modified')
+                                            ? 'bg-blue-100 text-blue-800'
+                                            : 'bg-gray-100 text-gray-800'
+                                        }`}
+                                      >
+                                        {cellContent}
+                                      </span>
+                                    ) : isChange ? (
+                                      <span
+                                        className={`font-mono font-semibold ${
+                                          cellContent.startsWith('+')
+                                            ? 'text-green-600'
+                                            : cellContent.startsWith('-')
+                                            ? 'text-red-600'
+                                            : 'text-[#0E1B2E]'
+                                        }`}
+                                      >
+                                        {cellContent}
+                                      </span>
+                                    ) : (
+                                      props.children
+                                    )}
+                                  </td>
+                                );
+                              },
+                              tbody: ({ node, ...props }: any) => {
+                                // Add alternating row colors
+                                return (
+                                  <tbody className="[&>tr:nth-child(even)]:bg-[#0E1B2E]/5 [&>tr:hover]:bg-[#0E1B2E]/10 [&>tr]:transition-colors" {...props} />
+                                );
+                              },
                               strong: ({ node, ...props }) => (
                                 <strong
                                   className={`font-bold text-[#0E1B2E] ${spaceGrotesk.className}`}
@@ -1448,7 +1614,7 @@ export default function ChatPage() {
                         </div>
                       </div>
                     ) : (
-                      <div className="text-white whitespace-pre-wrap">
+                      <div className="text-white whitespace-pre-wrap break-words max-w-full overflow-x-auto">
                         {message.content}
                       </div>
                     )}
@@ -1531,7 +1697,9 @@ export default function ChatPage() {
                             exit={{ opacity: 0, height: 0 }}
                             className="mt-4 space-y-2 p-4 bg-white/40 backdrop-blur-sm rounded-lg border border-[#0E1B2E]/10"
                           >
-                            <h4 className={`text-sm font-semibold text-[#0E1B2E] mb-3 ${spaceGrotesk.className}`}>
+                            <h4
+                              className={`text-sm font-semibold text-[#0E1B2E] mb-3 ${spaceGrotesk.className}`}
+                            >
                               Sources ({message.sources.length})
                             </h4>
                             <div className="space-y-2">
@@ -1544,17 +1712,24 @@ export default function ChatPage() {
                                     <div className="flex items-start gap-2 flex-1">
                                       {getContentIcon(source.content_type)}
                                       <div className="flex-1 min-w-0">
-                                        <div className={`text-sm font-medium text-[#0E1B2E] truncate ${spaceGrotesk.className}`}>
+                                        <div
+                                          className={`text-sm font-medium text-[#0E1B2E] truncate ${spaceGrotesk.className}`}
+                                        >
                                           {formatFileName(source)}
                                         </div>
                                         {source.type && (
-                                          <div className={`text-xs text-[#0E1B2E]/60 mt-1 ${spaceGrotesk.className}`}>
+                                          <div
+                                            className={`text-xs text-[#0E1B2E]/60 mt-1 ${spaceGrotesk.className}`}
+                                          >
                                             {source.type}
                                           </div>
                                         )}
                                         {source.score && (
-                                          <div className={`text-xs text-[#0E1B2E]/50 mt-1 ${firaCode.className}`}>
-                                            Score: {(source.score * 100).toFixed(1)}%
+                                          <div
+                                            className={`text-xs text-[#0E1B2E]/50 mt-1 ${firaCode.className}`}
+                                          >
+                                            Score:{" "}
+                                            {(source.score * 100).toFixed(1)}%
                                           </div>
                                         )}
                                       </div>
@@ -1600,7 +1775,9 @@ export default function ChatPage() {
               <div className="p-4 bg-white/60 backdrop-blur-sm border border-[#0E1B2E]/10 rounded-2xl shadow-sm">
                 <div className="flex items-center gap-2">
                   <Loader2 className="w-4 h-4 animate-spin text-[#0E1B2E]" />
-                  <span className={`text-sm text-[#0E1B2E]/70 ${spaceGrotesk.className}`}>
+                  <span
+                    className={`text-sm text-[#0E1B2E]/70 ${spaceGrotesk.className}`}
+                  >
                     Searching through your codebase and related knowledge
                   </span>
                 </div>
@@ -1658,7 +1835,11 @@ export default function ChatPage() {
             className="fixed right-4 bottom-20 w-96 max-h-[60vh] overflow-auto bg-white/90 backdrop-blur-xl border border-[#0E1B2E]/20 rounded-xl p-4 z-50 shadow-2xl"
           >
             <div className="flex items-center justify-between mb-2">
-              <h4 className={`text-sm font-semibold text-[#0E1B2E] ${spaceGrotesk.className}`}>Related Knowledge</h4>
+              <h4
+                className={`text-sm font-semibold text-[#0E1B2E] ${spaceGrotesk.className}`}
+              >
+                Related Knowledge
+              </h4>
               <button
                 onClick={() =>
                   setShowRelatedKnowledge((prev) => ({
@@ -1674,10 +1855,14 @@ export default function ChatPage() {
 
             {metrics ? (
               <div className="mb-3 p-2 bg-[#0E1B2E]/5 rounded-lg border border-[#0E1B2E]/10">
-                <h5 className={`text-xs text-[#0E1B2E] font-medium mb-1 ${spaceGrotesk.className}`}>
+                <h5
+                  className={`text-xs text-[#0E1B2E] font-medium mb-1 ${spaceGrotesk.className}`}
+                >
                   Metrics / Tech Summary
                 </h5>
-                <pre className={`text-xs text-[#0E1B2E]/80 max-h-40 overflow-auto p-2 bg-[#0E1B2E]/5 rounded ${firaCode.className}`}>
+                <pre
+                  className={`text-xs text-[#0E1B2E]/80 max-h-40 overflow-auto p-2 bg-[#0E1B2E]/5 rounded ${firaCode.className}`}
+                >
                   {JSON.stringify(metrics, null, 2)}
                 </pre>
               </div>
@@ -1686,7 +1871,9 @@ export default function ChatPage() {
             <div>
               {rk.issues && rk.issues.length > 0 && (
                 <div className="mb-3">
-                  <h6 className={`text-xs text-[#0E1B2E] font-medium mb-1 ${spaceGrotesk.className}`}>
+                  <h6
+                    className={`text-xs text-[#0E1B2E] font-medium mb-1 ${spaceGrotesk.className}`}
+                  >
                     Issues
                   </h6>
                   {rk.issues.map((it: any) => (
@@ -1696,8 +1883,14 @@ export default function ChatPage() {
                     >
                       <div className="flex items-center justify-between text-sm">
                         <div>
-                          <div className={`font-semibold text-[#0E1B2E] ${spaceGrotesk.className}`}>{it.title}</div>
-                          <div className={`text-xs text-[#0E1B2E]/60 ${spaceGrotesk.className}`}>
+                          <div
+                            className={`font-semibold text-[#0E1B2E] ${spaceGrotesk.className}`}
+                          >
+                            {it.title}
+                          </div>
+                          <div
+                            className={`text-xs text-[#0E1B2E]/60 ${spaceGrotesk.className}`}
+                          >
                             #{it.number} • {it.status}
                           </div>
                         </div>
@@ -1711,7 +1904,9 @@ export default function ChatPage() {
                         </a>
                       </div>
                       {it.description && (
-                        <div className={`text-xs text-[#0E1B2E]/70 mt-1 ${spaceGrotesk.className}`}>
+                        <div
+                          className={`text-xs text-[#0E1B2E]/70 mt-1 ${spaceGrotesk.className}`}
+                        >
                           {it.description.slice(0, 300)}
                         </div>
                       )}
@@ -1722,7 +1917,9 @@ export default function ChatPage() {
 
               {rk.prs && rk.prs.length > 0 && (
                 <div className="mb-3">
-                  <h6 className={`text-xs text-[#0E1B2E] font-medium mb-1 ${spaceGrotesk.className}`}>
+                  <h6
+                    className={`text-xs text-[#0E1B2E] font-medium mb-1 ${spaceGrotesk.className}`}
+                  >
                     PRs
                   </h6>
                   {rk.prs.map((pr: any) => (
@@ -1732,8 +1929,14 @@ export default function ChatPage() {
                     >
                       <div className="flex items-center justify-between text-sm">
                         <div>
-                          <div className={`font-semibold text-[#0E1B2E] ${spaceGrotesk.className}`}>{pr.title}</div>
-                          <div className={`text-xs text-[#0E1B2E]/60 ${spaceGrotesk.className}`}>
+                          <div
+                            className={`font-semibold text-[#0E1B2E] ${spaceGrotesk.className}`}
+                          >
+                            {pr.title}
+                          </div>
+                          <div
+                            className={`text-xs text-[#0E1B2E]/60 ${spaceGrotesk.className}`}
+                          >
                             #{pr.number} • {pr.status}
                           </div>
                         </div>
@@ -1747,7 +1950,9 @@ export default function ChatPage() {
                         </a>
                       </div>
                       {pr.description && (
-                        <div className={`text-xs text-[#0E1B2E]/70 mt-1 ${spaceGrotesk.className}`}>
+                        <div
+                          className={`text-xs text-[#0E1B2E]/70 mt-1 ${spaceGrotesk.className}`}
+                        >
                           {pr.description.slice(0, 300)}
                         </div>
                       )}
@@ -1758,17 +1963,26 @@ export default function ChatPage() {
 
               {rk.commits && rk.commits.length > 0 && (
                 <div className="mb-3">
-                  <h6 className={`text-xs text-[#0E1B2E] font-medium mb-1 ${spaceGrotesk.className}`}>
+                  <h6
+                    className={`text-xs text-[#0E1B2E] font-medium mb-1 ${spaceGrotesk.className}`}
+                  >
                     Commits
                   </h6>
                   {rk.commits.map((c: any) => (
-                    <div key={c.sha} className="p-2 bg-[#0E1B2E]/5 rounded-lg mb-2 border border-[#0E1B2E]/10">
+                    <div
+                      key={c.sha}
+                      className="p-2 bg-[#0E1B2E]/5 rounded-lg mb-2 border border-[#0E1B2E]/10"
+                    >
                       <div className="flex items-center justify-between text-sm">
                         <div>
-                          <div className={`font-semibold text-[#0E1B2E] ${spaceGrotesk.className}`}>
+                          <div
+                            className={`font-semibold text-[#0E1B2E] ${spaceGrotesk.className}`}
+                          >
                             {c.message?.slice(0, 120) || c.sha}
                           </div>
-                          <div className={`text-xs text-[#0E1B2E]/60 ${spaceGrotesk.className}`}>
+                          <div
+                            className={`text-xs text-[#0E1B2E]/60 ${spaceGrotesk.className}`}
+                          >
                             {c.author}
                           </div>
                         </div>
@@ -1790,7 +2004,9 @@ export default function ChatPage() {
                 rk.issues.length === 0 &&
                 rk.prs.length === 0 &&
                 rk.commits.length === 0 && (
-                  <div className={`text-xs text-[#0E1B2E]/60 ${spaceGrotesk.className}`}>
+                  <div
+                    className={`text-xs text-[#0E1B2E]/60 ${spaceGrotesk.className}`}
+                  >
                     No related items found.
                   </div>
                 )}

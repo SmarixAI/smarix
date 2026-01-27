@@ -5,6 +5,7 @@ from typing import List, Dict, Any
 from pathlib import Path
 import json
 from ..query_type import QueryType
+from utils.metadata_normalizer import MetadataNormalizer
 
 
 class ContextBuilderMixin:
@@ -23,12 +24,13 @@ class ContextBuilderMixin:
                 score *= 1.1
 
             # Try multiple fields for content
-            full_content = (metadata.get('full_content') or metadata.get('content') or '').lower()
+            meta_norm = MetadataNormalizer(metadata, result)
+            full_content = (meta_norm.get_content() or '').lower()
             keyword_matches = sum(1 for k in keywords if k.lower() in full_content)
             if keyword_matches > 0:
                 score *= (1.0 + 0.1 * min(keyword_matches, 5))
 
-            chunk_type = metadata.get('type', '')
+            chunk_type = meta_norm.get_chunk_type('')
             if query_type == QueryType.FLOW_ARCHITECTURE and chunk_type in ['documentation', 'analyzed_file']:
                 score *= 1.2
             elif query_type == QueryType.TROUBLESHOOTING and chunk_type == 'issue':
@@ -48,11 +50,26 @@ class ContextBuilderMixin:
     
     def build_context_from_chunks(self, chunks: List[Dict], query_type: str) -> str:
         """Build context string from retrieved chunks."""
+        # Special handling for FILE_LOOKUP queries with file-specific results
+        if query_type == QueryType.FILE_LOOKUP and chunks:
+            # Check if all chunks are from the same file (file-specific query)
+            file_paths = set()
+            for chunk in chunks:
+                meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+                file_path = meta_norm.get_file_path()
+                if file_path:
+                    file_paths.add(file_path)
+            
+            # If all chunks are from a single file, use file-specific context builder
+            if len(file_paths) == 1:
+                return self._build_file_specific_context(chunks, list(file_paths)[0])
+        
+        # Regular context building for other cases
         context_parts: List[str] = []
 
         if query_type == QueryType.FLOW_ARCHITECTURE:
             max_chunks = 15
-        elif query_type in [QueryType.HOW_TO, QueryType.CODE_LOCATION, QueryType.QUESTION_GENERATION]:
+        elif query_type in [QueryType.HOW_TO, QueryType.FILE_LOOKUP, QueryType.QUESTION_GENERATION]:
             max_chunks = 10
         elif query_type in [QueryType.PR_ISSUE_TUTORIAL, QueryType.PR_ISSUE_CODING_QUESTION]:
             max_chunks = 20
@@ -63,36 +80,41 @@ class ContextBuilderMixin:
 
         for i, chunk in enumerate(chunks[:max_chunks], 1):
             metadata = chunk.get('metadata', {})
+            # Use metadata normalizer for unified access
+            meta_norm = MetadataNormalizer(metadata, chunk)
 
             context_parts.append(f"## Source {i}")
             
-            # Handle both 'type' and 'source_type' fields
-            chunk_type = metadata.get('type') or metadata.get('source_type') or metadata.get('chunk_type') or 'unknown'
+            # Get chunk type with fallback lookups
+            chunk_type = meta_norm.get_chunk_type('unknown')
             context_parts.append(f"Type: {chunk_type}")
 
-            # Handle both 'file_path' and 'file' fields
-            file_path = metadata.get('file_path') or metadata.get('file') or metadata.get('source')
+            # Get file path with fallback lookups
+            file_path = meta_norm.get_file_path()
             if file_path:
                 context_parts.append(f"File: {file_path}")
 
             if metadata.get('line_start') and metadata.get('line_end'):
                 context_parts.append(f"Lines: {metadata['line_start']}-{metadata['line_end']}")
 
-            if metadata.get('issue_number'):
-                context_parts.append(f"Issue: #{metadata['issue_number']}")
-            if metadata.get('pr_number'):
-                context_parts.append(f"PR: #{metadata['pr_number']}")
+            # Get issue/PR numbers with fallback lookups
+            issue_number = meta_norm.get_issue_number()
+            if issue_number is not None:
+                context_parts.append(f"Issue: #{issue_number}")
+            pr_number = meta_norm.get_pr_number()
+            if pr_number is not None:
+                context_parts.append(f"PR: #{pr_number}")
             if metadata.get('author'):
                 context_parts.append(f"Author: {metadata['author']}")
             if metadata.get('title'):
                 context_parts.append(f"Title: {metadata['title']}")
 
-            # Try multiple fields for content (full_content, content, or from chunk)
-            content = metadata.get('full_content') or metadata.get('content') or chunk.get('content', '')
+            # Get content with fallback lookups
+            content = meta_norm.get_content() or chunk.get('content', '')
             if content:
                 if query_type == QueryType.FLOW_ARCHITECTURE:
                     max_length = 5000
-                elif query_type in [QueryType.HOW_TO, QueryType.CODE_LOCATION, QueryType.CONCEPTUAL, QueryType.QUESTION_GENERATION]:
+                elif query_type in [QueryType.HOW_TO, QueryType.FILE_LOOKUP, QueryType.CONCEPTUAL, QueryType.QUESTION_GENERATION]:
                     max_length = 3500
                 elif query_type in [QueryType.PR_ISSUE_TUTORIAL, QueryType.PR_ISSUE_CODING_QUESTION]:
                     max_length = 6000
@@ -119,6 +141,129 @@ class ContextBuilderMixin:
             context_parts.append("\n" + "=" * 60 + "\n")
 
         return "\n".join(context_parts)
+    
+    def _build_file_specific_context(self, chunks: List[Dict], file_path: str) -> str:
+        """
+        Build context specifically for a single file query.
+        Organizes chunks: overview first, then code organized by type.
+        Shows actual code directly with proper structure.
+        """
+        from collections import defaultdict
+        
+        # Organize chunks by type
+        overview_chunks = []
+        function_chunks = []
+        class_chunks = []
+        method_chunks = []
+        code_chunks = []
+        other_chunks = []
+        
+        for chunk in chunks:
+            meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+            chunk_type = meta_norm.get_chunk_type('')
+            
+            if chunk_type == 'file_overview':
+                overview_chunks.append(chunk)
+            elif chunk_type == 'function':
+                function_chunks.append(chunk)
+            elif chunk_type == 'class':
+                class_chunks.append(chunk)
+            elif chunk_type == 'method':
+                method_chunks.append(chunk)
+            elif chunk_type == 'code':
+                code_chunks.append(chunk)
+            else:
+                other_chunks.append(chunk)
+        
+        context_parts = []
+        
+        # Header with file path
+        context_parts.append(f"# File: {file_path}\n")
+        
+        # 1. File Overview (if exists) - show as summary
+        if overview_chunks:
+            overview = overview_chunks[0]  # Usually only one overview
+            meta_norm = MetadataNormalizer(overview.get('metadata', {}), overview)
+            overview_content = meta_norm.get_content() or overview.get('content', '')
+            
+            if overview_content:
+                context_parts.append("## File Overview\n")
+                context_parts.append(overview_content)
+                context_parts.append("\n" + "=" * 70 + "\n")
+        
+        # 2. Classes (with their methods)
+        if class_chunks:
+            context_parts.append("## Classes\n")
+            for chunk in class_chunks:
+                meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+                metadata = chunk.get('metadata', {})
+                class_name = metadata.get('class_name') or metadata.get('name', 'Unknown')
+                content = meta_norm.get_content() or chunk.get('content', '')
+                
+                if content:
+                    context_parts.append(f"### Class: {class_name}\n")
+                    context_parts.append(content)
+                    context_parts.append("\n")
+            
+            context_parts.append("=" * 70 + "\n")
+        
+        # 3. Methods (standalone methods, not part of classes)
+        if method_chunks:
+            context_parts.append("## Methods\n")
+            for chunk in method_chunks:
+                meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+                metadata = chunk.get('metadata', {})
+                method_name = metadata.get('method_name') or metadata.get('name', 'Unknown')
+                content = meta_norm.get_content() or chunk.get('content', '')
+                
+                if content:
+                    context_parts.append(f"### Method: {method_name}\n")
+                    context_parts.append(content)
+                    context_parts.append("\n")
+            
+            context_parts.append("=" * 70 + "\n")
+        
+        # 4. Functions
+        if function_chunks:
+            context_parts.append("## Functions\n")
+            for chunk in function_chunks:
+                meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
+                metadata = chunk.get('metadata', {})
+                function_name = metadata.get('function_name') or metadata.get('name', 'Unknown')
+                content = meta_norm.get_content() or chunk.get('content', '')
+                
+                if content:
+                    context_parts.append(f"### Function: {function_name}\n")
+                    context_parts.append(content)
+                    context_parts.append("\n")
+            
+            context_parts.append("=" * 70 + "\n")
+        
+        # 5. Other code chunks (general code blocks)
+        if code_chunks:
+            context_parts.append("## Code\n")
+            for chunk in code_chunks:
+                content = MetadataNormalizer(chunk.get('metadata', {}), chunk).get_content() or chunk.get('content', '')
+                if content:
+                    # Add line numbers if available
+                    metadata = chunk.get('metadata', {})
+                    if metadata.get('line_start') and metadata.get('line_end'):
+                        context_parts.append(f"### Lines {metadata['line_start']}-{metadata['line_end']}\n")
+                    context_parts.append(content)
+                    context_parts.append("\n")
+            
+            context_parts.append("=" * 70 + "\n")
+        
+        # 6. Other chunks (if any)
+        if other_chunks:
+            context_parts.append("## Other Content\n")
+            for chunk in other_chunks:
+                content = MetadataNormalizer(chunk.get('metadata', {}), chunk).get_content() or chunk.get('content', '')
+                if content:
+                    context_parts.append(content)
+                    context_parts.append("\n")
+        
+        return "\n".join(context_parts)
 
     def build_email_context(self, emails: List[Dict]) -> str:
         """Build context string from email results."""
@@ -143,8 +288,9 @@ class ContextBuilderMixin:
                 except Exception:
                     pass
 
-            # Try multiple fields for content
-            content = metadata.get('full_content') or metadata.get('content') or ''
+            # Get content with fallback lookups
+            meta_norm = MetadataNormalizer(metadata, email)
+            content = meta_norm.get_content() or ''
             if content:
                 if len(content) > 800:
                     content = content[:800] + "\n... (truncated)"

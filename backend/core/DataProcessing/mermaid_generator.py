@@ -171,10 +171,12 @@ class MermaidGenerator:
             lines.append(f"    {method_node}[{method}]")
             lines.append(f"    Client --> {method_node}")
 
+            from utils.path_normalizer import normalize_path, extract_filename
             for chunk in chunks[:3]:
-                file_path = chunk.get("file_path", "unknown")
+                file_path_raw = chunk.get("file_path", "unknown")
+                file_path = normalize_path(file_path_raw, "unknown") if file_path_raw != "unknown" else "unknown"
                 file_id = self._sanitize_id(file_path)
-                file_name = file_path.split("/")[-1]
+                file_name = extract_filename(file_path) or file_path.split("/")[-1] if "/" in file_path else file_path
 
                 lines.append(f"    {file_id}[📄 {file_name}]")
                 lines.append(f"    {method_node} --> {file_id}")
