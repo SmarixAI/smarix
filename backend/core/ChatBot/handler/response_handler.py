@@ -631,12 +631,8 @@ class ResponseHandler:
             ]
 
         if intent == "description":
-            meta = self._get_metadata
-            meta_str = self._get_metadata_str_lower
-            return [
-                c for c in chunks
-                if meta(c).get("type") == "issue" and "body" in meta_str(c)
-            ]
+            return [c for c in chunks if self._get_metadata(c).get("type") == "issue"]
+
 
         if intent == "comments":
             meta = self._get_metadata
@@ -833,6 +829,13 @@ Instructions:
             github_results = self._slice_pr_context_by_intent(github_results, intent)
         elif query_type == QueryType.ISSUE_SPECIFIC and intent:
             github_results = self._slice_issue_context_by_intent(github_results, intent)
+
+        # 🧠 DEBUG: See what chunks survived intent slicing
+        self._describe_chunks_naturally(
+            github_results,
+            label=f"POST-INTENT-SLICE | query_type={query_type}, intent={intent}"
+        )
+
 
         # 🔒 STEP 2: Build context
         context = self.chatbot.build_context_from_chunks(github_results, query_type)
@@ -1092,4 +1095,36 @@ Instructions:
             'related_knowledge': None,
             'is_metrics_query': False
         }
+    
+    def _describe_chunks_naturally(
+        self,
+        chunks: List[Dict[str, Any]],
+        label: str = "CHUNK DEBUG"
+    ) -> None:
+        """
+        Log retrieved chunks in a human-readable way to see
+        exactly what context is passed to the LLM.
+        """
+        if not chunks:
+            self.chatbot.logger.warning(f"{label} | No chunks available")
+            return
 
+        from utils.metadata_normalizer import MetadataNormalizer
+
+        self.chatbot.logger.info(f"{label} | {len(chunks)} chunks found")
+
+        for i, chunk in enumerate(chunks, 1):
+            meta = MetadataNormalizer(chunk.get("metadata", {}), chunk)
+
+            summary = (
+                f"[{i}] "
+                f"type={meta.get('type', 'unknown')}, "
+                f"title={meta.get('title', 'n/a')}, "
+                f"state={meta.get('state', 'n/a')}, "
+                f"author={meta.get('author', 'n/a')}, "
+                f"file={meta.get_file_path('n/a')}, "
+                f"chunk_type={meta.get_chunk_type('unknown')}, "
+                f"score={chunk.get('score', 0.0)}"
+            )
+
+            self.chatbot.logger.info(f"{label} | {summary}")
