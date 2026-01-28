@@ -68,11 +68,33 @@ def chunk_git_data(
         chunks.append(repo_overview)
         self.chunk_registry[repo_overview["chunk_id"]] = repo_overview
 
+        # ------------------------------------
+        # Build issue knowledge lookup map
+        # ------------------------------------
+        issue_knowledge_map = {}
+
+        for item in data.get("knowledge_data", []):
+            if not isinstance(item, dict):
+                continue
+
+            if item.get("event_type") == "issue":
+                meta = item.get("metadata", {})
+                number = meta.get("number")
+
+                if number is not None:
+                    issue_knowledge_map[number] = item
+
+
         # CHUNK ISSUES - ONE CHUNK PER ISSUE
         issues = data.get("issues", [])
         print(f"   Processing {len(issues)} issues...")
 
         for idx, issue in enumerate(issues):
+            issue_number = issue.get("number")
+            if issue_number is None:
+                continue
+            knowledge = issue_knowledge_map.get(issue_number, {})
+
             if not isinstance(issue, dict):
                 continue
 
@@ -95,12 +117,20 @@ def chunk_git_data(
                     for c in issue["comments"]
                     if isinstance(c, dict)
                 ]
+            
+            # Fallback: merge comments from knowledge_data if issue comments are missing
+            if not comments and isinstance(knowledge.get("comments"), list):
+                comments = knowledge["comments"]
 
             # Bidirectional linking
             linked_prs = issue.get("linked_prs", [])
             is_truly_resolved = issue.get("is_truly_resolved", False)
             resolution_status = issue.get("resolution_status", "unknown")
-            body_text = issue.get("body", "") or ""
+            body_text = (
+                issue.get("body")
+                or knowledge.get("description")
+                or ""
+            )
 
             # Extract labels properly
             labels = []
@@ -131,7 +161,11 @@ def chunk_git_data(
                 'retrieval_priority': 1,
                 'entities': {
                     'issue_number': issue.get('number'),
-                    'author': issue.get('user', {}).get('login') if isinstance(issue.get('user'), dict) else None,
+                    'author': (
+                        issue.get('user', {}).get('login')
+                        if isinstance(issue.get('user'), dict)
+                        else None
+                    ) or knowledge.get("author"),
                     'labels': labels,
                     'assignees': assignees,
                     'milestone': issue.get('milestone', {}).get('title') if isinstance(issue.get('milestone'),
@@ -146,7 +180,11 @@ def chunk_git_data(
                     "closed_at": issue.get("closed_at"),
                 },
                 "content": {
-                    "title": issue.get("title", ""),
+                    "title": (
+                        issue.get("title")
+                        or knowledge.get("title")
+                        or ""
+                    ),
                     "body": body_text,
                     "state": issue.get("state", ""),
                     "comments_count": len(comments),
@@ -154,7 +192,7 @@ def chunk_git_data(
                 },
                 "comments": comments,
                 "search_hints": {
-                    "text": f"{issue.get('title', '')} {body_text}",
+                    "text": f"{knowledge.get('title', '')} {body_text}",
                     "keywords": global_keywords,
                     "linked_prs": [f"#{pr}" for pr in linked_prs],
                 },
@@ -642,44 +680,42 @@ def chunk_git_data(
             chunks.append(chunk)
             self.chunk_registry[chunk_id] = chunk
 
-        # CHUNK ONBOARDING (single document)
-        if "onboarding" in data and data["onboarding"]:
-            chunk = {
-                'chunk_id': f"{reponame}_onboarding_all",
-                'type': 'onboarding',
-                'source': 'git',
-                'repo_owner': repo_owner,  # Add owner for strict filtering
-                'repo_name': reponame,
-                'retrieval_priority': 1,
-                'content': data['onboarding'],
-                'search_hints': {
-                    'text': json.dumps(data['onboarding']),
-                    "keywords": global_keywords
-                },
-                "raw_data": data["onboarding"],
-            }
-            chunks.append(chunk)
-            self.chunk_registry[chunk["chunk_id"]] = chunk
+        # # CHUNK ONBOARDING (single document)
+        # if "onboarding" in data and data["onboarding"]:
+        #     chunk = {
+        #         'chunk_id': f"{reponame}_onboarding_all",
+        #         'type': 'onboarding',
+        #         'source': 'git',
+        #         'repo_owner': repo_owner,  # Add owner for strict filtering
+        #         'repo_name': reponame,
+        #         'retrieval_priority': 1,
+        #         'content': data['onboarding'],
+        #         'search_hints': {
+        #             'text': json.dumps(data['onboarding']),
+        #             "keywords": global_keywords
+        #         },
+        #         "raw_data": data["onboarding"],
+        #     }
+        #     chunks.append(chunk)
+        #     self.chunk_registry[chunk["chunk_id"]] = chunk
 
-        # CHUNK OFFBOARDING (single document)
-        if "offboarding" in data and data["offboarding"]:
-            chunk = {
-                'chunk_id': f"{reponame}_offboarding_all",
-                'type': 'offboarding',
-                'source': 'git',
-                'repo_owner': repo_owner,  # Add owner for strict filtering
-                'repo_name': reponame,
-                'retrieval_priority': 1,
-                'content': data['offboarding'],
-                'search_hints': {
-                    'text': json.dumps(data['offboarding']),
-                    "keywords": global_keywords
-                },
-                "raw_data": data["offboarding"],
-            }
-            chunks.append(chunk)
-            self.chunk_registry[chunk["chunk_id"]] = chunk
+        # # CHUNK OFFBOARDING (single document)
+        # if "offboarding" in data and data["offboarding"]:
+        #     chunk = {
+        #         'chunk_id': f"{reponame}_offboarding_all",
+        #         'type': 'offboarding',
+        #         'source': 'git',
+        #         'repo_owner': repo_owner,  # Add owner for strict filtering
+        #         'repo_name': reponame,
+        #         'retrieval_priority': 1,
+        #         'content': data['offboarding'],
+        #         'search_hints': {
+        #             'text': json.dumps(data['offboarding']),
+        #             "keywords": global_keywords
+        #         },
+        #         "raw_data": data["offboarding"],
+        #     }
+        #     chunks.append(chunk)
+        #     self.chunk_registry[chunk["chunk_id"]] = chunk
 
         return chunks, entities, techstack
-
-

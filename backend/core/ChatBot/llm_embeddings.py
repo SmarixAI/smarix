@@ -130,7 +130,7 @@ class LLMEmbeddingMixin:
     def get_dynamic_system_prompt(
         self, query_type: str, query: str, role: Optional[str] = "general"
     ) -> str:
-        base_rules = """You are a friendly and helpful expert software engineer and technical documentation specialist.
+        base_rules = """You are a software engineer and documentation assistant..
 
         Your goal is to provide accurate, helpful, and conversational responses that feel natural and engaging.
 
@@ -1255,3 +1255,5 @@ class LLMEmbeddingMixin:
             )
 
         return "\n".join(prompt_parts)
+    
+    
