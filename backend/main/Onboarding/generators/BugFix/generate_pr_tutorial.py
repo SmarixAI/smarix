@@ -20,6 +20,7 @@ if str(BACKEND_ROOT) not in sys.path:
 repo_root = BACKEND_ROOT
 
 from utils.repo_context import get_repo_context
+from utils.s3 import s3_manager
 
 ctx = get_repo_context()
 
@@ -225,7 +226,7 @@ def generate_pr_tutorials(
     model: str = None,
     use_multi_index: bool = True,
     routing_method: str = 'llm'
-) -> Path:
+) -> str:
     """
     Generate PR tutorials: 1 Easy, 1 Medium, 1 Hard using Random PR Generator
     """
@@ -395,14 +396,20 @@ def generate_pr_tutorials(
     }
 
     # Save to JSON
-    output_dir = ONBOARDING_ROOT / "bugfix"
-    output_dir.mkdir(parents=True, exist_ok=True)
+    # Upload to S3
+    s3_key = f"Onboarding/{REPO_OWNER}/{REPO_NAME}/bugfix/onboarding_pr_tutorials.json"
 
-    json_file = output_dir / "onboarding_pr_tutorials.json"
+    try:
+        s3_manager.upload_json(tutorials_data, s3_key)
+        print("=" * 80 + "\n")
+        print(f"✅ PR tutorials uploaded to S3:")
+        print(f"   s3://{s3_manager.bucket}/{s3_key}\n")
+    except Exception as e:
+        print(f"❌ Failed to upload to S3: {e}")
+        raise
 
+    return s3_key
 
-    with open(json_file, 'w', encoding='utf-8') as f:
-        json.dump(tutorials_data, f, indent=2, ensure_ascii=False)
 
     print("=" * 80 + "\n")
     print(f"✅ PR tutorials saved to: {json_file}\n")

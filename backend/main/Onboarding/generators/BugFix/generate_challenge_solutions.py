@@ -20,6 +20,7 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 from utils.repo_context import get_repo_context
+from utils.s3 import s3_manager
 
 # ------------------------------------------------------------------
 # Bootstrap
@@ -34,25 +35,20 @@ ONBOARDING_ROOT = ctx["onboarding"]
 
 REPO_FULL_NAME = f"{REPO_OWNER}/{REPO_NAME}"
 
-BUGFIX_DIR = ONBOARDING_ROOT / "bugfix"
-INPUT_JSON = BUGFIX_DIR / "onboarding_coding_questions.json"
-OUTPUT_JSON = BUGFIX_DIR / "onboarding_challenge_solution.json"
-
-
 # ------------------------------------------------------------------
 # Helpers
 # ------------------------------------------------------------------
-def load_pr_numbers(json_file: Path) -> list[int]:
+def load_pr_numbers(s3_key: str) -> list[int]:
     """
-    Extract PR numbers from LLM raw responses.
+    Extract PR numbers from LLM raw responses stored in S3.
     Supports:
       - PR #14
       - PR Number: #14
       - Pull Request 14
     """
     try:
-        with open(json_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        print(f"Loading PR numbers from S3: {s3_key}")
+        data = s3_manager.download_json(s3_key)
 
         pr_numbers: list[int] = []
 
@@ -164,16 +160,23 @@ def create_output(prs: list[dict]) -> dict:
 # ------------------------------------------------------------------
 # Main
 # ------------------------------------------------------------------
-def generate_challenge_solutions() -> Path:
+def generate_challenge_solutions() -> str:
+    
+    # Define S3 keys
+    input_s3_key = f"Onboarding/{REPO_OWNER}/{REPO_NAME}/bugfix/onboarding_coding_questions.json"
+    output_s3_key = f"Onboarding/{REPO_OWNER}/{REPO_NAME}/bugfix/onboarding_challenge_solution.json"
 
-    if not INPUT_JSON.exists():
-        raise FileNotFoundError(f"Missing input file: {INPUT_JSON}")
+    # Check if input exists in S3
+    try:
+        s3_manager.download_json(input_s3_key)
+    except Exception:
+        raise FileNotFoundError(f"Missing input file in S3: {input_s3_key}")
 
     github_token = os.getenv("GITHUB_TOKEN")
     if not github_token:
         raise RuntimeError("GITHUB_TOKEN not set in environment")
 
-    pr_numbers = load_pr_numbers(INPUT_JSON)
+    pr_numbers = load_pr_numbers(input_s3_key)
     if not pr_numbers:
         raise RuntimeError("No PR numbers found in coding questions")
 
@@ -186,14 +189,16 @@ def generate_challenge_solutions() -> Path:
 
     output = create_output(results)
 
-    BUGFIX_DIR.mkdir(parents=True, exist_ok=True)
-    with open(OUTPUT_JSON, "w", encoding="utf-8") as f:
-        json.dump(output, f, indent=2, ensure_ascii=False)
+    # Upload to S3
+    try:
+        s3_manager.upload_json(output, output_s3_key)
+        print(f"\n✅ PR challenge solutions uploaded to S3:")
+        print(f"   s3://{s3_manager.bucket}/{output_s3_key}")
+    except Exception as e:
+        print(f"❌ Failed to upload to S3: {e}")
+        raise
 
-    print(f"\n✅ PR challenge solutions saved to:")
-    print(f"   {OUTPUT_JSON}")
-
-    return OUTPUT_JSON
+    return output_s3_key
 
 
 if __name__ == "__main__":

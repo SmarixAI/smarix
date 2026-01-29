@@ -1,5 +1,9 @@
 import json
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from utils.s3 import s3_manager
 
 # S3 Configuration
