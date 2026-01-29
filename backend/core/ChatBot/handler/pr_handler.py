@@ -1,23 +1,12 @@
-"""
-PR-specific handling module for the RAG Chatbot.
-Handles all Pull Request related queries and operations.
-"""
+
 
 import re
 from typing import Dict, Any, Optional, List
 from ..query_type import QueryType
 
 
-class PRHandler:
-    """Handler for all PR-specific operations and queries."""
-    
+class PRHandler: 
     def __init__(self, chatbot):
-        """
-        Initialize PR handler with reference to chatbot instance.
-        
-        Args:
-            chatbot: The RAGChatbot instance to access shared methods and attributes
-        """
         self.chatbot = chatbot
     
     def handle_pr_direct_lookup(
@@ -28,19 +17,6 @@ class PRHandler:
         active_session_id: str,
         role: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
-        """
-        Handle direct PR lookup when entity type is 'pr'.
-        
-        Args:
-            entity: Entity dict with 'type' and 'number'
-            query: Original user query
-            expanded_query: Expanded/rewritten query
-            active_session_id: Current session ID
-            role: Optional role parameter
-            
-        Returns:
-            Response dict if PR found, None otherwise
-        """
         if not entity or entity.get("type") != "pr":
             return None
             
@@ -65,22 +41,6 @@ class PRHandler:
                 self._update_caches(query, result, active_session_id)
                 self._save_conversation(active_session_id, query, result)
                 return result
-
-        
-        # Fallback — match numeric substring inside title
-        # pr_results = self.chatbot.vector_db.search(
-        #     query=f"pull request {num}",
-        #     top_k=self.chatbot.top_k
-        # )
-
-        # if pr_results:
-        #     self.chatbot.logger.info(f"DIRECT LOOKUP | Fallback match in title → {len(pr_results)} chunks")
-        #     result = self.chatbot.response_handler.respond_with_results(
-        #         pr_results, QueryType.PR_SPECIFIC, query, expanded_query, role=role
-        #     )
-        #     self._update_caches(query, result, active_session_id)
-        #     self._save_conversation(active_session_id, query, result)
-        #     return result
         
         self.chatbot.logger.warning(f"DIRECT LOOKUP | No match for PR #{num} across metadata keys")
         return None
@@ -116,21 +76,6 @@ class PRHandler:
         role: Optional[str] = None,
         schema_name: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
-        """
-        Handle PR override when query contains PR keywords and a number.
-        
-        Args:
-            raw_num: Regex match object with PR number
-            query: Original user query
-            expanded_query: Expanded/rewritten query
-            query_lower: Lowercase query for keyword matching
-            query_type: Detected query type
-            active_session_id: Current session ID
-            role: Optional role parameter
-            
-        Returns:
-            Response dict if PR found, None otherwise
-        """
         if not raw_num:
             return None
             
@@ -178,18 +123,6 @@ class PRHandler:
         query: str,
         active_session_id: str
     ) -> Optional[Dict[str, Any]]:
-        """
-        Handle case when PR is not found in metadata.
-        
-        Args:
-            raw_num: Regex match object with PR number
-            query_type: Detected query type
-            query: Original user query
-            active_session_id: Current session ID
-            
-        Returns:
-            Response dict with not found message, None if not applicable
-        """
         if query_type != QueryType.PR_SPECIFIC or not raw_num:
             return None
         
@@ -207,18 +140,6 @@ class PRHandler:
         original_query: str,
         expanded_query: str
     ) -> Dict[str, Any]:
-        """
-        Generate a step-by-step tutorial based on a specific PR or Issue.
-        Retrieves comprehensive context about the PR/Issue and creates educational content.
-        
-        Args:
-            entity: Entity dict with 'type' and 'number'
-            original_query: Original user query
-            expanded_query: Expanded/rewritten query
-            
-        Returns:
-            Response dict with tutorial content
-        """
         entity_type = entity['type']
         entity_number = entity['number']
         
@@ -320,18 +241,6 @@ class PRHandler:
         original_query: str,
         expanded_query: str
     ) -> Dict[str, Any]:
-        """
-        Generate a coding challenge/question based on a specific PR or Issue.
-        Creates practice problems that help learners understand the concepts.
-        
-        Args:
-            entity: Entity dict with 'type' and 'number'
-            original_query: Original user query
-            expanded_query: Expanded/rewritten query
-            
-        Returns:
-            Response dict with coding question content
-        """
         entity_type = entity['type']
         entity_number = entity['number']
         
@@ -429,11 +338,9 @@ class PRHandler:
         }
     
     def _update_caches(self, query: str, result: Dict[str, Any], active_session_id: str):
-        """Update semantic and response caches."""
         self.chatbot.cache_handler.update_caches(query, result, active_session_id)
 
     def _save_conversation(self, active_session_id: str, query: str, result: Dict[str, Any], schema_name: Optional[str] = None):
-        """Save conversation to conversation store."""
         try:
             self.chatbot.conversation_store.add_message(active_session_id, "user", query, schema_name=schema_name, tokens_used=0)
             self.chatbot.conversation_store.add_message(

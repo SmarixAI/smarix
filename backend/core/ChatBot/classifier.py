@@ -3,6 +3,7 @@ import re
 import time
 from typing import List, Dict, Any, Optional, Iterator
 from .query_type import QueryType
+from collections import defaultdict
 
 # Constants for classification
 GREETING_WORDS = ['hi', 'hello', 'hellow', 'hey', 'greetings', 'howdy', 'sup']
@@ -16,6 +17,16 @@ GREETING_PATTERNS = [
     r'^help[\?\.!]*$',
     r'^start[\?\.!]*$',
 ]
+
+HOW_TO_PATTERNS = [
+    'how do i', 'how to', 'steps to', 'guide to',
+    'how can i', 'way to'
+]
+
+CONCEPTUAL_PATTERNS = [
+    'what is', 'what does', 'explain', 'define', 'describe'
+]
+
 
 QUESTION_GENERATION_PATTERNS = [
     r"generate\s+(questions?|mcqs?|quiz)",
@@ -134,6 +145,31 @@ SHORT_QUERY_MAX_LENGTH = 20  # Max characters for short query detection
 
 # Simple queries that shouldn't be rewritten
 SIMPLE_QUERIES = ['help', 'start', 'hi', 'hello', 'hey']
+
+
+# -----------------------------
+# Classification scoring config
+# -----------------------------
+WEIGHT_STRONG = 3.0
+WEIGHT_MEDIUM = 2.0
+WEIGHT_WEAK = 1.0
+
+LLM_FALLBACK_THRESHOLD = 1.5   # below this → ask LLM
+
+# Classification tie-break priority (higher wins on equal score)
+PRIORITY = [
+    QueryType.GREETING,
+    QueryType.ISSUE_SPECIFIC,
+    QueryType.PR_SPECIFIC,
+    QueryType.COMMIT_SPECIFIC,
+    QueryType.PR_ISSUE_TUTORIAL,
+    QueryType.PR_ISSUE_CODING_QUESTION,
+    QueryType.FILE_LOOKUP,
+    QueryType.QUESTION_GENERATION,
+    QueryType.HOW_TO,
+    QueryType.CONCEPTUAL,
+]
+
 
 
 class ClassifierMixin:
@@ -261,17 +297,77 @@ class ClassifierMixin:
 
         return False
 
-    def is_question_generation_query(self, query: str) -> bool:
-        """
-        Detect if the query is requesting question generation (quiz, MCQs, assessments).
-        """
-        query_lower = query.lower().strip()
+    def _init_scores(self) -> Dict[str, float]:
+        return defaultdict(float)
+    
+    def _log_scores(self, scores: Dict[str, float]):
+        for k, v in sorted(scores.items(), key=lambda x: -x[1]):
+            self.logger.debug(f"SCORE | {k} = {v:.2f}")
 
-        for pattern in QUESTION_GENERATION_PATTERNS:
-            if re.search(pattern, query_lower):
-                return True
+    def score_greeting(self, query: str, scores: Dict[str, float]):
+        if self.is_greeting(query):
+            scores[QueryType.GREETING] += WEIGHT_STRONG
 
-        return False
+    def score_random_pr(self, query: str, scores: Dict[str, float]):
+        if self.is_random_pr_generator_query(query):
+            scores[QueryType.RANDOM_PR_GENERATOR] += WEIGHT_STRONG
+
+    def score_pr_issue_tutorial(self, query: str, scores: Dict[str, float]):
+        if self.is_pr_issue_tutorial_query(query):
+            scores[QueryType.PR_ISSUE_TUTORIAL] += WEIGHT_STRONG
+            scores[QueryType.HOW_TO] += WEIGHT_MEDIUM
+
+    def score_code_structure(self, query_lower: str, scores: Dict[str, float]):
+        if any(re.search(k, query_lower) for k in STRUCTURE_KEYWORDS):
+            scores[QueryType.CODE_STRUCTURE] += WEIGHT_MEDIUM
+
+
+    def score_conceptual(self, query_lower: str, scores: Dict[str, float]):
+        if any(p in query_lower for p in CONCEPTUAL_PATTERNS):
+            scores[QueryType.CONCEPTUAL] += WEIGHT_MEDIUM
+
+    def score_pr_issue_coding_question(self, query: str, scores: Dict[str, float]):
+        if self.is_pr_issue_coding_question_query(query):
+            scores[QueryType.PR_ISSUE_CODING_QUESTION] += WEIGHT_STRONG
+            scores[QueryType.QUESTION_GENERATION] += WEIGHT_MEDIUM
+
+    def score_repo_metadata(self, query_lower: str, scores: Dict[str, float]):
+        if any(k in query_lower for k in METRICS_KEYWORDS):
+            scores[QueryType.REPOSITORY_METRICS] += WEIGHT_MEDIUM
+
+        if any(k in query_lower for k in TECH_STACK_KEYWORDS):
+            scores[QueryType.TECH_STACK] += WEIGHT_MEDIUM
+
+    def score_file_lookup(self, query_lower: str, scores: Dict[str, float]):
+        file_patterns = [
+            r'\.(py|js|ts|dart|java|kt|go|rs)',
+            'where is',
+            'find',
+            'implementation of',
+        ]
+
+        if any(re.search(p, query_lower) for p in file_patterns):
+            scores[QueryType.FILE_LOOKUP] += WEIGHT_MEDIUM
+
+    def score_flow_architecture(self, query_lower: str, scores: Dict[str, float]):
+        if any(re.search(k, query_lower) for k in FLOW_KEYWORDS):
+            scores[QueryType.FLOW_ARCHITECTURE] += WEIGHT_MEDIUM
+
+    def score_impact_traceability(self, query_lower: str, scores: Dict[str, float]):
+        if any(k in query_lower for k in IMPACT_KEYWORDS):
+            scores[QueryType.IMPACT_ANALYSIS] += WEIGHT_STRONG
+
+        if any(k in query_lower for k in TRACEABILITY_KEYWORDS):
+            scores[QueryType.TRACEABILITY] += WEIGHT_STRONG
+
+    def score_how_to(self, query_lower: str, scores: Dict[str, float]):
+        if any(p in query_lower for p in HOW_TO_PATTERNS):
+            scores[QueryType.HOW_TO] += WEIGHT_MEDIUM
+
+    def score_question_generation(self, query: str, scores: Dict[str, float]):
+        if self.is_question_generation_query(query):
+            scores[QueryType.QUESTION_GENERATION] += WEIGHT_MEDIUM
+
 
     def is_pr_issue_tutorial_query(self, query: str) -> bool:
         """
@@ -452,9 +548,12 @@ Feel free to ask me anything about the codebase!"""
         query_lower = query.lower()
 
         if query_type == QueryType.ISSUE_SPECIFIC:
-            match = re.search(r'issue\s*#?\s*(\d+)', query_lower)
+            match = re.search(r'issue\s*(?:#|number)?\s*(\d+)', query_lower)
             if match:
-                return {'type': 'issue', 'number': int(match.group(1))}
+                return {
+                    'type': 'issue',
+                    'number': int(match.group(1))
+                }
 
         elif query_type == QueryType.PR_SPECIFIC:
             match = re.search(
@@ -477,9 +576,13 @@ Feel free to ask me anything about the codebase!"""
                 return {'type': 'pr', 'number': int(pr_match.group(1))}
 
             # Try to find issue number
-            issue_match = re.search(r'issue\s*#?\s*(\d+)', query_lower)
+            issue_match = re.search(r'issue\s*(?:#|number)?\s*(\d+)', query_lower)
             if issue_match:
-                return {'type': 'issue', 'number': int(issue_match.group(1))}
+                return {
+                    'type': 'issue',
+                    'number': int(issue_match.group(1))
+                }
+
 
         return None
 
@@ -620,100 +723,80 @@ Feel free to ask me anything about the codebase!"""
             self.logger.error(f"LLM CLASSIFICATION | Error: {e}")
             return QueryType.GENERAL
 
+   
     def classify_query(self, query: str) -> str:
-        query_lower = query.lower()
+        query_lower = query.lower().strip()
+        scores = self._init_scores()
 
-        if self.is_greeting(query):
-            self.logger.info("CLASSIFICATION | Rule-based: GREETING")
-            return QueryType.GREETING
+        # Apply scorers
+        self.score_greeting(query, scores)
+        self.score_entity_lookup(query_lower, scores) 
+        self.score_random_pr(query, scores)
+        self.score_question_generation(query, scores)
+        self.score_pr_issue_tutorial(query, scores)
+        self.score_pr_issue_coding_question(query, scores)
+        self.score_repo_metadata(query_lower, scores)
+        self.score_file_lookup(query_lower, scores)
+        self.score_flow_architecture(query_lower, scores)
+        self.score_impact_traceability(query_lower, scores)
+        self.score_code_structure(query_lower, scores)
+        self.score_conceptual(query_lower, scores)
+        self.score_how_to(query_lower, scores)
 
-        if self.is_random_pr_generator_query(query):
-            self.logger.info("CLASSIFICATION | Rule-based: RANDOM_PR_GENERATOR")
-            return QueryType.RANDOM_PR_GENERATOR
+        self._log_scores(scores)
 
-        if self.is_pr_issue_tutorial_query(query):
-            self.logger.info("CLASSIFICATION | Rule-based: PR_ISSUE_TUTORIAL")
-            return QueryType.PR_ISSUE_TUTORIAL
+        if not scores or max(scores.values(), default=0.0) == 0.0:
+            self.logger.info("CLASSIFICATION | No meaningful scores, using LLM")
+            return self.llm_classify_query(query)
 
-        if self.is_pr_issue_coding_question_query(query):
-            self.logger.info("CLASSIFICATION | Rule-based: PR_ISSUE_CODING_QUESTION")
-            return QueryType.PR_ISSUE_CODING_QUESTION
 
-        if self.is_question_generation_query(query):
-            self.logger.info("CLASSIFICATION | Rule-based: QUESTION_GENERATION")
-            return QueryType.QUESTION_GENERATION
+        # Determine best score
+        best_score = max(scores.values())
 
-        if any(kw in query_lower for kw in METRICS_KEYWORDS):
-            self.logger.info("CLASSIFICATION | Rule-based: REPOSITORY_METRICS")
-            return QueryType.REPOSITORY_METRICS
+        if best_score < LLM_FALLBACK_THRESHOLD:
+            self.logger.info("CLASSIFICATION | Low confidence, using LLM")
+            return self.llm_classify_query(query)
 
-        if any(kw in query_lower for kw in TECH_STACK_KEYWORDS):
-            self.logger.info("CLASSIFICATION | Rule-based: TECH_STACK")
-            return QueryType.TECH_STACK
+        # Find all candidates with the same best score
+        candidates = [k for k, v in scores.items() if v == best_score]
 
-        if any(re.search(kw, query_lower) for kw in STRUCTURE_KEYWORDS):
-            self.logger.info("CLASSIFICATION | Rule-based: CODE_STRUCTURE")
-            return QueryType.CODE_STRUCTURE
+        # Tie-break using priority
+        for p in PRIORITY:
+            if p in candidates:
+                self.logger.info(f"CLASSIFICATION | Scored result: {p} ({best_score:.2f})")
+                return p
 
-        if re.search(r'(issue|bug|ticket|report)\s*#?\s*(\d+)', query_lower):
-            self.logger.info("CLASSIFICATION | Rule-based: ISSUE_SPECIFIC")
-            return QueryType.ISSUE_SPECIFIC
+        # Fallback (should rarely happen)
+        chosen = candidates[0]
+        self.logger.info(f"CLASSIFICATION | Scored result (fallback): {chosen} ({best_score:.2f})")
+        return chosen
 
-        if re.search(r'(pr|pull\s*request|merge\s*request|mr|review|code\s*review)\s*#?\s*(\d+)', query_lower):
-            self.logger.info("CLASSIFICATION | Rule-based: PR_SPECIFIC")
-            return QueryType.PR_SPECIFIC
+    
+    def score_entity_lookup(self, query_lower: str, scores: Dict[str, float]):
+        # Issue number
+        if re.search(r'issue\s*(#|number)?\s*\d+', query_lower):
+            scores[QueryType.ISSUE_SPECIFIC] += WEIGHT_STRONG
 
+        # PR number
+        if re.search(r'(pr|pull\s*request)\s*(#|number)?\s*\d+', query_lower):
+            scores[QueryType.PR_SPECIFIC] += WEIGHT_STRONG
+
+        # Commit hash
         if re.search(r'commit\s+[a-f0-9]{7,40}', query_lower):
-            self.logger.info("CLASSIFICATION | Rule-based: COMMIT_SPECIFIC")
-            return QueryType.COMMIT_SPECIFIC
+            scores[QueryType.COMMIT_SPECIFIC] += WEIGHT_STRONG
 
-        if any(re.search(kw, query_lower) for kw in FLOW_KEYWORDS):
-            self.logger.info("CLASSIFICATION | Rule-based: FLOW_ARCHITECTURE")
-            return QueryType.FLOW_ARCHITECTURE
+    def is_question_generation_query(self, query: str) -> bool:
+        """
+        Detect if the query is requesting generation of questions, quizzes, MCQs, etc.
+        """
+        query_lower = query.lower().strip()
 
-        if any(kw in query_lower for kw in ['how do i', 'how to', 'how can i', 'steps to', 'guide to']):
-            self.logger.info("CLASSIFICATION | Rule-based: HOW_TO")
-            return QueryType.HOW_TO
+        for pattern in QUESTION_GENERATION_PATTERNS:
+            if re.search(pattern, query_lower):
+                return True
 
-        if any(kw in query_lower for kw in ['what is', 'what does', 'what are', 'explain', 'describe', 'define']):
-            self.logger.info("CLASSIFICATION | Rule-based: CONCEPTUAL")
-            return QueryType.CONCEPTUAL
+        return False
 
-        if any(kw in query_lower for kw in ['error', 'bug', 'fix', 'problem', 'debug', 'troubleshoot', 'not working']):
-            self.logger.info("CLASSIFICATION | Rule-based: TROUBLESHOOTING")
-            return QueryType.TROUBLESHOOTING
-
-        # Enhanced file query detection - check for file-related patterns
-        file_query_patterns = [
-            'where is', 'where can i find', 'locate', 'find', 'which file',
-            'show me', 'tell me about', 'what is in', 'what\'s in',
-            'file', 'code in', 'implementation of', 'definition of',
-            # File extensions
-            r'\.(py|js|ts|dart|java|go|rs|cpp|c|h|hpp|md|txt|json|yaml|yml|xml|html|css|scss|less|vue|jsx|tsx|kt|swift|rb|php)',
-            # Path patterns
-            r'[\w\-_/\\]+\.(py|js|ts|dart|java|go|rs|cpp|c|h|hpp|md|txt|json|yaml|yml)',
-            r'[\w\-_/\\]+/[\w\-_/\\]+',
-        ]
-        
-        # Check for file path patterns
-        has_file_path = any(re.search(pattern, query_lower) for pattern in file_query_patterns[4:])
-        has_file_keywords = any(kw in query_lower for kw in file_query_patterns[:4])
-        
-        if has_file_path or has_file_keywords:
-            self.logger.info("CLASSIFICATION | Rule-based: FILE_LOOKUP (file query detected)")
-            return QueryType.FILE_LOOKUP
-        
-        if any(kw in query_lower for kw in IMPACT_KEYWORDS):
-            self.logger.info("CLASSIFICATION | Rule-based: IMPACT_ANALYSIS")
-            return QueryType.IMPACT_ANALYSIS
-        
-        if any(kw in query_lower for kw in TRACEABILITY_KEYWORDS):
-            self.logger.info("CLASSIFICATION | Rule-based: TRACEABILITY")
-            return QueryType.TRACEABILITY
-
-        self.logger.info("CLASSIFICATION | No rule matched, using LLM classification")
-        llm_category = self.llm_classify_query(query)
-        return llm_category
 
     def is_random_pr_generator_query(self, query: str) -> bool:
         """
