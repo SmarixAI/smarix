@@ -192,26 +192,44 @@ class EmbeddingGenerator:
             # Normalize file path using path normalizer
             file_path = normalize_path(file_path_raw, '') if file_path_raw else ''
             
-            metadata_list.append({
+            # 1️⃣ Start with FULL prepared metadata (this already has merged_by etc.)
+            full_metadata = chunk.get('metadata', {}).copy()
+
+            # 2️⃣ Overlay / normalize fields that embedding cares about
+            full_metadata.update({
                 'chunk_id': chunk.get('chunk_id'),
-                'chunk_type': chunk_type,  # Standard field
-                'type': chunk_type,  # Alias for backward compat
-                'category': chunk.get('category'),
-                'importance_score': chunk.get('importance_score', 1.0),
-                'file_path': file_path,  # Standard field - normalized
+                'chunk_type': chunk_type,
+                'type': chunk_type,  # backward compat
+
+                # structural fields
+                'file_path': file_path,
+                'language': chunk.get('language') or full_metadata.get('language', ''),
+                'repo_name': chunk.get('repo_name') or full_metadata.get('repo_name', ''),
+                'repo_owner': chunk.get('repo_owner') or full_metadata.get('repo_owner', ''),
+
+                # ranking / retrieval
+                'retrieval_priority': (
+                    chunk.get('retrieval_priority')
+                    or full_metadata.get('retrieval_priority', 3)
+                ),
+
+                # enrichment fields (safe to override)
+                'category': chunk.get('category', full_metadata.get('category')),
+                'importance_score': chunk.get(
+                    'importance_score',
+                    full_metadata.get('importance_score', 1.0)
+                ),
                 'function_name': chunk.get('function_name', ''),
                 'class_name': chunk.get('class_name', ''),
                 'semantic_tags': chunk.get('semantic_tags', []),
                 'keywords': chunk.get('keywords', [])[:10],
-                'language': chunk.get('language') or nested_metadata.get('language', ''),
-                'content': chunk.get('content', ''),  # Store original content
-                # CRITICAL: Include repo info for filtering
-                'repo_name': chunk.get('repo_name') or nested_metadata.get('repo_name', ''),
-                'repo_owner': chunk.get('repo_owner') or nested_metadata.get('repo_owner', ''),
-                # Include other important metadata fields
-                'source': chunk.get('source') or nested_metadata.get('source', ''),
-                'retrieval_priority': chunk.get('retrieval_priority') or nested_metadata.get('retrieval_priority', 3),
+
+                # source
+                'source': chunk.get('source') or full_metadata.get('source', ''),
             })
+
+            metadata_list.append(full_metadata)
+
             # compute a small metadata hash to detect metadata-only changes
             meta_for_hash = {
                 'file_path': chunk.get('file_path'),
