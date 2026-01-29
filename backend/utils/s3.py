@@ -36,4 +36,4 @@ class S3Manager:
         return f"https://{self.bucket}.s3.{self.region}.amazonaws.com/{key}"
 
 
-s3_manager = S3Manager(bucket="smarix-data", region="us-east-1")
+s3_manager = S3Manager(bucket="smarix-data-apsouth1", region="ap-south-1")

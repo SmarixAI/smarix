@@ -33,8 +33,8 @@ from .handler import (
 from sentence_transformers import SentenceTransformer
 from utils.s3 import s3_manager
 
-S3_BUCKET = "smarix-data"
-S3_DEFAULT_REGION = "us-east-1"
+S3_BUCKET = "smarix-data-apsouth1"
+S3_DEFAULT_REGION = "ap-south-1"
 
 
 def load_current_repo_from_state():

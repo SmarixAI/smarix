@@ -34,7 +34,7 @@ if str(backend_dir) not in sys.path:
 from utils.s3 import s3_manager
 
 # S3 Configuration
-S3_BUCKET = "smarix-data"
+S3_BUCKET = "smarix-data-apsouth1"
 S3_BASE_PATH = "DataProcessing"
 S3_EMBEDDINGS_PATH = "Embeddings"
 S3_VECTORDB_PATH = "VectorDB"
@@ -55,11 +55,9 @@ def load_current_repo_from_state():
         print(f"   Option 1: Set environment variables:")
         print(f"      export AWS_ACCESS_KEY_ID=your_access_key")
         print(f"      export AWS_SECRET_ACCESS_KEY=your_secret_key")
-        print(f"      export AWS_DEFAULT_REGION=us-east-1")
         print(f"\n   Option 2: Add to .env file:")
         print(f"      AWS_ACCESS_KEY_ID=your_access_key")
         print(f"      AWS_SECRET_ACCESS_KEY=your_secret_key")
-        print(f"      AWS_DEFAULT_REGION=us-east-1")
         print(f"\n   Option 3: Configure AWS CLI:")
         print(f"      aws configure")
         raise RuntimeError(
@@ -97,11 +95,62 @@ S3_PROCESSED_PREFIX = f"{S3_BASE_PATH}/{REPO_OWNER}/{REPO_NAME}/"
 def download_file_parallel(s3_key):
     """Download file from S3 in parallel"""
     try:
-        response = s3_manager.s3.get_object(Bucket=S3_BUCKET, Key=s3_key)
-        content = response["Body"].read()
-        return s3_key, content, None
+        filename = s3_key.split('/')[-1]
+        
+        # Get file size first for progress indication
+        file_size_mb = 0
+        file_size_bytes = 0
+        try:
+            head_response = s3_manager.s3.head_object(Bucket=S3_BUCKET, Key=s3_key)
+            file_size_bytes = head_response.get('ContentLength', 0)
+            file_size_mb = file_size_bytes / (1024 * 1024)
+            if file_size_mb > 0.1:  # Show progress for files > 100KB
+                print(f"         Downloading {filename} ({file_size_mb:.1f} MB)...")
+        except Exception as e:
+            print(f"         Warning: Could not get file size for {filename}: {e}")
+        
+        # Set timeout to 5 minutes for large files
+        timeout_seconds = 300 if file_size_mb > 10 else 60
+        
+        try:
+            # Download file
+            response = s3_manager.s3.get_object(Bucket=S3_BUCKET, Key=s3_key)
+            
+            # Read in chunks for large files to show progress
+            if file_size_mb > 10:
+                content = b""
+                chunk_size = 10 * 1024 * 1024  # 10MB chunks
+                total_read = 0
+                last_progress = -1
+                while True:
+                    chunk = response["Body"].read(chunk_size)
+                    if not chunk:
+                        break
+                    content += chunk
+                    total_read += len(chunk)
+                    if file_size_bytes > 0:
+                        progress = int((total_read / file_size_bytes) * 100)
+                        # Print every 25% progress
+                        if progress >= last_progress + 25:
+                            print(f"         Progress: {progress}% ({total_read / (1024*1024):.1f} MB / {file_size_mb:.1f} MB)")
+                            last_progress = progress
+            else:
+                content = response["Body"].read()
+            
+            if file_size_mb > 0.1:
+                print(f"         ✓ Downloaded {filename}")
+            
+            return s3_key, content, None
+        except TimeoutError:
+            return s3_key, None, f"Download timeout after {timeout_seconds}s"
     except Exception as e:
-        return s3_key, None, str(e)
+        import traceback
+        error_msg = str(e)
+        print(f"         ✗ Error downloading {s3_key.split('/')[-1]}: {error_msg}")
+        if "timeout" in error_msg.lower() or "timed out" in error_msg.lower():
+            print(f"         💡 Tip: File might be very large. Check S3 connection and file size.")
+        traceback.print_exc()
+        return s3_key, None, error_msg
 
 
 def upload_file_parallel(args):
@@ -118,16 +167,22 @@ def upload_file_parallel(args):
 def load_embeddings_from_s3(s3_npy_key, s3_json_key):
     """Load vectors + metadata from S3"""
     print(f"      Downloading embeddings from S3...")
+    print(f"         Files: {s3_npy_key.split('/')[-1]}, {s3_json_key.split('/')[-1]}")
 
     download_tasks = [s3_npy_key, s3_json_key]
     futures = [executor.submit(download_file_parallel, key) for key in download_tasks]
 
     results = {}
+    completed = 0
     for future in concurrent.futures.as_completed(futures):
         s3_key, content, error = future.result()
+        completed += 1
         if error:
             raise FileNotFoundError(f"Failed to download {s3_key}: {error}")
         results[s3_key] = content
+        print(f"         Progress: {completed}/{len(download_tasks)} files downloaded")
+    
+    print(f"      Processing downloaded files...")
 
     # Try loading with np.load first (handles .npy format properly)
     try:
@@ -352,6 +407,133 @@ def build_graph_structure():
 
         traceback.print_exc()
 
+def process_single_embedding_type(folder_name, normalized_current_owner, normalized_current_repo):
+    """Process a single embedding type (can be called in parallel)"""
+    try:
+        # Handle 'graph' -> 'graph_nodes' mapping
+        if folder_name == "graph":
+            index_name = "graph_nodes"
+            s3_base_name = "graph_nodes"
+        else:
+            index_name = folder_name
+            s3_base_name = folder_name
+
+        print(f"\n🔹 Processing: {index_name}")
+
+        s3_npy_key = f"{S3_EMBEDDINGS_PREFIX}{folder_name}/{s3_base_name}.npy"
+        s3_json_key = f"{S3_EMBEDDINGS_PREFIX}{folder_name}/{s3_base_name}.json"
+
+        # Check for existence
+        if not s3_manager.key_exists(s3_npy_key) or not s3_manager.key_exists(s3_json_key):
+            print(f"   ⚠️  Missing files - skipping {index_name}")
+            return None
+
+        # Load embeddings
+        metadata, vectors = load_embeddings_from_s3(s3_npy_key, s3_json_key)
+        print(f"   ✓ Loaded {len(vectors)} vectors (dim: {vectors.shape[1]})")
+
+        # Filter metadata (same logic as before)
+        from utils.repo_normalizer import (
+            normalize_repo_name,
+            normalize_repo_owner,
+            repo_matches,
+            extract_repo_parts,
+        )
+
+        filtered_metadata = []
+        filtered_indices = []
+        skipped_count = 0
+        fixed_count = 0
+
+        for i, m in enumerate(metadata):
+            chunk_repo_raw = m.get("repo_name") or m.get("repository") or m.get("repo") or None
+            chunk_owner_raw = m.get("repo_owner") or m.get("owner") or None
+
+            if not chunk_repo_raw or str(chunk_repo_raw).strip() in ["", "None"]:
+                m["repo_name"] = REPO_NAME
+                m["repo_owner"] = REPO_OWNER
+                filtered_metadata.append(m)
+                filtered_indices.append(i)
+                fixed_count += 1
+                continue
+
+            normalized_chunk_owner, normalized_chunk_repo = extract_repo_parts(chunk_repo_raw)
+            if not normalized_chunk_owner and chunk_owner_raw:
+                normalized_chunk_owner = normalize_repo_owner(chunk_owner_raw)
+            if not normalized_chunk_repo:
+                normalized_chunk_repo = normalize_repo_name(chunk_repo_raw)
+
+            if repo_matches(
+                normalized_current_owner,
+                normalized_current_repo,
+                normalized_chunk_owner,
+                normalized_chunk_repo,
+            ):
+                m["repo_name"] = REPO_NAME
+                m["repo_owner"] = REPO_OWNER
+                filtered_metadata.append(m)
+                filtered_indices.append(i)
+            else:
+                skipped_count += 1
+
+        if fixed_count > 0 or skipped_count > 0:
+            vectors = vectors[filtered_indices]
+            metadata = filtered_metadata
+            if fixed_count > 0:
+                print(f"   ✓ Fixed {fixed_count} embeddings")
+            if skipped_count > 0:
+                print(f"   ✓ Filtered {skipped_count} from other repos")
+
+        if len(metadata) == 0:
+            print(f"   ⚠️  No embeddings for current repo")
+            return None
+
+        # Enrich metadata for specific types
+        if index_name.lower() == "issue":
+            for m in metadata:
+                if "issue_number" not in m:
+                    entities = m.get("entities", {})
+                    if isinstance(entities, dict) and entities.get("issue_number"):
+                        try:
+                            m["issue_number"] = int(entities["issue_number"])
+                        except:
+                            m["issue_number"] = str(entities["issue_number"])
+                content = m.get("content", "") or ""
+                if content and "issue_number" not in m:
+                    match = re.search(r"issue\s*#\s*(\d+)", content, re.IGNORECASE)
+                    if match:
+                        m["issue_number"] = int(match.group(1))
+                m["chunk_type"] = "issue"
+                m["type"] = "issue"
+
+        if index_name.lower() == "pr":
+            for m in metadata:
+                content = m.get("content", "") or ""
+                match = re.search(r"pr\s*#(\d+)", content, re.IGNORECASE)
+                if match:
+                    m["pr_number"] = int(match.group(1))
+                m["chunk_type"] = "pr"
+                m["type"] = "pr"
+
+        # Build index
+        index = build_faiss_index(vectors)
+        
+        # Save to S3
+        save_index_and_metadata_to_s3(index_name, index, metadata)
+        
+        # Return data for "all" index
+        return {
+            "index_name": index_name,
+            "metadata": metadata,
+            "vectors": vectors,
+            "success": True
+        }
+        
+    except Exception as e:
+        print(f"   ❌ Error processing {folder_name}: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 def main():
     skip_types = {"embeddings_cache"}
@@ -381,9 +563,7 @@ def main():
             type_dirs.append(type_name)
 
     if not type_dirs:
-        print(
-            f"❌ No valid embedding types found in s3://{S3_BUCKET}/{S3_EMBEDDINGS_PREFIX}"
-        )
+        print(f"❌ No valid embedding types found")
         return
 
     print(f"📦 Found {len(type_dirs)} embedding types:")
@@ -391,189 +571,58 @@ def main():
         print("   •", d)
     print()
 
+    # Normalize current repo info
+    from utils.repo_normalizer import extract_repo_parts, normalize_repo_owner, normalize_repo_name
+    
+    normalized_current_owner, normalized_current_repo = extract_repo_parts(FULL_REPO_NAME)
+    if not normalized_current_owner:
+        normalized_current_owner = normalize_repo_owner(REPO_OWNER)
+    if not normalized_current_repo:
+        normalized_current_repo = normalize_repo_name(REPO_NAME)
+
+    # PARALLEL PROCESSING: Process all embedding types concurrently
+    print(f"\n🚀 Processing {len(type_dirs)} types in parallel...\n")
+    
+    processing_executor = concurrent.futures.ThreadPoolExecutor(max_workers=min(len(type_dirs), 5))
+    
+    futures = {}
+    for folder_name in type_dirs:
+        future = processing_executor.submit(
+            process_single_embedding_type,
+            folder_name,
+            normalized_current_owner,
+            normalized_current_repo
+        )
+        futures[future] = folder_name
+    
+    # Collect results
     built_indices = []
     all_metadata = []
     all_vectors = []
-
-    for folder_name in type_dirs:
-        # Handle 'graph' -> 'graph_nodes' mapping
-        if folder_name == "graph":
-            index_name = "graph_nodes"
-            s3_base_name = "graph_nodes"
-        else:
-            index_name = folder_name
-            s3_base_name = folder_name
-
-        print(f"🔹 Building index: {index_name}")
-
-        s3_npy_key = f"{S3_EMBEDDINGS_PREFIX}{folder_name}/{s3_base_name}.npy"
-        s3_json_key = f"{S3_EMBEDDINGS_PREFIX}{folder_name}/{s3_base_name}.json"
-
-        # Check for existence
-        if not s3_manager.key_exists(s3_npy_key) or not s3_manager.key_exists(
-            s3_json_key
-        ):
-            print(
-                f"   ⚠️  Missing .npy or .json at s3://{S3_BUCKET}/{S3_EMBEDDINGS_PREFIX}{folder_name}/ — skipping"
-            )
-            continue
-
+    
+    for future in concurrent.futures.as_completed(futures):
+        folder_name = futures[future]
         try:
-            metadata, vectors = load_embeddings_from_s3(s3_npy_key, s3_json_key)
-            print(f"   ✅ Loaded {len(vectors)} vectors (dim: {vectors.shape[1]})")
-
-            # CRITICAL: Filter metadata and vectors to only include current repo
-            filtered_metadata = []
-            filtered_indices = []
-            skipped_count = 0
-            fixed_count = 0
-
-            # Import repo normalizer for flexible matching
-            from utils.repo_normalizer import (
-                normalize_repo_name,
-                normalize_repo_owner,
-                repo_matches,
-                extract_repo_parts,
-            )
-
-            # Normalize current repo info
-            normalized_current_owner, normalized_current_repo = extract_repo_parts(
-                FULL_REPO_NAME
-            )
-            if not normalized_current_owner:
-                normalized_current_owner = normalize_repo_owner(REPO_OWNER)
-            if not normalized_current_repo:
-                normalized_current_repo = normalize_repo_name(REPO_NAME)
-
-            for i, m in enumerate(metadata):
-                # Get repo_name - check multiple possible locations
-                chunk_repo_raw = (
-                    m.get("repo_name") or m.get("repository") or m.get("repo") or None
-                )
-                chunk_owner_raw = m.get("repo_owner") or m.get("owner") or None
-
-                # If repo_name is empty/missing, assume it's for current repo
-                if (
-                    not chunk_repo_raw
-                    or str(chunk_repo_raw).strip() == ""
-                    or str(chunk_repo_raw).strip() == "None"
-                ):
-                    m["repo_name"] = REPO_NAME
-                    m["repo_owner"] = REPO_OWNER
-                    filtered_metadata.append(m)
-                    filtered_indices.append(i)
-                    fixed_count += 1
-                    continue
-
-                # Normalize chunk repo info
-                normalized_chunk_owner, normalized_chunk_repo = extract_repo_parts(
-                    chunk_repo_raw
-                )
-                if not normalized_chunk_owner and chunk_owner_raw:
-                    normalized_chunk_owner = normalize_repo_owner(chunk_owner_raw)
-                if not normalized_chunk_repo:
-                    normalized_chunk_repo = normalize_repo_name(chunk_repo_raw)
-
-                # FLEXIBLE matching
-                matches_repo = repo_matches(
-                    normalized_current_owner,
-                    normalized_current_repo,
-                    normalized_chunk_owner,
-                    normalized_chunk_repo,
-                )
-
-                if matches_repo:
-                    m["repo_name"] = REPO_NAME
-                    m["repo_owner"] = REPO_OWNER
-                    filtered_metadata.append(m)
-                    filtered_indices.append(i)
-                else:
-                    skipped_count += 1
-                    if skipped_count <= 3:
-                        chunk_owner = chunk_owner_raw or "unknown"
-                        chunk_repo = chunk_repo_raw or "unknown"
-                        print(
-                            f"      ⚠️  Skipping chunk with repo: '{chunk_owner}/{chunk_repo}' (expected: '{REPO_OWNER}/{REPO_NAME}')"
-                        )
-
-            if fixed_count > 0:
-                print(
-                    f"   ✓ Fixed repo_name for {fixed_count} embeddings (assumed current repo)"
-                )
-                vectors = vectors[filtered_indices]
-                metadata = filtered_metadata
-
-            if skipped_count > 0:
-                print(
-                    f"   ⚠️  Filtered out {skipped_count} embeddings from other repositories"
-                )
-                if fixed_count == 0:
-                    vectors = vectors[filtered_indices]
-                    metadata = filtered_metadata
-
-            if fixed_count > 0 or skipped_count > 0:
-                print(
-                    f"   ✓ Using {len(metadata)} embeddings for {REPO_OWNER}/{REPO_NAME}"
-                )
-
-            if len(metadata) == 0:
-                print(
-                    f"   ⚠️  No embeddings found for current repo - skipping {index_name}"
-                )
-                continue
-
-            # Enrich metadata for specific types
-            if index_name.lower() == "issue":
-                for m in metadata:
-                    if "issue_number" not in m:
-                        entities = m.get("entities", {})
-                        if (
-                            isinstance(entities, dict)
-                            and entities.get("issue_number") is not None
-                        ):
-                            try:
-                                m["issue_number"] = int(entities["issue_number"])
-                            except Exception:
-                                m["issue_number"] = str(entities["issue_number"])
-                    content = m.get("content", "") or ""
-                    if content and "issue_number" not in m:
-                        match = re.search(r"issue\s*#\s*(\d+)", content, re.IGNORECASE)
-                        if match:
-                            m["issue_number"] = int(match.group(1))
-                    m["chunk_type"] = "issue"
-                    m["type"] = "issue"
-
-            if index_name.lower() == "pr":
-                for m in metadata:
-                    content = m.get("content", "") or ""
-                    match = re.search(r"pr\s*#(\d+)", content, re.IGNORECASE)
-                    if match:
-                        m["pr_number"] = int(match.group(1))
-                    m["chunk_type"] = "pr"
-                    m["type"] = "pr"
-
+            result = future.result()
+            if result and result.get("success"):
+                index_name = result["index_name"]
+                built_indices.append(index_name)
+                
+                # Collect for combined index
+                if index_name != "all" and index_name != "graph_nodes":
+                    metadata = result["metadata"]
+                    for m in metadata:
+                        m["source_index"] = index_name
+                    all_metadata.extend(metadata)
+                    all_vectors.append(result["vectors"])
+                    
+                print(f"✅ Completed: {index_name}")
         except Exception as e:
-            print(f"   ❌ Failed to load embeddings: {e}")
-            import traceback
+            print(f"❌ Failed: {folder_name} - {e}")
+    
+    processing_executor.shutdown(wait=True)
 
-            traceback.print_exc()
-            continue
-
-        try:
-            index = build_faiss_index(vectors)
-        except Exception as e:
-            print(f"   ❌ Failed to build FAISS index: {e}")
-            continue
-
-        save_index_and_metadata_to_s3(index_name, index, metadata)
-        built_indices.append(index_name)
-
-        if index_name != "all" and index_name != "graph_nodes":
-            for m in metadata:
-                m["source_index"] = index_name
-            all_metadata.extend(metadata)
-            all_vectors.append(vectors)
-
+    # Build combined "all" index
     if all_vectors:
         print(f"\n🔹 Building combined 'all' index...")
         try:
@@ -583,10 +632,8 @@ def main():
             built_indices.append("all")
         except Exception as e:
             print(f"   ❌ Failed to build combined index: {e}")
-            import traceback
 
-            traceback.print_exc()
-
+    # Build graph structure
     build_graph_structure()
 
     print(f"\n{'='*70}")
@@ -597,7 +644,6 @@ def main():
     for idx in built_indices:
         print(f"   • {idx}")
     print()
-
 
 if __name__ == "__main__":
     main()
