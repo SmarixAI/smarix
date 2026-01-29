@@ -39,6 +39,8 @@ from config.DataCollection.settings import Config
 from utils.DataCollection.file_utils import FileUtils
 from tqdm import tqdm
 
+from utils.s3 import s3_manager
+
 
 class AsyncRepositoryProcessor:
     """Enhanced async processor with 4-5x faster data collection"""
@@ -526,16 +528,12 @@ class AsyncRepositoryProcessor:
     def save_repository_data(
         self, repo_data: Dict[str, Any], owner: str, repo: str
     ) -> str:
-        """Save repository data (UNCHANGED)"""
-        base_dir = Path("../../data/DataCollectionFromGit")
-        repo_dir = base_dir / owner / repo
-        repo_dir.mkdir(parents=True, exist_ok=True)
-        output_file = repo_dir / f"{repo}.json"
+        """Save repository data to S3 (no local file)"""
+        s3_key = f"DataCollectionFromGit/{owner}/{repo}/{repo}.json"
 
-        with open(output_file, "w", encoding="utf-8") as f:
-            json.dump(repo_data, f, indent=2, ensure_ascii=False)
+        s3_manager.upload_json(repo_data, s3_key, public_read=False)
 
-        return str(output_file)
+        return s3_key
 
     def _find_original_file_path(self, duplicate_file: Dict, repo_data: Dict) -> str:
         """Find original file path (UNCHANGED)"""

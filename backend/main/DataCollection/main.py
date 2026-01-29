@@ -12,7 +12,10 @@ import sys
 import json
 import traceback
 
-# Make sure backend root is on sys.path
+from dotenv import load_dotenv 
+
+load_dotenv()
+
 _backend_dir = Path(__file__).resolve().parents[2]
 _backend_dir_str = str(_backend_dir)
 if _backend_dir_str not in sys.path:
@@ -21,22 +24,22 @@ if _backend_dir_str not in sys.path:
 from core.DataCollection.DataCollectionFromGithub.repository_processor import AsyncRepositoryProcessor
 from core.DataCollection.DataCollectionFromGithub.github_client import AsyncGitHubClient
 
-# Gmail imports (unchanged)
 from core.DataCollection.DataCollectionFromGmail.gmail_client import build_gmail_service
 from core.DataCollection.DataCollectionFromGmail.gmail_collector import GmailCollector
 
-STATE_FILE = Path(
-    _backend_dir / "data" / "Admin" / "state" / "runtime_state.json"
-)
+from utils.s3 import s3_manager
 
+S3_BUCKET = "smarix-data"
+S3_REGION = "us-east-1"
+
+STATE_S3_KEY = "Admin/state/runtime_state.json"
 
 def load_current_repo_from_state():
-    """Load repository info from state file"""
-    if not STATE_FILE.exists():
-        raise RuntimeError(f"State file not found: {STATE_FILE}")
-
-    with open(STATE_FILE, "r", encoding="utf-8") as f:
-        state = json.load(f)
+    """Load repository info from S3 state file"""
+    try:
+        state = s3_manager.download_json(STATE_S3_KEY)
+    except Exception as e:
+        raise RuntimeError(f"State file not found in S3 key {STATE_S3_KEY}: {e}")
 
     curr_repo = state.get("curr_repo")
     if not curr_repo:
@@ -76,7 +79,7 @@ async def process_single_repo_async(owner, repo, team_id=None, channel_id=None):
 
 def process_gmail_collection(save_output: bool = True):
     """
-    Collects Gmail messages (synchronous - unchanged)
+    Collects Gmail messages and optionally saves to S3 (not local).
     """
     print("\n" + "="*70)
     print(" GMAIL DATA COLLECTION (START) ")
@@ -99,16 +102,13 @@ def process_gmail_collection(save_output: bool = True):
 
     if save_output and gmail_data:
         try:
-            output_dir = Path("../../data/DataCollectionFromGmail")
-            output_dir.mkdir(parents=True, exist_ok=True)
-            output_path = output_dir / "gmail_data.json"
+            s3_key = "DataCollectionFromGmail/gmail_data.json"
 
-            with open(output_path, "w", encoding="utf-8") as f:
-                json.dump(gmail_data, f, indent=2, ensure_ascii=False)
+            s3_manager.upload_json(gmail_data, s3_key, public_read=False)
 
-            print(f"[GMAIL] Data saved → {output_path.resolve()}")
+            print(f"[GMAIL] Data saved → s3://{S3_BUCKET}/{s3_key}")
         except Exception as e:
-            print(f"[GMAIL] Failed to save gmail data: {e}")
+            print(f"[GMAIL] Failed to save gmail data to S3: {e}")
             traceback.print_exc()
 
     print("\n" + "="*70)
@@ -116,7 +116,6 @@ def process_gmail_collection(save_output: bool = True):
     print("="*70 + "\n")
 
     return gmail_data
-
 
 async def main_async():
     """Main async execution function"""
@@ -127,10 +126,6 @@ async def main_async():
     # Load repo from runtime_state.json
     owner, repo = load_current_repo_from_state()
     test_repos = [(owner, repo)]
-
-    output_dir = Path("../../data/DataCollectionFromGit")
-    output_dir.mkdir(exist_ok=True)
-    print(f"Output directory: {output_dir.absolute()}\n")
 
     # --- Step 1: Collect Gmail data first (optional) ---
     gmail_data = None

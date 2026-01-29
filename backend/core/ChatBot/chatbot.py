@@ -1,8 +1,8 @@
 """
-Enterprise-Grade RAG Chatbot v3.6
+Enterprise-Grade RAG Chatbot v3.6 - S3 OPTIMIZED
 Enhanced with Multi-Query Technique, LLM-powered classification, and comprehensive logging
+WITH S3 VECTOR DATABASE SUPPORT
 """
-
 import json
 import re
 import os
@@ -13,7 +13,9 @@ from datetime import datetime
 import time
 import uuid
 from dotenv import load_dotenv
+
 load_dotenv()
+
 from core.VectorDB.multi_index_store import MultiIndexVectorStore
 from core.ChatBot.query_router import QueryRouter
 from core.Memory.conversation_store import ConversationStore
@@ -23,23 +25,30 @@ from .classifier import ClassifierMixin
 from .retrieval import RetrievalMixin
 from .llm_embeddings import LLMEmbeddingMixin
 from .query_type import QueryType
-from .handler import PRHandler, IssueHandler, GreetingHandler, CommitHandler, GeneralQueryHandler, ResponseHandler, TraceabilityHandler, MultiQueryHandler, ChronologicalHandler, CacheHandler
+from .handler import (
+    PRHandler, IssueHandler, GreetingHandler, CommitHandler, 
+    GeneralQueryHandler, ResponseHandler, TraceabilityHandler, 
+    MultiQueryHandler, ChronologicalHandler, CacheHandler
+)
 from sentence_transformers import SentenceTransformer
+from utils.s3 import s3_manager
 
-STATE_FILE = Path(__file__).resolve().parents[2] / "data" / "Admin" / "state" / "runtime_state.json"
+S3_BUCKET = "smarix-data"
+S3_DEFAULT_REGION = "us-east-1"
+
 
 def load_current_repo_from_state():
-    """Reads the current active repository from state file"""
-    if not STATE_FILE.exists():
-        return None, None
+    """Reads the current active repository from S3 state file"""
+    state_s3_key = "Admin/state/runtime_state.json"
+    
     try:
-        with open(STATE_FILE, "r", encoding="utf-8") as f:
-            state = json.load(f)
+        state = s3_manager.download_json(state_s3_key)
         curr_repo = state.get("curr_repo")
         if not curr_repo:
             return None, None
-        return curr_repo["owner"], curr_repo["name"]
-    except Exception:
+        return curr_repo.get("owner"), curr_repo.get("name")
+    except Exception as e:
+        print(f"⚠️  Warning: Could not read runtime_state.json from S3: {e}")
         return None, None
 
 

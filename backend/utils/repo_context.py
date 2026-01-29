@@ -1,42 +1,43 @@
 import json
 from pathlib import Path
+from utils.s3 import s3_manager
 
-def get_runtime_state_file_path() -> Path:
-    """Get the path to the runtime state JSON file"""
-    repo_root = Path(__file__).resolve().parent.parent
-    possible_paths = [
-        repo_root / "data" / "Admin" / "state" / "runtime_state.json",
-        Path("data/Admin/state/runtime_state.json"),
-        Path("../../data/Admin/state/runtime_state.json"),
-        Path("backend/data/Admin/state/runtime_state.json"),
-    ]
-    
-    for path in possible_paths:
-        if path.exists():
-            return path
-    
-    # Return default path if none exist
-    return repo_root / "data" / "Admin" / "state" / "runtime_state.json"
+# S3 Configuration
+S3_BUCKET = "smarix-data"
+STATE_S3_KEY = "Admin/state/runtime_state.json"
 
-STATE_FILE = get_runtime_state_file_path()
+
+def get_runtime_state_from_s3():
+    """Get the runtime state from S3"""
+    try:
+        return s3_manager.download_json(STATE_S3_KEY)
+    except Exception as e:
+        raise RuntimeError(f"Failed to load runtime_state.json from S3: {e}")
+
 
 def get_repo_context():
-    with open(STATE_FILE, "r", encoding="utf-8") as f:
-        state = json.load(f)
-
+    """
+    Get repository context from S3 state file.
+    Returns paths for both local temp storage and S3 locations.
+    """
+    state = get_runtime_state_from_s3()
+    
     curr = state.get("curr_repo")
     if not curr:
         raise RuntimeError("curr_repo missing in runtime_state.json")
-
+    
     owner = curr["owner"]
     repo = curr["name"]
-    backend_root = Path(__file__).resolve().parents[1]   # backend/
-    base = backend_root / "data"
-
+    
+    # S3 paths for vector database and onboarding data
+    s3_vector_db = f"s3://{S3_BUCKET}/VectorDB/{owner}/{repo}"
+    s3_onboarding = f"s3://{S3_BUCKET}/Onboarding/{owner}/{repo}"
+    
     return {
         "owner": owner,
         "repo": repo,
-
-        "vector_db": base / "VectorDB" / owner / repo,
-        "onboarding": base / "Onboarding" / owner / repo,
+        "vector_db": s3_vector_db,  # S3 path for vector database
+        "onboarding": s3_onboarding,  # S3 path for onboarding data
+        "s3_vector_db_prefix": f"VectorDB/{owner}/{repo}/",  # S3 prefix without bucket
+        "s3_onboarding_prefix": f"Onboarding/{owner}/{repo}/",  # S3 prefix without bucket
     }
