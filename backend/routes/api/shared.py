@@ -13,7 +13,7 @@ if str(repo_root) not in sys.path:
 from utils.s3 import s3_manager
 
 # S3 Configuration
-S3_BUCKET = "smarix-data"
+S3_BUCKET = "smarix-data-apsouth1"
 S3_VECTORDB_PATH = "VectorDB"
 
 # Import RAGChatbot class

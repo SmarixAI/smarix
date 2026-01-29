@@ -426,6 +426,112 @@ class FAISSVectorDB:
         print(f"   Config: {config_path}")
     
     @classmethod
+    def load_from_s3(cls, bucket: str, s3_prefix: str) -> 'FAISSVectorDB':
+        """
+        Load FAISS index from S3 with STREAMING for large files.
+        
+        Args:
+            bucket: S3 bucket name
+            s3_prefix: S3 prefix (e.g., "VectorDB/owner/repo/all")
+        """
+        import tempfile
+        import time
+        from utils.s3 import s3_manager
+        
+        print(f"      📥 Loading from S3: s3://{bucket}/{s3_prefix}")
+        start_time = time.time()
+        
+        # Download files from S3 to temp directory with STREAMING
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            
+            # Files to download
+            files_to_download = [
+                ("metadata.pkl", "metadata.pkl"),
+                ("faiss.index", "faiss.index"),
+                ("config.json", "config.json")
+            ]
+            
+            # Download all files in parallel with streaming
+            import concurrent.futures
+            executor = concurrent.futures.ThreadPoolExecutor(max_workers=3)
+            
+            def download_file_streaming(s3_key, local_filename):
+                """Download file with streaming and progress"""
+                local_path = tmp_path / local_filename
+                
+                try:
+                    # Get file size first
+                    head_response = s3_manager.s3.head_object(Bucket=bucket, Key=s3_key)
+                    file_size = head_response.get('ContentLength', 0)
+                    file_size_mb = file_size / (1024 * 1024)
+                    
+                    # Stream download for files > 1MB
+                    if file_size_mb > 1:
+                        print(f"         Downloading {local_filename} ({file_size_mb:.1f}MB)...")
+                        
+                        response = s3_manager.s3.get_object(Bucket=bucket, Key=s3_key)
+                        
+                        # Stream to file in chunks
+                        chunk_size = 8 * 1024 * 1024  # 8MB chunks
+                        downloaded = 0
+                        last_progress = -1
+                        
+                        with open(local_path, 'wb') as f:
+                            for chunk in response['Body'].iter_chunks(chunk_size=chunk_size):
+                                f.write(chunk)
+                                downloaded += len(chunk)
+                                
+                                # Print progress every 25%
+                                if file_size > 0:
+                                    progress = int((downloaded / file_size) * 100)
+                                    if progress >= last_progress + 25:
+                                        print(f"         {local_filename}: {progress}%")
+                                        last_progress = progress
+                        
+                        elapsed = time.time() - start_time
+                        speed = file_size_mb / elapsed if elapsed > 0 else 0
+                        print(f"         ✓ {local_filename} ({speed:.1f}MB/s)")
+                    else:
+                        # Small file - download directly
+                        response = s3_manager.s3.get_object(Bucket=bucket, Key=s3_key)
+                        with open(local_path, 'wb') as f:
+                            f.write(response['Body'].read())
+                    
+                    return s3_key, True, None
+                except Exception as e:
+                    return s3_key, False, str(e)
+            
+            # Submit download tasks
+            futures = []
+            for s3_filename, local_filename in files_to_download:
+                s3_key = f"{s3_prefix}/{s3_filename}"
+                
+                # Skip config if it doesn't exist (optional)
+                if s3_filename == "config.json" and not s3_manager.key_exists(s3_key):
+                    continue
+                
+                future = executor.submit(download_file_streaming, s3_key, local_filename)
+                futures.append((local_filename, future))
+            
+            # Wait for all downloads
+            for local_filename, future in futures:
+                s3_key, success, error = future.result()
+                if not success:
+                    if local_filename == "config.json":
+                        print(f"         ⚠️  Config not found (optional)")
+                    else:
+                        raise FileNotFoundError(f"Failed to download {s3_key}: {error}")
+            
+            executor.shutdown(wait=True)
+            
+            # Load using standard load method
+            total_elapsed = time.time() - start_time
+            print(f"      ✓ Downloaded in {total_elapsed:.1f}s")
+            
+            return cls.load(str(tmp_path))
+    
+    @classmethod
     def load(cls, load_dir: str) -> 'FAISSVectorDB':
         load_dir = Path(load_dir)
 
@@ -590,4 +696,3 @@ class FAISSVectorDB:
                 break
 
         return results
-

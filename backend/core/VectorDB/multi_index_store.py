@@ -10,10 +10,20 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
 import logging
+import re
+import tempfile
 
 from core.VectorDB.vector_db.faiss_db import FAISSVectorDB
 
 logger = logging.getLogger(__name__)
+
+# Import S3 manager
+try:
+    from utils.s3 import s3_manager
+    S3_BUCKET = "smarix-data-apsouth1"
+except ImportError:
+    s3_manager = None
+    S3_BUCKET = None
 
 
 class MultiIndexVectorStore:
@@ -47,18 +57,33 @@ class MultiIndexVectorStore:
         Initialize multi-index store.
         
         Args:
-            base_dir: Base directory for storing indices
+            base_dir: Base directory for storing indices (can be local path or S3 path like s3://bucket/path)
             dimension: Embedding dimension
             index_type: FAISS index type ('flat', 'ivf', 'hnsw')
             metric: Distance metric ('cosine', 'l2', 'ip')
         """
-        self.base_dir = Path(base_dir)
+        # Check if base_dir is an S3 path
+        self.is_s3_path = isinstance(base_dir, str) and base_dir.startswith("s3://")
+        
+        if self.is_s3_path:
+            # Parse S3 path: s3://bucket/path/to/vectordb
+            match = re.match(r"s3://([^/]+)/(.+)", base_dir)
+            if match:
+                self.s3_bucket = match.group(1)
+                self.s3_prefix = match.group(2).rstrip("/")
+            else:
+                raise ValueError(f"Invalid S3 path format: {base_dir}")
+            self.base_dir = None  # Not a local path
+        else:
+            self.base_dir = Path(base_dir)
+            self.s3_bucket = None
+            self.s3_prefix = None
+            # Create base directory structure for local paths
+            self.base_dir.mkdir(parents=True, exist_ok=True)
+        
         self.dimension = dimension
         self.index_type = index_type
         self.metric = metric
-        
-        # Create base directory structure
-        self.base_dir.mkdir(parents=True, exist_ok=True)
         
         # Dynamically discover available index types
         self.available_index_types = self._discover_index_types()
@@ -68,37 +93,93 @@ class MultiIndexVectorStore:
             idx_type: None for idx_type in self.available_index_types
         }
         
-        # Index directories
-        self.index_dirs = {
-            idx_type: self.base_dir / idx_type
-            for idx_type in self.available_index_types
-        }
+        # Index directories (for local) or S3 prefixes (for S3)
+        if self.is_s3_path:
+            self.index_dirs = {
+                idx_type: f"{self.s3_prefix}/{idx_type}"
+                for idx_type in self.available_index_types
+            }
+        else:
+            self.index_dirs = {
+                idx_type: self.base_dir / idx_type
+                for idx_type in self.available_index_types
+            }
         
-        logger.info(f"Initialized MultiIndexVectorStore at {self.base_dir}")
+        logger.info(f"Initialized MultiIndexVectorStore at {base_dir} (S3: {self.is_s3_path})")
         logger.info(f"Available index types: {self.available_index_types}")
     
     def _discover_index_types(self) -> List[str]:
         """
-        Dynamically discover available index types from directory structure.
+        Dynamically discover available index types from directory structure (local or S3).
         Returns base types + any additional types found in the directory.
         Handles special mapping: 'graph' folder -> 'graph_nodes' index type.
         """
         discovered_types = set(self.BASE_INDEX_TYPES)
         
-        # Scan base directory for additional index types
-        if self.base_dir.exists():
-            for item in self.base_dir.iterdir():
-                if item.is_dir():
-                    # Special handling: 'graph' folder maps to 'graph_nodes' index type
-                    if item.name == "graph":
-                        # Check if graph_nodes index exists in the graph folder
-                        graph_index_dir = item / "graph_nodes"
-                        if (graph_index_dir / "faiss.index").exists() or (graph_index_dir / "config.json").exists():
-                            discovered_types.add("graph_nodes")
-                    else:
-                        # Check if it looks like an index directory
-                        if (item / "faiss.index").exists() or (item / "config.json").exists():
-                            discovered_types.add(item.name)
+        if self.is_s3_path:
+            # Discover from S3
+            if s3_manager is None:
+                logger.warning("S3 manager not available, using base types only")
+                return sorted(list(discovered_types))
+            
+            try:
+                # List objects in S3 prefix
+                response = s3_manager.s3.list_objects_v2(
+                    Bucket=self.s3_bucket,
+                    Prefix=self.s3_prefix + "/",
+                    Delimiter="/"
+                )
+                
+                # Check CommonPrefixes for subdirectories (index types)
+                if "CommonPrefixes" in response:
+                    for prefix_info in response["CommonPrefixes"]:
+                        prefix = prefix_info["Prefix"]
+                        # Extract index type from prefix: VectorDB/owner/repo/type/
+                        parts = prefix.rstrip("/").split("/")
+                        if len(parts) > 0:
+                            index_type = parts[-1]
+                            
+                            # Special handling: 'graph' folder maps to 'graph_nodes' index type
+                            if index_type == "graph":
+                                # Check if graph_nodes index exists
+                                graph_prefix = f"{prefix}graph_nodes/"
+                                graph_response = s3_manager.s3.list_objects_v2(
+                                    Bucket=self.s3_bucket,
+                                    Prefix=graph_prefix,
+                                    MaxKeys=5
+                                )
+                                if "Contents" in graph_response:
+                                    has_index = any("faiss.index" in obj["Key"] for obj in graph_response["Contents"])
+                                    if has_index:
+                                        discovered_types.add("graph_nodes")
+                            else:
+                                # Check if this prefix has faiss.index
+                                type_response = s3_manager.s3.list_objects_v2(
+                                    Bucket=self.s3_bucket,
+                                    Prefix=prefix,
+                                    MaxKeys=5
+                                )
+                                if "Contents" in type_response:
+                                    has_index = any("faiss.index" in obj["Key"] for obj in type_response["Contents"])
+                                    if has_index:
+                                        discovered_types.add(index_type)
+            except Exception as e:
+                logger.warning(f"Failed to discover index types from S3: {e}")
+        else:
+            # Discover from local filesystem
+            if self.base_dir.exists():
+                for item in self.base_dir.iterdir():
+                    if item.is_dir():
+                        # Special handling: 'graph' folder maps to 'graph_nodes' index type
+                        if item.name == "graph":
+                            # Check if graph_nodes index exists in the graph folder
+                            graph_index_dir = item / "graph_nodes"
+                            if (graph_index_dir / "faiss.index").exists() or (graph_index_dir / "config.json").exists():
+                                discovered_types.add("graph_nodes")
+                        else:
+                            # Check if it looks like an index directory
+                            if (item / "faiss.index").exists() or (item / "config.json").exists():
+                                discovered_types.add(item.name)
         
         return sorted(list(discovered_types))
     
@@ -319,39 +400,86 @@ class MultiIndexVectorStore:
     
     def load(self, base_path: Optional[str] = None):
         """
-        Load all indices from disk.
+        Load all indices from disk or S3.
         
         Args:
-            base_path: Optional override for base directory
+            base_path: Optional override for base directory (can be local path or S3 path)
         """
-        load_dir = Path(base_path) if base_path else self.base_dir
+        # Determine if we're loading from S3
+        is_s3 = False
+        if base_path:
+            is_s3 = isinstance(base_path, str) and base_path.startswith("s3://")
+            if is_s3:
+                match = re.match(r"s3://([^/]+)/(.+)", base_path)
+                if match:
+                    s3_bucket = match.group(1)
+                    s3_prefix = match.group(2).rstrip("/")
+                else:
+                    raise ValueError(f"Invalid S3 path format: {base_path}")
+            else:
+                load_dir = Path(base_path)
+        else:
+            is_s3 = self.is_s3_path
+            if is_s3:
+                s3_bucket = self.s3_bucket
+                s3_prefix = self.s3_prefix
+            else:
+                load_dir = self.base_dir
         
         # Rediscover index types in case new ones were added
         if base_path:
-            self.base_dir = load_dir
+            if is_s3:
+                self.is_s3_path = True
+                self.s3_bucket = s3_bucket
+                self.s3_prefix = s3_prefix
+                self.base_dir = None
+            else:
+                self.is_s3_path = False
+                self.base_dir = load_dir
+                self.s3_bucket = None
+                self.s3_prefix = None
         self.available_index_types = self._discover_index_types()
         
         loaded_count = 0
         for index_type in self.available_index_types:
             # Special handling: 'graph_nodes' index is stored in 'graph/graph_nodes' folder
             if index_type == "graph_nodes":
-                index_dir = load_dir / "graph" / "graph_nodes"
+                if is_s3:
+                    index_s3_prefix = f"{s3_prefix}/graph/graph_nodes"
+                else:
+                    index_dir = load_dir / "graph" / "graph_nodes"
             else:
-                index_dir = load_dir / index_type
+                if is_s3:
+                    index_s3_prefix = f"{s3_prefix}/{index_type}"
+                else:
+                    index_dir = load_dir / index_type
             
-            if not index_dir.exists():
-                logger.debug(f"Index directory not found: {index_dir}")
-                continue
-            
-            # Check if index files exist
-            index_file = index_dir / 'faiss.index'
-            if not index_file.exists():
-                logger.warning(f"Index file not found: {index_file}")
-                continue
+            if is_s3:
+                # Check if index files exist in S3
+                if s3_manager is None:
+                    logger.error("S3 manager not available, cannot load from S3")
+                    continue
+                index_s3_key = f"{index_s3_prefix}/faiss.index"
+                if not s3_manager.key_exists(index_s3_key):
+                    logger.debug(f"Index file not found in S3: {index_s3_key}")
+                    continue
+            else:
+                if not index_dir.exists():
+                    logger.debug(f"Index directory not found: {index_dir}")
+                    continue
+                
+                # Check if index files exist
+                index_file = index_dir / 'faiss.index'
+                if not index_file.exists():
+                    logger.warning(f"Index file not found: {index_file}")
+                    continue
             
             try:
-                # Load FAISS index
-                loaded_db = FAISSVectorDB.load(str(index_dir))
+                # Load FAISS index (from S3 or local)
+                if is_s3:
+                    loaded_db = FAISSVectorDB.load_from_s3(s3_bucket, index_s3_prefix)
+                else:
+                    loaded_db = FAISSVectorDB.load(str(index_dir))
                 
                 logger.debug(f"Loaded index '{index_type}' with {len(loaded_db.metadata)} metadata entries")
                 
@@ -362,25 +490,41 @@ class MultiIndexVectorStore:
                 
                 # Update dimension from loaded index
                 if loaded_count == 0:  # Use first loaded index to set dimension
-                    config_path = index_dir / 'config.json'
-                    if config_path.exists():
-                        with open(config_path, 'r') as f:
-                            config = json.load(f)
+                    if is_s3:
+                        if s3_manager is not None:
+                            config_s3_key = f"{index_s3_prefix}/config.json"
+                            if s3_manager.key_exists(config_s3_key):
+                                config = s3_manager.download_json(config_s3_key)
                             detected_dim = config.get('dimension') or config.get('vector_dimension')
                             if detected_dim:
                                 self.dimension = detected_dim
                                 self.index_type = config.get('index_type', self.index_type)
                                 self.metric = config.get('metric', self.metric)
                                 logger.info(f"Detected dimension: {self.dimension} from '{index_type}' index")
+                    else:
+                        config_path = index_dir / 'config.json'
+                        if config_path.exists():
+                            with open(config_path, 'r') as f:
+                                config = json.load(f)
+                                detected_dim = config.get('dimension') or config.get('vector_dimension')
+                                if detected_dim:
+                                    self.dimension = detected_dim
+                                    self.index_type = config.get('index_type', self.index_type)
+                                    self.metric = config.get('metric', self.metric)
+                                    logger.info(f"Detected dimension: {self.dimension} from '{index_type}' index")
                 
-                logger.info(f"Loaded '{index_type}' index from {index_dir} ({loaded_db.index.ntotal} vectors, dim: {loaded_db.dimension})")
+                location_str = f"s3://{s3_bucket}/{index_s3_prefix}" if is_s3 else str(index_dir)
+                logger.info(f"Loaded '{index_type}' index from {location_str} ({loaded_db.index.ntotal} vectors, dim: {loaded_db.dimension})")
                 loaded_count += 1
                 
             except Exception as e:
                 logger.error(f"Failed to load '{index_type}' index: {e}")
+                import traceback
+                traceback.print_exc()
                 self.indices[index_type] = None
         
-        logger.info(f"Loaded {loaded_count}/{len(self.available_index_types)} indices from {load_dir}")
+        location_str = f"s3://{s3_bucket}/{s3_prefix}" if is_s3 else str(load_dir)
+        logger.info(f"Loaded {loaded_count}/{len(self.available_index_types)} indices from {location_str}")
     
     def get_statistics(self) -> Dict[str, Any]:
         """Get statistics for all indices"""
@@ -422,8 +566,8 @@ class MultiIndexVectorStore:
     def find(self, where: Dict[str, Any], top_k: int = 5, index: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Direct metadata lookup.
-        If `index` is provided → search ONLY that index (faster, deterministic lookup)
-        If `index` is None → search across all indices.
+        If index is provided → search ONLY that index (faster, deterministic lookup)
+        If index is None → search across all indices.
         """
         results = []
 
@@ -461,4 +605,3 @@ class MultiIndexVectorStore:
                     return results
 
         return results
-

@@ -57,7 +57,7 @@ from utils.s3 import s3_manager
 load_dotenv()
 
 # S3 Configuration
-S3_BUCKET = "smarix-data"
+S3_BUCKET = "smarix-data-apsouth1"
 S3_BASE_PATH = "DataProcessing"
 S3_EMBEDDINGS_PATH = "Embeddings"
 

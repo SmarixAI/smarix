@@ -4,8 +4,8 @@ load_dotenv()
 
 from backend.utils.s3 import s3_manager
 
-S3_BUCKET = "smarix-data"
-S3_REGION = "us-east-1"
+S3_BUCKET = "smarix-data-apsouth1"
+S3_REGION = "ap-south-1"
 STATE_S3_KEY = "Admin/state/runtime_state.json"
 
 

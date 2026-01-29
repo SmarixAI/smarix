@@ -3,7 +3,7 @@ from pathlib import Path
 from utils.s3 import s3_manager
 
 # S3 Configuration
-S3_BUCKET = "smarix-data"
+S3_BUCKET = "smarix-data-apsouth1"
 STATE_S3_KEY = "Admin/state/runtime_state.json"
 
 
