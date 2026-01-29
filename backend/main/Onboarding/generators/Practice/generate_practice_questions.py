@@ -19,7 +19,12 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 from utils.repo_context import get_repo_context
+from utils.s3 import s3_manager
+
 ctx = get_repo_context()
+
+REPO_OWNER = ctx["owner"]
+REPO_NAME = ctx["repo"]
 
 
 VECTOR_DB_PATH = ctx["vector_db"]
@@ -242,7 +247,7 @@ def generate_practice_questions(
     model: str = None,
     use_multi_index: bool = True,
     routing_method: str = 'llm'
-) -> Path:
+) -> str:
     """
     Generate practice code tutorial questions
     1 Easy, 2 Intermediate, 1 Hard = 4 total questions
@@ -370,18 +375,18 @@ def generate_practice_questions(
         }
     }
 
-    output_dir = ONBOARDING_ROOT / "practice"
-    output_dir.mkdir(parents=True, exist_ok=True)
+    # Upload to S3
+    s3_key = f"Onboarding/{REPO_OWNER}/{REPO_NAME}/practice/onboarding_practice_questions.json"
 
-    json_file = output_dir / f"onboarding_practice_questions.json"
+    try:
+        s3_manager.upload_json(questions_data, s3_key)
+        print(f"✅ Practice questions uploaded to S3:")
+        print(f"   s3://{s3_manager.bucket}/{s3_key}\n")
+    except Exception as e:
+        print(f"❌ Failed to upload to S3: {e}")
+        raise
 
-    with open(json_file, 'w', encoding='utf-8') as f:
-        json.dump(questions_data, f, indent=2, ensure_ascii=False)
-
-    
-    print(f"Practice questions saved to: {json_file.name}\n")
-
-    return json_file
+    return s3_key
 
 
 if __name__ == "__main__":

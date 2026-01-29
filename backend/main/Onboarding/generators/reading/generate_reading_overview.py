@@ -18,6 +18,7 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 from utils.repo_context import get_repo_context
+from utils.s3 import s3_manager
 
 load_dotenv()
 ctx = get_repo_context()
@@ -254,8 +255,9 @@ CRITICAL REQUIREMENTS:
 
 Generate the MCQ question now."""
 
+        schema_name = f"{REPO_OWNER}_{REPO_NAME}".replace("-", "_")
         try:
-            response = chatbot.chat(mcq_prompt)
+            response = chatbot.chat(mcq_prompt, schema_name=schema_name)
             answer = response.get('answer', '') if isinstance(response, dict) else getattr(response, 'answer', str(response))
             
             if answer:
@@ -426,8 +428,10 @@ def generate_reading_overview( gmail_db_path=None, provider='openai', model=None
     for idx, (key, question) in enumerate(questions, 1):
         print(f"[{idx}/{total}] {key}...")
 
+        schema_name = f"{REPO_OWNER}_{REPO_NAME}".replace("-", "_")
+
         try:
-            response = chatbot.chat(question)
+            response = chatbot.chat(question, schema_name=schema_name)
             # The exact response shape may differ by your chatbot implementation;
             # adapt the keys ('answer', 'context_quality') if needed.
             answer = response.get('answer') if isinstance(response, dict) else getattr(response, 'answer', str(response))
@@ -447,16 +451,15 @@ def generate_reading_overview( gmail_db_path=None, provider='openai', model=None
                 "quality": 0.0
             })
 
-    # Save to file
-    output_dir = ONBOARDING_ROOT / "reading"
-    output_dir.mkdir(parents=True, exist_ok=True)
+    s3_key = f"Onboarding/{REPO_OWNER}/{REPO_NAME}/reading/onboarding_project_overview.json"
+    
+    try:
+        s3_manager.upload_json(reading_overview_data, s3_key)
+        print(f"\n✓ Uploaded to S3: s3://{s3_manager.bucket}/{s3_key}")
+    except Exception as e:
+        print(f"\n❌ Failed to upload to S3: {e}")
+        raise
 
-    json_file = output_dir / f"onboarding_project_overview.json"
-
-    with open(json_file, 'w', encoding='utf-8') as f:
-        json.dump(reading_overview_data, f, indent=2, ensure_ascii=False)
-
-    print(f"\nDone! Saved to: {json_file}")
     successful_count = len([d for d in reading_overview_data['sections']['data']['teaching_content'] if not str(d.get('content')).startswith('Error:')])
     print(f"Answered {successful_count}/{total} questions successfully")
 
@@ -466,13 +469,15 @@ def generate_reading_overview( gmail_db_path=None, provider='openai', model=None
     print("=" * 80)
     reading_overview_data = generate_data_qna(reading_overview_data, chatbot, gmail_db_path, provider, model)
     
-    # Save updated file with QNA
-    with open(json_file, 'w', encoding='utf-8') as f:
-        json.dump(reading_overview_data, f, indent=2, ensure_ascii=False)
-    
-    print(f"✓ Updated file saved with QNA: {json_file}")
+    # Upload updated version with QNA to S3
+    try:
+        s3_manager.upload_json(reading_overview_data, s3_key)
+        print(f"✓ Updated file with QNA uploaded to S3: s3://{s3_manager.bucket}/{s3_key}")
+    except Exception as e:
+        print(f"❌ Failed to upload updated file: {e}")
+        raise
 
-    return json_file
+    return s3_key
 
 
 def add_qna_to_existing_reading_overview(
