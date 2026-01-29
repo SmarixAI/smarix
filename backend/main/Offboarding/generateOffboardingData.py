@@ -16,6 +16,12 @@ import argparse
 from pathlib import Path
 from datetime import datetime
 import io
+from utils.s3 import s3_manager
+from utils.repo_context import get_repo_context
+
+ctx = get_repo_context()
+REPO_OWNER = ctx["owner"]
+REPO_NAME = ctx["repo"]
 
 # Set UTF-8 encoding for Windows compatibility
 if sys.platform == 'win32':

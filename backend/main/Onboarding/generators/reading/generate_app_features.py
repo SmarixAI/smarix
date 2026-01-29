@@ -19,6 +19,7 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 from utils.repo_context import get_repo_context
+from utils.s3 import s3_manager
 
 load_dotenv()
 ctx = get_repo_context()
@@ -473,14 +474,14 @@ def generate_app_features_data(db_path, gmail_db_path=None, provider='openai', m
                 "quality": 0.0
             })
 
-    # Save to file
-    output_dir = ONBOARDING_ROOT / "reading"
-    output_dir.mkdir(parents=True, exist_ok=True)
+    s3_key = f"Onboarding/{REPO_OWNER}/{REPO_NAME}/reading/onboarding_app_features.json"
 
-    json_file = output_dir / f"onboarding_app_features.json"
-
-    with open(json_file, 'w', encoding='utf-8') as f:
-        json.dump(app_features_data, f, indent=2, ensure_ascii=False)
+    try:
+        s3_manager.upload_json(app_features_data, s3_key)
+        print(f"\n✓ Uploaded to S3: s3://{s3_manager.bucket}/{s3_key}")
+    except Exception as e:
+        print(f"\n❌ Failed to upload to S3: {e}")
+        raise
 
     # Calculate success stats
     total_answers = sum(len(section.get("teaching_content", [])) for section in app_features_data["sections"].values())
@@ -490,7 +491,6 @@ def generate_app_features_data(db_path, gmail_db_path=None, provider='openai', m
         if not str(item.get('content', '')).startswith('Error:')
     )
 
-    print(f"\nDone! Saved to: {json_file}")
     print(f"📊 Answered {successful_answers}/{total_answers} questions successfully")
     print(f"\nData organized into {len(app_features_data['sections'])} sections:")
     for section_name, section_data in app_features_data["sections"].items():
@@ -504,12 +504,14 @@ def generate_app_features_data(db_path, gmail_db_path=None, provider='openai', m
     app_features_data = generate_section_qna(app_features_data, chatbot, gmail_db_path, provider, model)
     
     # Save updated file with QNA
-    with open(json_file, 'w', encoding='utf-8') as f:
-        json.dump(app_features_data, f, indent=2, ensure_ascii=False)
-    
-    print(f"✓ Updated file saved with QNA sections: {json_file}")
+    try:
+        s3_manager.upload_json(app_features_data, s3_key)
+        print(f"✓ Updated file with QNA uploaded to S3: s3://{s3_manager.bucket}/{s3_key}")
+    except Exception as e:
+        print(f"❌ Failed to upload updated file: {e}")
+        raise
 
-    return json_file
+    return s3_key
 
 
 def add_qna_to_existing_app_features(
@@ -517,7 +519,7 @@ def add_qna_to_existing_app_features(
     gmail_db_path: str = None,
     provider: str = 'openai',
     model: str = None
-) -> Path:
+) -> str:
     """
     Add MCQ QNA questions to an existing app features JSON file
     
@@ -534,19 +536,17 @@ def add_qna_to_existing_app_features(
     print("║" + " ADD QNA TO EXISTING APP FEATURES ".center(78) + "║")
     print("╚" + "═" * 78 + "╝\n")
     
-    if json_file_path is None:
-        json_file_path = str(ONBOARDING_ROOT / "reading" / "onboarding_app_features.json")
-    
-    json_file = Path(json_file_path)
-    
-    if not json_file.exists():
-        print(f"✗  File not found: {json_file}")
+    s3_key = f"Onboarding/{REPO_OWNER}/{REPO_NAME}/reading/onboarding_app_features.json"
+
+    print(f"📄 Loading existing app features from S3...")
+
+    try:
+        app_features_data = s3_manager.download_json(s3_key)
+        print(f"✓  Loaded from: s3://{s3_manager.bucket}/{s3_key}\n")
+    except Exception as e:
+        print(f"✗  File not found in S3: {e}")
         return None
-    
-    print(f"📄 Loading existing app features: {json_file.name}")
-    
-    with open(json_file, 'r', encoding='utf-8') as f:
-        app_features_data = json.load(f)
+
     
     print("⚙  Initializing chatbot...")
     try:
@@ -565,12 +565,14 @@ def add_qna_to_existing_app_features(
     
     app_features_data = generate_section_qna(app_features_data, chatbot, gmail_db_path, provider, model)
     
-    with open(json_file, 'w', encoding='utf-8') as f:
-        json.dump(app_features_data, f, indent=2, ensure_ascii=False)
-    
-    print(f"✓  Updated file saved: {json_file}\n")
-    
-    return json_file
+    try:
+        s3_manager.upload_json(app_features_data, s3_key)
+        print(f"✓  Updated file uploaded to S3: s3://{s3_manager.bucket}/{s3_key}\n")
+    except Exception as e:
+        print(f"✗  Failed to upload to S3: {e}")
+        return None
+
+    return s3_key
 
 
 if __name__ == "__main__":
