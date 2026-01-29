@@ -8,7 +8,7 @@ from .multi_source import process_multi_source_data
 from backend.utils.s3 import s3_manager
 
 # S3 config
-S3_BUCKET = "smarix-data"
+S3_BUCKET = "smarix-data-apsouth1"
 
 
 def process_file(

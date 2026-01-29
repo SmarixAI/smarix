@@ -10,7 +10,7 @@ from utils.metadata_normalizer import MetadataNormalizer
 from utils.s3 import s3_manager
 
 # S3 Configuration
-S3_BUCKET = "smarix-data"
+S3_BUCKET = "smarix-data-apsouth1"
 S3_BASE_PATH = "DataProcessing"
 
 
