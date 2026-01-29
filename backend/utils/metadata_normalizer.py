@@ -43,7 +43,19 @@ class MetadataNormalizer:
         """
         # Handle case where metadata is nested in result dict
         if result_dict is not None:
-            self._raw_metadata = result_dict.get('metadata', {}) or metadata or {}
+            base = result_dict.get('metadata', {}) or metadata or {}
+
+            # 🔥 MERGE ENTITIES INTO METADATA
+            entities = result_dict.get("entities", {})
+            if isinstance(entities, dict):
+                base = {**base, **entities}
+
+            # 🔥 OPTIONAL: merge raw_data if present
+            raw_data = result_dict.get("raw_data", {})
+            if isinstance(raw_data, dict):
+                base = {**base, **raw_data}
+
+            self._raw_metadata = base
         else:
             # Handle both direct metadata dict and nested cases
             if isinstance(metadata, dict):
@@ -104,6 +116,31 @@ class MetadataNormalizer:
                     return self._normalize_path(file_path)
         
         return default
+    
+    def get_created_at(self, default: Optional[str] = None) -> Optional[str]:
+        temporal = self._raw_metadata.get("temporal", {})
+        return (
+            temporal.get("created_at")
+            or self._raw_metadata.get("created_at")
+            or default
+        )
+
+    def get_merged_at(self, default: Optional[str] = None) -> Optional[str]:
+        temporal = self._raw_metadata.get("temporal", {})
+        return (
+            temporal.get("merged_at")
+            or self._raw_metadata.get("merged_at")
+            or default
+        )
+
+    def get_closed_at(self, default: Optional[str] = None) -> Optional[str]:
+        temporal = self._raw_metadata.get("temporal", {})
+        return (
+            temporal.get("closed_at")
+            or self._raw_metadata.get("closed_at")
+            or default
+        )
+
     
     def get_chunk_type(self, default: Optional[str] = None) -> Optional[str]:
         """
@@ -432,6 +469,25 @@ class MetadataNormalizer:
         pr_number = self.get_pr_number()
         if pr_number is not None:
             normalized['pr_number'] = pr_number
+
+        # 🔥 ADD THIS BLOCK
+        merged_by = self.get('merged_by')
+        if merged_by:
+            normalized['merged_by'] = merged_by
+
+        # 🔥 Temporal fields (PR / Issue lifecycle)
+        created_at = self.get_created_at()
+        if created_at:
+            normalized["created_at"] = created_at
+
+        merged_at = self.get_merged_at()
+        if merged_at:
+            normalized["merged_at"] = merged_at
+
+        closed_at = self.get_closed_at()
+        if closed_at:
+            normalized["closed_at"] = closed_at
+
         
         return normalized
     

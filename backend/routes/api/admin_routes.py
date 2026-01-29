@@ -13,6 +13,9 @@ import asyncio
 import subprocess
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from core.DataCollection.DataCollectionFromGithub.repository_processor import AsyncRepositoryProcessor
+from core.DataCollection.DataCollectionFromGithub.github_client import AsyncGitHubClient
+
 
 router = APIRouter()
 
@@ -467,29 +470,31 @@ def update_runtime_state(owner: str, repo_name: str) -> Dict[str, Any]:
         }
 
 
-def run_data_collection(owner: str, repo: str) -> Dict[str, Any]:
-    """Run data collection for a repository"""
-    try:
-        # Import here to avoid circular imports
-        from core.DataCollection.DataCollectionFromGithub.repository_processor import RepositoryProcessor
-        
-        processor = RepositoryProcessor()
-        if not processor.test_connection():
-            return {"success": False, "error": "GitHub API connection failed. Check your token."}
-        
-        repo_data = processor.process_repository(owner, repo)
+async def async_run_data_collection(owner: str, repo: str) -> Dict[str, Any]:
+    processor = AsyncRepositoryProcessor()
+
+    async with AsyncGitHubClient(max_concurrent_requests=50) as github_client:
+        ok = await processor.test_connection(github_client)
+        if not ok:
+            return {"success": False, "error": "GitHub API connection failed"}
+
+        repo_data = await processor.process_repository(owner, repo)
         output_file = processor.save_repository_data(repo_data, owner, repo)
-        
+
         return {
             "success": True,
             "output_file": str(output_file),
             "stats": repo_data.get("stats", {}),
-            "message": f"Successfully collected data for {owner}/{repo}"
+            "message": f"Successfully collected data for {owner}/{repo}",
         }
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return {"success": False, "error": str(e)}
+
+def run_data_collection_sync(owner: str, repo: str) -> Dict[str, Any]:
+    loop = asyncio.new_event_loop()
+    try:
+        asyncio.set_event_loop(loop)
+        return loop.run_until_complete(async_run_data_collection(owner, repo))
+    finally:
+        loop.close()
 
 
 def run_data_processing() -> Dict[str, Any]:
@@ -860,7 +865,10 @@ async def admin_data_collection(request: SetupRequest):
             raise HTTPException(status_code=500, detail=state_result.get("error", "Failed to update state"))
         
         # Then run data collection
-        result = run_data_collection(request.organization, request.repo_name)
+        result = await async_run_data_collection(
+            request.organization,
+            request.repo_name
+        )
         if result["success"]:
             return SetupResponse(
                 status="success",
@@ -1389,7 +1397,7 @@ async def websocket_pipeline(websocket: WebSocket):
             })
             await asyncio.sleep(0.1)  # Small delay to ensure message is sent
             
-            future = executor.submit(run_step, "data-collection", run_data_collection, organization, repo_name)
+            future = executor.submit(run_step, "data-collection", run_data_collection_sync, organization, repo_name)
             # Note: We can't set current_pipeline_task here as it's in another module
             # The global state will be updated by the module that owns it
             results["data_collection"] = future.result()

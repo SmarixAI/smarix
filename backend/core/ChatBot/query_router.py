@@ -249,6 +249,72 @@ class QueryRouter:
             logger.warning(f"Failed to parse JSON response: {e}")
             return None
 
+    def _normalize_query(self, query: str) -> str:
+        """
+        Normalize query text for robust keyword matching.
+        - Lowercase
+        - Replace punctuation with spaces
+        - Collapse multiple spaces
+        """
+        query = query.lower()
+        query = re.sub(r'[^a-z0-9# ]', ' ', query)  # keep # for PR/issue numbers
+        query = re.sub(r'\s+', ' ', query).strip()
+        return query
+
+
+    def _apply_hard_rules(self, query_lower: str) -> Optional[str]:
+        """
+        Apply non-negotiable routing rules.
+        Returns index_type if a hard rule matches, else None.
+        """
+
+        # 🔒 HARD RULE: random PR queries always route to PR index
+        if any(p in query_lower for p in [
+            'random pr',
+            'random pull request',
+            'any random pr',
+            'generate random pr',
+            'pick random pr',
+            'select random pr'
+        ]):
+            logger.info("ROUTER | Hard rule matched: random PR → pr")
+            return 'pr'
+
+        # 🔒 HARD RULE: explicit PR number
+        if re.search(r'\b(?:pr|pull request)\s*#?\s*\d+\b', query_lower):
+            logger.info("ROUTER | Hard rule matched: PR number → pr")
+            return 'pr'
+
+        return None
+
+    def _has_explicit_multi_intent(self, query_lower: str) -> bool:
+        """
+        Detect explicit multi-intent queries based on conjunctions
+        and multiple question patterns.
+        """
+
+        # Explicit conjunctions
+        if any(c in query_lower for c in [
+            ' and ',
+            ' also ',
+            ' as well as ',
+            ' along with ',
+            ' plus ',
+            ' then ',
+            ' after ',
+            ' before '
+        ]):
+            return True
+
+        # Multiple question words → likely multi intent
+        question_markers = ['why', 'how', 'when', 'who', 'what']
+        hits = sum(1 for q in question_markers if q in query_lower)
+        if hits >= 2:
+            return True
+
+        return False
+
+
     def route(self, query: str) -> str:
         """
         Route query to appropriate index.
@@ -261,12 +327,13 @@ class QueryRouter:
                        'pr_issue_tutorial', 'pr_issue_coding_question', or 'multi'
         """
 
-        query_lower = query.lower().strip()
+        query_lower = self._normalize_query(query)
 
-        # 1️⃣ NEW: detect direct ID queries
-        match = re.search(r'\b(?:pr|pull request)\s*#?\s*(\d+)\b', query_lower)
-        if match:
-            return "pr"
+        # 🔒 HARD RULE: random PR generator must go ONLY to PR index
+        hard_rule = self._apply_hard_rules(query_lower)
+        if hard_rule:
+            return hard_rule
+
 
 
 
@@ -290,7 +357,13 @@ class QueryRouter:
         Returns:
             Index type string
         """
-        query_lower = query.lower()
+        query_lower = self._normalize_query(query)
+
+        # 🔍 Explicit multi-intent detection
+        if self._has_explicit_multi_intent(query_lower):
+            logger.info("Explicit multi-intent detected via conjunctions/questions")
+            return 'multi'
+
 
         # Count keyword matches for each index type
         scores = self._initialize_scores()
@@ -374,6 +447,9 @@ class QueryRouter:
 
         # Check if multiple indices have high scores (multi-query)
         high_scores = [idx for idx, score in scores.items() if score >= max_score * MULTI_QUERY_THRESHOLD]
+
+        if 'random_pr_generator' in high_scores:
+            return 'pr'
 
         if len(high_scores) > 1:
             logger.info(f"Multiple indices matched: {high_scores}, using 'multi'")
@@ -674,7 +750,11 @@ class QueryRouter:
         Returns:
             Tuple of (index_type, confidence_score)
         """
-        query_lower = query.lower()
+        query_lower = self._normalize_query(query)
+
+        if self._has_explicit_multi_intent(query_lower):
+            return ('multi', 0.85)
+
         scores = self._initialize_scores()
         
         # Count matches
@@ -711,6 +791,15 @@ class QueryRouter:
         Returns:
             List of (index_type, confidence) tuples, sorted by confidence (descending)
         """
+
+        query_lower = self._normalize_query(query)
+
+        # 🔒 HARD RULE: random PR → PR index only
+        hard_rule = self._apply_hard_rules(query_lower)
+        if hard_rule:
+            return [(hard_rule, 1.0)]
+
+    
         if self.routing_method == "llm":
             return self._llm_route_top3(query)
         elif self.routing_method == "keyword":
@@ -820,7 +909,15 @@ class QueryRouter:
         Returns:
             List of (index_type, confidence) tuples, sorted by confidence (descending)
         """
-        query_lower = query.lower()
+        query_lower = self._normalize_query(query)
+
+        if self._has_explicit_multi_intent(query_lower):
+            return [
+                ('multi', 0.9),
+                ('code', 0.6),
+                ('pr', 0.5)
+            ]
+
         scores = self._initialize_scores()
         
         # Count keyword matches

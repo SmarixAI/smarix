@@ -227,6 +227,35 @@ def load_embeddings_from_s3(s3_npy_key, s3_json_key):
 
         if "metadata" in item and isinstance(item["metadata"], dict):
             md = item["metadata"].copy()
+
+            # 🔥 CRITICAL: preserve PR-specific fields
+            for key in [
+                "merged_by",
+                "pr_status",
+                "is_merged",
+                "base_branch",
+                "head_branch",
+                "author",
+                "reviewers"
+            ]:
+                if key in item.get("metadata", {}) and key not in md:
+                    md[key] = item["metadata"][key]
+
+
+            # 🔥 CRITICAL: merge ALL top-level metadata fields
+            for k, v in item.items():
+                if k not in ["vector", "id", "metadata", "content"]:
+                    if k not in md:
+                        md[k] = v
+
+            # 🔥 OPTIONAL but recommended: merge raw_data
+            raw_data = item.get("raw_data", {})
+            if isinstance(raw_data, dict):
+                for k, v in raw_data.items():
+                    if k not in md:
+                        md[k] = v
+
+            # Merge top-level fields that might not be in nested metadata
             for key in ["repo_name", "repo_owner", "source", "type", "chunk_type"]:
                 if key in item and key not in md:
                     md[key] = item[key]
@@ -514,6 +543,18 @@ def process_single_embedding_type(folder_name, normalized_current_owner, normali
                     m["pr_number"] = int(match.group(1))
                 m["chunk_type"] = "pr"
                 m["type"] = "pr"
+
+            if index_name.lower() == "pr":
+                for m in metadata:
+                    # 🔒 Ensure merged_by is preserved
+                    if "merged_by" not in m:
+                        entities = m.get("entities", {})
+                        if isinstance(entities, dict) and "merged_by" in entities:
+                            m["merged_by"] = entities["merged_by"]
+
+                    m["chunk_type"] = "pr"
+                    m["type"] = "pr"
+
 
         # Build index
         index = build_faiss_index(vectors)

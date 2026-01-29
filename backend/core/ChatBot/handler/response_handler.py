@@ -1,7 +1,4 @@
-"""
-Response handling module for the RAG Chatbot.
-Handles response packaging, formatting, and multi-query merging.
-"""
+
 
 import re
 from typing import Dict, Any, List, Optional, Callable, Tuple
@@ -307,43 +304,22 @@ Remember: Be friendly, clear, and help readers understand the issue's history na
 
 
 class ResponseHandler:
-    """Handler for all response packaging and formatting operations."""
-    
     def __init__(self, chatbot):
-        """
-        Initialize Response handler with reference to chatbot instance.
-        
-        Args:
-            chatbot: The RAGChatbot instance to access shared methods and attributes
-        """
         self.chatbot = chatbot
 
     def _get_metadata(self, chunk: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Extract metadata from chunk with safe access and normalization support.
-        
-        Args:
-            chunk: Chunk dictionary
-            
-        Returns:
-            Normalized metadata dictionary
-        """
         from utils.metadata_normalizer import MetadataNormalizer
-        metadata = chunk.get('metadata', {})
-        # Return normalized metadata for consistent access
-        meta_norm = MetadataNormalizer(metadata, chunk)
-        return meta_norm.normalize() if metadata else {}
-    
+
+        # If metadata is missing or empty, normalize the ENTIRE chunk
+        metadata = chunk.get("metadata")
+        if isinstance(metadata, dict) and metadata:
+            meta_norm = MetadataNormalizer(metadata, chunk)
+        else:
+            meta_norm = MetadataNormalizer(chunk)
+
+        return meta_norm.normalize()
+
     def _get_metadata_str_lower(self, chunk: Dict[str, Any]) -> str:
-        """
-        Get metadata as lowercase string for case-insensitive matching.
-        
-        Args:
-            chunk: Chunk dictionary
-            
-        Returns:
-            Lowercase string representation of metadata
-        """
         return str(self._get_metadata(chunk)).lower()
     
     def _needs_full_code_header(self, query: str) -> bool:
@@ -360,23 +336,7 @@ class ResponseHandler:
             ]
         )
 
-
     def _detect_ambiguous_filename(self, chunks: List[Dict[str, Any]], query: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """
-        Detect if multiple files with the same filename exist in the results.
-        
-        This can happen in two ways:
-        1. Chunks are already marked with _ambiguous_filename flag (from code_chunks_loader)
-        2. Special __ambiguous__ format returned from retrieval
-        3. Multiple unique file paths share the same filename (detected from all retrieval sources)
-        
-        Args:
-            chunks: List of retrieved chunks
-            query: Original query text (optional, used to check if user provided full path)
-        
-        Returns:
-            Dict with 'filename' and 'paths' if ambiguity detected, None otherwise
-        """
         if not chunks:
             return None
 
@@ -558,22 +518,11 @@ class ResponseHandler:
         
         return None
 
-
     def _slice_pr_context_by_intent(
         self, 
         chunks: List[Dict[str, Any]], 
         intent: Optional[str]
     ) -> List[Dict[str, Any]]:
-        """
-        Filter PR chunks based on intent.
-        
-        Args:
-            chunks: List of chunk dictionaries
-            intent: Intent type (status, files, changes, author, etc.)
-            
-        Returns:
-            Filtered list of chunks
-        """
         if not intent:
             return chunks
 
@@ -600,16 +549,6 @@ class ResponseHandler:
         chunks: List[Dict[str, Any]], 
         intent: Optional[str]
     ) -> List[Dict[str, Any]]:
-        """
-        Filter Issue chunks based on intent.
-        
-        Args:
-            chunks: List of chunk dictionaries
-            intent: Intent type (status, assignee, labels, description, comments, timeline)
-            
-        Returns:
-            Filtered list of chunks
-        """
         if not intent:
             return chunks
 
@@ -661,20 +600,6 @@ class ResponseHandler:
         intent: Optional[str],
         role: Optional[str]
     ) -> Tuple[str, str]:
-        """
-        Build system and user prompts based on query type and intent.
-        
-        Args:
-            query_type: Detected query type
-            expanded_query: Expanded/rewritten query
-            context: Built context from chunks
-            email_context: Email context if available
-            intent: Optional intent for PR/Issue queries
-            role: Optional role parameter
-            
-        Returns:
-            Tuple of (system_prompt, user_prompt)
-        """
         # Intent-aware prompting for PR/Issue queries
         if query_type == QueryType.PR_SPECIFIC and intent:
             system_prompt = PR_INTENT_SYSTEM_PROMPTS.get(
@@ -700,34 +625,23 @@ class ResponseHandler:
         return system_prompt, user_prompt
     
     def _build_intent_user_prompt(self, expanded_query: str, context: str) -> str:
-        """
-        Build user prompt for intent-aware PR/Issue queries.
-        Uses a conversational format that encourages natural, friendly responses.
-        
-        Args:
-            expanded_query: Expanded/rewritten query
-            context: Built context from chunks
-            
-        Returns:
-            Formatted user prompt string
-        """
         return f"""
-Please answer the following question in a friendly, natural, and conversational tone.
+            Please answer the following question in a friendly, natural, and conversational tone.
 
-Question:
-{expanded_query}
+            Question:
+            {expanded_query}
 
-Context (use only information from here):
-{context}
+            Context (use only information from here):
+            {context}
 
-Instructions:
-- Answer as if you're explaining to a colleague or teammate
-- Be friendly, warm, and conversational
-- Use complete sentences and natural language
-- Provide accurate information based on the context
-- If information is missing from the context, mention that naturally
-- Make your response engaging and easy to read
-""".strip()
+            Instructions:
+            - Answer as if you're explaining to a colleague or teammate
+            - Be friendly, warm, and conversational
+            - Use complete sentences and natural language
+            - Provide accurate information based on the context
+            - If information is missing from the context, mention that naturally
+            - Make your response engaging and easy to read
+            """.strip()
 
     def respond_with_results(
         self,
@@ -739,9 +653,6 @@ Instructions:
         intent: Optional[str] = None
     ) -> Dict[str, Any]:
 
-        # ============================================================
-        # FILE LOOKUP FLOW (special-cased, must short-circuit)
-        # ============================================================
         if query_type == QueryType.FILE_LOOKUP:
 
             inferred: Optional[str] = None
@@ -836,9 +747,112 @@ Instructions:
             label=f"POST-INTENT-SLICE | query_type={query_type}, intent={intent}"
         )
 
+        # 🔥 HARD FACT SHORT-CIRCUIT: who merged the PR
+        if query_type == QueryType.PR_SPECIFIC:
+            q = expanded_query.lower()
+
+            if any(phrase in q for phrase in [
+                "who merged",
+                "merged by",
+                "who did merge",
+                "who merged pr"
+            ]):
+                for c in github_results:
+                    meta = self._get_metadata(c)
+                    merged_by = meta.get("merged_by")
+                    pr_number = meta.get("pr_number")
+
+                    if merged_by:
+                        answer = f"PR #{pr_number} was merged by {merged_by}."
+                        return self.package_response(
+                            answer,
+                            github_results,
+                            [],
+                            query_type,
+                            intent="merged_by"
+                        )
+
+                # 🔥 HARD FACT SHORT-CIRCUIT: PR dates (created / merged / closed)
+        if query_type == QueryType.PR_SPECIFIC:
+            q = expanded_query.lower()
+
+            for c in github_results:
+                meta = self._get_metadata(c)
+                pr_number = meta.get("pr_number")
+
+                # When was PR created?
+                if "when" in q and "created" in q:
+                    created_at = meta.get("created_at")
+                    if created_at:
+                        return self.package_response(
+                            f"PR #{pr_number} was created on {created_at}.",
+                            github_results,
+                            [],
+                            query_type,
+                            intent="created_at"
+                        )
+
+                # When was PR merged?
+                if "when" in q and "merged" in q:
+                    merged_at = meta.get("merged_at")
+                    if merged_at:
+                        return self.package_response(
+                            f"PR #{pr_number} was merged on {merged_at}.",
+                            github_results,
+                            [],
+                            query_type,
+                            intent="merged_at"
+                        )
+
+                # When was PR closed?
+                if "when" in q and "closed" in q:
+                    closed_at = meta.get("closed_at")
+                    if closed_at:
+                        return self.package_response(
+                            f"PR #{pr_number} was closed on {closed_at}.",
+                            github_results,
+                            [],
+                            query_type,
+                            intent="closed_at"
+                        )
+
 
         # 🔒 STEP 2: Build context
         context = self.chatbot.build_context_from_chunks(github_results, query_type)
+
+        # ============================================================
+        # 🔥 PR METADATA-ONLY FALLBACK (CRITICAL FIX)
+        # ============================================================
+        if query_type == QueryType.PR_SPECIFIC and not context.strip():
+            meta = self._get_metadata(github_results[0])
+
+            pr_number = meta.get("pr_number")
+            state = meta.get("state") or meta.get("pr_status")
+            merged_by = meta.get("merged_by")
+            created_at = meta.get("created_at")
+            merged_at = meta.get("merged_at")
+
+            parts = [f"PR #{pr_number}"]
+
+            if state:
+                parts.append(f"is {state}")
+
+            if merged_by:
+                parts.append(f"and was merged by {merged_by}")
+
+            if merged_at:
+                parts.append(f"on {merged_at}")
+
+            answer = " ".join(parts) + "."
+
+            return self.package_response(
+                answer,
+                github_results,
+                [],
+                query_type,
+                intent=intent
+            )
+
 
         email_results = self.chatbot.retrieve_gmail_correlated(
             github_results,
@@ -890,7 +904,6 @@ Instructions:
             intent=intent
         )
 
-
     def package_response(
         self,
         answer: str,
@@ -899,18 +912,6 @@ Instructions:
         query_type: str,
         intent: Optional[str] = None
     ) -> Dict[str, Any]:
-        """
-        Package response with sources, emails, and metadata.
-        
-        Args:
-            answer: The generated answer text
-            github_results: List of retrieved GitHub results
-            email_results: List of retrieved email results
-            query_type: Detected query type
-            
-        Returns:
-            Packaged response dict
-        """
         sources = self._build_sources_list(github_results, query_type, intent)
         emails = self._build_emails_list(email_results)
         context_quality = self._calculate_context_quality(github_results)
@@ -933,17 +934,6 @@ Instructions:
         query_type: str,
         intent: Optional[str]
     ) -> List[Dict[str, Any]]:
-        """
-        Build GitHub sources list from results.
-        
-        Args:
-            github_results: List of retrieved GitHub results
-            query_type: Detected query type
-            intent: Optional intent for filtering
-            
-        Returns:
-            List of source dictionaries
-        """
         sources = []
         if not github_results:
             return sources
@@ -972,15 +962,6 @@ Instructions:
         self,
         email_results: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """
-        Build email list from results.
-        
-        Args:
-            email_results: List of retrieved email results
-            
-        Returns:
-            List of email dictionaries
-        """
         emails = []
         if not email_results:
             return emails
@@ -1000,17 +981,6 @@ Instructions:
         self,
         github_results: List[Dict[str, Any]]
     ) -> float:
-        """
-        Calculate context quality score from results.
-        
-        Args:
-            github_results: List of retrieved GitHub results
-            
-        Returns:
-            Context quality score (0.0 to 1.0)
-
-            
-        """
         if not github_results:
             return 0.0
         
@@ -1021,17 +991,6 @@ Instructions:
         results: List[Dict[str, Any]],
         original_query: str
     ) -> Dict[str, Any]:
-        """
-        Merge multiple sub-query results into a SINGLE coherent response.
-        Returns a properly formatted response dict (not fragmented UI messages).
-        
-        Args:
-            results: List of response dicts from sub-queries
-            original_query: Original user query
-            
-        Returns:
-            Merged response dict
-        """
         if not results:
             return self.package_response(
                 "No results found for your query.",
@@ -1101,10 +1060,6 @@ Instructions:
         chunks: List[Dict[str, Any]],
         label: str = "CHUNK DEBUG"
     ) -> None:
-        """
-        Log retrieved chunks in a human-readable way to see
-        exactly what context is passed to the LLM.
-        """
         if not chunks:
             self.chatbot.logger.warning(f"{label} | No chunks available")
             return
@@ -1122,6 +1077,7 @@ Instructions:
                 f"title={meta.get('title', 'n/a')}, "
                 f"state={meta.get('state', 'n/a')}, "
                 f"author={meta.get('author', 'n/a')}, "
+                f"merged_by={meta.get('merged_by', 'n/a')}, "
                 f"file={meta.get_file_path('n/a')}, "
                 f"chunk_type={meta.get_chunk_type('unknown')}, "
                 f"score={chunk.get('score', 0.0)}"
