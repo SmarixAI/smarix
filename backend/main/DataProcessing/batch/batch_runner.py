@@ -1,22 +1,28 @@
-
 from collections import Counter
 from ..pipeline.file_processor import process_file
 from ..chunking.base_chunker import DataChunker
 from ..state.repo_state import load_current_repo_from_state
 
-REPO_OWNER, REPO_NAME = load_current_repo_from_state()
-import os
 import json
-from pathlib import Path
+
+# Import S3Manager
+from backend.utils.s3 import s3_manager
+
+REPO_OWNER, REPO_NAME = load_current_repo_from_state()
+
+# S3 config
+S3_BUCKET = "smarix-data"
+
 
 def batch_process():
     """
     Batch process with Git-first → Gmail correlation strategy
     Only processes files for the current repo specified in runtime_state.json
+    Reads from S3, writes to S3 (no local data/ directory)
     """
-    git_dir = "../../data/DataCollectionFromGit"
-    gmail_dir = "../../data/DataCollectionFromGmail"
-    output_dir = "../../data/DataProcessing"
+    # S3 paths
+    git_s3_key = f"DataCollectionFromGit/{REPO_OWNER}/{REPO_NAME}/{REPO_NAME}.json"
+    gmail_s3_key = "DataCollectionFromGmail/gmail_data.json"
 
     # Display current repo being processed
     print(f"\n{'=' * 70}")
@@ -26,38 +32,34 @@ def batch_process():
     # Initialize shared chunker
     chunker = DataChunker(REPO_NAME, REPO_OWNER)
 
-    # Filter Git files to only include the current repo
-    git_files = []
-    if os.path.exists(git_dir):
-        # Build the expected path for the current repo
-        expected_repo_path = Path(git_dir) / REPO_OWNER / REPO_NAME / f"{REPO_NAME}.json"
-        
-        # Find all Git files first
-        all_git_files = list(Path(git_dir).glob("*/*/*.json"))
-        print(f"📂 Found {len(all_git_files)} Git files (total)")
-        
-        # Filter to only the current repo
-        git_files = [f for f in all_git_files if f == expected_repo_path]
-        
-        if git_files:
-            print(f"📂 Processing Git file for current repo: {REPO_OWNER}/{REPO_NAME}")
-        else:
-            print(f"⚠️  No Git file found for current repo: {REPO_OWNER}/{REPO_NAME}")
-            print(f"   Expected path: {expected_repo_path}")
+    # Load Git data from S3
+    git_data = None
+    print(f"📂 Looking for Git data in S3: s3://{S3_BUCKET}/{git_s3_key}")
 
-    gmail_files = []
-    if os.path.exists(gmail_dir):
-        gmail_files = [
-            f for f in Path(gmail_dir).glob("*_data.json")
-            if REPO_NAME in f.name
-        ]
-        print(f"📧 Found {len(gmail_files)} Gmail files")
+    if s3_manager.key_exists(git_s3_key):
+        git_data = s3_manager.download_json(git_s3_key)
+        print(
+            f"✅ Found and loaded Git file for current repo: {REPO_OWNER}/{REPO_NAME}"
+        )
+    else:
+        print(f"⚠️  No Git file found for current repo: {REPO_OWNER}/{REPO_NAME}")
+        print(f"   Expected S3 key: {git_s3_key}")
 
-    if not git_files and not gmail_files:
-        print(f"❌ No JSON files found")
+    # Load Gmail data from S3
+    gmail_data = None
+    if s3_manager.key_exists(gmail_s3_key):
+        gmail_data = s3_manager.download_json(gmail_s3_key)
+        print(f"📧 Found and loaded Gmail file: {gmail_s3_key}")
+    else:
+        print(f"⚠️  No Gmail file found in S3")
+
+    if not git_data and not gmail_data:
+        print(f"❌ No JSON files found in S3")
         return
 
-    print(f"\n📦 Total files to process: {len(git_files) + len(gmail_files)}")
+    print(
+        f"\n📦 Total files to process: {(1 if git_data else 0) + (1 if gmail_data else 0)}"
+    )
     print(
         f"   Strategy: Git first → Code analysis → Extract entities → Gmail with correlation\n"
     )
@@ -66,19 +68,18 @@ def batch_process():
     all_git_entities = {}
     all_tech_stacks = {}
 
-    # Phase 1: Process all Git files first
-    print(f"\n{'=' * 70}")
-    print("PHASE 1: Processing GitHub Data with Code Analysis")
-    print(f"{'=' * 70}\n")
+    # Phase 1: Process Git data first
+    if git_data:
+        print(f"\n{'=' * 70}")
+        print("PHASE 1: Processing GitHub Data with Code Analysis")
+        print(f"{'=' * 70}\n")
 
-    for json_file in git_files:
         try:
             result = process_file(
-                str(json_file),
-                output_dir,
+                git_data,  # Pass dict directly
                 chunker,
             )
-            results.append((json_file.name, "Success", result))
+            results.append((git_s3_key, "Success", result))
 
             # Collect entities
             if result.get("entities"):
@@ -89,14 +90,14 @@ def batch_process():
                 all_tech_stacks[result["repo_name"]] = result["tech_stack"]
 
         except Exception as e:
-            print(f"❌ Failed {json_file.name}: {e}")
+            print(f"❌ Failed {git_s3_key}: {e}")
             import traceback
 
             traceback.print_exc()
-            results.append((json_file.name, "Failed", str(e)))
+            results.append((git_s3_key, "Failed", str(e)))
 
-    # Phase 2: Process Gmail files with Git correlation
-    if gmail_files:
+    # Phase 2: Process Gmail data with Git correlation
+    if gmail_data:
         print(f"\n{'=' * 70}")
         print("PHASE 2: Processing Gmail Data (with GitHub correlation)")
         print(f"{'=' * 70}\n")
@@ -124,22 +125,20 @@ def batch_process():
             print(f"      • {key}: {len(values)}")
         print()
 
-        for json_file in gmail_files:
-            try:
-                result = process_file(
-                    str(json_file),
-                    output_dir,
-                    chunker,
-                    merged_entities,
-                )
+        try:
+            result = process_file(
+                gmail_data,  # Pass dict directly
+                chunker,
+                merged_entities,
+            )
 
-                results.append((json_file.name, "Success", result))
-            except Exception as e:
-                print(f"❌ Failed {json_file.name}: {e}")
-                import traceback
+            results.append((gmail_s3_key, "Success", result))
+        except Exception as e:
+            print(f"❌ Failed {gmail_s3_key}: {e}")
+            import traceback
 
-                traceback.print_exc()
-                results.append((json_file.name, "Failed", str(e)))
+            traceback.print_exc()
+            results.append((gmail_s3_key, "Failed", str(e)))
 
     # Summary
     print(f"\n{'=' * 70}")
@@ -219,27 +218,24 @@ def batch_process():
         for name, _, error in failed:
             print(f"   • {name}: {error}")
 
-    # Save aggregated tech stack summary
+    # Save aggregated tech stack summary to S3
     if all_tech_stacks:
-        aggregated_summary_file = os.path.join(
-            output_dir, "aggregated_tech_stack_summary.json"
+        aggregated_s3_key = "DataProcessing/aggregated_tech_stack_summary.json"
+
+        aggregated_data = {
+            "repositories": all_tech_stacks,
+            "summary": {
+                "total_repositories": len(all_tech_stacks),
+                "languages": dict(all_languages),
+                "frameworks": dict(all_frameworks),
+                "tools": dict(all_tools),
+                "total_code_lines": total_code_lines,
+                "total_functions": total_functions,
+                "total_classes": total_classes,
+            },
+        }
+
+        s3_manager.upload_json(aggregated_data, aggregated_s3_key, public_read=False)
+        print(
+            f"\n💾 Aggregated tech stack summary saved -> s3://{S3_BUCKET}/{aggregated_s3_key}"
         )
-        with open(aggregated_summary_file, "w", encoding="utf-8") as f:
-            json.dump(
-                {
-                    "repositories": all_tech_stacks,
-                    "summary": {
-                        "total_repositories": len(all_tech_stacks),
-                        "languages": dict(all_languages),
-                        "frameworks": dict(all_frameworks),
-                        "tools": dict(all_tools),
-                        "total_code_lines": total_code_lines,
-                        "total_functions": total_functions,
-                        "total_classes": total_classes,
-                    },
-                },
-                f,
-                indent=2,
-                ensure_ascii=False,
-            )
-        print(f"\n💾 Aggregated tech stack summary saved: {aggregated_summary_file}")
