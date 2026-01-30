@@ -279,8 +279,9 @@ def generate_pr_tutorials(
         print(f"STEP 1: Getting random {difficulty} PR...")
         random_pr_prompt = get_random_pr_prompt(difficulty)
 
+        schema_name = f"{REPO_OWNER}_{REPO_NAME}".replace("-", "_")
         try:
-            pr_response = chatbot.chat(random_pr_prompt)
+            pr_response = chatbot.chat(random_pr_prompt, schema_name=schema_name)
 
             if not pr_response or not isinstance(pr_response, dict):
                 print(f"❌ Invalid response from Random PR Generator\n")
@@ -318,8 +319,9 @@ def generate_pr_tutorials(
         print(f"STEP 2: Generating tutorial for PR #{pr_number}...")
         tutorial_prompt = get_tutorial_generation_prompt(pr_number)
 
+        schema_name = f"{REPO_OWNER}_{REPO_NAME}".replace("-", "_")
         try:
-            tutorial_response = chatbot.chat(tutorial_prompt)
+            tutorial_response = chatbot.chat(tutorial_prompt, schema_name=schema_name)
 
             if not tutorial_response or not isinstance(tutorial_response, dict):
                 print(f"❌ Invalid tutorial response\n")

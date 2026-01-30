@@ -115,21 +115,48 @@ class GeneralQueryHandler:
         else:
             self.chatbot.logger.warning(f"CONTEXT | Empty context - no information available to answer query")
 
-        # Generate response
-        system_prompt = self.chatbot.get_dynamic_system_prompt(query_type, expanded_query, role=role)
-        user_prompt = self.chatbot.build_user_prompt(
-            expanded_query, context, email_context, query_type, entity, metrics_context
-        )
+        # 🚨 CRITICAL: Check if we have no context at all (no results, no metrics, no email context)
+        # If so, generate a helpful no-context response instead of calling LLM with empty context
+        has_any_context = bool(context or email_context or metrics_context or github_results or gmail_results)
+        
+        if not has_any_context:
+            self.chatbot.logger.warning(
+                f"NO_CONTEXT | No results retrieved for query type: {query_type}. "
+                f"Query: '{expanded_query}'. Using generate_no_context_response."
+            )
+            
+            # Check which indices are available
+            if hasattr(self.chatbot, 'multi_index_store') and self.chatbot.multi_index_store:
+                loaded_indices = [
+                    idx_type for idx_type, idx_db in self.chatbot.multi_index_store.indices.items()
+                    if idx_db is not None
+                ]
+                self.chatbot.logger.info(f"NO_CONTEXT | Loaded indices: {loaded_indices}")
+                self.chatbot.logger.info(f"NO_CONTEXT | Available index types: {self.chatbot.multi_index_store.available_index_types}")
+            
+            # Generate helpful no-context response
+            answer = self.chatbot.generate_no_context_response(expanded_query, query_type)
+            refined_answer = answer  # No need to refine a no-context response
+        else:
+            # Generate response with available context
+            system_prompt = self.chatbot.get_dynamic_system_prompt(query_type, expanded_query, role=role)
+            user_prompt = self.chatbot.build_user_prompt(
+                expanded_query, context, email_context, query_type, entity, metrics_context
+            )
 
-        if self.chatbot.verbose:
-            print("Generating response...")
+            if self.chatbot.verbose:
+                print("Generating response...")
 
-        self.chatbot.logger.info("LLM GENERATION | Started")
-        answer = self.chatbot.call_llm(system_prompt, user_prompt)
-        self.chatbot.logger.info(f"LLM GENERATION | Completed, Length: {len(answer)} chars")
+            self.chatbot.logger.info("LLM GENERATION | Started")
+            answer = self.chatbot.call_llm(system_prompt, user_prompt)
+            self.chatbot.logger.info(f"LLM GENERATION | Completed, Length: {len(answer)} chars")
 
-        self.chatbot.logger.info("VERIFICATION | Starting response verification")
-        refined_answer = self.chatbot.verify_and_refine_response(answer, query, query_type)
+        # Only verify and refine if we generated a response (not no-context response)
+        if has_any_context:
+            self.chatbot.logger.info("VERIFICATION | Starting response verification")
+            refined_answer = self.chatbot.verify_and_refine_response(answer, query, query_type)
+        else:
+            refined_answer = answer
 
         # Build sources and emails
         sources = self._build_sources(github_results)

@@ -99,7 +99,8 @@ def generate_coding_questions(
     for idx, category in enumerate(categories, 1):
         print(f"\n[{idx}/3] {category} question")
 
-        response = chatbot.chat(get_coding_question_prompt(category))
+        schema_name = f"{REPO_OWNER}_{REPO_NAME}".replace("-", "_")
+        response = chatbot.chat(get_coding_question_prompt(category), schema_name=schema_name)
         answer = response.get("answer") if isinstance(response, dict) else None
 
         if not answer:

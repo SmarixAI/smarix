@@ -35,9 +35,44 @@ class MultiIndexRetrievalMixin:
         # STEP 1: Query Routing - Get TOP-3 indexes
         top3_indexes = self._route_to_indexes(query_text or "", query_type)
         
+        # STEP 1b: Validate that routed indices are actually loaded
+        if not hasattr(self, 'multi_index_store') or not self.multi_index_store:
+            self.logger.error("RETRIEVAL | multi_index_store not available")
+            return []
+        
+        # Check which indices are loaded
+        loaded_indices = {
+            idx_type: idx_db is not None
+            for idx_type, idx_db in self.multi_index_store.indices.items()
+        }
+        
+        # Filter out indices that aren't loaded and log warnings
+        validated_indexes = []
+        for idx_type, conf in top3_indexes:
+            target_index = 'graph_nodes' if idx_type == 'impact_analysis' else idx_type
+            if loaded_indices.get(target_index, False):
+                validated_indexes.append((idx_type, conf))
+            else:
+                self.logger.warning(
+                    f"ROUTING | Index '{target_index}' was routed but is not loaded. "
+                    f"Available loaded indices: {[k for k, v in loaded_indices.items() if v]}"
+                )
+        
+        # If no validated indices, try fallback to 'all' index
+        if not validated_indexes:
+            self.logger.warning(
+                f"ROUTING | No routed indices are loaded. Falling back to 'all' index. "
+                f"Available indices: {[k for k, v in loaded_indices.items() if v]}"
+            )
+            if loaded_indices.get('all', False):
+                validated_indexes = [('all', 0.5)]
+            else:
+                self.logger.error("RETRIEVAL | No indices are loaded, cannot perform retrieval")
+                return []
+        
         # STEP 2: Parallel Retrieval - Weighted retrieval (7-5-3) based on confidence
-        # Sort top3_indexes by confidence (descending) to ensure correct order
-        top3_indexes_sorted = sorted(top3_indexes, key=lambda x: x[1], reverse=True)[:3]
+        # Sort validated_indexes by confidence (descending) to ensure correct order
+        top3_indexes_sorted = sorted(validated_indexes, key=lambda x: x[1], reverse=True)[:3]
         
         all_results = []
         repo_filters = self._get_repo_filters()
@@ -46,6 +81,12 @@ class MultiIndexRetrievalMixin:
             """Search a single index in parallel with specified top_k"""
             try:
                 target_index = 'graph_nodes' if index_type == 'impact_analysis' else index_type
+                
+                # Double-check index is loaded before searching
+                if not loaded_indices.get(target_index, False):
+                    self.logger.warning(f"SEARCH | Index '{target_index}' not loaded, skipping search")
+                    return []
+                
                 results = self.multi_index_store.search_by_type(
                     query_embedding,
                     index_type=target_index,
@@ -60,6 +101,8 @@ class MultiIndexRetrievalMixin:
                 return results
             except Exception as e:
                 self.logger.warning(f"SEARCH | Failed to search '{index_type}' index: {e}")
+                import traceback
+                self.logger.debug(f"SEARCH | Traceback: {traceback.format_exc()}")
                 return []
         
         # Parallel retrieval from TOP-3 indexes with weighted top_k (7-5-3)
@@ -80,19 +123,23 @@ class MultiIndexRetrievalMixin:
         
         # STEP 2b: ALWAYS include 'all' index (combined/fallback index) as fallback
         # Use 5 chunks from combined index (same as before)
-        try:
-            combined_results = self.multi_index_store.search_all(
-                query_embedding,
-                top_k=5,  # Fixed 5 for fallback
-                filters=repo_filters
-            )
-            for result in combined_results:
-                result['index_type'] = result.get('index_type', 'all')
-                result['routing_confidence'] = 0.3  # Lower confidence for fallback
-            all_results.extend(combined_results)
-            self.logger.info(f"SEARCH | 'all' index (fallback): {len(combined_results)} results")
-        except Exception as e:
-            self.logger.warning(f"SEARCH | 'all' index search failed: {e}")
+        # Only if 'all' index is loaded
+        if loaded_indices.get('all', False):
+            try:
+                combined_results = self.multi_index_store.search_all(
+                    query_embedding,
+                    top_k=5,  # Fixed 5 for fallback
+                    filters=repo_filters
+                )
+                for result in combined_results:
+                    result['index_type'] = result.get('index_type', 'all')
+                    result['routing_confidence'] = 0.3  # Lower confidence for fallback
+                all_results.extend(combined_results)
+                self.logger.info(f"SEARCH | 'all' index (fallback): {len(combined_results)} results")
+            except Exception as e:
+                self.logger.warning(f"SEARCH | 'all' index search failed: {e}")
+        else:
+            self.logger.debug("SEARCH | 'all' index not loaded, skipping fallback search")
         
         # Deduplicate by chunk_id
         seen_ids = set()
