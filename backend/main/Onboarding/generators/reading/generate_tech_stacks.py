@@ -141,17 +141,25 @@ def parse_single_mcq_from_response(response_text: str) -> dict:
             # Check for answer markers
             if '**Answer:**' in line or 'Answer:' in line:
                 answer_section = True
-                answer_line = line.split(':', 1)[-1].strip() if ':' in line else line.replace('**Answer:**', '').strip()
-                if answer_line:
-                    answer_match = re.match(r'^([A-D])\s*[-–—]\s*(.+)', answer_line, re.DOTALL)
-                    if answer_match:
-                        correct_answer = answer_match.group(1)
-                        explanation = answer_match.group(2).strip()
+                try:
+                    if ':' in line:
+                        split_result = line.split(':', 1)
+                        answer_line = split_result[-1].strip() if split_result else line.replace('**Answer:**', '').strip()
                     else:
-                        letter_match = re.match(r'^([A-D])', answer_line)
-                        if letter_match:
-                            correct_answer = letter_match.group(1)
-                            explanation = answer_line[1:].strip()
+                        answer_line = line.replace('**Answer:**', '').strip()
+                    
+                    if answer_line:
+                        answer_match = re.match(r'^([A-D])\s*[-–—]\s*(.+)', answer_line, re.DOTALL)
+                        if answer_match:
+                            correct_answer = answer_match.group(1)
+                            explanation = answer_match.group(2).strip()
+                        else:
+                            letter_match = re.match(r'^([A-D])', answer_line)
+                            if letter_match:
+                                correct_answer = letter_match.group(1)
+                                explanation = answer_line[1:].strip() if len(answer_line) > 1 else ""
+                except (IndexError, AttributeError):
+                    pass
                 continue
             
             if answer_section:
@@ -168,7 +176,7 @@ def parse_single_mcq_from_response(response_text: str) -> dict:
                 # It's part of the question text
                 question_text.append(line)
         
-        if len(options) == 4 and correct_answer and correct_answer in options:
+        if len(options) == 4 and correct_answer and correct_answer in options and question_text:
             return {
                 'question': ' '.join(question_text),
                 'options': options,
@@ -187,8 +195,11 @@ def parse_single_mcq_from_response(response_text: str) -> dict:
     if len(answer_split) < 2:
         return None
     
-    question_part = answer_split[0].strip()
-    answer_part = answer_split[1].strip()
+    try:
+        question_part = answer_split[0].strip()
+        answer_part = answer_split[1].strip()
+    except IndexError:
+        return None
     
     # Extract question text and options
     lines = question_part.split('\n')
@@ -221,10 +232,10 @@ def parse_single_mcq_from_response(response_text: str) -> dict:
         letter_match = re.match(r'^([A-D])', answer_part)
         if letter_match:
             correct_answer = letter_match.group(1)
-            explanation = answer_part[1:].strip()
+            explanation = answer_part[1:].strip() if len(answer_part) > 1 else ""
     
     # Validate this is a proper MCQ
-    if len(options) == 4 and correct_answer and correct_answer in options:
+    if len(options) == 4 and correct_answer and correct_answer in options and question_text:
         return {
             'question': ' '.join(question_text),
             'options': options,
@@ -302,8 +313,9 @@ CRITICAL REQUIREMENTS:
 
 Generate the MCQ question now."""
 
+            schema_name = f"{REPO_OWNER}_{REPO_NAME}".replace("-", "_")
             try:
-                response = chatbot.chat(mcq_prompt)
+                response = chatbot.chat(mcq_prompt, schema_name=schema_name)
                 answer = response.get('answer', '') if isinstance(response, dict) else getattr(response, 'answer', str(response))
                 
                 if answer:
@@ -549,8 +561,9 @@ def generate_tech_stack_data(gmail_db_path=None, provider='openai', model=None):
     for idx, (key, question) in enumerate(questions, 1):
         print(f"[{idx}/{total}] {key}...")
 
+        schema_name = f"{REPO_OWNER}_{REPO_NAME}".replace("-", "_")
         try:
-            response = chatbot.chat(question)
+            response = chatbot.chat(question, schema_name=schema_name)
             answer = response.get('answer') if isinstance(response, dict) else getattr(response, 'answer', str(response))
             quality = response.get('context_quality', 1.0) if isinstance(response, dict) else getattr(response, 'context_quality', 1.0)
 

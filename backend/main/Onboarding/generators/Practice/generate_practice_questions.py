@@ -309,8 +309,9 @@ def generate_practice_questions(
 
         question_prompt = prompt_template.format(difficulty=difficulty)
 
+        schema_name = f"{REPO_OWNER}_{REPO_NAME}".replace("-", "_")
         try:
-            response = chatbot.chat(question_prompt)
+            response = chatbot.chat(question_prompt, schema_name=schema_name)
 
             if not response or not isinstance(response, dict):
                 print(f"Invalid response for Question {idx}\n")
