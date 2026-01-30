@@ -302,7 +302,8 @@ def generate_code_conventions_data( gmail_db_path=None, provider='openai', model
         gmail_db_path=gmail_db_path,
         provider=provider,
         model=model,
-        verbose=False
+        verbose=False,
+        disable_conversation_storage=True  # Skip conversation storage for generators
     )
 
     # Define code conventions specific questions
