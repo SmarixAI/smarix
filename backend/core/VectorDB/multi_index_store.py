@@ -520,11 +520,24 @@ class MultiIndexVectorStore:
             except Exception as e:
                 logger.error(f"Failed to load '{index_type}' index: {e}")
                 import traceback
-                traceback.print_exc()
+                logger.debug(f"Traceback for '{index_type}': {traceback.format_exc()}")
                 self.indices[index_type] = None
         
         location_str = f"s3://{s3_bucket}/{s3_prefix}" if is_s3 else str(load_dir)
         logger.info(f"Loaded {loaded_count}/{len(self.available_index_types)} indices from {location_str}")
+        
+        # Log which indices failed to load for debugging
+        failed_indices = [
+            idx_type for idx_type in self.available_index_types
+            if self.indices.get(idx_type) is None
+        ]
+        if failed_indices:
+            logger.warning(
+                f"Failed to load {len(failed_indices)} indices: {failed_indices}. "
+                f"These indices will not be available for retrieval."
+            )
+        else:
+            logger.info(f"All {loaded_count} available indices loaded successfully")
     
     def get_statistics(self) -> Dict[str, Any]:
         """Get statistics for all indices"""

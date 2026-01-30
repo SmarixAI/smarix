@@ -255,8 +255,9 @@ CRITICAL REQUIREMENTS:
 
 Generate the MCQ question now."""
 
+            schema_name = f"{REPO_OWNER}_{REPO_NAME}".replace("-", "_")
             try:
-                response = chatbot.chat(mcq_prompt)
+                response = chatbot.chat(mcq_prompt, schema_name=schema_name)
                 answer = response.get('answer', '') if isinstance(response, dict) else getattr(response, 'answer', str(response))
                 
                 if answer:
@@ -513,8 +514,9 @@ def generate_code_conventions_data( gmail_db_path=None, provider='openai', model
     for idx, (key, question) in enumerate(questions, 1):
         print(f"[{idx}/{total}] {key}...")
 
+        schema_name = f"{REPO_OWNER}_{REPO_NAME}".replace("-", "_")
         try:
-            response = chatbot.chat(question)
+            response = chatbot.chat(question, schema_name=schema_name)
             answer = response.get('answer') if isinstance(response, dict) else getattr(response, 'answer',
                                                                                        str(response))
             quality = response.get('context_quality', 1.0) if isinstance(response, dict) else getattr(response,

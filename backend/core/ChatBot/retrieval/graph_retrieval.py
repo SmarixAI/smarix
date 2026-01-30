@@ -13,6 +13,10 @@ class GraphRetrievalMixin:
         """Lazy load the NetworkX graph structure"""
         if hasattr(self, 'G') and self.G:
             return self.G
+        
+        # Check if repo_owner and repo_name are available
+        if not self.repo_owner or not self.repo_name:
+            return None
             
         graph_path = Path("../../data/VectorDB") / self.repo_owner / self.repo_name / "graph_structure.pkl"
         if graph_path.exists():
