@@ -184,46 +184,72 @@ def parse_practice_question(response_text: str, difficulty: str, question_number
 
     desc_match = re.search(r'##\s*Question Description\s*\n+(.*?)(?=##\s*Implementation Tutorial|$)',
                           response_text, re.DOTALL | re.IGNORECASE)
-    if desc_match:
+    if desc_match and desc_match.groups():
         parsed_question['question_description'] = desc_match.group(1).strip()
 
     step_pattern = r'\*\*Step\s+(\d+):\s*([^\*]+?)\*\*\s*\n+(.*?)(?=\*\*Step\s+\d+:|$)'
     steps_iter = re.finditer(step_pattern, response_text, re.DOTALL)
 
     for step_match in steps_iter:
-        step_num = int(step_match.group(1))
-        step_title = step_match.group(2).strip()
-        step_content = step_match.group(3).strip()
+        if not step_match.groups() or len(step_match.groups()) < 3:
+            continue
+        try:
+            step_num = int(step_match.group(1))
+            step_title = step_match.group(2).strip() if step_match.group(2) else ""
+            step_content = step_match.group(3).strip() if step_match.group(3) else ""
+        except (IndexError, ValueError, AttributeError) as e:
+            print(f"⚠ Warning: Error parsing step match: {e}")
+            continue
 
         # What to Do: capture until Code Snippet or Tips or Common Mistakes or next Step
-        what_to_do_match = re.search(
-            r'\*\*What to Do[:\s]*\*\*\s*\n+(.*?)(?=\*\*Code Snippet|\*\*Tips|\*\*Common Mistakes|\*\*Step|\Z)',
-            step_content,
-            re.DOTALL | re.IGNORECASE
-        )
-        what_to_do = what_to_do_match.group(1).strip() if what_to_do_match else ""
+        what_to_do = ""
+        try:
+            what_to_do_match = re.search(
+                r'\*\*What to Do[:\s]*\*\*\s*\n+(.*?)(?=\*\*Code Snippet|\*\*Tips|\*\*Common Mistakes|\*\*Step|\Z)',
+                step_content,
+                re.DOTALL | re.IGNORECASE
+            )
+            if what_to_do_match and what_to_do_match.groups():
+                what_to_do = what_to_do_match.group(1).strip()
+        except (IndexError, AttributeError):
+            pass
 
         # Code snippet between triple backticks (handles optional language after backticks)
-        code_match = re.search(r'```(?:[\w+-]*)\s*\n(.*?)\n```', step_content, re.DOTALL)
-        code_snippet = code_match.group(1).strip() if code_match else ""
+        code_snippet = ""
+        try:
+            code_match = re.search(r'```(?:[\w+-]*)\s*\n(.*?)\n```', step_content, re.DOTALL)
+            if code_match and code_match.groups():
+                code_snippet = code_match.group(1).strip()
+        except (IndexError, AttributeError):
+            pass
 
         # Tips: numbered list (captures multiple numbered items)
-        tips_match = re.search(
-            r'\*\*Tips[:\s]*\*\*\s*\n+(.*?)(?=\*\*Common Mistakes|\*\*Step|\Z)',
-            step_content,
-            re.DOTALL | re.IGNORECASE
-        )
-        tips_text = tips_match.group(1).strip() if tips_match else ""
-        tips = [t.strip() for t in re.findall(r'\d+\.\s*(.+?)(?=\n\d+\.|\n\Z)', tips_text, re.DOTALL)]
+        tips = []
+        try:
+            tips_match = re.search(
+                r'\*\*Tips[:\s]*\*\*\s*\n+(.*?)(?=\*\*Common Mistakes|\*\*Step|\Z)',
+                step_content,
+                re.DOTALL | re.IGNORECASE
+            )
+            if tips_match and tips_match.groups():
+                tips_text = tips_match.group(1).strip()
+                tips = [t.strip() for t in re.findall(r'\d+\.\s*(.+?)(?=\n\d+\.|\n\Z)', tips_text, re.DOTALL) if t.strip()]
+        except (IndexError, AttributeError):
+            pass
 
         # Common mistakes: numbered list
-        mistakes_match = re.search(
-            r'\*\*Common Mistakes(?: to Avoid)?[:\s]*\*\*\s*\n+(.*?)(?=\*\*Step|\Z)',
-            step_content,
-            re.DOTALL | re.IGNORECASE
-        )
-        mistakes_text = mistakes_match.group(1).strip() if mistakes_match else ""
-        mistakes = [m.strip() for m in re.findall(r'\d+\.\s*(.+?)(?=\n\d+\.|\Z)', mistakes_text, re.DOTALL)]
+        mistakes = []
+        try:
+            mistakes_match = re.search(
+                r'\*\*Common Mistakes(?: to Avoid)?[:\s]*\*\*\s*\n+(.*?)(?=\*\*Step|\Z)',
+                step_content,
+                re.DOTALL | re.IGNORECASE
+            )
+            if mistakes_match and mistakes_match.groups():
+                mistakes_text = mistakes_match.group(1).strip()
+                mistakes = [m.strip() for m in re.findall(r'\d+\.\s*(.+?)(?=\n\d+\.|\Z)', mistakes_text, re.DOTALL) if m.strip()]
+        except (IndexError, AttributeError):
+            pass
 
         parsed_question['steps'].append({
             'step_number': step_num,
@@ -326,22 +352,31 @@ def generate_practice_questions(
 
             print(f"Received response ({len(answer_text):,} characters)")
 
-            parsed = parse_practice_question(answer_text, difficulty, idx)
+            try:
+                parsed = parse_practice_question(answer_text, difficulty, idx)
 
-            if parsed and parsed.get('steps'):
-                step_count = len(parsed['steps'])
-                print(f"Parsed successfully: {step_count} steps found")
+                if parsed and parsed.get('steps'):
+                    step_count = len(parsed['steps'])
+                    print(f"Parsed successfully: {step_count} steps found")
 
-                valid_steps = [s for s in parsed['steps'] if s.get('code_line_count', 0) >= 10]
-                print(f"Steps with 10+ lines of code: {len(valid_steps)}/{step_count}")
+                    valid_steps = [s for s in parsed['steps'] if s.get('code_line_count', 0) >= 10]
+                    print(f"Steps with 10+ lines of code: {len(valid_steps)}/{step_count}")
 
-                all_questions.append(parsed)
-                print(f"Question {idx} added to output\n")
-            else:
-                print(f"Failed to parse Question {idx}\n")
+                    all_questions.append(parsed)
+                    print(f"Question {idx} added to output\n")
+                else:
+                    print(f"Failed to parse Question {idx} - no steps found")
+                    print(f"Response preview (first 500 chars): {answer_text[:500]}...\n")
+            except (IndexError, AttributeError, ValueError) as parse_error:
+                print(f"⚠️  Error parsing Question {idx}: {parse_error}")
+                print(f"   This usually means the LLM response format doesn't match expected pattern")
+                print(f"   Response preview (first 500 chars): {answer_text[:500]}...\n")
+                continue
 
         except Exception as e:
             print(f"Error generating Question {idx}: {e}\n")
+            import traceback
+            traceback.print_exc()
             continue
 
     questions_data = {
