@@ -302,6 +302,7 @@ def generate_app_features_data(db_path, gmail_db_path=None, provider='openai', m
         provider=provider,
         model=model,
         verbose=False,
+        disable_conversation_storage=True  # Skip conversation storage for generators
     )
 
     # Define app features specific questions
@@ -558,7 +559,8 @@ def add_qna_to_existing_app_features(
             gmail_db_path=gmail_db_path,
             provider=provider,
             model=model,
-            verbose=False
+            verbose=False,
+            disable_conversation_storage=True  # Skip conversation storage for generators
         )
         print("✓  Chatbot initialized successfully\n")
     except Exception as e:

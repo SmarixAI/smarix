@@ -91,6 +91,7 @@ def generate_coding_questions(
         verbose=True,
         routing_method=routing_method,
         enable_multi_query=False,
+        disable_conversation_storage=True  # Skip conversation storage for generators
     )
 
     categories = ["UI", "Feature", "Test"]
