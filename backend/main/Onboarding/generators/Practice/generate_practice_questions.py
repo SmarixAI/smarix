@@ -271,7 +271,8 @@ def generate_practice_questions(
             temperature=0.4,
             verbose=True,
             routing_method=routing_method,
-            enable_multi_query=False
+            enable_multi_query=False,
+            disable_conversation_storage=True  # Skip conversation storage for generators
         )
 
         print("Chatbot initialized successfully")

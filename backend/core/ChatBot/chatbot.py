@@ -69,7 +69,8 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         enable_multi_query: bool = False,
         routing_method: str = "llm",  # Default to LLM-based routing for better accuracy
         repo_owner: Optional[str] = None,  # Repository owner for filtering
-        repo_name: Optional[str] = None    # Repository name for filtering
+        repo_name: Optional[str] = None,    # Repository name for filtering
+        disable_conversation_storage: bool = False  # Set to True to skip conversation storage (useful for generators)
     ):
         self.repo_owner, self.repo_name = load_current_repo_from_state()
         if not self.repo_owner and verbose:
@@ -165,12 +166,8 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             memory_db_url = f"sqlite:///{db_path}"
         
         # Try to initialize conversation store, but make it optional if database is not available
-        try:
-            self.conversation_store = ConversationStore(memory_db_url)
-        except Exception as e:
-            if self.verbose:
-                print(f"⚠️  Warning: Could not connect to conversation database: {e}")
-                print("   Conversation history will not be persisted, but chatbot will still work.")
+        # Or skip entirely if disable_conversation_storage is True (for generator scripts)
+        if disable_conversation_storage:
             # Create a dummy conversation store that does nothing
             class DummyConversationStore:
                 def create_session(self, *args, **kwargs): return None
@@ -182,6 +179,26 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
                 def delete_session(self, *args, **kwargs): pass
                 def session_exists(self, *args, **kwargs): return False
             self.conversation_store = DummyConversationStore()
+            if self.verbose:
+                print("ℹ️  Conversation storage disabled (generator mode)")
+        else:
+            try:
+                self.conversation_store = ConversationStore(memory_db_url)
+            except Exception as e:
+                if self.verbose:
+                    print(f"⚠️  Warning: Could not connect to conversation database: {e}")
+                    print("   Conversation history will not be persisted, but chatbot will still work.")
+                # Create a dummy conversation store that does nothing
+                class DummyConversationStore:
+                    def create_session(self, *args, **kwargs): return None
+                    def add_message(self, *args, **kwargs): return None
+                    def get_full_history(self, *args, **kwargs): return []
+                    def clear_session(self, *args, **kwargs): pass
+                    def get_session_stats(self, *args, **kwargs): return {}
+                    def get_all_sessions(self, *args, **kwargs): return []
+                    def delete_session(self, *args, **kwargs): pass
+                    def session_exists(self, *args, **kwargs): return False
+                self.conversation_store = DummyConversationStore()
 
         redis_host = os.getenv("REDIS_HOST", "localhost")
         redis_port = int(os.getenv("REDIS_PORT", "6379"))

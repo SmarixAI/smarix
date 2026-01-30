@@ -325,7 +325,8 @@ def generate_repo_structure_data( gmail_db_path=None, provider='openai', model=N
         gmail_db_path=gmail_db_path,
         provider=provider,
         model=model,
-        verbose=False
+        verbose=False,
+        disable_conversation_storage=True  # Skip conversation storage for generators
     )
 
     # Define repository structure specific questions

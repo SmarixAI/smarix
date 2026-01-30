@@ -305,7 +305,8 @@ def generate_reading_overview( gmail_db_path=None, provider='openai', model=None
         gmail_db_path=gmail_db_path,
         provider=provider,
         model=model,
-        verbose=False
+        verbose=False,
+        disable_conversation_storage=True  # Skip conversation storage for generators
     )
 
     # Define all questions
@@ -526,7 +527,8 @@ def add_qna_to_existing_reading_overview(
             gmail_db_path=gmail_db_path,
             provider=provider,
             model=model,
-            verbose=False
+            verbose=False,
+            disable_conversation_storage=True  # Skip conversation storage for generators
         )
         print("✓  Chatbot initialized successfully\n")
     except Exception as e:

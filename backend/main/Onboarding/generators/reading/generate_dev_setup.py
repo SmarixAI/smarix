@@ -313,7 +313,8 @@ def generate_dev_setup_data(gmail_db_path=None, provider='openai', model=None):
         gmail_db_path=gmail_db_path,
         provider=provider,
         model=model,
-        verbose=False
+        verbose=False,
+        disable_conversation_storage=True  # Skip conversation storage for generators
     )
 
     # Define dev setup specific questions
