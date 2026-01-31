@@ -302,6 +302,53 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         self.conversation_store.create_session(new_id, schema_name=schema_name)
         self.current_session_id = new_id
         return new_id
+    
+    def retrieve_raw_chunks(
+        self,
+        query_text: str,
+        top_k: int = 30,
+        query_type: str = QueryType.QUESTION_GENERATION,
+    ):
+        """
+        RAW retrieval for generators (practice, onboarding, analysis).
+        Bypasses chat flow but still respects multi-index routing.
+        """
+
+        # 1. Build embedding
+        query_embedding = self.get_query_embedding(query_text)
+
+        # 2. Minimal safe defaults
+        entity = None
+        keywords = query_text.lower().split()
+
+        # 3. Call canonical multi-index retrieval
+        return self._retrieve_multi_index(
+            query_embedding=query_embedding,
+            query_type=query_type,
+            entity=entity,
+            keywords=keywords,
+            top_k=top_k,
+            query_text=query_text,
+        ) or []
+    
+    from .query_type import QueryType
+
+    def retrieve(self, query: str, top_k: int = 20):
+        """
+        Lightweight retrieval API for generators and tools.
+        SAFE wrapper over multi-index retrieval.
+        """
+
+        query_embedding = self.get_query_embedding(query)
+
+        return self._retrieve_multi_index(
+            query_embedding=query_embedding,
+            query_type=QueryType.QUESTION_GENERATION,
+            entity=None,
+            keywords=query.lower().split(),
+            top_k=top_k,
+            query_text=query
+        ) or []
 
     def start_new_session(self, schema_name: str) -> str:
         """Create a new empty session in DB and set it as current."""
