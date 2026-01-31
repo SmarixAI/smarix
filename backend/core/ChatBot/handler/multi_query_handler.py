@@ -189,19 +189,6 @@ class MultiQueryHandler:
             answers, original_query
         )
 
-        # Save merged response
-        try:
-            self.chatbot.conversation_store.add_message(
-                session_id, "user", original_query, schema_name=schema_name, tokens_used=0
-            )
-            self.chatbot.conversation_store.add_message(
-                session_id, "assistant", merged["answer"], schema_name=schema_name, tokens_used=0
-            )
-        except Exception as e:
-            self.chatbot.logger.error(
-                f"CONVERSATION_STORE | Failed to save multi-query response: {e}"
-            )
-
         return merged
 
     # -------------------------------

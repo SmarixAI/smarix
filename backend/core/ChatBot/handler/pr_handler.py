@@ -39,7 +39,6 @@ class PRHandler:
                     pr_results, QueryType.PR_SPECIFIC, query, expanded_query, role=role
                 )
                 self._update_caches(query, result, active_session_id)
-                self._save_conversation(active_session_id, query, result)
                 return result
         
         self.chatbot.logger.warning(f"DIRECT LOOKUP | No match for PR #{num} across metadata keys")
@@ -99,11 +98,6 @@ class PRHandler:
         
         if pr_results:
             self.chatbot.logger.info(f"DIRECT LOOKUP (PR override) | {len(pr_results)} chunks returned")
-            
-            try:
-                self.chatbot.conversation_store.add_message(active_session_id, "user", query, schema_name=schema_name, tokens_used=0)
-            except Exception as e:
-                self.chatbot.logger.error(f"CONVERSATION_STORE | Failed to save user query: {e}")
             
             intent = self.detect_pr_intent(query_lower)
     
@@ -339,12 +333,3 @@ class PRHandler:
     
     def _update_caches(self, query: str, result: Dict[str, Any], active_session_id: str):
         self.chatbot.cache_handler.update_caches(query, result, active_session_id)
-
-    def _save_conversation(self, active_session_id: str, query: str, result: Dict[str, Any], schema_name: Optional[str] = None):
-        try:
-            self.chatbot.conversation_store.add_message(active_session_id, "user", query, schema_name=schema_name, tokens_used=0)
-            self.chatbot.conversation_store.add_message(
-                active_session_id, "assistant", result.get("answer", ""), schema_name=schema_name, tokens_used=0
-            )
-        except Exception as e:
-            self.chatbot.logger.error(f"CONVERSATION_STORE | Failed to save user query: {e}")

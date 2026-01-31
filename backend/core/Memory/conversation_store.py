@@ -117,81 +117,101 @@ class ConversationStore:
             raise ValueError("schema_name is required to add a message")
 
         conn = self._get_conn()
+        cur = None
         try:
-            with conn.cursor() as cur:
-                self._set_schema_context(cur, schema_name)
+            cur = conn.cursor()
+            self._set_schema_context(cur, schema_name)
 
-                # ✅ Get or create conversation
-                conv_id = self._get_conversation_id(cur, session_id)
-                
-                if conv_id is None:
-                    # Conversation doesn't exist - create it
-                    print(f"🆕 Creating new conversation for session {session_id}")
-                    cur.execute(
-                        """
-                        INSERT INTO conversations (session_id, created_at, updated_at, title)
-                        VALUES (%s, NOW(), NOW(), 'New Chat')
-                        RETURNING id
-                        """,
-                        (session_id,),
-                    )
-                    conv_id = cur.fetchone()[0]
-                    print(f"✅ Created conversation_id: {conv_id}")
-
+            # ✅ Get or create conversation
+            conv_id = self._get_conversation_id(cur, session_id)
+            
+            if conv_id is None:
+                # Conversation doesn't exist - create it
+                print(f"🆕 Creating new conversation for session {session_id}")
                 cur.execute(
                     """
-                    INSERT INTO messages (conversation_id, role, content, tokens_used, response_time_ms, metadata)
-                    VALUES (%s, %s, %s, %s, %s, %s)
+                    INSERT INTO conversations (session_id, created_at, updated_at, title)
+                    VALUES (%s, NOW(), NOW(), 'New Chat')
                     RETURNING id
                     """,
-                    (
-                        conv_id,
-                        role,
-                        content,
-                        tokens_used,
-                        response_time_ms,
-                        Json(metadata or {}),
-                    ),
+                    (session_id,),
                 )
-                msg_id = cur.fetchone()[0]
+                conv_id = cur.fetchone()[0]
+                print(f"✅ Created conversation_id: {conv_id}")
 
+            cur.execute(
+                """
+                INSERT INTO messages (conversation_id, role, content, tokens_used, response_time_ms, metadata)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id
+                """,
+                (
+                    conv_id,
+                    role,
+                    content,
+                    tokens_used,
+                    response_time_ms,
+                    Json(metadata or {}),
+                ),
+            )
+            msg_id = cur.fetchone()[0]
+
+            cur.execute(
+                "UPDATE conversations SET updated_at = NOW() WHERE id = %s",
+                (conv_id,),
+            )
+
+            # Generate title if it's the first user message in this schema
+            if role == "user":
                 cur.execute(
-                    "UPDATE conversations SET updated_at = NOW() WHERE id = %s",
+                    """
+                    SELECT COUNT(*) 
+                    FROM messages 
+                    WHERE conversation_id = %s AND role = 'user'
+                    """,
                     (conv_id,),
                 )
+                user_count = cur.fetchone()[0]
 
-                # Generate title if it's the first user message in this schema
-                if role == "user":
+                if user_count == 1:
+                    first_line = content.strip().split("\n", 1)[0]
+                    short = first_line[:60]
+                    title = short + "..." if len(first_line) > 60 else short
                     cur.execute(
-                        """
-                        SELECT COUNT(*) 
-                        FROM messages 
-                        WHERE conversation_id = %s AND role = 'user'
-                        """,
-                        (conv_id,),
+                        "UPDATE conversations SET title = %s WHERE id = %s",
+                        (title, conv_id),
                     )
-                    user_count = cur.fetchone()[0]
 
-                    if user_count == 1:
-                        first_line = content.strip().split("\n", 1)[0]
-                        short = first_line[:60]
-                        title = short + "..." if len(first_line) > 60 else short
-                        cur.execute(
-                            "UPDATE conversations SET title = %s WHERE id = %s",
-                            (title, conv_id),
-                        )
-
-                conn.commit()
-                print(f"✅ Added message {msg_id} to conversation {conv_id}")
-                return msg_id
+            # ✅ CRITICAL: Commit BEFORE closing cursor
+            conn.commit()
+            
+            # ✅ Verify the message was actually saved
+            cur.execute(
+                "SELECT COUNT(*) FROM messages WHERE id = %s",
+                (msg_id,)
+            )
+            verify_count = cur.fetchone()[0]
+            
+            print(f"✅ Added message {msg_id} to conversation {conv_id} (verified: {verify_count} row exists)")
+            
+            if verify_count == 0:
+                raise Exception(f"Message {msg_id} was not saved to database!")
+            
+            return msg_id
+            
         except Exception as e:
-            conn.rollback()
+            if conn:
+                conn.rollback()
             logger.error(f"Error adding message in {schema_name}: {e}")
             import traceback
             traceback.print_exc()
             raise e
         finally:
-            self._put_conn(conn)
+            if cur:
+                cur.close()
+            if conn:
+                self._put_conn(conn)
+
 
 
     def get_messages(
@@ -208,12 +228,13 @@ class ConversationStore:
                     print(f"📖 No conversation_id found for session {session_id}, returning empty messages")
                     return []
 
+                # ✅ Changed: Order ASC (oldest first) so we don't need to reverse
                 cur.execute(
                     """
                     SELECT id, role, content, tokens_used, response_time_ms, created_at, metadata
                     FROM messages
                     WHERE conversation_id = %s
-                    ORDER BY created_at DESC
+                    ORDER BY created_at ASC, id ASC
                     LIMIT %s
                     """,
                     (conv_id, limit),
@@ -222,7 +243,14 @@ class ConversationStore:
                 
                 print(f"📖 Found {len(messages)} messages for conversation_id {conv_id}")
                 
-                return [dict(msg) for msg in reversed(messages)]
+                # ✅ Debug: Print first and last message
+                if messages:
+                    print(f"  First message: role={messages[0]['role']}, content={messages[0]['content'][:50]}")
+                    print(f"  Last message: role={messages[-1]['role']}, content={messages[-1]['content'][:50]}")
+                
+                # ✅ No need to reverse since we ordered ASC
+                return [dict(msg) for msg in messages]
+                
         except Exception as e:
             logger.error(f"Error fetching messages in {schema_name}: {e}")
             import traceback
@@ -230,7 +258,6 @@ class ConversationStore:
             return []
         finally:
             self._put_conn(conn)
-
 
     def get_full_history(
         self, session_id: str, schema_name: str

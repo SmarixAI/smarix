@@ -70,9 +70,6 @@ class TraceabilityHandler:
             # Update Caches
             self._update_caches(query, result, active_session_id)
             
-            # Save conversation
-            self._save_conversation(active_session_id, query, result, schema_name=schema_name)
-            
             return result
         else:
             self.chatbot.logger.warning(f"TRACEABILITY | No match for {entity['type']} #{entity['number']}")
@@ -81,12 +78,4 @@ class TraceabilityHandler:
     def _update_caches(self, query: str, result: Dict[str, Any], active_session_id: str):
         """Update semantic and response caches."""
         self.chatbot.cache_handler.update_caches(query, result, active_session_id)
-    
-    def _save_conversation(self, active_session_id: str, query: str, result: Dict[str, Any], schema_name: Optional[str] = None):
-        """Save conversation to conversation store."""
-        try:
-            self.chatbot.conversation_store.add_message(active_session_id, "user", query, schema_name=schema_name, tokens_used=0)
-            self.chatbot.conversation_store.add_message(active_session_id, "assistant", result.get("answer", ""), schema_name=schema_name, tokens_used=0)
-        except Exception as e:
-            self.chatbot.logger.error(f"CONVERSATION_STORE | Failed to save: {e}")
 

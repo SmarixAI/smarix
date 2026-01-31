@@ -1,7 +1,18 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { MODULE_FILE_MAPPING, getModuleName } from '../../../../../components/onboarding/constants/ReadingOverview/modules';
+
+// --- S3 Configuration ---
+const S3_BUCKET = process.env.AWS_BUCKET_NAME || 'smarix-data-apsouth1';
+const S3_REGION = process.env.AWS_DEFAULT_REGION || 'ap-south-1';
+
+const s3Client = new S3Client({
+  region: S3_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+  },
+});
 
 interface JSONData {
   metadata?: any;
@@ -10,42 +21,20 @@ interface JSONData {
   [key: string]: any;
 }
 
-function groupTeachingThenQna(teachingContent: any[], qna: any[], prefix: string = ''): Record<string, any> {
-  const grouped: Record<string, any> = {};
-  let index = 1;
-  
-  // Add all teaching_content items first (each as separate page)
-  teachingContent.forEach((item) => {
-    const key = prefix ? `${prefix}_teaching_content_${index}` : `teaching_content_${index}`;
-    grouped[key] = {
-      type: 'teaching_content',
-      ...item
-    };
-    index++;
-  });
-  
-  // Then add all qna items together as a single page
-  if (qna.length > 0) {
-    const key = prefix ? `${prefix}_qna_all` : `qna_all`;
-    grouped[key] = {
-      type: 'qna',
-      questions: qna, // All questions in an array
-      sectionKey: prefix
-    };
-  }
-  
-  return grouped;
-}
-
-
 function extractGroupedSections(jsonData: JSONData) {
-  if (!jsonData.sections || typeof jsonData.sections !== 'object') {
+  // Robust check: try root .sections, or .data.sections
+  const sectionsData = jsonData.sections || (jsonData.data && jsonData.data.sections);
+
+  if (!sectionsData || typeof sectionsData !== 'object') {
+    console.warn("⚠️ extractGroupedSections: No 'sections' found in JSON");
     return [];
   }
 
-  return Object.entries(jsonData.sections).map(([sectionKey, sectionValue]) => {
-    const teaching = sectionValue.teaching_content ?? [];
-    const qna = sectionValue.qna ?? [];
+  return Object.entries(sectionsData).map(([sectionKey, sectionValue]) => {
+    // @ts-ignore
+    const val = sectionValue as any;
+    const teaching = val.teaching_content ?? [];
+    const qna = val.qna ?? [];
 
     const items = [
       ...teaching.map((t: any) => ({ type: 'teaching_content', ...t })),
@@ -66,7 +55,6 @@ function extractGroupedSections(jsonData: JSONData) {
   });
 }
 
-
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ moduleId: string }> }
@@ -76,128 +64,61 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const repo = searchParams.get('repo');
     
-    // Normalize moduleId to string name if it's numeric
+    if (!repo) {
+      return NextResponse.json({ error: 'Repo param required' }, { status: 400 });
+    }
+
     const normalizedModuleId = getModuleName(moduleId);
     const jsonFileName = MODULE_FILE_MAPPING[normalizedModuleId] || MODULE_FILE_MAPPING[moduleId];
 
     if (!jsonFileName) {
-      return NextResponse.json(
-        { error: 'Module not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Module not found' }, { status: 404 });
     }
 
-    let possiblePaths: string[];
+    const s3Key = `Onboarding/${repo}/reading/${jsonFileName}`;
+    console.log(`Fetching from S3: ${s3Key}`);
 
-    // Helper function to find file in repo folders or old structure
-    const findFileInRepos = async (basePaths: string[], fileName: string, repo?: string): Promise<string | null> => {
-      for (const basePath of basePaths) {
-        try {
-          // If repo is provided, try owner/repo structure first
-          if (repo) {
-            const [owner, repoName] = repo.split('/');
-            // Try new structure: owner/repo/onboarding_reading_data/
-            const newPath = path.join(basePath, owner, repoName, 'onboarding_reading_data', fileName);
-            try {
-              await fs.access(newPath);
-              return newPath;
-            } catch {
-              // Try alternative: owner/repo/reading/
-              const altPath = path.join(basePath, owner, repoName, 'reading', fileName);
-              try {
-                await fs.access(altPath);
-                return altPath;
-              } catch {
-                // Continue to scan
-              }
-            }
-          }
-          
-          // Scan repo folders for the file
-          const entries = await fs.readdir(basePath, { withFileTypes: true });
-          for (const entry of entries) {
-            if (entry.isDirectory()) {
-              // Check if it's owner/repo structure
-              const ownerPath = path.join(basePath, entry.name);
-              const ownerEntries = await fs.readdir(ownerPath, { withFileTypes: true });
-              for (const repoEntry of ownerEntries) {
-                if (repoEntry.isDirectory()) {
-                  // Try new structure: owner/repo/onboarding_reading_data/
-                  const newPath = path.join(ownerPath, repoEntry.name, 'onboarding_reading_data', fileName);
-                  try {
-                    await fs.access(newPath);
-                    return newPath;
-                  } catch {
-                    // Try alternative: owner/repo/reading/
-                    const altPath = path.join(ownerPath, repoEntry.name, 'reading', fileName);
-                    try {
-                      await fs.access(altPath);
-                      return altPath;
-                    } catch {
-                      continue;
-                    }
-                  }
-                }
-              }
-              
-              // Try flat repo structure: repo_name/onboarding_reading_data/
-              const flatPath = path.join(ownerPath, entry.name, 'onboarding_reading_data', fileName);
-              try {
-                await fs.access(flatPath);
-                return flatPath;
-              } catch {
-                continue;
-              }
-            }
-          }
-          
-          // Try old structure (direct file)
-          const oldPath = path.join(basePath, 'onboarding_reading_data', fileName);
-          try {
-            await fs.access(oldPath);
-            return oldPath;
-          } catch {
-            continue;
-          }
-        } catch {
-          continue;
-        }
+    try {
+      const command = new GetObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: s3Key,
+      });
+
+      const s3Response = await s3Client.send(command);
+      
+      if (!s3Response.Body) {
+        throw new Error('Empty body from S3');
       }
-      return null;
-    };
 
-    const possibleBasePaths = [
-      path.join(process.cwd(), '..', '..', 'backend', 'data', 'Onboarding'),
-      path.join(process.cwd(), '..', 'backend', 'data', 'Onboarding'),
-      path.join(process.cwd(), 'backend', 'data', 'Onboarding'),
-    ];
+      const fileContent = await s3Response.Body.transformToString();
+      const jsonData: JSONData = JSON.parse(fileContent);
+      
+      // Log keys to debug structure issues
+      // console.log("Fetched JSON Keys:", Object.keys(jsonData));
 
-    const filePath = await findFileInRepos(possibleBasePaths, jsonFileName, repo);
-    
-    if (!filePath) {
-      return NextResponse.json(
-        { error: 'Module file not found' },
-        { status: 404 }
-      );
+      const sections = extractGroupedSections(jsonData);
+
+      return NextResponse.json({
+        moduleId,
+        jsonFile: jsonFileName,
+        sections,
+        totalSections: sections.length,
+      }, {
+        headers: {
+          'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
+        },
+      });
+
+    } catch (s3Error: any) {
+      console.error("S3 Fetch Error:", s3Error);
+      if (s3Error.name === 'NoSuchKey') {
+        return NextResponse.json({ error: 'File not found in S3', key: s3Key }, { status: 404 });
+      }
+      throw s3Error;
     }
 
-    const fileContent = await fs.readFile(filePath, 'utf-8');
-
-    const jsonData: JSONData = JSON.parse(fileContent);
-    const sections = extractGroupedSections(jsonData);
-
-    
-    return NextResponse.json({
-      moduleId,
-      jsonFile: jsonFileName,
-      sections,
-      totalSections: sections.length,
-    }, {
-      headers: {
-        'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
-      },
-    });
   } catch (error) {
+    console.error("API Error:", error);
     return NextResponse.json({
       error: 'Failed to load module',
       details: error instanceof Error ? error.message : 'Unknown error',

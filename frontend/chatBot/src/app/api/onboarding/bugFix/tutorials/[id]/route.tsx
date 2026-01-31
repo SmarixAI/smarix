@@ -1,6 +1,20 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+
+// ---------- S3 CONFIGURATION ---------- //
+
+const S3_BUCKET = process.env.AWS_BUCKET_NAME || 'smarix-data-apsouth1';
+const S3_REGION = process.env.AWS_DEFAULT_REGION || 'ap-south-1';
+
+const s3Client = new S3Client({
+  region: S3_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+  },
+});
+
+// ---------- API ROUTE ---------- //
 
 export async function GET(
   request: Request,
@@ -8,130 +22,76 @@ export async function GET(
 ) {
   try {
     const { searchParams } = new URL(request.url);
-    const repo = searchParams.get('repo');
+    const repo = searchParams.get('repo'); // e.g. "owner/repo"
     const { id } = await params;
 
-    // Helper function to find file in repo folders
-    const findFileInRepos = async (basePaths: string[], fileName: string, repo?: string | null): Promise<string | null> => {
-      for (const basePath of basePaths) {
-        try {
-          // If repo is provided, try owner/repo structure first
-          if (repo) {
-            const [owner, repoName] = repo.split('/');
-            // Try bugfix/ folder first (most common location)
-            const bugfixPath = path.join(basePath, owner, repoName, 'bugfix', fileName);
-            try {
-              await fs.access(bugfixPath);
-              return bugfixPath;
-            } catch {
-              // Try new structure: owner/repo/onboarding_bugfix_data/
-              const newPath = path.join(basePath, owner, repoName, 'onboarding_bugfix_data', fileName);
-              try {
-                await fs.access(newPath);
-                return newPath;
-              } catch {
-                // Continue to scan
-              }
-            }
-          }
-          
-          // Scan repo folders for the file
-          const entries = await fs.readdir(basePath, { withFileTypes: true });
-          for (const entry of entries) {
-            if (entry.isDirectory()) {
-              // Check if it's owner/repo structure
-              const ownerPath = path.join(basePath, entry.name);
-              try {
-                const ownerEntries = await fs.readdir(ownerPath, { withFileTypes: true });
-                for (const repoEntry of ownerEntries) {
-                  if (repoEntry.isDirectory()) {
-                    // Try new structure: owner/repo/onboarding_bugfix_data/
-                    const newPath = path.join(ownerPath, repoEntry.name, 'onboarding_bugfix_data', fileName);
-                    try {
-                      await fs.access(newPath);
-                      return newPath;
-                    } catch {
-                      // Try alternative: owner/repo/bugfix/
-                      const altPath = path.join(ownerPath, repoEntry.name, 'bugfix', fileName);
-                      try {
-                        await fs.access(altPath);
-                        return altPath;
-                      } catch {
-                        continue;
-                      }
-                    }
-                  }
-                }
-              } catch {
-                // Not owner/repo structure, try flat
-              }
-              
-              // Try flat repo structure: repo_name/onboarding_bugfix_data/
-              const flatPath = path.join(ownerPath, entry.name, 'onboarding_bugfix_data', fileName);
-              try {
-                await fs.access(flatPath);
-                return flatPath;
-              } catch {
-                continue;
-              }
-            }
-          }
-          
-          // Try old structure (direct file)
-          const oldPath = path.join(basePath, 'onboarding_bugfix_data', fileName);
-          try {
-            await fs.access(oldPath);
-            return oldPath;
-          } catch {
-            continue;
-          }
-        } catch {
-          continue;
-        }
+    if (!repo) {
+      return NextResponse.json(
+        { error: 'Repository information (repo query param) is required' },
+        { status: 400 }
+      );
+    }
+
+    // JSON filename for PR tutorials
+    const jsonFileName = 'onboarding_pr_tutorials.json';
+
+    // Construct S3 Key
+    // Pattern: Onboarding/{owner}/{repo}/bugfix/{jsonFileName}
+    const s3Key = `Onboarding/${repo}/bugfix/${jsonFileName}`;
+
+    console.log(`Fetching PR Tutorial #${id} from S3: ${s3Key}`);
+
+    try {
+      const command = new GetObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: s3Key,
+      });
+
+      const s3Response = await s3Client.send(command);
+      
+      if (!s3Response.Body) {
+        throw new Error('Empty body from S3');
       }
-      return null;
-    };
 
-    const possibleBasePaths = [
-      path.join(process.cwd(), '..', '..', 'backend', 'data', 'Onboarding'),
-      path.join(process.cwd(), '..', 'backend', 'data', 'Onboarding'),
-      path.join(process.cwd(), 'backend', 'data', 'Onboarding'),
-    ];
+      const fileContent = await s3Response.Body.transformToString();
+      const jsonData = JSON.parse(fileContent);
 
-    const filePath = await findFileInRepos(possibleBasePaths, 'onboarding_pr_tutorials.json', repo);
-    
-    if (!filePath) {
-      return NextResponse.json(
-        { error: 'PR tutorials file not found' },
-        { status: 404 }
+      // Find the specific tutorial by ID (tutorial_number)
+      const tutorial = jsonData.tutorials?.find(
+        (t: any) => t.tutorial_number === parseInt(id) || t.tutorial_number?.toString() === id
       );
+
+      if (!tutorial) {
+        return NextResponse.json(
+          { error: 'Tutorial not found', id },
+          { status: 404 }
+        );
+      }
+
+      return NextResponse.json(tutorial, {
+        headers: {
+          'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
+        },
+      });
+
+    } catch (s3Error: any) {
+      console.error("S3 Fetch Error:", s3Error);
+      
+      if (s3Error.name === 'NoSuchKey') {
+        return NextResponse.json(
+          { error: 'PR tutorials file not found in S3', key: s3Key },
+          { status: 404 }
+        );
+      }
+      
+      throw s3Error;
     }
 
-    const fileContent = await fs.readFile(filePath, 'utf-8');
-    const jsonData = JSON.parse(fileContent);
-
-    // Find the tutorial by ID (tutorial_number)
-    const tutorial = jsonData.tutorials?.find(
-      (t: any) => t.tutorial_number === parseInt(id) || t.tutorial_number?.toString() === id
-    );
-
-    if (!tutorial) {
-      return NextResponse.json(
-        { error: 'Tutorial not found' },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json(tutorial, {
-      headers: {
-        'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
-      },
-    });
   } catch (error) {
+    console.error("API Error:", error);
     return NextResponse.json({
       error: 'Failed to load tutorial',
       details: error instanceof Error ? error.message : 'Unknown error',
     }, { status: 500 });
   }
 }
-

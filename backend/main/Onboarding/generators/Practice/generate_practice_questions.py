@@ -7,6 +7,7 @@ Generates practice coding questions with step-by-step tutorials
 import sys
 import json
 import re
+import random
 from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
@@ -22,28 +23,22 @@ from utils.repo_context import get_repo_context
 from utils.s3 import s3_manager
 
 ctx = get_repo_context()
-
 REPO_OWNER = ctx["owner"]
 REPO_NAME = ctx["repo"]
-
-
 VECTOR_DB_PATH = ctx["vector_db"]
 ONBOARDING_ROOT = ctx["onboarding"]
-
-
 
 load_dotenv()
 
 
 def _load_rag_chatbot_class():
-    """Dynamically load RAGChatbot class from various possible locations"""
+    """Dynamically load RAGChatbot class"""
     candidates = [
         "core.chatbot",
         "core.ChatBot.chatbot",
         "ChatBot.core.chatbot",
         "ChatBot.chatbot",
     ]
-
     for cand in candidates:
         try:
             mod = importlib.import_module(cand)
@@ -51,7 +46,6 @@ def _load_rag_chatbot_class():
                 return mod.RAGChatbot
         except Exception:
             pass
-
     for path in BACKEND_ROOT.rglob("chatbot.py"):
         try:
             spec = importlib.util.spec_from_file_location("rag_chatbot_dynamic", str(path))
@@ -61,128 +55,105 @@ def _load_rag_chatbot_class():
                 return getattr(mod, "RAGChatbot")
         except Exception:
             pass
-
     raise ImportError("Could not import RAGChatbot class")
 
 
 RAGChatbot = _load_rag_chatbot_class()
 
-def can_generate_practice_tutorial(repo_chunks: list) -> bool:
-    code_chunks = 0
 
-    for c in repo_chunks:
-        meta = c.get("metadata", {})
+def get_random_code_context(chatbot, limit: int = 10) -> str:
+    """
+    Fetches random but relevant code chunks from the DB to serve as context
+    for the practice question.
+    """
+    # Keywords to find meaty code logic (not just configs)
+    keywords = [
+        "service implementation", "controller logic", "api handler", 
+        "data processing", "authentication logic", "utility functions",
+        "business logic", "database model", "helper class"
+    ]
+    
+    selected_keyword = random.choice(keywords)
+    print(f"   🔍 Searching for code context using: '{selected_keyword}'...")
+    
+    query_embedding = chatbot.get_query_embedding(selected_keyword)
+    
+    chunks = []
+    if hasattr(chatbot.vector_db, 'search'):
+        chunks = chatbot.vector_db.search(query_embedding, top_k=limit)
+    
+    # Fallback to specific indices
+    if not chunks and hasattr(chatbot.vector_db, 'indices'):
+        for idx in ['code', 'github']:
+            if idx in chatbot.vector_db.indices:
+                res = chatbot.vector_db.indices[idx].search(query_embedding, top_k=limit)
+                if isinstance(res, list): chunks.extend(res)
+                
+    # Flatten if needed
+    if isinstance(chunks, dict):
+        flat = []
+        for v in chunks.values():
+            if isinstance(v, list): flat.extend(v)
+        chunks = flat
 
-        # ✅ RAG-normalized fields
-        content = c.get("text", "").strip()
-        index_type = meta.get("index")  # "code", "file", etc.
+    # Filter for good code chunks (not too short)
+    valid_chunks = []
+    for c in chunks:
+        text = c.get("content") or c.get("text", "")
+        if len(text.splitlines()) > 10:
+            path = c.get("metadata", {}).get("file_path", "unknown")
+            valid_chunks.append(f"File: {path}\n```\n{text[:2000]}\n```")
+    
+    if not valid_chunks:
+        return ""
+        
+    # Return a random selection of 3-5 chunks to form a context
+    selected_chunks = random.sample(valid_chunks, min(len(valid_chunks), 5))
+    return "\n\n".join(selected_chunks)
 
-        if index_type in {"code", "file"} and content:
-            line_count = len(content.splitlines())
-            if line_count >= 5:   # relaxed threshold is fine
-                code_chunks += 1
 
-    print(f"[DEBUG] Executable code chunks detected: {code_chunks}")
-    return code_chunks >= 1
-
-def load_practice_question_prompt() -> str:
+def load_practice_question_prompt(difficulty: str, steps: str) -> str:
     """Load the complete practice question generation prompt"""
 
-    prompt_template = """CRITICAL INSTRUCTION: You MUST ONLY use information from the provided context (repository code, emails, documents). DO NOT generate any code, class names, function names, or examples that are not present in the context. If the context does not contain enough information for a particular functionality, skip it and choose a different functionality that exists in the context.
+    return f"""
+    ROLE: Expert Coding Instructor.
+    
+    TASK: Generate ONE practice code-level tutorial question based on the provided repository code.
+    
+    DIFFICULTY: {difficulty}
+    REQUIRED STEPS: {steps}
+    
+    CRITICAL CONSTRAINT: 
+    - You MUST use the provided "REPO CONTEXT" code. 
+    - Do NOT invent classes or functions that don't exist in the context.
+    - If the context is about Authentication, write an Auth question. If it's about Data, write a Data question.
 
-ABSOLUTELY FORBIDDEN: 
-- NO Mermaid diagrams
-- NO flowcharts
-- NO visual diagrams of any kind
-- NO architecture diagrams
-- NO UML diagrams
-- NO graphical representations
-- NO markdown diagrams
-- NO ASCII art diagrams
+    OUTPUT FORMAT:
+    ## Question Description
+    Create a clear problem statement based on the code provided. Example: "Implement the error handling logic for the UserService."
 
-Generate ONE practice code-level tutorial question STRICTLY based on a functionality found in the provided context.
+    ## Implementation Tutorial
+    Break the solution down into exactly {steps} steps.
 
-DIFFICULTY LEVEL: {difficulty}
+    **Step 1: [Title]**
+    **What to Do**: Explain the task (5-6 sentences).
+    **Code Snippet**:
+    ```python
+    # 10-20 lines of COMPLETE, EXECUTABLE code based on the context.
+    # No placeholders like "// logic here".
+    ```
+    **Tips**: 
+    1. Tip 1
+    2. Tip 2
+    3. Tip 3
+    4. Tip 4
+    5. Tip 5
+    **Common Mistakes**:
+    1. Mistake 1
+    2. Mistake 2
 
-- Easy question: EXACTLY 5-6 steps
-- Intermediate question: EXACTLY 7-8 steps  
-- Hard question: EXACTLY 9-10 steps
-
-MANDATORY POINT: DO NOT provide the solution in just 1-2 steps. You MUST break down the question into the specified number of steps based on difficulty.
-
----
-
-## Question Description
-
-Create a clear, detailed code-level problem statement focusing on one major application flow that EXISTS IN THE CONTEXT (e.g., authentication, data processing, API integration, state management, error handling, database operations). 
-
-Describe what the end result should accomplish. USE ONLY actual class names, function names, and structures from the provided context.
-
----
-
-## Implementation Tutorial
-
-YOU MUST break down the complete solution into the EXACT number of sequential steps specified for the difficulty level. EVERY SINGLE STEP MUST INCLUDE COMPLETE, WORKING CODE WITH NO PLACEHOLDERS OR COMMENTS LIKE "// logic will go here".
-
-CRITICAL: Each step MUST contain AT LEAST 10-20 LINES OF CODE. Steps with fewer than 10 lines are FORBIDDEN.
-
-IMPORTANT: Each step should implement ONLY ONE SMALL PART of the solution. Build the solution incrementally across all steps.
-
----
-
-### For EACH Step, You MUST Provide ALL FOUR SECTIONS:
-
-**Step X: [Step Title]**
-
-**What to Do (MANDATORY - Write at least 5-6 sentences)**
-- Explain in detail what needs to be implemented in this specific step ONLY
-- Describe the purpose and how it connects to previous steps (if applicable)
-- Explain the concepts, patterns, or techniques being used in THIS STEP
-- Mention what files or components from the CONTEXT are being modified
-- Describe the expected outcome after completing THIS SPECIFIC STEP
-- Explain how this step contributes to the overall solution
-
-**Code Snippet (MANDATORY - MUST BE 10-20 LINES PER STEP - COUNT THE LINES)**
-
-ABSOLUTE REQUIREMENTS FOR CODE:
-1. REQUIRED: Code MUST be MINIMUM 10 lines, MAXIMUM 20 lines (count them!)
-2. REQUIRED: Code MUST be complete and executable with NO placeholders
-3. REQUIRED: Code MUST use actual class names, methods, and variables from the provided context
-4. REQUIRED: Include all necessary imports, method signatures, and complete implementations FOR THIS STEP
-5. REQUIRED: If a single function is too short, include related setup code, imports, class definitions, or helper methods to reach 10+ lines
-6. REQUIRED: Add proper error handling, logging, or validation code to extend shorter implementations
-7. FORBIDDEN: Code snippets with fewer than 10 lines
-8. FORBIDDEN: Comments like "// logic will go here", "// add implementation", "// your code here"
-9. FORBIDDEN: Placeholder text or incomplete code blocks
-10. FORBIDDEN: Making up class names or methods not in the context
-11. FORBIDDEN: Providing the complete solution in one step
-
-**Tips (MANDATORY - Exactly 4-5 tips)**
-1. [Specific actionable tip about best practices for THIS STEP based on the context]
-2. [Tip about optimization, performance, or alternative approaches relevant to THIS STEP]
-3. [Tip about edge cases or scenarios to handle specific to THIS STEP]
-4. [Tip about testing or validating THIS STEP works correctly]
-5. [Tip about debugging common issues in THIS STEP based on the codebase patterns]
-
-**Common Mistakes to Avoid (MANDATORY - Exactly 2-3 mistakes)**
-1. [Specific mistake developers make in THIS STEP with explanation of why it happens and its impact]
-2. [Another common pitfall in THIS STEP with consequences and how to prevent it]
-3. [Third mistake specific to THIS STEP with clear guidance on avoidance]
-
----
-
-## ABSOLUTE REQUIREMENTS - FAILURE TO FOLLOW WILL RESULT IN INVALID OUTPUT:
-
-### Output Format Requirements (CRITICAL):
-1. FORBIDDEN: Mermaid diagrams, flowcharts, or any visual diagrams
-2. FORBIDDEN: Architecture diagrams or system design illustrations
-3. FORBIDDEN: UML diagrams or any graphical representations
-4. REQUIRED: Only provide text-based tutorial with code snippets
-5. REQUIRED: Focus on step-by-step code implementation only
-
-Generate the practice question now."""
-
-    return prompt_template
+    (Repeat for all {steps} steps)
+    """
 
 
 def parse_practice_question(response_text: str, difficulty: str, question_number: int) -> Optional[Dict]:
@@ -201,72 +172,39 @@ def parse_practice_question(response_text: str, difficulty: str, question_number
 
     desc_match = re.search(r'##\s*Question Description\s*\n+(.*?)(?=##\s*Implementation Tutorial|$)',
                           response_text, re.DOTALL | re.IGNORECASE)
-    if desc_match and desc_match.groups():
+    if desc_match:
         parsed_question['question_description'] = desc_match.group(1).strip()
 
-    step_pattern = r'\*\*Step\s+(\d+):\s*([^\*]+?)\*\*\s*\n+(.*?)(?=\*\*Step\s+\d+:|$)'
+    # Improved regex to capture steps robustly
+    step_pattern = r'\*\*Step\s+(\d+):\s*([^\*]+?)\*\*(.*?)(?=\*\*Step\s+\d+:|$)'
     steps_iter = re.finditer(step_pattern, response_text, re.DOTALL)
 
     for step_match in steps_iter:
-        if not step_match.groups() or len(step_match.groups()) < 3:
+        if not step_match.groups():
             continue
-        try:
-            step_num = int(step_match.group(1))
-            step_title = step_match.group(2).strip() if step_match.group(2) else ""
-            step_content = step_match.group(3).strip() if step_match.group(3) else ""
-        except (IndexError, ValueError, AttributeError) as e:
-            print(f"⚠ Warning: Error parsing step match: {e}")
-            continue
+            
+        step_num = int(step_match.group(1))
+        step_title = step_match.group(2).strip()
+        step_content = step_match.group(3).strip()
 
-        # What to Do: capture until Code Snippet or Tips or Common Mistakes or next Step
+        # Extract subsections
         what_to_do = ""
-        try:
-            what_to_do_match = re.search(
-                r'\*\*What to Do[:\s]*\*\*\s*\n+(.*?)(?=\*\*Code Snippet|\*\*Tips|\*\*Common Mistakes|\*\*Step|\Z)',
-                step_content,
-                re.DOTALL | re.IGNORECASE
-            )
-            if what_to_do_match and what_to_do_match.groups():
-                what_to_do = what_to_do_match.group(1).strip()
-        except (IndexError, AttributeError):
-            pass
+        wtd_match = re.search(r'\*\*What to Do.*?\*\*\s*(.*?)(?=\*\*Code Snippet)', step_content, re.DOTALL | re.IGNORECASE)
+        if wtd_match: what_to_do = wtd_match.group(1).strip()
 
-        # Code snippet between triple backticks (handles optional language after backticks)
         code_snippet = ""
-        try:
-            code_match = re.search(r'```(?:[\w+-]*)\s*\n(.*?)\n```', step_content, re.DOTALL)
-            if code_match and code_match.groups():
-                code_snippet = code_match.group(1).strip()
-        except (IndexError, AttributeError):
-            pass
+        code_match = re.search(r'```(?:[\w+-]*)\s*\n(.*?)\n```', step_content, re.DOTALL)
+        if code_match: code_snippet = code_match.group(1).strip()
 
-        # Tips: numbered list (captures multiple numbered items)
         tips = []
-        try:
-            tips_match = re.search(
-                r'\*\*Tips[:\s]*\*\*\s*\n+(.*?)(?=\*\*Common Mistakes|\*\*Step|\Z)',
-                step_content,
-                re.DOTALL | re.IGNORECASE
-            )
-            if tips_match and tips_match.groups():
-                tips_text = tips_match.group(1).strip()
-                tips = [t.strip() for t in re.findall(r'\d+\.\s*(.+?)(?=\n\d+\.|\n\Z)', tips_text, re.DOTALL) if t.strip()]
-        except (IndexError, AttributeError):
-            pass
+        tips_match = re.search(r'\*\*Tips.*?\*\*\s*(.*?)(?=\*\*Common Mistakes)', step_content, re.DOTALL | re.IGNORECASE)
+        if tips_match:
+            tips = [t.strip() for t in re.findall(r'\d+\.\s*(.+)', tips_match.group(1))]
 
-        # Common mistakes: numbered list
         mistakes = []
-        try:
-            mistakes_match = re.search(
-                r'\*\*Common Mistakes(?: to Avoid)?[:\s]*\*\*\s*\n+(.*?)(?=\*\*Step|\Z)',
-                step_content,
-                re.DOTALL | re.IGNORECASE
-            )
-            if mistakes_match and mistakes_match.groups():
-                mistakes_text = mistakes_match.group(1).strip()
-                mistakes = [m.strip() for m in re.findall(r'\d+\.\s*(.+?)(?=\n\d+\.|\Z)', mistakes_text, re.DOTALL) if m.strip()]
-        except (IndexError, AttributeError):
-            pass
+        mistakes_match = re.search(r'\*\*Common Mistakes.*?\*\*\s*(.*?)(?=$)', step_content, re.DOTALL | re.IGNORECASE)
+        if mistakes_match:
+            mistakes = [m.strip() for m in re.findall(r'\d+\.\s*(.+)', mistakes_match.group(1))]
 
         parsed_question['steps'].append({
             'step_number': step_num,
@@ -291,45 +229,31 @@ def generate_practice_questions(
     use_multi_index: bool = True,
     routing_method: str = 'llm'
 ) -> str:
-    """
-    Generate practice code tutorial questions
-    1 Easy, 2 Intermediate, 1 Hard = 4 total questions
-    """
 
     print("=" * 80)
     print("Practice Code Tutorial Questions Generator".center(80))
-    print("1 Easy | 2 Intermediate | 1 Hard".center(80))
     print("=" * 80 + "\n")
 
     if model is None:
         model = "gpt-4o" if provider == 'openai' else None
 
-    print("Initializing chatbot with multi-index support...")
+    # Initialize Chatbot
     try:
         chatbot = RAGChatbot(
             vector_db_path=VECTOR_DB_PATH,
             gmail_db_path=gmail_db_path,
             provider=provider,
             model=model,
-            temperature=0.4,
+            temperature=0.7,
             verbose=True,
             routing_method=routing_method,
             enable_multi_query=False,
-            disable_conversation_storage=True  # Skip conversation storage for generators
+            disable_conversation_storage=True
         )
-
-        print("Chatbot initialized successfully")
-
-        if use_multi_index and hasattr(chatbot, 'multi_index_store') and chatbot.multi_index_store:
-            stats = chatbot.multi_index_store.get_statistics()
-            print(f"Multi-index: {stats.get('total_indices', 0)} indices, {stats.get('total_vectors', 0)} vectors")
-            print(f"Routing: {routing_method.upper()}")
-
+        print("✅ Chatbot initialized successfully")
     except Exception as e:
-        print(f"Failed to initialize chatbot: {e}")
+        print(f"❌ Failed to initialize chatbot: {e}")
         return None
-
-    prompt_template = load_practice_question_prompt()
 
     questions_config = [
         {"difficulty": "Easy", "steps": "5-6"},
@@ -338,135 +262,51 @@ def generate_practice_questions(
         {"difficulty": "Hard", "steps": "9-10"}
     ]
 
-    # 🔍 Pull executable repo context ONLY for feasibility check
-    repo_chunks = []
-
-    # Pull from CODE index
-    # ✅ CORRECT: use RAG abstraction, not vector store internals
-    # 🔍 Pull executable repo context ONLY for feasibility check
-    # 🔍 Pull executable repo context ONLY for feasibility check
-    repo_chunks = []
-
-    store = getattr(chatbot, "multi_index_store", None)
-
-    if store:
-        # Deterministic lookup — no embeddings, no routing
-        repo_chunks.extend(
-            store.find(
-                where={"language": "dart"},
-                index="file",
-                top_k=20
-            )
-        )
-
-        repo_chunks.extend(
-            store.find(
-                where={"language": "dart"},
-                index="code",
-                top_k=20
-            )
-        )
-
-    print(f"[DEBUG] Feasibility chunks pulled: {len(repo_chunks)}")
-
-
-    for c in repo_chunks[:5]:
-        meta = c.get("metadata", {})
-        print({
-            "index": meta.get("index"),
-            "file": meta.get("file_path"),
-            "lines": len(c.get("text", "").splitlines())
-        })
-
-    repo_chunks = repo_chunks or []
-
     all_questions = []
-
-    print("\n" + "=" * 80)
-    print("Generating Practice Code Tutorial Questions")
-    print("=" * 80 + "\n")
-
-    can_generate = can_generate_practice_tutorial(repo_chunks)
 
     for idx, config in enumerate(questions_config, 1):
         difficulty = config["difficulty"]
         steps = config["steps"]
 
-        if not can_generate:
-            print(
-                f"⚠️  Skipping Question {idx} ({difficulty}) — "
-                "not enough executable repo code"
-            )
+        print(f"\nQuestion {idx}/4: {difficulty} Level ({steps} steps)")
+
+        # STEP 1: Fetch Real Code Context
+        context = get_random_code_context(chatbot)
+        
+        if not context:
+            print(f"   ⚠️ Not enough code context found. Skipping.")
             continue
+            
+        print(f"   ✅ Context found: {len(context)} chars")
 
-        print(f"Question {idx}/4: {difficulty} Level ({steps} steps)")
-        print(f"Sending request to chatbot...\n")
+        # STEP 2: Generate Question via LLM
+        system_prompt = load_practice_question_prompt(difficulty, steps)
+        user_prompt = f"REPO CONTEXT:\n{context[:20000]}" # Limit context
 
-        question_prompt = prompt_template.format(difficulty=difficulty)
-
-        schema_name = f"{REPO_OWNER}_{REPO_NAME}".replace("-", "_")
         try:
-            response = chatbot.chat(question_prompt, schema_name=schema_name)
+            print(f"   🤖 Generating question via LLM...")
+            raw_response = chatbot.call_llm(system_prompt, user_prompt)
+            
+            # STEP 3: Parse
+            parsed = parse_practice_question(raw_response, difficulty, idx)
 
-            if not response or not isinstance(response, dict):
-                print(f"Invalid response for Question {idx}\n")
-                continue
-
-            answer_text = response.get('answer', '')
-
-            if not answer_text:
-                print(f"Empty response for Question {idx}\n")
-                continue
-
-            print(f"Received response ({len(answer_text):,} characters)")
-
-            try:
-                parsed = parse_practice_question(answer_text, difficulty, idx)
-
-                if parsed and parsed.get('steps'):
-                    step_count = len(parsed['steps'])
-                    print(f"Parsed successfully: {step_count} steps found")
-
-                    valid_steps = [s for s in parsed['steps'] if s.get('code_line_count', 0) >= 10]
-                    print(f"Steps with 10+ lines of code: {len(valid_steps)}/{step_count}")
-
-                    all_questions.append(parsed)
-                    print(f"Question {idx} added to output\n")
-                else:
-                    print(f"Failed to parse Question {idx} - no steps found")
-                    print(f"Response preview (first 500 chars): {answer_text[:500]}...\n")
-            except (IndexError, AttributeError, ValueError) as parse_error:
-                print(f"⚠️  Error parsing Question {idx}: {parse_error}")
-                print(f"   This usually means the LLM response format doesn't match expected pattern")
-                print(f"   Response preview (first 500 chars): {answer_text[:500]}...\n")
-                continue
+            if parsed and parsed.get('steps'):
+                all_questions.append(parsed)
+                print(f"   ✅ Question generated and parsed ({len(parsed['steps'])} steps).")
+            else:
+                print(f"   ⚠️ Failed to parse generated question.")
 
         except Exception as e:
-            print(f"Error generating Question {idx}: {e}\n")
-            import traceback
-            traceback.print_exc()
+            print(f"   ❌ Error generating question: {e}")
             continue
 
-    
+    # Prepare Output
     questions_data = {
         "metadata": {
             "generated_at": datetime.now().isoformat(),
             "provider": provider,
-            "model": model or getattr(chatbot, 'model', 'unknown'),
-            "total_questions_requested": 4,
+            "model": model,
             "total_questions_generated": len(all_questions),
-            "question_breakdown": "1 Easy, 2 Intermediate, 1 Hard",
-            "question_type": "Practice Code Tutorial with Step-by-Step Implementation",
-            "multi_index_enabled": use_multi_index,
-            "routing_method": routing_method,
-            "features": [
-                "Step-by-step code tutorials",
-                "10-20 lines of code per step",
-                "Tips and common mistakes for each step",
-                "Context-aware from repository",
-                "No hallucinated code",
-                "Complete executable code only"
-            ]
         },
         "questions": all_questions,
         "statistics": {
@@ -475,9 +315,7 @@ def generate_practice_questions(
                 "Easy": len([q for q in all_questions if q.get('difficulty') == 'Easy']),
                 "Intermediate": len([q for q in all_questions if q.get('difficulty') == 'Intermediate']),
                 "Hard": len([q for q in all_questions if q.get('difficulty') == 'Hard'])
-            },
-            "total_steps": sum(len(q.get('steps', [])) for q in all_questions),
-            "average_steps_per_question": round(sum(len(q.get('steps', [])) for q in all_questions) / len(all_questions), 1) if all_questions else 0
+            }
         }
     }
 
@@ -486,7 +324,7 @@ def generate_practice_questions(
 
     try:
         s3_manager.upload_json(questions_data, s3_key)
-        print(f"✅ Practice questions uploaded to S3:")
+        print(f"\n✅ Practice questions uploaded to S3:")
         print(f"   s3://{s3_manager.bucket}/{s3_key}\n")
     except Exception as e:
         print(f"❌ Failed to upload to S3: {e}")
@@ -496,16 +334,9 @@ def generate_practice_questions(
 
 
 if __name__ == "__main__":
-    gmail_db_path: str = None,
-    PROVIDER = "openai"
-    MODEL = "gpt-4o-mini"
-    USE_MULTI_INDEX = True
-    ROUTING_METHOD = "llm"
-
-    result = generate_practice_questions(
+    generate_practice_questions(
         provider="openai",
         model="gpt-4o-mini",
         use_multi_index=True,
         routing_method="llm"
     )
-

@@ -153,14 +153,6 @@ class CacheHandler:
                 cached_result['_cached_query']
             )
             
-            try:
-                self.chatbot.conversation_store.add_message(session_id, 'user', query, schema_name=schema_name,tokens_used=0)
-                self.chatbot.conversation_store.add_message(
-                    session_id, 'assistant', result.get('answer', ''), schema_name=schema_name, tokens_used=0
-                )
-            except Exception as e:
-                self.chatbot.logger.error(f"Failed to save augmented response: {e}")
-            
             return result
         
         # Handle generation with hints (low confidence or PR-strict)
@@ -181,14 +173,6 @@ class CacheHandler:
             self.chatbot.logger.info(
                 f"✅ DIRECT CACHE HIT | confidence={confidence} | tier={cache_tier}"
             )
-            
-            try:
-                self.chatbot.conversation_store.add_message(session_id, 'user', query, schema_name=schema_name, tokens_used=0)
-                self.chatbot.conversation_store.add_message(
-                    session_id, 'assistant', cached_result.get('answer', ''), schema_name=schema_name, tokens_used=0
-                )
-            except Exception as e:
-                self.chatbot.logger.error(f"Failed to save cached exchange: {e}")
             
             return cached_result
         

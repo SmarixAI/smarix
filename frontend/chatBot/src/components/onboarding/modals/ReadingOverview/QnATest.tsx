@@ -18,7 +18,7 @@ interface QnATestProps {
   sectionTitle?: string;
   employeeId?: string | null;
   moduleId?: string;
-  onProgressUpdate?: () => void;
+  onProgressUpdate?: (section: string, itemId: string, updates: any) => void;
 }
 
 export default function QnATest({ questions, sectionTitle, employeeId, moduleId, onProgressUpdate }: QnATestProps) {
@@ -105,6 +105,15 @@ export default function QnATest({ questions, sectionTitle, employeeId, moduleId,
       
       const saveProgress = async () => {
         try {
+          const updates = {
+            status: 'completed',
+            score: scoreData.correct,
+            totalQuestions: scoreData.total,
+            percentage: scoreData.percentage,
+            progress: 100,
+            completedAt: new Date().toISOString(),
+          };
+
           const response = await fetch('/api/onboarding/progress', {
             method: 'POST',
             headers: {
@@ -114,19 +123,12 @@ export default function QnATest({ questions, sectionTitle, employeeId, moduleId,
               employeeId,
               section: 'qa',
               itemId: moduleId,
-              updates: {
-                status: 'completed',
-                score: scoreData.correct,
-                totalQuestions: scoreData.total,
-                percentage: scoreData.percentage,
-                progress: 100,
-                completedAt: new Date().toISOString(),
-              },
+              updates,
             }),
           });
 
           if (response.ok && onProgressUpdate) {
-            onProgressUpdate();
+            onProgressUpdate('qa', moduleId || '', updates);
           }
         } catch (error) {
           console.error('Error saving QnA progress:', error);
