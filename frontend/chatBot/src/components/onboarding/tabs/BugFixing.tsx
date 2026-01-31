@@ -3,10 +3,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BookOpen, Code2, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import type {
-  PRTutorialsResponse,
-  CodingQuestionsResponse,
-} from '../../../../types/onboarding';
 import { Inter } from 'next/font/google';
 
 const inter = Inter({ subsets: ['latin'], weight: ['400', '500', '600', '700'] });
@@ -41,6 +37,7 @@ interface BugListItem {
   difficulty: 'Easy' | 'Medium' | 'Hard';
   prNumber: number;
   filesChanged: number;
+  category?: string;
 }
 
 export default function BugFixing({ 
@@ -51,15 +48,12 @@ export default function BugFixing({
 }: BugFixingProps) {
   const router = useRouter();
 
-  const [tutorials, setTutorials] =
-    useState<PRTutorialsResponse | null>(null);
-  const [challenges, setChallenges] =
-    useState<CodingQuestionsResponse | null>(null);
+  const [tutorials, setTutorials] = useState<any>(null);
+  const [challenges, setChallenges] = useState<any>(null);
 
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterType>('all');
   const [search, setSearch] = useState('');
-  const [activeIndex, setActiveIndex] = useState(0);
 
   /* ===================== FETCH ===================== */
 
@@ -70,6 +64,7 @@ export default function BugFixing({
       const repoParam = repo ? `?repo=${encodeURIComponent(repo)}` : '';
 
       try {
+        // Fetch from the two separate API endpoints
         const [tutRes, chalRes] = await Promise.all([
           fetch(`/api/onboarding/bugFix/tutorials${repoParam}`),
           fetch(`/api/onboarding/bugFix/challenges${repoParam}`),
@@ -81,8 +76,6 @@ export default function BugFixing({
         }
         if (chalRes.ok) {
           const chalData = await chalRes.json();
-          console.log('Challenges API response:', chalData);
-          console.log('Challenges questions:', chalData?.questions);
           setChallenges(chalData);
         }
       } catch (error) {
@@ -95,104 +88,101 @@ export default function BugFixing({
     fetchData();
   }, [activeRepos]);
 
-  /* ===================== DATA ===================== */
+  /* ===================== DATA PROCESSING ===================== */
 
   const bugs: BugListItem[] = useMemo(() => {
-    const tutorialItems =
-      tutorials?.tutorials
-        ?.filter(t => t.tutorial_number != null) // Filter out items without tutorial_number
-        .map(t => ({
-          id: t.tutorial_number!,
-          type: 'tutorial' as const,
-          title: t.pr_title,
-          description: t.brief_description,
-          difficulty: (t.difficulty ?? 'Easy') as 'Easy' | 'Medium' | 'Hard',
-          prNumber: t.pr_number,
-          filesChanged: t.code_files_modified,
-        })) ?? [];
-
-    // Handle challenges - check both questions array and direct array
-    const challengesArray = challenges?.questions || (Array.isArray(challenges) ? challenges : []);
+    // 1. Process Tutorials
+    const rawTutorials = tutorials?.tutorials || [];
     
-    console.log('Processing challenges:', {
-      challenges,
-      questions: challenges?.questions,
-      challengesArray,
-      length: challengesArray?.length,
-      firstItem: challengesArray?.[0]
+    const tutorialItems = rawTutorials.map((t: any) => {
+      // Fallback: If pr_title is missing, try to scrape it from markdown raw_response
+      let title = t.pr_title;
+      if (!title && t.raw_response) {
+        const match = t.raw_response.match(/^#\s*Tutorial.*?:(.+?)$/m);
+        if (match) title = match[1].trim();
+      }
+
+      // Fallback description
+      let description = t.brief_description;
+      if (!description && t.raw_response) {
+        const match = t.raw_response.match(/##\s*1\.?\s*Overview\s*\n+([\s\S]*?)(?=\n##)/);
+        if (match) description = match[1].trim().slice(0, 150) + '...';
+      }
+
+      return {
+        id: t.tutorial_number,
+        type: 'tutorial' as const,
+        title: title || `Tutorial for PR #${t.pr_number}`,
+        description: description || 'Learn how this PR was implemented.',
+        difficulty: (t.difficulty || 'Medium') as 'Easy' | 'Medium' | 'Hard',
+        prNumber: t.pr_number,
+        filesChanged: t.code_files_modified || 0,
+      };
     });
 
-    const challengeItems =
-      challengesArray
-        ?.filter((c: any) => {
-          // Check for pr_number or question_number (some might use question_number)
-          const hasPrNumber = (c.pr_number != null && c.pr_number !== undefined) || 
-                              (c.question_number != null && c.question_number !== undefined);
-          if (!hasPrNumber) {
-            console.log('Filtered out challenge (no pr_number/question_number):', c);
-          }
-          return hasPrNumber;
-        })
-        .map((c: any) => {
-          // Use pr_number if available, otherwise question_number
-          const prNumber = c.pr_number ?? c.question_number;
-          const item = {
-            id: prNumber!,
-            type: 'challenge' as const,
-            title: c.pr_title || c.title || `Fix issues in PR #${prNumber}`,
-            description:
-              c.brief_description ||
-              c.description ||
-              (c.file_changes?.length
-                ? `Resolve code issues across ${c.file_changes.length} modified file(s).`
-                : 'Resolve the reported code issues in this pull request.'),
-            difficulty: (c.difficulty || 'Medium') as 'Easy' | 'Medium' | 'Hard',
-            prNumber: prNumber!,
-            filesChanged: c.file_changes?.length ?? c.code_files_modified ?? 0,
-          };
-          console.log('Mapped challenge item:', item);
-          return item;
-        }) ?? [];
+    // 2. Process Challenges (Parsing raw_response JSON)
+    const rawChallenges = challenges?.questions || [];
 
-    console.log('Final bugs array:', {
-      tutorialItems: tutorialItems.length,
-      challengeItems: challengeItems.length,
-      total: tutorialItems.length + challengeItems.length
+    const challengeItems = rawChallenges.map((c: any) => {
+      let parsedContent: any = {};
+      try {
+        // The raw_response is often a JSON string in these challenges
+        parsedContent = typeof c.raw_response === 'string' 
+          ? JSON.parse(c.raw_response) 
+          : c.raw_response;
+      } catch (e) {
+        // Fallback if not valid JSON
+        parsedContent = { title: "Coding Challenge", problem: c.raw_response };
+      }
+
+      return {
+        id: c.question_number,
+        type: 'challenge' as const,
+        title: parsedContent.title || `Challenge #${c.question_number}`,
+        description: parsedContent.problem 
+          ? (parsedContent.problem.slice(0, 120) + '...') 
+          : 'Solve the coding problem.',
+        difficulty: 'Medium', // Challenges usually default to Medium
+        prNumber: c.question_number, 
+        filesChanged: 1,
+        category: c.category
+      };
     });
 
+    // 3. Filter & Search
     return [...tutorialItems, ...challengeItems].filter(item => {
       if (filter === 'tutorials' && item.type !== 'tutorial') return false;
       if (filter === 'challenges' && item.type !== 'challenge') return false;
-      if (search)
+      
+      if (search) {
+        const q = search.toLowerCase();
         return (
-          item.title.toLowerCase().includes(search.toLowerCase()) ||
-          item.description.toLowerCase().includes(search.toLowerCase())
+          item.title.toLowerCase().includes(q) ||
+          item.description.toLowerCase().includes(q) ||
+          item.id.toString().includes(q)
         );
+      }
       return true;
     });
   }, [tutorials, challenges, filter, search]);
 
-  /* ===================== LOADING ===================== */
+  /* ===================== RENDER ===================== */
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-full">
+      <div className="flex justify-center items-center h-full min-h-[400px]">
         <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
       </div>
     );
   }
 
-  /* ===================== HANDLERS ===================== */
-
   const handleBugClick = (bug: BugListItem) => {
-    // Navigate to the detail page
     router.push(`/employee/onboarding/bug-fix/${bug.type}/${bug.id}`);
   };
 
-  /* ===================== UI ===================== */
   return (
     <div className={`${inter.className} h-full flex flex-col bg-[#FAFAFA]`}>
-      {/* ================= HEADER ================= */}
+      {/* HEADER */}
       <div className="sticky top-0 z-20 bg-gradient-to-b from-white to-[#FAFAFA] border-b border-slate-200 flex-shrink-0">
         <div className="px-6 pt-5 pb-3">
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">
@@ -231,7 +221,7 @@ export default function BugFixing({
               <input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Search bugs, PRs, descriptions"
+                placeholder="Search bugs, PRs..."
                 className="w-full pl-9 pr-4 py-2 text-sm border rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
@@ -239,53 +229,59 @@ export default function BugFixing({
         </div>
       </div>
 
-      {/* ================= LIST ================= */}
+      {/* LIST */}
       <div className="flex-1 overflow-y-auto px-0 py-4">
-        <div className="bg-white border border-slate-200 divide-y divide-slate-200 rounded-xl overflow-hidden">
+        <div className="bg-white border border-slate-200 divide-y divide-slate-200 rounded-xl overflow-hidden mx-6">
           {bugs.map((bug, idx) => (
             <div
-              key={`${bug.type}-${bug.id ?? idx}-${bug.prNumber ?? idx}`}
+              key={`${bug.type}-${bug.id}`}
               onClick={() => handleBugClick(bug)}
-              className="group relative px-6 py-5 cursor-pointer transition hover:bg-slate-50 rounded-lg"
-
+              className="group relative px-6 py-5 cursor-pointer transition hover:bg-slate-50"
             >
-              
-
               <div className="flex gap-5">
+                {/* Icon */}
                 {bug.type === 'tutorial' ? (
-                  <BookOpen className="w-6 h-6 text-slate-500 mt-1 group-hover:text-slate-700 transition-colors" />
+                  <div className="mt-1 p-2 rounded-lg bg-blue-50 group-hover:bg-blue-100 transition-colors">
+                    <BookOpen className="w-5 h-5 text-blue-600" />
+                  </div>
                 ) : (
-                  <Code2 className="w-6 h-6 text-amber-600 mt-1" />
+                  <div className="mt-1 p-2 rounded-lg bg-amber-50 group-hover:bg-amber-100 transition-colors">
+                    <Code2 className="w-5 h-5 text-amber-600" />
+                  </div>
                 )}
 
                 <div className="flex-1 space-y-2">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span
-                      className={`px-2.5 py-0.5 rounded text-xs font-medium ${TYPE_STYLES[bug.type]}`}
-                    >
+                    <span className={`px-2.5 py-0.5 rounded text-xs font-medium ${TYPE_STYLES[bug.type]}`}>
                       {bug.type === 'tutorial' ? 'Tutorial' : 'Challenge'}
                     </span>
 
+                    {/* Category Tag for Challenges */}
+                    {bug.category && (
+                      <span className="px-2.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                        {bug.category}
+                      </span>
+                    )}
+
                     <p className="text-sm font-semibold text-slate-900">
-                      PR #{bug.prNumber} · {bug.title}
+                      #{bug.id} · {bug.title}
                     </p>
                   </div>
 
-                  <p className="text-sm text-slate-600 leading-relaxed max-w-4xl">
+                  <p className="text-sm text-slate-600 leading-relaxed max-w-4xl line-clamp-2">
                     {bug.description}
                   </p>
 
                   <div className="flex items-center gap-4 text-xs pt-1">
-                    <span
-                      className={`px-2 py-0.5 rounded ${DIFFICULTY_STYLES[bug.difficulty]}`}
-                    >
+                    <span className={`px-2 py-0.5 rounded font-medium ${DIFFICULTY_STYLES[bug.difficulty]}`}>
                       {bug.difficulty}
                     </span>
 
-                    <span className="text-slate-500">
-                      {bug.filesChanged} file
-                      {bug.filesChanged !== 1 && 's'} changed
-                    </span>
+                    {bug.type === 'tutorial' && (
+                      <span className="text-slate-500">
+                        {bug.filesChanged} file{bug.filesChanged !== 1 && 's'} changed
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -294,7 +290,7 @@ export default function BugFixing({
 
           {bugs.length === 0 && (
             <div className="py-12 text-center text-sm text-slate-500">
-              No bugs found
+              No bugs found.
             </div>
           )}
         </div>

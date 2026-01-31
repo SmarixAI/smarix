@@ -64,7 +64,6 @@ class CommitHandler:
                 )
                 
                 self._update_caches(query, result, active_session_id)
-                self._save_conversation(active_session_id, query, result, "commit direct-lookup")
                 
                 return result
         
@@ -79,7 +78,6 @@ class CommitHandler:
             result = self.chatbot.response_handler.respond_with_results(commit_results, query_type, query, expanded_query, role=role)
             
             self._update_caches(query, result, active_session_id)
-            self._save_conversation(active_session_id, query, result, "commit fallback")
             
             return result
         
@@ -128,16 +126,10 @@ class CommitHandler:
         if commit_results:
             self.chatbot.logger.info(f"DIRECT LOOKUP (COMMIT override) | {len(commit_results)} chunks returned")
             
-            try:
-                self.chatbot.conversation_store.add_message(active_session_id, "user", query, schema_name=schema_name, tokens_used=0)
-            except Exception as e:
-                self.chatbot.logger.error(f"CONVERSATION_STORE | Failed to save user query: {e}")
-            
             result = self.chatbot.response_handler.respond_with_results(
                 commit_results, QueryType.COMMIT_SPECIFIC, query, expanded_query, role=role
             )
             self._update_caches(query, result, active_session_id)
-            self._save_conversation(active_session_id, query, result, "commit override")
             return result
         else:
             self.chatbot.logger.warning(f"DIRECT LOOKUP (COMMIT override) | No match for Commit {sha[:7]}")
@@ -176,14 +168,4 @@ class CommitHandler:
     def _update_caches(self, query: str, result: Dict[str, Any], active_session_id: str):
         """Update semantic and response caches."""
         self.chatbot.cache_handler.update_caches(query, result, active_session_id)
-    
-    def _save_conversation(self, active_session_id: str, query: str, result: Dict[str, Any], context: str = "commit", schema_name: Optional[str] = None):
-        """Save conversation to conversation store."""
-        try:
-            self.chatbot.conversation_store.add_message(active_session_id, "user", query, schema_name=schema_name, tokens_used=0)
-            self.chatbot.conversation_store.add_message(
-                active_session_id, "assistant", result.get("answer", ""), schema_name=schema_name, tokens_used=0
-            )
-        except Exception as e:
-            self.chatbot.logger.error(f"CONVERSATION_STORE | Failed to save {context} exchange: {e}")
 

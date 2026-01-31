@@ -1,6 +1,5 @@
 """
-Repository Structure Data Generator
-Extracts comprehensive repository organization and structure information
+Repository Structure Data Generator - Improved for Reliable QnA & Context Retrieval
 """
 
 import sys
@@ -51,7 +50,9 @@ def _load_rag_chatbot_class():
     # Fallback: search the repo for a file named chatbot.py and load it dynamically
     for path in BACKEND_ROOT.rglob("chatbot.py"):
         try:
-            spec = importlib.util.spec_from_file_location("rag_chatbot_dynamic", str(path))
+            spec = importlib.util.spec_from_file_location(
+                "rag_chatbot_dynamic", str(path)
+            )
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
             if hasattr(mod, "RAGChatbot"):
@@ -59,12 +60,11 @@ def _load_rag_chatbot_class():
         except Exception:
             pass
 
-    raise ImportError(
-        "Could not import RAGChatbot. Tried import paths: "
-        + ", ".join(candidates)
-        + ". Also searched repository for chatbot.py. "
-          "Make sure project is on PYTHONPATH and package markers (__init__.py) exist where needed."
-    )
+    raise ImportError("Could not import RAGChatbot class")
+
+
+# Initialize as None, will be loaded on first use
+RAGChatbot = None
 
 
 def get_rag_chatbot_class():
@@ -74,250 +74,221 @@ def get_rag_chatbot_class():
         RAGChatbot = _load_rag_chatbot_class()
     return RAGChatbot
 
-# Initialize as None, will be loaded on first use
-RAGChatbot = None
+
+def get_search_keywords_for_structure(topic: str) -> str:
+    """
+    Returns precise keywords to find relevant structure info.
+    """
+    mapping = {
+        "Root Directory": "root directory ls -la tree structure top-level files README LICENSE .gitignore",
+        "Hierarchy": "directory tree structure organization hierarchy nesting depth recursive list",
+        "Configuration": "config settings .env .yaml .json .xml .toml .ini setup build",
+        "Asset": "assets resources images fonts icons public static data media",
+        "Data Models": "models entities schemas domain data types interfaces struct class",
+        "Views": "views screens pages components widgets ui layout template",
+        "Business Logic": "services controllers providers bloc redux store actions logic usecases",
+        "State Management": "state store provider context bloc riverpod redux mobx",
+        "Utilities": "utils helpers common shared lib core extensions constants",
+        "Feature": "features modules components domains functional areas organization",
+        "Boundaries": "dependencies imports architecture layers boundaries communication",
+        "Cross-cutting": "auth logging error handling networking localization theme analytics",
+        "File Naming": "file naming convention pattern prefix suffix extension case",
+        "Directory Naming": "directory folder naming convention structure organization",
+        "Code Naming": "class function variable constant naming style guide convention",
+        "Critical": "main entry point app start important core kernel critical",
+        "Patterns": "architecture design patterns mvc mvvm clean architecture layered",
+        "Special": "generated build tools scripts bin docs examples migration seeds",
+        "Navigation": "import export require include navigation routing paths",
+        "Best Practices": "structure organization clean code separation concerns modularity",
+    }
+
+    # Fuzzy match
+    for key, value in mapping.items():
+        if key in topic:
+            return value
+    return "repository structure"
 
 
-def parse_single_mcq_from_response(response_text: str) -> dict:
+def retrieve_context(chatbot, keywords: str, limit: int = 20) -> str:
     """
-    Parse a single MCQ question from chatbot's response
-    Returns a dict with question, options, correct_answer, and explanation
+    Directly retrieves chunks from Vector DB.
     """
-    # Try to find the first MCQ in the response
-    question_pattern = r'###\s+Question\s+(\d+)\s+\(MCQ\s*-\s*(\w+)\)'
-    match = re.search(question_pattern, response_text)
-    
-    if not match:
-        # Try alternative format without header
-        # Look for question text followed by options A-D
-        lines = response_text.split('\n')
-        question_text = []
-        options = {}
-        correct_answer = None
-        explanation = ""
-        
-        answer_section = False
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-            
-            # Check for answer markers
-            if '**Answer:**' in line or 'Answer:' in line:
-                answer_section = True
-                try:
-                    if ':' in line:
-                        split_result = line.split(':', 1)
-                        answer_line = split_result[-1].strip() if split_result else line.replace('**Answer:**', '').strip()
-                    else:
-                        answer_line = line.replace('**Answer:**', '').strip()
-                    
-                    if answer_line:
-                        answer_match = re.match(r'^([A-D])\s*[-–—]\s*(.+)', answer_line, re.DOTALL)
-                        if answer_match:
-                            correct_answer = answer_match.group(1)
-                            explanation = answer_match.group(2).strip()
-                        else:
-                            letter_match = re.match(r'^([A-D])', answer_line)
-                            if letter_match:
-                                correct_answer = letter_match.group(1)
-                                explanation = answer_line[1:].strip() if len(answer_line) > 1 else ""
-                except (IndexError, AttributeError) as e:
-                    # Skip malformed answer lines
-                    pass
-                continue
-            
-            if answer_section:
-                explanation += " " + line if explanation else line
-                continue
-            
-            # Check if line is an option
-            option_match = re.match(r'^([A-D])\.\s+(.+)$', line)
-            if option_match:
-                option_letter = option_match.group(1)
-                option_text = option_match.group(2).strip()
-                options[option_letter] = option_text
-            else:
-                # It's part of the question text
-                question_text.append(line)
-        
-        if len(options) == 4 and correct_answer and correct_answer in options and question_text:
-            return {
-                'question': ' '.join(question_text),
-                'options': options,
-                'correct_answer': correct_answer,
-                'explanation': explanation.strip()
-            }
-        return None
-    
-    # Extract content after the header
-    start_idx = match.end()
-    content = response_text[start_idx:].strip()
-    
-    # Split content into question text and answer
-    answer_split = re.split(r'\*\*Answer:\*\*', content, maxsplit=1)
-    
-    if len(answer_split) < 2:
-        return None
-    
+    print(f"   🔍 Searching context with keywords: '{keywords[:50]}...'")
+    query_embedding = chatbot.get_query_embedding(keywords)
+
+    chunks = []
+
+    # Direct Search
+    if hasattr(chatbot.vector_db, "search"):
+        chunks = chatbot.vector_db.search(query_embedding, top_k=limit)
+
+    # Fallback to specific indices
+    if hasattr(chatbot.vector_db, "indices"):
+        for idx in ["code", "github", "docs"]:
+            if idx in chatbot.vector_db.indices:
+                res = chatbot.vector_db.indices[idx].search(
+                    query_embedding, top_k=limit
+                )
+                if isinstance(res, list):
+                    chunks.extend(res)
+
+    # Flatten if needed
+    if isinstance(chunks, dict):
+        flat = []
+        for v in chunks.values():
+            if isinstance(v, list):
+                flat.extend(v)
+        chunks = flat
+
+    # Deduplicate
+    seen = set()
+    unique_chunks = []
+    for c in chunks:
+        content = c.get("content") or c.get("text", "")
+        # Prefer chunks that look like file lists or directory structures
+        if content and content not in seen:
+            seen.add(content)
+            unique_chunks.append(c)
+
+    if not unique_chunks:
+        return ""
+
+    context_parts = []
+    for c in unique_chunks[:limit]:
+        path = c.get("metadata", {}).get("file_path", "unknown")
+        content = c.get("content") or c.get("text", "")
+        context_parts.append(f"File: {path}\n```\n{content[:2000]}\n```")
+
+    return "\n\n".join(context_parts)
+
+
+def parse_json_mcq(response_text: str) -> dict:
+    """Robustly parse JSON MCQ from response"""
     try:
-        question_part = answer_split[0].strip()
-        answer_part = answer_split[1].strip()
-    except IndexError:
-        return None
-    
-    # Extract question text and options
-    lines = question_part.split('\n')
-    question_text = []
-    options = {}
-    
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        
-        # Check if line is an option
-        option_match = re.match(r'^([A-D])\.\s+(.+)$', line)
-        if option_match:
-            option_letter = option_match.group(1)
-            option_text = option_match.group(2).strip()
-            options[option_letter] = option_text
+        # 1. Try finding JSON block
+        json_match = re.search(r"```json\s*(.*?)\s*```", response_text, re.DOTALL)
+        if json_match:
+            json_str = json_match.group(1)
         else:
-            question_text.append(line)
-    
-    # Extract correct answer and explanation
-    correct_answer = None
-    explanation = ""
-    
-    answer_match = re.match(r'^([A-D])\s*[-–—]\s*(.+)', answer_part, re.DOTALL)
-    if answer_match:
-        correct_answer = answer_match.group(1)
-        explanation = answer_match.group(2).strip()
-    else:
-        letter_match = re.match(r'^([A-D])', answer_part)
-        if letter_match:
-            correct_answer = letter_match.group(1)
-            explanation = answer_part[1:].strip() if len(answer_part) > 1 else ""
-    
-    # Validate this is a proper MCQ
-    if len(options) == 4 and correct_answer and correct_answer in options and question_text:
-        return {
-            'question': ' '.join(question_text),
-            'options': options,
-            'correct_answer': correct_answer,
-            'explanation': explanation
-        }
-    
-    return None
+            # Try finding raw JSON (starts with { ends with })
+            json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(0)
+            else:
+                return None
+
+        data = json.loads(json_str)
+
+        # Validate structure
+        required_keys = ["question", "options", "correct_answer", "explanation"]
+        if not all(key in data for key in required_keys):
+            print(f"    ⚠️ Missing keys in JSON. Found: {list(data.keys())}")
+            return None
+
+        # Validate options
+        if not isinstance(data["options"], dict) or len(data["options"]) < 2:
+            print("    ⚠️ Invalid options format")
+            return None
+
+        return data
+
+    except json.JSONDecodeError as e:
+        print(f"    ⚠️ JSON Decode Error: {e}")
+        return None
+    except Exception as e:
+        print(f"    ⚠️ Parse Error: {e}")
+        return None
 
 
-def generate_section_qna(repo_structure_data, chatbot, gmail_db_path=None, provider='openai', model=None):
+def generate_section_qna(repo_structure_data, chatbot):
     """
-    Generate MCQ questions for each section based on teaching_content
-    Adds a 'qna' array to each section
+    Generate MCQ questions for each section using strict JSON format
     """
     print("\n" + "=" * 80)
-    print("GENERATING MCQ QUESTIONS FOR EACH SECTION")
+    print("GENERATING MCQ QUESTIONS FOR SECTIONS")
     print("=" * 80 + "\n")
-    
+
     sections = repo_structure_data.get("sections", {})
     total_qnas = 0
-    
+
     for section_name, section_content in sections.items():
         if not isinstance(section_content, dict):
             continue
-            
-        print(f"Processing section: {section_name}")
-        
-        # Get teaching_content array from section
+
         teaching_content = section_content.get("teaching_content", [])
-        
         if not teaching_content:
-            print(f"  ⚠ No teaching_content found, skipping...\n")
             continue
-        
+
         qna_list = []
-        
+
         for idx, item_data in enumerate(teaching_content, 1):
-            if not isinstance(item_data, dict):
-                continue
-                
-            topic_text = item_data.get("topic", "")
-            content_text = item_data.get("content", "")
             title = item_data.get("title", f"Item {idx}")
-            
-            if not topic_text or not content_text or str(content_text).startswith("Error:"):
-                print(f"  [{idx}/{len(teaching_content)}] ⚠ Skipping '{title}' (invalid data)")
+            content = item_data.get("content", "")
+
+            # Skip if content is an error or too short
+            if (
+                not content
+                or str(content).startswith("Error:")
+                or len(str(content)) < 50
+            ):
                 continue
-            
+
             print(f"  [{idx}/{len(teaching_content)}] Generating MCQ for '{title}'...")
+
+            mcq_prompt = f"""
+            You are a technical quiz generator. Generate ONE multiple-choice question (MCQ) based on the provided repository structure content.
             
-            # Create prompt for generating MCQ
-            mcq_prompt = f"""Based on the following topic information, generate ONE multiple-choice question (MCQ) for new employee onboarding.
+            TOPIC: {title}
+            CONTENT: {content[:3000]}
+            
+            OUTPUT FORMAT:
+            You MUST return a valid JSON object. Do not include markdown formatting outside the JSON.
+            {{
+                "question": "The question text here?",
+                "options": {{
+                    "A": "Option 1",
+                    "B": "Option 2",
+                    "C": "Option 3",
+                    "D": "Option 4"
+                }},
+                "correct_answer": "A",
+                "explanation": "Explanation of why A is correct."
+            }}
+            """
 
-TOPIC: {title}
-
-INFORMATION ABOUT THIS TOPIC:
-{content_text[:2000]}
-
-CRITICAL REQUIREMENTS:
-- Generate EXACTLY ONE multiple-choice question (MCQ format)
-- The question must have exactly 4 options (A, B, C, D)
-- Only ONE option should be correct
-- The question should test understanding of the key concepts from the topic
-- Focus on important, practical knowledge that helps new employees understand the repository structure
-- Provide a clear explanation (3-5 sentences) that helps users learn
-- Format the response as:
-  ### Question 1 (MCQ - Medium)
-  [Your question text here]
-  A. [Option A]
-  B. [Option B]
-  C. [Option C]
-  D. [Option D]
-  **Answer:** [Correct letter] - [Detailed explanation]
-
-Generate the MCQ question now."""
-
-            schema_name = f"{REPO_OWNER}_{REPO_NAME}".replace("-", "_")
             try:
-                response = chatbot.chat(mcq_prompt, schema_name=schema_name)
-                answer = response.get('answer', '') if isinstance(response, dict) else getattr(response, 'answer', str(response))
-                
-                if answer:
-                    mcq = parse_single_mcq_from_response(answer)
-                    if mcq:
-                        mcq['subsection'] = title
-                        qna_list.append(mcq)
-                        print(f"    ✓ Generated MCQ successfully")
-                    else:
-                        print(f"    ✗ Failed to parse MCQ from response")
+                # System prompt ensures JSON behavior
+                response = chatbot.call_llm(
+                    "You are a helpful assistant that outputs only valid JSON.",
+                    mcq_prompt,
+                )
+
+                mcq = parse_json_mcq(response)
+
+                if mcq:
+                    mcq["subsection"] = title
+                    qna_list.append(mcq)
+                    print(f"    ✓ Generated MCQ: {mcq['question'][:50]}...")
                 else:
-                    print(f"    ✗ Empty response from chatbot")
-                    
+                    print(
+                        f"    ✗ Failed to parse MCQ. Raw response preview: {response[:100]}..."
+                    )
             except Exception as e:
                 print(f"    ✗ Error: {e}")
-                continue
-        
-        # Add qna list to section
+
         if qna_list:
             sections[section_name]["qna"] = qna_list
             total_qnas += len(qna_list)
-            print(f"  ✓ Added {len(qna_list)} MCQ questions to section '{section_name}'\n")
-        else:
-            print(f"  ⚠ No MCQ questions generated for section '{section_name}'\n")
-    
-    print(f"✓ Total MCQ questions generated: {total_qnas}")
-    print("=" * 80 + "\n")
-    
+
+    print(f"\n✓ Total MCQ questions generated: {total_qnas}")
     return repo_structure_data
 
 
-def generate_repo_structure_data( gmail_db_path=None, provider='openai', model=None):
-    """Generate comprehensive repository structure analysis data"""
+def generate_repo_structure_data(gmail_db_path=None, provider="openai", model=None):
+    """Generate comprehensive repository structure analysis data using Context-First RAG"""
 
-    print("Starting Repository Structure Data Generation...\n")
+    print("Starting Repository Structure Data Generation (Context-First)...\n")
 
-    # Initialize chatbot
     print("Loading chatbot...")
     RAGChatbotClass = get_rag_chatbot_class()
     chatbot = RAGChatbotClass(
@@ -326,181 +297,123 @@ def generate_repo_structure_data( gmail_db_path=None, provider='openai', model=N
         provider=provider,
         model=model,
         verbose=False,
-        disable_conversation_storage=True  # Skip conversation storage for generators
+        disable_conversation_storage=True,
     )
 
-    # Define repository structure specific questions
     questions = [
         # 1. Complete Repository Structure
-        ("Root Directory Overview",
-         "List ALL top-level directories and files in the repository root. For each directory, provide a brief "
-         "description of its purpose. Include hidden directories (starting with .) if they're significant "
-         "(.github, .vscode, etc.). For important root files (README.md, LICENSE, .gitignore, package.json, "
-         "pubspec.yaml, etc.), explain their role. Create a hierarchical tree view showing: root → main directories → "
-         "their immediate subdirectories (2-3 levels deep). "
-         "**Provide directory tree structure - plain text format, no code.**"),
-
-        ("Complete Directory Hierarchy",
-         "Create a comprehensive directory structure map showing the full repository organization. "
-         "Focus on the main source code directory (lib, src, app, etc.) and expand it to show all subdirectories "
-         "and their nesting levels. Show: which directories contain source files, which contain tests, which are "
-         "for configuration, and which are for assets/resources. Use indentation or tree notation to show hierarchy. "
-         "Example format: 'lib/ → models/ → task.dart, → views/ → home/ → home_view.dart'. "
-         "**Full directory tree - organize by functional areas, no file contents.**"),
-
-        ("Key Configuration Files Location",
-         "Identify and list ALL configuration files in the repository with their exact paths. Look for: "
-         "build configs (CMakeLists.txt, build.gradle, webpack.config.js), dependency files (pubspec.yaml, package.json, "
-         "requirements.txt), environment configs (.env files, config.yaml), CI/CD configs (.github/workflows/, "
-         ".gitlab-ci.yml), editor configs (.vscode/, .editorconfig), linter configs (.eslintrc, analysis_options.yaml), "
-         "Docker configs (Dockerfile, docker-compose.yml). For each file, state: path, purpose, and what it configures. "
-         "**List all config files with paths and purposes.**"),
-
-        ("Asset and Resource Organization",
-         "Locate all asset and resource directories. Search for directories named: assets, resources, public, static, "
-         "images, fonts, icons, sounds, data, fixtures, locales, i18n, translations, etc. For each found, describe: "
-         "what it contains (images, fonts, data files, etc.), file formats present, and how these assets are used in the app. "
-         "If no dedicated asset directories exist, state 'No asset directories found'. "
-         "**Map asset organization - describe structure, don't list every file.**"),
-
+        (
+            "Root Directory Overview",
+            "List top-level directories/files and their purpose. "
+            "**Provide directory tree structure.**",
+        ),
+        (
+            "Complete Directory Hierarchy",
+            "Create a full directory map of src/lib. " "**Full directory tree.**",
+        ),
+        (
+            "Key Configuration Files Location",
+            "List all config files (build, env, ci/cd) with paths. "
+            "**List config files.**",
+        ),
+        (
+            "Asset and Resource Organization",
+            "Locate assets folders (images, fonts, data). "
+            "**Map asset organization.**",
+        ),
         # 2. Model/Module-wise Structure
-        ("Data Models Organization",
-         "Search for data model, entity, or schema files. Look in directories like: models, entities, schemas, domain, "
-         "data, or files ending in _model.dart, .model.ts, Model.java, etc. List all model files found with their paths. "
-         "For each model, identify: what entity it represents (User, Task, Product, etc.), where it's located, and "
-         "what other models it relates to. Group related models together. "
-         "**List all model files organized by domain/feature - file paths only, no code.**"),
-
-        ("Views and UI Components Structure",
-         "Identify all UI-related code organization. Search for directories: views, screens, pages, components, widgets, "
-         "ui, layouts, templates, etc. List the structure showing: how views are organized (by feature, by type, flat), "
-         "what major screens/pages exist, how reusable components are organized. Show the hierarchy: "
-         "parent screens → child components. "
-         "**Map UI code organization - show directory structure and component hierarchy.**"),
-
-        ("Business Logic and Services Organization",
-         "Locate business logic code. Search for directories: services, controllers, blocs, providers, repositories, "
-         "use_cases, interactors, managers, handlers, utils, helpers, etc. Describe how business logic is organized: "
-         "by feature, by layer, by responsibility. List major service/controller files and their purposes. "
-         "Show how logic is separated from UI and data layers. "
-         "**Describe logic layer organization - show directory structure and key files.**"),
-
-        ("State Management Structure",
-         "If the app uses state management, identify how state code is organized. Look for directories or files: "
-         "state, store, redux, bloc, providers, controllers, notifiers, etc. Show: where state classes are defined, "
-         "where state logic lives, how state is separated by feature/domain. If using a specific pattern (BLoC, Redux, "
-         "Provider), show how that pattern structures the code. "
-         "**Map state management organization - describe structure, reference directories.**"),
-
-        ("Utilities and Shared Code Structure",
-         "Find shared/common code organization. Search for directories: utils, helpers, common, shared, core, lib, "
-         "constants, enums, extensions, mixins, etc. List what types of utilities exist: string helpers, date formatters, "
-         "validators, extensions, constants, enums, shared widgets, etc. Show how reusable code is organized. "
-         "**List utility organization - categorize by type of utility.**"),
-
+        (
+            "Data Models Organization",
+            "List all data model files and their locations. " "**List model files.**",
+        ),
+        (
+            "Views and UI Components Structure",
+            "Identify UI directories (screens, components). "
+            "**Map UI organization.**",
+        ),
+        (
+            "Business Logic and Services Organization",
+            "Locate services, controllers, providers. " "**Describe logic layer.**",
+        ),
+        (
+            "State Management Structure",
+            "Identify state management files/folders. " "**Map state management.**",
+        ),
+        (
+            "Utilities and Shared Code Structure",
+            "Find utils, helpers, shared folders. " "**List utility organization.**",
+        ),
         # 3. Feature-level Structure
-        ("Feature-based Organization",
-         "Analyze if the codebase uses feature-based organization. Look for: top-level directories named after features "
-         "(auth, dashboard, profile, settings, tasks, products, orders, etc.) or subdirectories within src/lib organized "
-         "by feature. For each feature found, show its internal structure: does it contain its own models, views, "
-         "controllers, and tests? List all major features identified and their organization pattern. "
-         "**Identify all features and show their internal structure - create feature map.**"),
-
-        ("Feature Module Boundaries",
-         "For each major feature identified, describe its boundaries and dependencies. What files/directories belong to "
-         "each feature? Do features have: their own subdirectories, clear entry points, isolated dependencies? "
-         "How do features communicate (shared services, events, direct imports)? Show which features depend on which. "
-         "Create a diagram or list showing feature dependencies. "
-         "**Map feature boundaries and inter-feature dependencies.**"),
-
-        ("Cross-cutting Concerns Organization",
-         "Identify how cross-cutting concerns are organized: authentication, authorization, logging, error handling, "
-         "networking, localization, theming, analytics, etc. Where is this code located? Is it in a shared directory, "
-         "or distributed across features? Show: where each concern is implemented, whether it's centralized or distributed. "
-         "**Map cross-cutting concerns to their locations in the codebase.**"),
-
+        (
+            "Feature-based Organization",
+            "Analyze if code is organized by feature. " "**Identify features.**",
+        ),
+        (
+            "Feature Module Boundaries",
+            "Describe boundaries and dependencies between features. "
+            "**Map feature boundaries.**",
+        ),
+        (
+            "Cross-cutting Concerns Organization",
+            "Where are auth, logging, error handling located? "
+            "**Map cross-cutting concerns.**",
+        ),
         # 4. Naming Conventions
-        ("File Naming Conventions",
-         "Analyze file naming patterns throughout the repository. Look for patterns in: file extensions, prefixes, "
-         "suffixes, casing (snake_case, camelCase, PascalCase, kebab-case). Examples: 'Does the project use "
-         "_test.dart or .test.ts for tests?', 'Are views named *_view.dart or *_screen.dart?', 'Are models named "
-         "*_model.dart or just *.dart?'. Document all observed file naming patterns with examples. "
-         "**List file naming conventions with real examples from the repo.**"),
-
-        ("Directory Naming Conventions",
-         "Analyze directory naming patterns. Observe: casing used (lowercase, snake_case, camelCase, PascalCase), "
-         "plural vs singular (models vs model, views vs view), naming patterns for feature directories, "
-         "naming for platform-specific directories (android, ios, web). List all directory naming patterns observed. "
-         "**Document directory naming conventions with examples.**"),
-
-        ("Code Naming Conventions",
-         "Analyze naming conventions in the code by examining class, function, and variable names. Look for patterns in: "
-         "class names (PascalCase, prefixes, suffixes like Controller, Service, Manager), function/method names "
-         "(camelCase, verb prefixes like get*, set*, is*, has*), variable names (camelCase, snake_case, prefixes like "
-         "_private, m_member), constant names (UPPER_CASE, kConstant). Provide examples from actual code. "
-         "**List code naming conventions with examples from the codebase.**"),
-
+        (
+            "File Naming Conventions",
+            "Analyze file naming patterns (snake_case, suffixes). "
+            "**List file naming conventions.**",
+        ),
+        (
+            "Directory Naming Conventions",
+            "Analyze directory naming patterns. " "**Document directory naming.**",
+        ),
+        (
+            "Code Naming Conventions",
+            "Analyze class/function naming patterns. "
+            "**List code naming conventions.**",
+        ),
         # 5. Important Notes
-        ("Critical Directories and Files",
-         "Identify the MOST IMPORTANT directories and files that a new developer should understand first. "
-         "Which directories contain the core application logic? Which files are entry points? What configuration files "
-         "are critical? Rank by importance: 1) Entry points (main.dart, index.js, app.py), 2) Core logic directories, "
-         "3) Critical configuration files, 4) Important documentation files. "
-         "**Prioritized list of critical files/directories with explanations.**"),
-
-        ("Code Organization Patterns",
-         "Identify the overall code organization pattern used. Is it: layered architecture (presentation/business/data), "
-         "feature-based, MVC/MVVM/MVP, clean architecture, onion architecture, or mixed? How strictly is the pattern "
-         "followed? Show evidence from the directory structure. Are there any deviations or exceptions? "
-         "**Describe the architectural organization pattern with directory evidence.**"),
-
-        ("Special Directories and Their Purposes",
-         "Identify any special-purpose directories that might not be obvious. Examples: generated code directories "
-         "(generated/, .generated/, build/), platform-specific directories (android/, ios/, web/), documentation "
-         "(docs/, documentation/), scripts (scripts/, tools/, bin/), examples (examples/, samples/), migration files "
-         "(migrations/, db/), fixtures/seeds (fixtures/, seeds/, test_data/). Explain each special directory's purpose. "
-         "**List special directories and their specific roles.**"),
-
-        ("Navigation and Import Patterns",
-         "Analyze how files import/reference each other. Look at import statements to understand: are there barrel files "
-         "(index files that re-export)? Are there path aliases or shortcuts? How deep are import paths? "
-         "What import patterns are used (relative paths '../../', absolute paths from root)? Show common import "
-         "patterns with examples. "
-         "**Document import/navigation patterns - show examples of typical imports.**"),
-
-        ("Structure Best Practices and Issues",
-         "Analyze the repository structure for best practices and issues. Good signs: clear separation of concerns, "
-         "consistent naming, appropriate nesting depth (not too deep), logical grouping. Issues to look for: "
-         "deeply nested directories (5+ levels), inconsistent naming, mixed concerns in same directory, "
-         "orphaned files in wrong locations, missing separation between logic and UI. "
-         "**Critical assessment of structure quality - both strengths and improvement areas.**"),
+        (
+            "Critical Directories and Files",
+            "Rank the most important directories for new devs. "
+            "**Prioritized list.**",
+        ),
+        (
+            "Code Organization Patterns",
+            "Identify the architectural pattern (MVC, Clean, Layered). "
+            "**Describe pattern.** [Image of application architecture diagram]",
+        ),
+        (
+            "Special Directories and Their Purposes",
+            "Identify generated, script, or doc directories. "
+            "**List special directories.**",
+        ),
+        (
+            "Navigation and Import Patterns",
+            "Analyze import styles and navigation structure. " "**Document patterns.**",
+        ),
+        (
+            "Structure Best Practices and Issues",
+            "Critique the structure: strengths vs issues (nesting, mixed concerns). "
+            "**Critical assessment.**",
+        ),
     ]
 
-    # Collect responses
     repo_structure_data = {
         "metadata": {
             "generated_at": datetime.now().isoformat(),
-            "repository": getattr(chatbot, "repo_info", {}).get('name', 'unknown'),
+            "repository": getattr(chatbot, "repo_info", {}).get("name", "unknown"),
             "provider": provider,
-            "model": getattr(chatbot, "model", None)
+            "model": getattr(chatbot, "model", None),
         },
         "sections": {
-            "complete_structure": {
-                "teaching_content": []
-            },
-            "model_module_structure": {
-                "teaching_content": []
-            },
-            "feature_level_structure": {
-                "teaching_content": []
-            },
-            "naming_conventions": {
-                "teaching_content": []
-            },
-            "important_notes": {
-                "teaching_content": []
-            }
-        }
+            "complete_structure": {"teaching_content": []},
+            "model_module_structure": {"teaching_content": []},
+            "feature_level_structure": {"teaching_content": []},
+            "naming_conventions": {"teaching_content": []},
+            "important_notes": {"teaching_content": []},
+        },
     }
 
     # Map questions to sections
@@ -533,69 +446,79 @@ def generate_repo_structure_data( gmail_db_path=None, provider='openai', model=N
     for idx, (key, question) in enumerate(questions, 1):
         print(f"[{idx}/{total}] {key}...")
 
-        schema_name = f"{REPO_OWNER}_{REPO_NAME}".replace("-", "_")
+        # 1. Get Keywords
+        keywords = get_search_keywords_for_structure(key)
+
+        # 2. Retrieve Context (Raw)
+        context = retrieve_context(chatbot, keywords)
+
+        if not context:
+            print("   ⚠️ No specific context found. Using broad knowledge...")
+            context = "No specific directory structure info found. Infer based on standard project conventions."
+
+        # 3. Generate Answer
+        system_prompt = (
+            "You are a Senior Software Architect. "
+            "Analyze the repository structure based on the provided file lists and code."
+        )
+
+        user_prompt = f"""
+        QUESTION: {question}
+        
+        CONTEXT FROM REPO:
+        {context[:20000]}
+        
+        INSTRUCTIONS:
+        - Analyze the context to answer the question.
+        - Be specific about file paths and directory names.
+        - Use tree view formatting for directories where helpful.
+        - If an image tag is requested, ensure it is included.
+        """
+
         try:
-            response = chatbot.chat(question, schema_name=schema_name)
-            answer = response.get('answer') if isinstance(response, dict) else getattr(response, 'answer',
-                                                                                       str(response))
-            quality = response.get('context_quality', 1.0) if isinstance(response, dict) else getattr(response,
-                                                                                                      'context_quality',
-                                                                                                      1.0)
+            answer = chatbot.call_llm(system_prompt, user_prompt)
+
+            # Helper to add image tag if missed
+            if "Patterns" in key and "[Image of" not in answer:
+                answer += "\n\n[Image of application architecture diagram]\n"
 
             section = section_mapping.get(idx - 1, "important_notes")
-            repo_structure_data["sections"][section]["teaching_content"].append({
-                "title": key,
-                "topic": question,
-                "content": answer,
-                "quality": quality
-            })
+            repo_structure_data["sections"][section]["teaching_content"].append(
+                {"title": key, "topic": question, "content": answer, "quality": 1.0}
+            )
+            print(f"   ✓ Generated response ({len(answer)} chars)")
+
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"   ❌ Error: {e}")
             section = section_mapping.get(idx - 1, "important_notes")
-            repo_structure_data["sections"][section]["teaching_content"].append({
-                "title": key,
-                "topic": question,
-                "content": f"Error: {str(e)}",
-                "quality": 0.0
-            })
+            repo_structure_data["sections"][section]["teaching_content"].append(
+                {
+                    "title": key,
+                    "topic": question,
+                    "content": f"Error: {str(e)}",
+                    "quality": 0.0,
+                }
+            )
 
-    # Save to file
-    # Upload to S3
-    s3_key = f"Onboarding/{REPO_OWNER}/{REPO_NAME}/reading/onboarding_repo_structure.json"
-
-    try:
-        s3_manager.upload_json(repo_structure_data, s3_key)
-        print(f"\n✓ Uploaded to S3: s3://{s3_manager.bucket}/{s3_key}")
-    except Exception as e:
-        print(f"\n❌ Failed to upload to S3: {e}")
-        raise
-
-
-    # Calculate success stats
-    total_answers = sum(len(section.get("teaching_content", [])) for section in repo_structure_data["sections"].values())
-    successful_answers = sum(
-        1 for section in repo_structure_data["sections"].values()
-        for item in section.get("teaching_content", [])
-        if not str(item.get('content', '')).startswith('Error:')
+    # Upload Draft to S3
+    s3_key = (
+        f"Onboarding/{REPO_OWNER}/{REPO_NAME}/reading/onboarding_repo_structure.json"
     )
-
-    print(f"📊 Answered {successful_answers}/{total_answers} questions successfully")
-    print(f"\nData organized into {len(repo_structure_data['sections'])} sections:")
-    for section_name, section_data in repo_structure_data["sections"].items():
-        teaching_count = len(section_data.get("teaching_content", []))
-        print(f"   - {section_name}: {teaching_count} teaching content items")
-
-    # Generate MCQ questions for each section
-    print("\n" + "=" * 80)
-    print("Starting MCQ QNA Generation...")
-    print("=" * 80)
-    repo_structure_data = generate_section_qna(repo_structure_data, chatbot, gmail_db_path, provider, model)
-    
-    # Save updated file with QNA
-    # Upload updated version with QNA to S3
     try:
         s3_manager.upload_json(repo_structure_data, s3_key)
-        print(f"✓ Updated file with QNA uploaded to S3: s3://{s3_manager.bucket}/{s3_key}")
+        print(f"\n✓ Draft Uploaded to S3: s3://{s3_manager.bucket}/{s3_key}")
+    except Exception as e:
+        print(f"\n❌ Failed to upload: {e}")
+
+    # Generate MCQ
+    repo_structure_data = generate_section_qna(repo_structure_data, chatbot)
+
+    # Upload Final
+    try:
+        s3_manager.upload_json(repo_structure_data, s3_key)
+        print(
+            f"✓ Final file with QNA uploaded to S3: s3://{s3_manager.bucket}/{s3_key}"
+        )
     except Exception as e:
         print(f"❌ Failed to upload updated file: {e}")
         raise
@@ -603,78 +526,9 @@ def generate_repo_structure_data( gmail_db_path=None, provider='openai', model=N
     return s3_key
 
 
-def add_qna_to_existing_repo_structure(
-    json_file_path: str = None,
-    gmail_db_path: str = None,
-    provider: str = 'openai',
-    model: str = None
-) -> str:
-    """
-    Add MCQ QNA questions to an existing repo structure JSON file
-    
-    Args:
-        json_file_path: Path to existing repo structure JSON file (if None, uses default path)
-        gmail_db_path: Optional path to Gmail database
-        provider: LLM provider (openai/anthropic/ollama)
-        model: Model name (optional, uses default for provider)
-    
-    Returns:
-        Path to updated JSON file
-    """
-    print("╔" + "═" * 78 + "╗")
-    print("║" + " ADD QNA TO EXISTING REPO STRUCTURE ".center(78) + "║")
-    print("╚" + "═" * 78 + "╝\n")
-    
-    # Determine file path
-    s3_key = f"Onboarding/{REPO_OWNER}/{REPO_NAME}/reading/onboarding_repo_structure.json"
-
-    print(f"📄 Loading existing repo structure from S3...")
-
-    try:
-        repo_structure_data = s3_manager.download_json(s3_key)
-        print(f"✓  Loaded from: s3://{s3_manager.bucket}/{s3_key}\n")
-    except Exception as e:
-        print(f"✗  File not found in S3: {e}")
-        return None
-
-    
-    # Initialize chatbot
-    print("⚙  Initializing chatbot...")
-    try:
-        RAGChatbotClass = get_rag_chatbot_class()
-        chatbot = RAGChatbotClass(
-            vector_db_path=VECTOR_DB_PATH,
-            gmail_db_path=gmail_db_path,
-            provider=provider,
-            model=model,
-            verbose=False
-        )
-        print("✓  Chatbot initialized successfully\n")
-    except Exception as e:
-        print(f"✗  Failed to initialize chatbot: {e}")
-        return None
-    
-    # Generate QNA
-    repo_structure_data = generate_section_qna(repo_structure_data, chatbot, gmail_db_path, provider, model)
-    
-    # Save updated file
-    try:
-        s3_manager.upload_json(repo_structure_data, s3_key)
-        print(f"✓  Updated file uploaded to S3: s3://{s3_manager.bucket}/{s3_key}\n")
-    except Exception as e:
-        print(f"✗  Failed to upload to S3: {e}")
-        return None
-
-    return s3_key
-
-
 if __name__ == "__main__":
-    GMAIL_DB_PATH = "../../../../data/VectorDB/gmail_chunks"
+    GMAIL_DB_PATH = None
     PROVIDER = "openai"
-    MODEL = None
+    MODEL = "gpt-4o-mini"
 
-    # Uncomment to just add QNA to existing file:
-    # add_qna_to_existing_repo_structure(gmail_db_path=GMAIL_DB_PATH, provider=PROVIDER, model=MODEL)
-    
-    # Generate complete repo structure with QNA:
     generate_repo_structure_data(GMAIL_DB_PATH, PROVIDER, MODEL)

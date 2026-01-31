@@ -1,5 +1,5 @@
 """
-Tech Stack Data Generator - Improved for Better RAG Retrieval
+Tech Stack Data Generator - Improved for Better RAG Retrieval & Reliable QnA
 """
 
 import sys
@@ -52,55 +52,27 @@ def _load_rag_chatbot_class():
             mod = importlib.import_module(cand)
             if hasattr(mod, "RAGChatbot"):
                 return mod.RAGChatbot
-        except Exception as e:
-            # Debug: uncomment to see import errors
-            # print(f"Failed to import {cand}: {e}")
-            pass
-
-    # Fallback: try direct path to chatbot.py
-    chatbot_path = BACKEND_ROOT / "core" / "ChatBot" / "chatbot.py"
-    if chatbot_path.exists():
-        try:
-            # Ensure BACKEND_ROOT is in sys.path for imports to work
-            if str(BACKEND_ROOT) not in sys.path:
-                sys.path.insert(0, str(BACKEND_ROOT))
-            
-            # Try importing using the module path
-            try:
-                from core.ChatBot.chatbot import RAGChatbot
-                return RAGChatbot
-            except ImportError:
-                # If that fails, try loading directly
-                spec = importlib.util.spec_from_file_location("core.ChatBot.chatbot", str(chatbot_path))
-                mod = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(mod)  # type: ignore
-                if hasattr(mod, "RAGChatbot"):
-                    return mod.RAGChatbot
-        except Exception as e:
-            # Print error for debugging
-            print(f"Warning: Failed to load from direct path {chatbot_path}: {e}")
-            import traceback
-            traceback.print_exc()
+        except Exception:
             pass
 
     # Fallback: search the repo for a file named chatbot.py and load it dynamically
     for path in BACKEND_ROOT.rglob("chatbot.py"):
         try:
-            spec = importlib.util.spec_from_file_location("rag_chatbot_dynamic", str(path))
+            spec = importlib.util.spec_from_file_location(
+                "rag_chatbot_dynamic", str(path)
+            )
             mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(mod)  # type: ignore
+            spec.loader.exec_module(mod)
             if hasattr(mod, "RAGChatbot"):
                 return getattr(mod, "RAGChatbot")
-        except Exception as e:
-            # Debug: uncomment to see load errors
-            # print(f"Failed to load from path {path}: {e}")
+        except Exception:
             pass
 
-    raise ImportError(
-        f"Could not import RAGChatbot. Tried import paths: {', '.join(candidates)}. "
-        f"Also searched repository for chatbot.py. BACKEND_ROOT: {BACKEND_ROOT}. "
-        f"Make sure project is on PYTHONPATH and package markers (__init__.py) exist where needed."
-    )
+    raise ImportError("Could not import RAGChatbot class")
+
+
+# Initialize as None, will be loaded on first use
+RAGChatbot = None
 
 
 def get_rag_chatbot_class():
@@ -110,249 +82,221 @@ def get_rag_chatbot_class():
         RAGChatbot = _load_rag_chatbot_class()
     return RAGChatbot
 
-# Initialize as None, will be loaded on first use
-RAGChatbot = None
+
+def get_search_keywords_for_tech(topic: str) -> str:
+    """
+    Returns precise keywords to find relevant config/code files for tech stack analysis.
+    """
+    mapping = {
+        "Languages": "extension file types .py .js .ts .java .kt .swift .dart .go .rs .rb .php statistics",
+        "Dependencies": "package.json pubspec.yaml requirements.txt pom.xml build.gradle go.mod Cargo.toml Gemfile dependencies",
+        "Frameworks": "framework import react flutter angular vue django flask spring express rails laravel",
+        "Build Tools": "CMakeLists.txt Makefile build.gradle webpack vite tsconfig babel rollup gradle maven",
+        "Application Type": "main entry point index app startup initialization platform mobile web desktop",
+        "Data Storage": "database sqlite postgresql mysql mongodb redis firebase realm hive sharedpreferences schema model",
+        "Networking": "http dio axios fetch retrofit okhttp requests api endpoint graphql websocket client",
+        "State Management": "state management provider riverpod bloc redux mobx getx context vuex pinia ngrx recoil",
+        "UI Layer": "ui widget component view layout css html xml swiftui jetpack compose styling",
+        "Directory Structure": "directory structure folder lib src app components services models utils",
+        "Platform": "android ios web windows linux macos native configuration manifest plist",
+        "Testing": "test spec unit integration e2e testing framework jest mocha pytest junit",
+        "Automation": "ci cd github actions workflow docker jenkins circleci script build deploy",
+        "Ecosystem": "ecosystem stack technology platform language environment coherence",
+        "Cross-Platform": "cross-platform multi-platform shared code specific implementation",
+        "Versions": "version sdk constraint engine minimum requirement compatibility",
+        "Prerequisites": "install setup prerequisite sdk runtime tool env environment",
+        "Maturity": "deprecated outdated legacy maintenance support update upgrade",
+    }
+
+    # Fuzzy match
+    for key, value in mapping.items():
+        if key in topic:
+            return value
+    return "technology configuration"
 
 
-def parse_single_mcq_from_response(response_text: str) -> dict:
+def retrieve_context(chatbot, keywords: str, limit: int = 15) -> str:
     """
-    Parse a single MCQ question from chatbot's response
-    Returns a dict with question, options, correct_answer, and explanation
+    Directly retrieves chunks from Vector DB.
     """
-    # Try to find the first MCQ in the response
-    question_pattern = r'###\s+Question\s+(\d+)\s+\(MCQ\s*-\s*(\w+)\)'
-    match = re.search(question_pattern, response_text)
-    
-    if not match:
-        # Try alternative format without header
-        # Look for question text followed by options A-D
-        lines = response_text.split('\n')
-        question_text = []
-        options = {}
-        correct_answer = None
-        explanation = ""
-        
-        answer_section = False
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-            
-            # Check for answer markers
-            if '**Answer:**' in line or 'Answer:' in line:
-                answer_section = True
-                try:
-                    if ':' in line:
-                        split_result = line.split(':', 1)
-                        answer_line = split_result[-1].strip() if split_result else line.replace('**Answer:**', '').strip()
-                    else:
-                        answer_line = line.replace('**Answer:**', '').strip()
-                    
-                    if answer_line:
-                        answer_match = re.match(r'^([A-D])\s*[-–—]\s*(.+)', answer_line, re.DOTALL)
-                        if answer_match:
-                            correct_answer = answer_match.group(1)
-                            explanation = answer_match.group(2).strip()
-                        else:
-                            letter_match = re.match(r'^([A-D])', answer_line)
-                            if letter_match:
-                                correct_answer = letter_match.group(1)
-                                explanation = answer_line[1:].strip() if len(answer_line) > 1 else ""
-                except (IndexError, AttributeError):
-                    pass
-                continue
-            
-            if answer_section:
-                explanation += " " + line if explanation else line
-                continue
-            
-            # Check if line is an option
-            option_match = re.match(r'^([A-D])\.\s+(.+)$', line)
-            if option_match:
-                option_letter = option_match.group(1)
-                option_text = option_match.group(2).strip()
-                options[option_letter] = option_text
-            else:
-                # It's part of the question text
-                question_text.append(line)
-        
-        if len(options) == 4 and correct_answer and correct_answer in options and question_text:
-            return {
-                'question': ' '.join(question_text),
-                'options': options,
-                'correct_answer': correct_answer,
-                'explanation': explanation.strip()
-            }
-        return None
-    
-    # Extract content after the header
-    start_idx = match.end()
-    content = response_text[start_idx:].strip()
-    
-    # Split content into question text and answer
-    answer_split = re.split(r'\*\*Answer:\*\*', content, maxsplit=1)
-    
-    if len(answer_split) < 2:
-        return None
-    
+    print(f"   🔍 Searching context with keywords: '{keywords[:50]}...'")
+    query_embedding = chatbot.get_query_embedding(keywords)
+
+    chunks = []
+
+    # Direct Search
+    if hasattr(chatbot.vector_db, "search"):
+        chunks = chatbot.vector_db.search(query_embedding, top_k=limit)
+
+    # Fallback to specific indices
+    if hasattr(chatbot.vector_db, "indices"):
+        for idx in ["code", "github"]:
+            if idx in chatbot.vector_db.indices:
+                res = chatbot.vector_db.indices[idx].search(
+                    query_embedding, top_k=limit
+                )
+                if isinstance(res, list):
+                    chunks.extend(res)
+
+    # Flatten if needed
+    if isinstance(chunks, dict):
+        flat = []
+        for v in chunks.values():
+            if isinstance(v, list):
+                flat.extend(v)
+        chunks = flat
+
+    # Deduplicate
+    seen = set()
+    unique_chunks = []
+    for c in chunks:
+        content = c.get("content") or c.get("text", "")
+        if content and content not in seen:
+            seen.add(content)
+            unique_chunks.append(c)
+
+    if not unique_chunks:
+        return ""
+
+    context_parts = []
+    for c in unique_chunks[:limit]:
+        path = c.get("metadata", {}).get("file_path", "unknown")
+        content = c.get("content") or c.get("text", "")
+        context_parts.append(f"File: {path}\n```\n{content[:2000]}\n```")
+
+    return "\n\n".join(context_parts)
+
+
+def parse_json_mcq(response_text: str) -> dict:
+    """Robustly parse JSON MCQ from response"""
     try:
-        question_part = answer_split[0].strip()
-        answer_part = answer_split[1].strip()
-    except IndexError:
-        return None
-    
-    # Extract question text and options
-    lines = question_part.split('\n')
-    question_text = []
-    options = {}
-    
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        
-        # Check if line is an option
-        option_match = re.match(r'^([A-D])\.\s+(.+)$', line)
-        if option_match:
-            option_letter = option_match.group(1)
-            option_text = option_match.group(2).strip()
-            options[option_letter] = option_text
+        # 1. Try finding JSON block
+        json_match = re.search(r"```json\s*(.*?)\s*```", response_text, re.DOTALL)
+        if json_match:
+            json_str = json_match.group(1)
         else:
-            question_text.append(line)
-    
-    # Extract correct answer and explanation
-    correct_answer = None
-    explanation = ""
-    
-    answer_match = re.match(r'^([A-D])\s*[-–—]\s*(.+)', answer_part, re.DOTALL)
-    if answer_match:
-        correct_answer = answer_match.group(1)
-        explanation = answer_match.group(2).strip()
-    else:
-        letter_match = re.match(r'^([A-D])', answer_part)
-        if letter_match:
-            correct_answer = letter_match.group(1)
-            explanation = answer_part[1:].strip() if len(answer_part) > 1 else ""
-    
-    # Validate this is a proper MCQ
-    if len(options) == 4 and correct_answer and correct_answer in options and question_text:
-        return {
-            'question': ' '.join(question_text),
-            'options': options,
-            'correct_answer': correct_answer,
-            'explanation': explanation
-        }
-    
-    return None
+            # Try finding raw JSON (starts with { ends with })
+            json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(0)
+            else:
+                return None
+
+        data = json.loads(json_str)
+
+        # Validate structure
+        required_keys = ["question", "options", "correct_answer", "explanation"]
+        if not all(key in data for key in required_keys):
+            print(f"    ⚠️ Missing keys in JSON. Found: {list(data.keys())}")
+            return None
+
+        # Validate options
+        if not isinstance(data["options"], dict) or len(data["options"]) < 2:
+            print("    ⚠️ Invalid options format")
+            return None
+
+        return data
+
+    except json.JSONDecodeError as e:
+        print(f"    ⚠️ JSON Decode Error: {e}")
+        return None
+    except Exception as e:
+        print(f"    ⚠️ Parse Error: {e}")
+        return None
 
 
-def generate_section_qna(tech_stack_data, chatbot, gmail_db_path=None, provider='openai', model=None):
+def generate_section_qna(tech_stack_data, chatbot):
     """
-    Generate MCQ questions for each section in tech stack data
-    Adds a 'qna' array to each section
+    Generate MCQ questions for each section in tech stack data using strict JSON format
     """
     print("\n" + "=" * 80)
     print("GENERATING MCQ QUESTIONS FOR TECH STACK SECTIONS")
     print("=" * 80 + "\n")
-    
+
     sections = tech_stack_data.get("sections", {})
     total_qnas = 0
-    
+
     for section_name, section_content in sections.items():
         if not isinstance(section_content, dict):
             continue
-            
-        print(f"Processing section: {section_name}")
-        
-        # Get teaching_content array from section
+
         teaching_content = section_content.get("teaching_content", [])
-        
         if not teaching_content:
-            print(f"  ⚠ No teaching_content found, skipping...\n")
             continue
-        
+
         qna_list = []
-        
+
+        # Only generate a max of 2 questions per section to save time/tokens if list is huge
+        # But for tech stack usually we have ~4 items per section, so iterating all is fine.
         for idx, item_data in enumerate(teaching_content, 1):
-            if not isinstance(item_data, dict):
-                continue
-                
-            topic_text = item_data.get("topic", "")
-            content_text = item_data.get("content", "")
             title = item_data.get("title", f"Item {idx}")
-            
-            if not topic_text or not content_text or str(content_text).startswith("Error:"):
-                print(f"  [{idx}/{len(teaching_content)}] ⚠ Skipping '{title}' (invalid data)")
+            content = item_data.get("content", "")
+
+            # Skip if content is an error or too short
+            if (
+                not content
+                or str(content).startswith("Error:")
+                or len(str(content)) < 50
+            ):
                 continue
-            
+
             print(f"  [{idx}/{len(teaching_content)}] Generating MCQ for '{title}'...")
+
+            mcq_prompt = f"""
+            You are a technical quiz generator. Generate ONE multiple-choice question (MCQ) based on the provided technical content.
             
-            # Create prompt for generating MCQ
-            mcq_prompt = f"""Based on the following topic information, generate ONE multiple-choice question (MCQ) for new employee onboarding.
+            TOPIC: {title}
+            CONTENT: {content[:3000]}
+            
+            OUTPUT FORMAT:
+            You MUST return a valid JSON object. Do not include markdown formatting outside the JSON.
+            {{
+                "question": "The question text here?",
+                "options": {{
+                    "A": "Option 1",
+                    "B": "Option 2",
+                    "C": "Option 3",
+                    "D": "Option 4"
+                }},
+                "correct_answer": "A",
+                "explanation": "Explanation of why A is correct."
+            }}
+            """
 
-TOPIC: {title}
-
-INFORMATION ABOUT THIS TOPIC:
-{content_text[:2000]}
-
-CRITICAL REQUIREMENTS:
-- Generate EXACTLY ONE multiple-choice question (MCQ format)
-- The question must have exactly 4 options (A, B, C, D)
-- Only ONE option should be correct
-- The question should test understanding of the key concepts from the topic
-- Focus on important, practical knowledge that helps new employees understand the codebase
-- Provide a clear explanation (3-5 sentences) that helps users learn
-- Format the response as:
-  ### Question 1 (MCQ - Medium)
-  [Your question text here]
-  A. [Option A]
-  B. [Option B]
-  C. [Option C]
-  D. [Option D]
-  **Answer:** [Correct letter] - [Detailed explanation]
-
-Generate the MCQ question now."""
-
-            schema_name = f"{REPO_OWNER}_{REPO_NAME}".replace("-", "_")
             try:
-                response = chatbot.chat(mcq_prompt, schema_name=schema_name)
-                answer = response.get('answer', '') if isinstance(response, dict) else getattr(response, 'answer', str(response))
-                
-                if answer:
-                    mcq = parse_single_mcq_from_response(answer)
-                    if mcq:
-                        mcq['subsection'] = title
-                        qna_list.append(mcq)
-                        print(f"    ✓ Generated MCQ successfully")
-                    else:
-                        print(f"    ✗ Failed to parse MCQ from response")
+                # System prompt ensures JSON behavior
+                response = chatbot.call_llm(
+                    "You are a helpful assistant that outputs only valid JSON.",
+                    mcq_prompt,
+                )
+
+                mcq = parse_json_mcq(response)
+
+                if mcq:
+                    mcq["subsection"] = title
+                    qna_list.append(mcq)
+                    print(f"    ✓ Generated MCQ: {mcq['question'][:50]}...")
                 else:
-                    print(f"    ✗ Empty response from chatbot")
-                    
+                    print(
+                        f"    ✗ Failed to parse MCQ. Raw response preview: {response[:100]}..."
+                    )
+
             except Exception as e:
-                print(f"    ✗ Error: {e}")
-                continue
-        
-        # Add qna list to section
+                print(f"    ✗ Error calling LLM: {e}")
+
         if qna_list:
             sections[section_name]["qna"] = qna_list
             total_qnas += len(qna_list)
-            print(f"  ✓ Added {len(qna_list)} MCQ questions to section '{section_name}'\n")
-        else:
-            print(f"  ⚠ No MCQ questions generated for section '{section_name}'\n")
-    
-    print(f"✓ Total MCQ questions generated: {total_qnas}")
-    print("=" * 80 + "\n")
-    
+
+    print(f"\n✓ Total MCQ questions generated: {total_qnas}")
     return tech_stack_data
 
 
-def generate_tech_stack_data(gmail_db_path=None, provider='openai', model=None):
-    """Generate comprehensive tech stack analysis data"""
+def generate_tech_stack_data(gmail_db_path=None, provider="openai", model=None):
+    """Generate comprehensive tech stack analysis data using Context-First RAG"""
 
-    print("Starting Tech Stack Data Generation...\n")
+    print("Starting Tech Stack Data Generation (Context-First)...\n")
 
-    # Initialize chatbot
     print("Loading chatbot...")
     RAGChatbotClass = get_rag_chatbot_class()
     chatbot = RAGChatbotClass(
@@ -361,176 +305,123 @@ def generate_tech_stack_data(gmail_db_path=None, provider='openai', model=None):
         provider=provider,
         model=model,
         verbose=False,
-        disable_conversation_storage=True  # Skip conversation storage for generators
+        disable_conversation_storage=True,
     )
 
-    # Define tech stack specific questions - optimized for RAG retrieval
     questions = [
         # 1. Complete Tech Stack Overview
-        ("Programming Languages Used",
-         "Search for files with extensions like .dart, .java, .py, .js, .ts, .cpp, .swift, .kt, .go, .rb, .rs, .php. "
-         "List EVERY programming language found in the codebase. For each language, count or estimate: "
-         "number of files, percentage of codebase, and what parts of the application use it. "
-         "Example format: 'Dart: 150 files (80%), used for mobile app logic and UI'. "
-         "**List all languages with file counts - no code snippets.**"),
-
-        ("Package Dependencies",
-         "Look for files named: pubspec.yaml, package.json, requirements.txt, pom.xml, build.gradle, go.mod, "
-         "Gemfile, Cargo.toml, Package.swift, or similar dependency files. "
-         "Extract and list the TOP 15-20 dependencies from these files. For each dependency, state: "
-         "its name, what it provides (UI, networking, database, testing, etc.), and whether it's for "
-         "production or development use. If you find these files, extract the actual package names. "
-         "**Extract from dependency files and list package names with purposes.**"),
-
-        ("Frameworks and Major Libraries",
-         "Identify the main frameworks by looking at: import statements, dependency files, and file structure. "
-         "Common frameworks include: Flutter, React, Angular, Vue, Django, Flask, Spring Boot, Express, "
-         "Rails, Laravel, .NET, etc. List the PRIMARY framework(s) that structure this application. "
-         "Also identify major libraries for: UI components, state management, routing, networking, database access. "
-         "**List framework names and major library names - no code.**"),
-
-        ("Build Tools and Compilation",
-         "Search for build configuration files: CMakeLists.txt, Makefile, build.gradle, webpack.config.js, "
-         "vite.config.js, tsconfig.json, babel.config.js, etc. What build tools compile or bundle this code? "
-         "What tools transpile or process code before execution? List: build systems (CMake, Gradle, Maven, npm, etc.), "
-         "bundlers (Webpack, Vite, Rollup), transpilers (Babel, TypeScript), and compilers. "
-         "**List build toolchain - configuration examples OK, no application code.**"),
-
+        (
+            "Programming Languages Used",
+            "List EVERY programming language found in the codebase. Count files/percentage. "
+            "**List all languages with file counts.**",
+        ),
+        (
+            "Package Dependencies",
+            "Extract TOP 15-20 dependencies from package.json, pubspec.yaml etc. "
+            "**List package names with purposes.**",
+        ),
+        (
+            "Frameworks and Major Libraries",
+            "List the PRIMARY frameworks (Flutter, React, etc.) and major libraries. "
+            "**List names only.**",
+        ),
+        (
+            "Build Tools and Compilation",
+            "List build systems, bundlers, transpilers. " "**List build toolchain.**",
+        ),
         # 2. Application Flow wrt Tech Stacks
-        ("Application Type and Entry Point",
-         "Determine the application type by examining: main files (main.dart, index.js, app.py, main.go, etc.), "
-         "project structure, and build outputs. Is this a: mobile app, web app, desktop app, CLI tool, "
-         "backend API, library, or multi-platform project? Identify the entry point file(s). "
-         "Describe what happens when the application starts - which technologies initialize first? "
-         "**Describe app type and startup flow with technologies - no code snippets.**"),
-
-        ("Data Storage Technologies",
-         "Search for database-related code and imports. Look for: SQLite (sqflite, sqlite3), PostgreSQL (pg, psycopg2), "
-         "MySQL, MongoDB, Redis, Firebase, Realm, Hive, SharedPreferences, AsyncStorage, IndexedDB, etc. "
-         "What database or storage technology is used? Where is data stored (local device, remote server, cloud)? "
-         "Look for: database initialization code, schema files, migration files, or ORM/query builder usage. "
-         "**List all data storage technologies found - include schema definitions if present.**"),
-
-        ("Networking and API Communication",
-         "Look for HTTP client libraries and API code. Search for: http, dio, axios, fetch, retrofit, okhttp, "
-         "requests, urllib, networking imports. Does this application make network requests? "
-         "What library handles HTTP? Are there WebSocket connections? Does it define API endpoints? "
-         "Look for: API client code, REST endpoint definitions, GraphQL queries, WebSocket handlers. "
-         "**List networking libraries and communication patterns - no implementation code.**"),
-
-        ("State Management Pattern",
-         "For applications with UI, identify state management by searching for: Provider, Riverpod, Bloc, Redux, "
-         "MobX, GetX, Context API, Vuex, Pinia, NgRx, Recoil, Zustand, setState, etc. "
-         "How does the application manage state? What pattern or library coordinates data flow between UI and logic? "
-         "If no state management library is found, describe how state is handled. "
-         "**Identify state management approach - describe pattern, don't paste code.**"),
-
-        ("UI Layer Technologies",
-         "Identify UI technologies by examining: import statements, file extensions, and component files. "
-         "For mobile: Flutter widgets, React Native, SwiftUI, Jetpack Compose, UIKit, XML layouts. "
-         "For web: HTML/CSS/JS, React components, Vue templates, Angular components, Svelte. "
-         "For desktop: Electron, Qt, GTK, WPF, JavaFX. What technologies render the user interface? "
-         "What styling approach is used (CSS, SASS, styled-components, Tailwind, native styling)? "
-         "**List UI technologies and styling approach - no code.**"),
-
+        (
+            "Application Type and Entry Point",
+            "Is this mobile, web, backend? Identify entry point file. "
+            "**Describe app type and startup.**",
+        ),
+        (
+            "Data Storage Technologies",
+            "List databases, local storage, ORMs found. " "**List storage tech.**",
+        ),
+        (
+            "Networking and API Communication",
+            "List HTTP clients, GraphQL, WebSocket libraries. "
+            "**List networking libs.**",
+        ),
+        (
+            "State Management Pattern",
+            "Identify state management libraries (Provider, Redux, etc). "
+            "**Identify pattern.**",
+        ),
+        (
+            "UI Layer Technologies",
+            "List UI frameworks (Flutter widgets, React components) and styling. "
+            "**List UI tech.**",
+        ),
         # 3. Module-wise Tech Stack
-        ("Project Directory Structure",
-         "Analyze the top-level directory structure. List main directories (lib, src, app, components, services, "
-         "models, utils, test, android, ios, web, windows, linux, etc.) and explain what each contains. "
-         "How is the codebase organized? Is there separation by: feature, layer (MVC), platform, or module? "
-         "**Describe directory organization - plain text list, no code.**"),
-
-        ("Platform-Specific Technologies",
-         "Look for platform-specific directories: android, ios, web, windows, linux, macos, etc. "
-         "For each platform directory found, identify what native technologies are used: "
-         "Android: Kotlin/Java with Gradle; iOS: Swift/Objective-C with CocoaPods/SPM; "
-         "Web: HTML/JS frameworks; Desktop: native APIs or cross-platform wrappers. "
-         "**List platform-specific tech - mention directories and technologies used.**"),
-
-        ("Testing Infrastructure",
-         "Search for test files and test configuration. Look for: test directories, files ending in _test.dart, "
-         ".test.js, .spec.ts, test_*.py, *_test.go, etc. Identify testing frameworks: flutter_test, jest, "
-         "mocha, pytest, junit, go test, rspec, etc. What types of tests exist (unit, widget, integration, e2e)? "
-         "Look for test configuration files. If tests exist, list the frameworks. If none, state 'No tests found'. "
-         "**List testing technologies - be explicit about presence or absence.**"),
-
-        ("Development Automation",
-         "Look for CI/CD configuration and development scripts: .github/workflows, .gitlab-ci.yml, .circleci, "
-         "jenkins files, docker-compose.yml, Dockerfile, scripts directory, npm scripts in package.json. "
-         "What automation exists for: testing, building, deploying, linting, formatting? "
-         "What tools automate development workflows (GitHub Actions, Docker, pre-commit hooks, etc.)? "
-         "**List automation tools and their purposes - config examples OK.**"),
-
+        (
+            "Project Directory Structure",
+            "List main directories and explain contents. "
+            "**Describe directory organization.**",
+        ),
+        (
+            "Platform-Specific Technologies",
+            "List native technologies in android/ios/web folders. "
+            "**List platform-specific tech.**",
+        ),
+        (
+            "Testing Infrastructure",
+            "List testing frameworks and types of tests found. "
+            "**List testing tech.**",
+        ),
+        (
+            "Development Automation",
+            "List CI/CD tools, scripts, Docker. " "**List automation tools.**",
+        ),
         # 4. Technology Rationale
-        ("Technology Ecosystem",
-         "Based on all technologies identified, what is the primary technology ecosystem? "
-         "Examples: Dart/Flutter ecosystem, JavaScript/Node.js ecosystem, Python ecosystem, Java/JVM ecosystem, "
-         "Go ecosystem, Ruby ecosystem, .NET ecosystem, etc. Are most technologies from one ecosystem, "
-         "or is this a polyglot project mixing multiple ecosystems? Why might this ecosystem have been chosen? "
-         "**Identify the dominant ecosystem and explain the technology cohesion.**"),
-
-        ("Cross-Platform Strategy",
-         "Analyze how the project handles multiple platforms. Is there: a single codebase for all platforms, "
-         "platform-specific code in separate directories, conditional compilation, or separate apps per platform? "
-         "What technologies enable cross-platform development (Flutter, React Native, Electron, etc.)? "
-         "How much code is shared vs platform-specific? "
-         "**Describe cross-platform approach and code sharing strategy.**"),
-
+        (
+            "Technology Ecosystem",
+            "Identify the primary ecosystem (e.g. Flutter/Dart, Node.js). "
+            "**Identify dominant ecosystem.**",
+        ),
+        (
+            "Cross-Platform Strategy",
+            "How is cross-platform handled? Shared code vs specific? "
+            "**Describe strategy.**",
+        ),
         # 5. Reference/Summary
-        ("Complete Technology Inventory",
-         "Create a comprehensive table with ALL technologies identified so far. For each technology list: "
-         "Name | Type (Language/Framework/Library/Tool) | Purpose | File/Directory Reference. "
-         "Include everything: languages, frameworks, libraries, databases, build tools, testing tools, CI/CD, etc. "
-         "**Structured table format - serves as master reference.**"),
-
-        ("Version Requirements",
-         "Search dependency files for version numbers. Look at: pubspec.yaml (sdk, dependencies), "
-         "package.json (engines, dependencies), requirements.txt, pom.xml, build.gradle, etc. "
-         "Extract: minimum SDK/runtime versions, framework versions, and major dependency versions. "
-         "Example: 'Dart SDK: >=2.19.0 <4.0.0', 'Flutter: SDK flutter', 'http: ^1.1.0'. "
-         "If versions aren't specified, note which technologies lack version constraints. "
-         "**Extract actual version numbers from configuration files.**"),
-
-        ("Developer Prerequisites",
-         "Based on all identified technologies, what must a developer install to work on this project? "
-         "List in priority order: 1) Required SDKs/runtimes (Dart, Node.js, Python, JDK, etc.) "
-         "2) Primary framework (Flutter, React, etc.) 3) Build tools 4) Development tools (IDE, debugger). "
-         "What should they learn first? What's the minimum setup to run the app locally? "
-         "**Prioritized setup list - focus on what's actually required.**"),
-
-        ("Technology Maturity and Updates",
-         "Analyze the tech stack's maturity: Are these technologies actively maintained and widely adopted? "
-         "Are any deprecated or outdated? Look for: old framework versions, deprecated APIs in comments, "
-         "TODO comments about upgrades. Are technologies modern (released in last 3-5 years) or established? "
-         "What are the strengths (stability, community, performance) and potential risks (legacy, niche, abandoned)? "
-         "**Critical assessment of stack's current state and future viability.**"),
+        (
+            "Complete Technology Inventory",
+            "Create a comprehensive table: Name | Type | Purpose | Reference. "
+            "**Structured table format.**",
+        ),
+        (
+            "Version Requirements",
+            "Extract minimum SDK/framework versions from config files. "
+            "**Extract version numbers.**",
+        ),
+        (
+            "Developer Prerequisites",
+            "List required installs (SDKs, tools) in priority order. "
+            "**Prioritized setup list.**",
+        ),
+        (
+            "Technology Maturity and Updates",
+            "Assess stack maturity, deprecated packages, legacy code. "
+            "**Critical assessment.**",
+        ),
     ]
 
-    # Collect responses
     tech_stack_data = {
         "metadata": {
             "generated_at": datetime.now().isoformat(),
-            "repository": getattr(chatbot, "repo_info", {}).get('name', 'unknown'),
+            "repository": getattr(chatbot, "repo_info", {}).get("name", "unknown"),
             "provider": provider,
-            "model": getattr(chatbot, "model", None)
+            "model": getattr(chatbot, "model", None),
         },
         "sections": {
-            "complete_tech_stack_overview": {
-                "teaching_content": []
-            },
-            "application_flow_tech_stack": {
-                "teaching_content": []
-            },
-            "module_wise_tech_breakdown": {
-                "teaching_content": []
-            },
-            "technology_rationale": {
-                "teaching_content": []
-            },
-            "reference_summary": {
-                "teaching_content": []
-            }
-        }
+            "complete_tech_stack_overview": {"teaching_content": []},
+            "application_flow_tech_stack": {"teaching_content": []},
+            "module_wise_tech_breakdown": {"teaching_content": []},
+            "technology_rationale": {"teaching_content": []},
+            "reference_summary": {"teaching_content": []},
+        },
     }
 
     # Map questions to sections
@@ -562,145 +453,82 @@ def generate_tech_stack_data(gmail_db_path=None, provider='openai', model=None):
     for idx, (key, question) in enumerate(questions, 1):
         print(f"[{idx}/{total}] {key}...")
 
-        schema_name = f"{REPO_OWNER}_{REPO_NAME}".replace("-", "_")
+        # 1. Get Keywords
+        keywords = get_search_keywords_for_tech(key)
+
+        # 2. Retrieve Context (Raw)
+        context = retrieve_context(chatbot, keywords)
+
+        if not context:
+            print("   ⚠️ No specific context found. Using broad knowledge...")
+            context = "No specific configuration files found. Infer based on standard project structures."
+
+        # 3. Generate Answer
+        system_prompt = (
+            "You are a Senior Software Architect. "
+            "Analyze the tech stack based on the provided configuration files and code."
+        )
+
+        user_prompt = f"""
+        QUESTION: {question}
+        
+        CONTEXT FROM REPO:
+        {context[:20000]}
+        
+        INSTRUCTIONS:
+        - Analyze the context to answer the question.
+        - Be specific about versions and library names if visible.
+        - If files are missing, state what is likely used based on file extensions.
+        """
+
         try:
-            response = chatbot.chat(question, schema_name=schema_name)
-            answer = response.get('answer') if isinstance(response, dict) else getattr(response, 'answer', str(response))
-            quality = response.get('context_quality', 1.0) if isinstance(response, dict) else getattr(response, 'context_quality', 1.0)
+            answer = chatbot.call_llm(system_prompt, user_prompt)
 
             section = section_mapping.get(idx - 1, "reference_summary")
-            tech_stack_data["sections"][section]["teaching_content"].append({
-                "title": key,
-                "topic": question,
-                "content": answer,
-                "quality": quality
-            })
+            tech_stack_data["sections"][section]["teaching_content"].append(
+                {"title": key, "topic": question, "content": answer, "quality": 1.0}
+            )
+            print(f"   ✓ Generated response ({len(answer)} chars)")
+
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"   ❌ Error: {e}")
             section = section_mapping.get(idx - 1, "reference_summary")
-            tech_stack_data["sections"][section]["teaching_content"].append({
-                "title": key,
-                "topic": question,
-                "content": f"Error: {str(e)}",
-                "quality": 0.0
-            })
+            tech_stack_data["sections"][section]["teaching_content"].append(
+                {
+                    "title": key,
+                    "topic": question,
+                    "content": f"Error: {str(e)}",
+                    "quality": 0.0,
+                }
+            )
 
-    # Upload to S3
+    # Upload Draft to S3
     s3_key = f"Onboarding/{REPO_OWNER}/{REPO_NAME}/reading/onboarding_tech_stack.json"
-
     try:
         s3_manager.upload_json(tech_stack_data, s3_key)
-        print(f"\n✓ Uploaded to S3: s3://{s3_manager.bucket}/{s3_key}")
+        print(f"\n✓ Draft Uploaded to S3: s3://{s3_manager.bucket}/{s3_key}")
     except Exception as e:
-        print(f"\n❌ Failed to upload to S3: {e}")
-        raise
+        print(f"\n❌ Failed to upload: {e}")
 
+    # Generate MCQ
+    tech_stack_data = generate_section_qna(tech_stack_data, chatbot)
 
-    # Calculate success stats
-    total_answers = sum(len(section.get("teaching_content", [])) for section in tech_stack_data["sections"].values())
-    successful_answers = sum(
-        1 for section in tech_stack_data["sections"].values()
-        for item in section.get("teaching_content", [])
-        if not str(item.get('content', '')).startswith('Error:')
-    )
-
-    print(f"📊 Answered {successful_answers}/{total_answers} questions successfully")
-    print(f"\nData organized into {len(tech_stack_data['sections'])} sections:")
-    for section_name, section_data in tech_stack_data["sections"].items():
-        teaching_count = len(section_data.get("teaching_content", []))
-        print(f"   - {section_name}: {teaching_count} teaching content items")
-
-    # Generate MCQ questions for each section
-    print("\n" + "=" * 80)
-    print("Starting MCQ QNA Generation...")
-    print("=" * 80)
-    tech_stack_data = generate_section_qna(tech_stack_data, chatbot, gmail_db_path, provider, model)
-    
-    # Save updated file with QNA
-    # Upload updated version with QNA to S3
+    # Upload Final
     try:
         s3_manager.upload_json(tech_stack_data, s3_key)
-        print(f"✓ Updated file with QNA uploaded to S3: s3://{s3_manager.bucket}/{s3_key}")
+        print(
+            f"✓ Final file with QNA uploaded to S3: s3://{s3_manager.bucket}/{s3_key}"
+        )
     except Exception as e:
         print(f"❌ Failed to upload updated file: {e}")
         raise
-
-
-    return s3_key
-
-
-def add_qna_to_existing_tech_stack(
-    json_file_path: str = None,
-    gmail_db_path: str = None,
-    provider: str = 'openai',
-    model: str = None
-) -> str:
-    """
-    Add MCQ QNA questions to an existing tech stack JSON file
-    
-    Args:
-        json_file_path: Path to existing tech stack JSON file (if None, uses default path)
-        gmail_db_path: Optional path to Gmail database
-        provider: LLM provider (openai/anthropic/ollama)
-        model: Model name (optional, uses default for provider)
-    
-    Returns:
-        Path to updated JSON file
-    """
-    print("╔" + "═" * 78 + "╗")
-    print("║" + " ADD QNA TO EXISTING TECH STACK ".center(78) + "║")
-    print("╚" + "═" * 78 + "╝\n")
-    
-    # Determine file path
-    s3_key = f"Onboarding/{REPO_OWNER}/{REPO_NAME}/reading/onboarding_tech_stack.json"
-
-    print(f"📄 Loading existing tech stack from S3...")
-
-    try:
-        tech_stack_data = s3_manager.download_json(s3_key)
-        print(f"✓  Loaded from: s3://{s3_manager.bucket}/{s3_key}\n")
-    except Exception as e:
-        print(f"✗  File not found in S3: {e}")
-        return None
-
-    
-    # Initialize chatbot
-    print("⚙  Initializing chatbot...")
-    try:
-        RAGChatbotClass = get_rag_chatbot_class()
-        chatbot = RAGChatbotClass(
-            vector_db_path=VECTOR_DB_PATH,
-            gmail_db_path=gmail_db_path,
-            provider=provider,
-            model=model,
-            verbose=False
-        )
-        print("✓  Chatbot initialized successfully\n")
-    except Exception as e:
-        print(f"✗  Failed to initialize chatbot: {e}")
-        return None
-    
-    # Generate QNA
-    tech_stack_data = generate_section_qna(tech_stack_data, chatbot, gmail_db_path, provider, model)
-    
-    # Save updated file
-    try:
-        s3_manager.upload_json(tech_stack_data, s3_key)
-        print(f"✓  Updated file uploaded to S3: s3://{s3_manager.bucket}/{s3_key}\n")
-    except Exception as e:
-        print(f"✗  Failed to upload to S3: {e}")
-        return None
 
     return s3_key
 
 
 if __name__ == "__main__":
-    GMAIL_DB_PATH = "../../../../data/VectorDB/gmail_chunks"
+    GMAIL_DB_PATH = None
     PROVIDER = "openai"
-    MODEL = None
+    MODEL = "gpt-4o-mini"
 
-    # Uncomment to just add QNA to existing file:
-    # add_qna_to_existing_tech_stack(gmail_db_path=GMAIL_DB_PATH, provider=PROVIDER, model=MODEL)
-    
-    # Generate complete tech stack with QNA:
     generate_tech_stack_data(GMAIL_DB_PATH, PROVIDER, MODEL)
