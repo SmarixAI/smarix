@@ -79,31 +79,170 @@ def create_user_schema_postgres(username: str, schema_name: str):
         conn = psycopg2.connect(MEMORY_DB_URL)
         conn.autocommit = True
         with conn.cursor() as cur:
-            # 1. Check if exists
+            # 1. Check if user schema already exists
+            schema_exists = False
             cur.execute("SELECT 1 FROM information_schema.schemata WHERE schema_name = %s", (schema_name,))
             if cur.fetchone():
-                return
+                schema_exists = True
+                # Check if tables exist in the schema
+                cur.execute("""
+                    SELECT table_name 
+                    FROM information_schema.tables 
+                    WHERE table_schema = %s AND table_name IN ('conversations', 'messages', 'tasks')
+                """, (schema_name,))
+                existing_tables = {row[0] for row in cur.fetchall()}
+                required_tables = {'conversations', 'messages', 'tasks'}
+                
+                # If all tables exist, we're done
+                if existing_tables == required_tables:
+                    return
+                
+                # Otherwise, we need to create missing tables (schema exists but tables are missing)
 
-            # 2. Create Schema
-            cur.execute(f"CREATE SCHEMA IF NOT EXISTS {schema_name}")
+            # 2. Ensure template_schema exists (create if it doesn't)
+            cur.execute("SELECT 1 FROM information_schema.schemata WHERE schema_name = 'template_schema'")
+            if not cur.fetchone():
+                # Create template_schema and its tables
+                cur.execute("CREATE SCHEMA IF NOT EXISTS template_schema")
+                
+                # Create template tables
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS template_schema.conversations (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        session_id VARCHAR(255) UNIQUE NOT NULL,
+                        user_id VARCHAR(255),
+                        created_at TIMESTAMP DEFAULT NOW(),
+                        updated_at TIMESTAMP DEFAULT NOW(),
+                        title TEXT,
+                        metadata JSONB DEFAULT '{}'::jsonb
+                    )
+                """)
+                
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS template_schema.messages (
+                        id BIGSERIAL PRIMARY KEY,
+                        conversation_id UUID,
+                        role VARCHAR(20) NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
+                        content TEXT NOT NULL,
+                        tokens_used INTEGER DEFAULT 0,
+                        response_time_ms INTEGER,
+                        created_at TIMESTAMP DEFAULT NOW(),
+                        metadata JSONB DEFAULT '{}'::jsonb
+                    )
+                """)
+                
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS template_schema.tasks (
+                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                        title TEXT NOT NULL,
+                        description TEXT,
+                        category VARCHAR(50) DEFAULT 'day-to-day',
+                        priority VARCHAR(20) DEFAULT 'medium',
+                        status VARCHAR(20) DEFAULT 'pending',
+                        deadline DATE,
+                        assigned_to_username VARCHAR(50),
+                        assigned_by VARCHAR(50) DEFAULT 'Self',
+                        created_at TIMESTAMP DEFAULT NOW()
+                    )
+                """)
+                print("✓ Created template_schema with template tables")
 
-            # 3. Clone Tables from Template
-            # We assume template_schema exists from init_db.sql
+            # 3. Create user schema (if it doesn't exist)
+            if not schema_exists:
+                cur.execute(f"CREATE SCHEMA IF NOT EXISTS {schema_name}")
+
+            # 4. Clone Tables from Template (or create directly if cloning fails)
+            # Only create tables that don't exist
             for table in ['conversations', 'messages', 'tasks']:
-                cur.execute(f"CREATE TABLE {schema_name}.{table} (LIKE template_schema.{table} INCLUDING ALL)")
+                # Check if table already exists
+                if schema_exists:
+                    cur.execute("""
+                        SELECT 1 FROM information_schema.tables 
+                        WHERE table_schema = %s AND table_name = %s
+                    """, (schema_name, table))
+                    if cur.fetchone():
+                        continue  # Table already exists, skip
+                
+                # Try to create the table
+                try:
+                    cur.execute(f"CREATE TABLE {schema_name}.{table} (LIKE template_schema.{table} INCLUDING ALL)")
+                except Exception as clone_error:
+                    # If cloning fails, create table directly
+                    if table == 'conversations':
+                        cur.execute(f"""
+                            CREATE TABLE IF NOT EXISTS {schema_name}.conversations (
+                                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                                session_id VARCHAR(255) UNIQUE NOT NULL,
+                                user_id VARCHAR(255),
+                                created_at TIMESTAMP DEFAULT NOW(),
+                                updated_at TIMESTAMP DEFAULT NOW(),
+                                title TEXT,
+                                metadata JSONB DEFAULT '{{}}'::jsonb
+                            )
+                        """)
+                    elif table == 'messages':
+                        cur.execute(f"""
+                            CREATE TABLE IF NOT EXISTS {schema_name}.messages (
+                                id BIGSERIAL PRIMARY KEY,
+                                conversation_id UUID,
+                                role VARCHAR(20) NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
+                                content TEXT NOT NULL,
+                                tokens_used INTEGER DEFAULT 0,
+                                response_time_ms INTEGER,
+                                created_at TIMESTAMP DEFAULT NOW(),
+                                metadata JSONB DEFAULT '{{}}'::jsonb
+                            )
+                        """)
+                    elif table == 'tasks':
+                        cur.execute(f"""
+                            CREATE TABLE IF NOT EXISTS {schema_name}.tasks (
+                                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                                title TEXT NOT NULL,
+                                description TEXT,
+                                category VARCHAR(50) DEFAULT 'day-to-day',
+                                priority VARCHAR(20) DEFAULT 'medium',
+                                status VARCHAR(20) DEFAULT 'pending',
+                                deadline DATE,
+                                assigned_to_username VARCHAR(50),
+                                assigned_by VARCHAR(50) DEFAULT 'Self',
+                                created_at TIMESTAMP DEFAULT NOW()
+                            )
+                        """)
 
-            # 4. Re-establish Foreign Keys (messages -> conversations)
-            cur.execute(f"""
-                ALTER TABLE {schema_name}.messages 
-                ADD CONSTRAINT fk_conversation 
-                FOREIGN KEY (conversation_id) 
-                REFERENCES {schema_name}.conversations(id) ON DELETE CASCADE
-            """)
+            # 5. Re-establish Foreign Keys (messages -> conversations)
+            # Only if both tables exist
+            cur.execute("""
+                SELECT 1 FROM information_schema.tables 
+                WHERE table_schema = %s AND table_name IN ('conversations', 'messages')
+            """, (schema_name,))
+            if len(cur.fetchall()) == 2:  # Both tables exist
+                try:
+                    cur.execute(f"""
+                        ALTER TABLE {schema_name}.messages 
+                        ADD CONSTRAINT fk_conversation 
+                        FOREIGN KEY (conversation_id) 
+                        REFERENCES {schema_name}.conversations(id) ON DELETE CASCADE
+                    """)
+                except Exception:
+                    # Constraint might already exist, ignore
+                    pass
 
-            # 5. Create Indexes
-            cur.execute(f"CREATE INDEX idx_msg_conv_time ON {schema_name}.messages(conversation_id, created_at DESC)")
+            # 6. Create Indexes
+            cur.execute("""
+                SELECT 1 FROM information_schema.tables 
+                WHERE table_schema = %s AND table_name = 'messages'
+            """, (schema_name,))
+            if cur.fetchone():  # messages table exists
+                try:
+                    cur.execute(f"CREATE INDEX IF NOT EXISTS idx_msg_conv_time ON {schema_name}.messages(conversation_id, created_at DESC)")
+                except Exception:
+                    # Index might already exist, ignore
+                    pass
 
-            print(f"✓ Created schema {schema_name} for {username}")
+            if schema_exists:
+                print(f"✓ Verified/created missing tables in schema {schema_name} for {username}")
+            else:
+                print(f"✓ Created schema {schema_name} for {username}")
         conn.close()
     except Exception as e:
         print(f"⚠ Error creating schema {schema_name}: {e}")

@@ -67,6 +67,23 @@ def _load_rag_chatbot_class():
 
 RAGChatbot = _load_rag_chatbot_class()
 
+def can_generate_practice_tutorial(repo_chunks: list) -> bool:
+    code_chunks = 0
+
+    for c in repo_chunks:
+        meta = c.get("metadata", {})
+
+        # ✅ RAG-normalized fields
+        content = c.get("text", "").strip()
+        index_type = meta.get("index")  # "code", "file", etc.
+
+        if index_type in {"code", "file"} and content:
+            line_count = len(content.splitlines())
+            if line_count >= 5:   # relaxed threshold is fine
+                code_chunks += 1
+
+    print(f"[DEBUG] Executable code chunks detected: {code_chunks}")
+    return code_chunks >= 1
 
 def load_practice_question_prompt() -> str:
     """Load the complete practice question generation prompt"""
@@ -321,15 +338,66 @@ def generate_practice_questions(
         {"difficulty": "Hard", "steps": "9-10"}
     ]
 
+    # 🔍 Pull executable repo context ONLY for feasibility check
+    repo_chunks = []
+
+    # Pull from CODE index
+    # ✅ CORRECT: use RAG abstraction, not vector store internals
+    # 🔍 Pull executable repo context ONLY for feasibility check
+    # 🔍 Pull executable repo context ONLY for feasibility check
+    repo_chunks = []
+
+    store = getattr(chatbot, "multi_index_store", None)
+
+    if store:
+        # Deterministic lookup — no embeddings, no routing
+        repo_chunks.extend(
+            store.find(
+                where={"language": "dart"},
+                index="file",
+                top_k=20
+            )
+        )
+
+        repo_chunks.extend(
+            store.find(
+                where={"language": "dart"},
+                index="code",
+                top_k=20
+            )
+        )
+
+    print(f"[DEBUG] Feasibility chunks pulled: {len(repo_chunks)}")
+
+
+    for c in repo_chunks[:5]:
+        meta = c.get("metadata", {})
+        print({
+            "index": meta.get("index"),
+            "file": meta.get("file_path"),
+            "lines": len(c.get("text", "").splitlines())
+        })
+
+    repo_chunks = repo_chunks or []
+
     all_questions = []
 
     print("\n" + "=" * 80)
     print("Generating Practice Code Tutorial Questions")
     print("=" * 80 + "\n")
 
+    can_generate = can_generate_practice_tutorial(repo_chunks)
+
     for idx, config in enumerate(questions_config, 1):
-        difficulty = config['difficulty']
-        steps = config['steps']
+        difficulty = config["difficulty"]
+        steps = config["steps"]
+
+        if not can_generate:
+            print(
+                f"⚠️  Skipping Question {idx} ({difficulty}) — "
+                "not enough executable repo code"
+            )
+            continue
 
         print(f"Question {idx}/4: {difficulty} Level ({steps} steps)")
         print(f"Sending request to chatbot...\n")
@@ -379,6 +447,7 @@ def generate_practice_questions(
             traceback.print_exc()
             continue
 
+    
     questions_data = {
         "metadata": {
             "generated_at": datetime.now().isoformat(),

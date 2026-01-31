@@ -159,11 +159,11 @@ LLM_FALLBACK_THRESHOLD = 1.5   # below this → ask LLM
 # Classification tie-break priority (higher wins on equal score)
 PRIORITY = [
     QueryType.GREETING,
+    QueryType.PR_ISSUE_TUTORIAL,
+    QueryType.PR_ISSUE_CODING_QUESTION,
     QueryType.ISSUE_SPECIFIC,
     QueryType.PR_SPECIFIC,
     QueryType.COMMIT_SPECIFIC,
-    QueryType.PR_ISSUE_TUTORIAL,
-    QueryType.PR_ISSUE_CODING_QUESTION,
     QueryType.FILE_LOOKUP,
     QueryType.QUESTION_GENERATION,
     QueryType.HOW_TO,

@@ -334,6 +334,23 @@ class ResponseHandler:
             ]
         )
 
+    def _has_executable_repo_code(self, chunks: List[Dict[str, Any]]) -> bool:
+        """
+        Returns True if we have at least one executable code chunk
+        (not PR / issue / diff metadata).
+        """
+        for c in chunks:
+            meta = self._get_metadata(c)
+            chunk_type = meta.get("type") or meta.get("chunk_type")
+
+            # Only real code chunks count
+            if chunk_type == "code":
+                content = c.get("content", "")
+                if content and len(content.splitlines()) >= 10:
+                    return True
+
+        return False
+
     def _detect_ambiguous_filename(self, chunks: List[Dict[str, Any]], query: Optional[str] = None) -> Optional[Dict[str, Any]]:
         if not chunks:
             return None
@@ -650,6 +667,28 @@ class ResponseHandler:
         role: Optional[str] = None,
         intent: Optional[str] = None
     ) -> Dict[str, Any]:
+        
+        # ============================================================
+        # 🔥 EARLY PR CODING TUTORIAL GUARD (MUST RUN FIRST)
+        # ============================================================
+
+        if query_type == QueryType.PR_ISSUE_CODING_QUESTION:
+            has_code = self._has_executable_repo_code(github_results)
+
+            if not has_code:
+                self.chatbot.logger.warning(
+                    "EARLY_PR_CODING_GUARD | No executable repo code found — downgrading query"
+                )
+
+                return self.package_response(
+                    "This pull request does not contain enough executable repository code to generate a step-by-step coding tutorial. Here's a high-level explanation instead.",
+                    github_results,
+                    [],
+                    QueryType.PR_SPECIFIC,
+                    intent="summary"
+                )
+        # ⛔ HARD LOCK — from here on, behave ONLY like PR
+        query_type = QueryType.PR_SPECIFIC
 
         if query_type == QueryType.FILE_LOOKUP:
 
@@ -814,101 +853,12 @@ class ResponseHandler:
                             intent="closed_at"
                         )
 
+             
 
         # 🔒 STEP 2: Build context
         context = self.chatbot.build_context_from_chunks(github_results, query_type)
 
-        # Handle empty results gracefully with fallback retrieval
-        if not github_results:
-            # Try fallback retrieval with simplified query
-            self.chatbot.logger.warning("RETRIEVAL | No results found, attempting fallback retrieval")
-            
-            # Extract key terms from query for fallback
-            import re
-            # For generation prompts, extract what we're looking for (functionality, code, features, etc.)
-            simplified_query = expanded_query
-            
-            # Check if this is a generation/creation prompt
-            if re.search(r'\b(generate|create|provide|make|build)\b.*\b(based on|from|using|found in|in the context)\b', expanded_query, re.IGNORECASE):
-                # Extract key concepts: functionality, code, features, implementation
-                key_terms = []
-                if re.search(r'\bfunctionality\b', expanded_query, re.IGNORECASE):
-                    key_terms.append("functionality implementation")
-                if re.search(r'\bcode\b', expanded_query, re.IGNORECASE):
-                    key_terms.append("code")
-                if re.search(r'\bfeature\b', expanded_query, re.IGNORECASE):
-                    key_terms.append("feature")
-                if re.search(r'\bapplication flow\b', expanded_query, re.IGNORECASE):
-                    key_terms.append("application flow")
-                if re.search(r'\bauthentication|data processing|API|state management|error handling|database\b', expanded_query, re.IGNORECASE):
-                    matches = re.findall(r'\b(authentication|data processing|API|state management|error handling|database operations)\b', expanded_query, re.IGNORECASE)
-                    key_terms.extend([m.lower() for m in matches])
-                
-                # Build simplified query from key terms
-                if key_terms:
-                    simplified_query = " ".join(key_terms[:3])  # Use top 3 key terms
-                else:
-                    simplified_query = "code implementation functionality"
-            else:
-                # For regular queries, remove instruction words and extract meaningful content
-                simplified_query = re.sub(r'\b(CRITICAL|INSTRUCTION|MUST|ONLY|FORBIDDEN|REQUIRED|ABSOLUTE|MANDATORY)\b', '', expanded_query, flags=re.IGNORECASE)
-                simplified_query = re.sub(r'\b(generate|create|provide|include|explain|describe)\b.*?\.', '', simplified_query, flags=re.IGNORECASE)
-                # Extract first meaningful sentence or key phrases
-                sentences = [s.strip() for s in simplified_query.split('.') if len(s.strip()) > 20]
-                if sentences:
-                    simplified_query = sentences[0][:200]  # Take first meaningful sentence, max 200 chars
-                else:
-                    # If no good sentences, try to extract key nouns/verbs
-                    words = [w for w in simplified_query.split() if len(w) > 4 and w.lower() not in ['this', 'that', 'with', 'from', 'what', 'when', 'where']]
-                    simplified_query = " ".join(words[:10]) if words else "code"
-            
-            # Ensure we have a query
-            if not simplified_query or len(simplified_query.strip()) < 3:
-                simplified_query = "code implementation"
-            
-            # Try fallback retrieval with simplified query
-            try:
-                fallback_embedding = self.chatbot.get_query_embedding(simplified_query)
-                github_results = self.chatbot.retrieve_github_first(
-                    fallback_embedding, 
-                    query_type, 
-                    None,  # entity
-                    [],    # keywords
-                    query_text=simplified_query
-                )
-                
-                if github_results:
-                    self.chatbot.logger.info(f"RETRIEVAL | Fallback retrieval found {len(github_results)} results")
-                    context = self.chatbot.build_context_from_chunks(github_results, query_type)
-                else:
-                    # Last resort: try to get any code samples from 'code' index
-                    if hasattr(self.chatbot, 'multi_index_store') and self.chatbot.multi_index_store:
-                        code_index = self.chatbot.multi_index_store.indices.get('code')
-                        if code_index:
-                            try:
-                                # Get some general code samples
-                                general_embedding = self.chatbot.get_query_embedding("code implementation function class")
-                                github_results = code_index.search(general_embedding, top_k=5)
-                                github_results = self.chatbot._filter_by_repo(github_results) if hasattr(self.chatbot, '_filter_by_repo') else github_results
-                                if github_results:
-                                    self.chatbot.logger.info(f"RETRIEVAL | Fallback to general code samples: {len(github_results)} results")
-                                    context = self.chatbot.build_context_from_chunks(github_results, query_type)
-                            except Exception as e:
-                                self.chatbot.logger.warning(f"RETRIEVAL | Fallback code index search failed: {e}")
-            except Exception as e:
-                self.chatbot.logger.warning(f"RETRIEVAL | Fallback retrieval failed: {e}")
-            
-            # If still no results after fallback, return helpful message
-            if not github_results:
-                answer = "I couldn't find any relevant information in the codebase to answer your question. Please try rephrasing your query or be more specific."
-                return self.package_response(
-                    answer,
-                    [],
-                    [],
-                    query_type,
-                    intent=intent
-                )
-
+       
         # ============================================================
         # 🔥 PR METADATA-ONLY FALLBACK (CRITICAL FIX)
         # ============================================================
