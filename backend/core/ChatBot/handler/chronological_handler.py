@@ -137,15 +137,6 @@ class ChronologicalHandler:
             f"RESPONSE COMPLETE | Quality: {context_quality:.2f}, Sources: {len(sources)}, Emails: {len(emails)}")
         self.chatbot.logger.info("=" * 80)
 
-        # Store conversation to database
-        try:
-            self.chatbot.conversation_store.add_message(active_session_id, "user", query, schema_name=schema_name, tokens_used=0)
-            self.chatbot.conversation_store.add_message(active_session_id, "assistant", refined_answer, schema_name=schema_name, tokens_used=0)
-            self.chatbot.logger.info(
-                f"CONVERSATION_STORE | Saved chronological response to session {active_session_id[:8]}...")
-        except Exception as e:
-            self.chatbot.logger.error(f"CONVERSATION_STORE | Failed to save chrono response: {e}")
-
         result = {
             'answer': refined_answer,
             'sources': sources,

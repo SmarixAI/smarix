@@ -28,7 +28,7 @@ interface ContentModalProps {
   moduleId: string;
   activeRepos?: string[];
   employeeId?: string | null;
-  onProgressUpdate?: () => void;
+  onProgressUpdate?: (section: string, itemId: string, updates: any) => void;
 }
 
 interface SectionWithItems {

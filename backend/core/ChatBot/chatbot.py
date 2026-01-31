@@ -401,10 +401,32 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
     def chat(self, query: str, schema_name: str, filters: Optional[Dict] = None, session_id: Optional[str] = None, role: Optional[str] = None) -> Dict[str, Any]:
         if role is None:
             role = "general"
+
+        is_subquery = filters.get("is_subquery", False) if filters else False
+
+        def save_assistant_message(result_data):
+            """Helper to save assistant response once before returning"""
+            if result_data and not is_subquery:
+                try:
+                    self.conversation_store.add_message(
+                        active_session_id, "assistant", result_data.get("answer", ""), 
+                        schema_name=schema_name, tokens_used=result_data.get("tokens_used", 0)
+                    )
+                except Exception as e:
+                    self.logger.error(f"CONVERSATION_STORE | Failed to save assistant message: {e}")
+            return result_data
         
         self.logger.info("=" * 80)
         self.logger.info(f"NEW QUERY | {query}")
         active_session_id = self._ensure_session(session_id, schema_name=schema_name)
+
+        if not is_subquery:
+            try:
+                self.conversation_store.add_message(
+                    active_session_id, "user", query, schema_name=schema_name, tokens_used=0
+                )
+            except Exception as e:
+                self.logger.error(f"CONVERSATION_STORE | Failed to save user message: {e}")
 
         # STEP 1: UPDATE CACHE AGES (runs periodically)
         self.cache_handler.update_cache_ages()
@@ -417,7 +439,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             result = self.cache_handler.handle_cached_result(cached_result, query, active_session_id, schema_name=schema_name)
             if result:
                 self.logger.info(f"DIRECT CACHE HIT | confidence={result.get('cache_confidence', 'N/A')}")
-                return result
+                return save_assistant_message(result)
             # If handle_cached_result returned None, it means requires_generation
             # Skip old cache and proceed to RAG
             self.logger.info(f"Semantic cache requires generation, skipping old cache")
@@ -439,7 +461,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
                     self.logger.info(f"OLD CACHE HIT but response is failure, skipping cache")
                 else:
                     self.logger.info(f"OLD CACHE HIT | Returning cached response (legacy)")
-                    return cached_response
+                    return save_assistant_message(cached_response)
 
         query_lower = query.lower()
 
@@ -452,7 +474,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         if self.is_greeting(query):
             query_type = QueryType.GREETING
             self.logger.info("CLASSIFICATION | Rule-based: GREETING (detected early)")
-            return self.greeting_handler.handle_greeting(query, query_type, active_session_id, schema_name=schema_name)
+            return save_assistant_message(self.greeting_handler.handle_greeting(query, query_type, active_session_id, schema_name=schema_name))
 
         # Early entity detection to decide if rewriting is needed
         has_pr = bool(re.search(r'\bPR\s*#?\s*\d+|\bpull request\s*#?\s*\d+', query, re.IGNORECASE))
@@ -492,7 +514,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
                 subqueries = self.multi_query_handler.split_into_subqueries(query)
                 if len(subqueries) > 1:
                     self.logger.info(f"MULTI-QUERY | Detected {len(subqueries)} sub-questions")
-                    return self.multi_query_handler.handle_multi_query(subqueries, query, active_session_id, schema_name=schema_name)
+                    return save_assistant_message(self.multi_query_handler.handle_multi_query(subqueries, query, active_session_id, schema_name=schema_name))
 
         # STEP 3: Classify query into QueryType (using rewritten/expanded query)
         #Determines query category: HOW_TO, FILE_LOOKUP, CONCEPTUAL, etc.
@@ -510,15 +532,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             # CRITICAL: Store RAW query, not expanded
             self.cache_handler.update_caches(query, result, active_session_id)
 
-            try:
-                self.conversation_store.add_message(active_session_id, "user", query, schema_name=schema_name,  tokens_used=0)
-                self.conversation_store.add_message(
-                    active_session_id, "assistant", result.get("answer", ""), schema_name=schema_name, tokens_used=0
-                )
-            except Exception as e:
-                self.logger.error(f"CONVERSATION_STORE | Failed to save tutorial exchange: {e}")
-
-            return result
+            return save_assistant_message(result)
 
         if query_type == QueryType.PR_ISSUE_CODING_QUESTION and entity:
             self.logger.info(
@@ -530,15 +544,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             # CRITICAL: Store RAW query
             self.cache_handler.update_caches(query, result, active_session_id)
 
-            try:
-                self.conversation_store.add_message(active_session_id, "user", query, schema_name=schema_name, tokens_used=0)
-                self.conversation_store.add_message(
-                    active_session_id, "assistant", result.get("answer", ""), schema_name=schema_name, tokens_used=0
-                )
-            except Exception as e:
-                self.logger.error(f"CONVERSATION_STORE | Failed to save coding-question exchange: {e}")
-
-            return result
+            return save_assistant_message(result)
 
         # DIRECT LOOKUP - Issue
         if entity and entity.get("type") == "issue":
@@ -548,7 +554,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             if result:
                 # Store RAW query if result found
                 self.cache_handler.update_caches(query, result, active_session_id)
-                return result
+                return save_assistant_message(result)
 
         # DIRECT LOOKUP - PR
         if entity and entity.get("type") == "pr":
@@ -558,7 +564,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             if result:
                 # Store RAW query if result found
                 self.cache_handler.update_caches(query, result, active_session_id)
-                return result
+                return save_assistant_message(result)
 
         # DIRECT LOOKUP - Commit
         if entity and entity.get("type") == "commit":
@@ -568,7 +574,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             if result:
                 # Store RAW query if result found
                 self.cache_handler.update_caches(query, result, active_session_id)
-                return result
+                return save_assistant_message(result)
 
         self.logger.info(f"QUERY TYPE | {query_type}")
 
@@ -592,7 +598,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             if result:
                 # Store RAW query
                 self.cache_handler.update_caches(query, result, active_session_id)
-                return result
+                return save_assistant_message(result)
             # Mark that we tried to find PR but didn't find it
             pr_results = False
 
@@ -602,7 +608,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             if result:
                 # Even "not found" gets cached (exact match case)
                 self.cache_handler.update_caches(query, result, active_session_id)
-                return result
+                return save_assistant_message(result)
 
         # Handle Issue override
         issue_results = None
@@ -619,7 +625,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             if result:
                 # Store RAW query
                 self.cache_handler.update_caches(query, result, active_session_id)
-                return result
+                return save_assistant_message(result)
             # Mark that we tried to find Issue but didn't find it
             issue_results = False
 
@@ -629,7 +635,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             if result:
                 # Store RAW query
                 self.cache_handler.update_caches(query, result, active_session_id)
-                return result
+                return save_assistant_message(result)
 
         # Guaranteed COMMIT direct lookup override
         raw_sha = re.search(r'\b([a-f0-9]{7,40})\b', expanded_query.lower())
@@ -640,20 +646,20 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             if result:
                 # Store RAW query
                 self.cache_handler.update_caches(query, result, active_session_id)
-                return result
+                return save_assistant_message(result)
             
             # If commit not found, handle not found case
             result = self.commit_handler.handle_commit_not_found(raw_sha, query_type, query, active_session_id)
             if result:
                 # Store RAW query
                 self.cache_handler.update_caches(query, result, active_session_id)
-                return result
+                return save_assistant_message(result)
 
         # STEP 4: Query routing happens in _retrieve_multi_index() using expanded_query
         #         Routes to appropriate index: docs, code, prs, commits, or combined
         #         Then searches both routed index AND combined index, merges results
         if query_type == QueryType.GREETING:
-            return self.greeting_handler.handle_greeting(query, query_type, active_session_id, schema_name=schema_name)
+            return save_assistant_message(self.greeting_handler.handle_greeting(query, query_type, active_session_id, schema_name=schema_name))
 
         chrono_query = self.detect_chronological_query(expanded_query)
 
@@ -669,7 +675,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             if result:
                 # Store RAW query
                 self.cache_handler.update_caches(query, result, active_session_id)
-                return result
+                return save_assistant_message(result)
             
         if query_type == QueryType.TRACEABILITY and entity:
             result = self.traceability_handler.handle_traceability(
@@ -678,7 +684,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             if result:
                 # Store RAW query
                 self.cache_handler.update_caches(query, result, active_session_id)
-                return result
+                return save_assistant_message(result)
 
         # Non-chronological / general flow
         result = self.general_query_handler.handle_general_query(
@@ -686,8 +692,8 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         )
         # Store RAW query for general queries too
         self.cache_handler.update_caches(query, result, active_session_id)
-        return result
 
+        return save_assistant_message(result)
 
     def _respond_with_results(
         self,

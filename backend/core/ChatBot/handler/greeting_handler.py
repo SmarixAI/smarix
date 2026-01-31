@@ -43,9 +43,6 @@ class GreetingHandler:
         # Update conversation history
         self._update_history(query, greeting_response)
 
-        # Save to conversation store
-        self._save_to_conversation_store(query, greeting_response, active_session_id, schema_name)
-
         # Build result dictionary
         result = self._build_response_dict(greeting_response, query_type)
 
@@ -111,41 +108,6 @@ class GreetingHandler:
         self.chatbot.history.append({'role': 'user', 'content': query})
         self.chatbot.history.append({'role': 'assistant', 'content': response})
     
-    def _save_to_conversation_store(
-        self,
-        query: str,
-        response: str,
-        active_session_id: str,
-        schema_name: str
-    ) -> None:
-        """
-        Save greeting exchange to conversation store.
-        
-        Args:
-            query: User query
-            response: Assistant response
-            active_session_id: Current session ID
-        """
-        try:
-            self.chatbot.conversation_store.add_message(
-                active_session_id, "user", query, schema_name=schema_name, tokens_used=0
-            )
-            self.chatbot.conversation_store.add_message(
-                active_session_id, "assistant", response, schema_name=schema_name, tokens_used=0
-            )
-            self.chatbot.logger.info(
-                f"CONVERSATION_STORE | Saved greeting exchange to session {active_session_id[:8]}..."
-            )
-        except (AttributeError, ValueError, TypeError) as e:
-            # More specific exception handling for common conversation store errors
-            self.chatbot.logger.error(
-                f"CONVERSATION_STORE | Failed to save greeting: {type(e).__name__}: {e}"
-            )
-        except Exception as e:
-            # Catch-all for unexpected errors
-            self.chatbot.logger.error(
-                f"CONVERSATION_STORE | Unexpected error saving greeting: {type(e).__name__}: {e}"
-            )
     
     def _build_response_dict(self, greeting_response: str, query_type: str) -> Dict[str, Any]:
         """

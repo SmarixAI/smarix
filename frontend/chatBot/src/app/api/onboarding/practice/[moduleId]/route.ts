@@ -1,7 +1,6 @@
-import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
-import { PRACTICE_MODULE_FILE_MAPPING } from '../../../../../components/onboarding/constants/Practice/modules';
+import { NextResponse } from "next/server";
+import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+import { PRACTICE_MODULE_FILE_MAPPING } from "../../../../../components/onboarding/constants/Practice/modules";
 
 // ---------- TYPES ---------- //
 
@@ -30,148 +29,102 @@ interface PracticeJSONData {
   [key: string]: any;
 }
 
+// ---------- S3 CONFIGURATION ---------- //
+
+const S3_BUCKET = process.env.AWS_BUCKET_NAME || "smarix-data-apsouth1";
+const S3_REGION = process.env.AWS_DEFAULT_REGION || "ap-south-1";
+
+const s3Client = new S3Client({
+  region: S3_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+  },
+});
+
 // ---------- API ROUTE ---------- //
 
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ moduleId: string }> }
+  { params }: { params: Promise<{ moduleId: string }> },
 ) {
   try {
     const { moduleId } = await params;
+    const { searchParams } = new URL(request.url);
+    const repo = searchParams.get("repo"); // e.g. "owner/repo"
+
+    if (!repo) {
+      return NextResponse.json(
+        { error: "Repository information (repo query param) is required" },
+        { status: 400 },
+      );
+    }
+
     const jsonFileName = PRACTICE_MODULE_FILE_MAPPING[moduleId];
 
     if (!jsonFileName) {
       return NextResponse.json(
-        { error: 'Practice module not found', moduleId },
-        { status: 404 }
+        { error: "Practice module not found", moduleId },
+        { status: 404 },
       );
     }
 
-    const { searchParams } = new URL(request.url);
-    const repo = searchParams.get('repo');
+    // Construct S3 Key
+    // Pattern: Onboarding/{owner}/{repo}/practice/{jsonFileName}
+    const s3Key = `Onboarding/${repo}/practice/${jsonFileName}`;
 
-    // Helper function to find file in repo folders
-    const findFileInRepos = async (basePaths: string[], fileName: string, repo?: string | null): Promise<string | null> => {
-      for (const basePath of basePaths) {
-        try {
-          // If repo is provided, try owner/repo structure first
-          if (repo) {
-            const [owner, repoName] = repo.split('/');
-            // Try new structure: owner/repo/onboarding_practice_data/
-            const newPath = path.join(basePath, owner, repoName, 'onboarding_practice_data', fileName);
-            try {
-              await fs.access(newPath);
-              return newPath;
-            } catch {
-              // Try alternative: owner/repo/practice/
-              const altPath = path.join(basePath, owner, repoName, 'practice', fileName);
-              try {
-                await fs.access(altPath);
-                return altPath;
-              } catch {
-                // Continue to scan
-              }
-            }
-          }
-          
-          // Scan repo folders for the file
-          const entries = await fs.readdir(basePath, { withFileTypes: true });
-          for (const entry of entries) {
-            if (entry.isDirectory()) {
-              // Check if it's owner/repo structure
-              const ownerPath = path.join(basePath, entry.name);
-              try {
-                const ownerEntries = await fs.readdir(ownerPath, { withFileTypes: true });
-                for (const repoEntry of ownerEntries) {
-                  if (repoEntry.isDirectory()) {
-                    // Try new structure: owner/repo/onboarding_practice_data/
-                    const newPath = path.join(ownerPath, repoEntry.name, 'onboarding_practice_data', fileName);
-                    try {
-                      await fs.access(newPath);
-                      return newPath;
-                    } catch {
-                      // Try alternative: owner/repo/practice/
-                      const altPath = path.join(ownerPath, repoEntry.name, 'practice', fileName);
-                      try {
-                        await fs.access(altPath);
-                        return altPath;
-                      } catch {
-                        continue;
-                      }
-                    }
-                  }
-                }
-              } catch {
-                // Not owner/repo structure, try flat
-              }
-              
-              // Try flat repo structure: repo_name/onboarding_practice_data/
-              const flatPath = path.join(ownerPath, entry.name, 'onboarding_practice_data', fileName);
-              try {
-                await fs.access(flatPath);
-                return flatPath;
-              } catch {
-                continue;
-              }
-            }
-          }
-          
-          // Try old structure (direct file)
-          const oldPath = path.join(basePath, 'onboarding_practice_data', fileName);
-          try {
-            await fs.access(oldPath);
-            return oldPath;
-          } catch {
-            continue;
-          }
-        } catch {
-          continue;
-        }
+    console.log(`Fetching Practice Module from S3: ${s3Key}`);
+
+    try {
+      const command = new GetObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: s3Key,
+      });
+
+      const s3Response = await s3Client.send(command);
+
+      if (!s3Response.Body) {
+        throw new Error("Empty body from S3");
       }
-      return null;
-    };
 
-    const possibleBasePaths = [
-      path.join(process.cwd(), '..', '..', 'backend', 'data', 'Onboarding'),
-      path.join(process.cwd(), '..', 'backend', 'data', 'Onboarding'),
-      path.join(process.cwd(), 'backend', 'data', 'Onboarding'),
-    ];
+      const fileContent = await s3Response.Body.transformToString();
+      const jsonData: PracticeJSONData = JSON.parse(fileContent);
 
-    const filePath = await findFileInRepos(possibleBasePaths, jsonFileName, repo);
-    
-    if (!filePath) {
       return NextResponse.json(
-        { error: 'Practice module file not found', fileName: jsonFileName },
-        { status: 404 }
-      );
-    }
-
-    const fileContent = await fs.readFile(filePath, 'utf-8');
-
-    const jsonData: PracticeJSONData = JSON.parse(fileContent);
-
-    return NextResponse.json(
-      {
-        moduleId,
-        jsonFile: jsonFileName,
-        metadata: jsonData.metadata,
-        tasks: jsonData.questions || [],
-        totalTasks: jsonData.questions?.length || 0,
-      },
-      {
-        headers: {
-          "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400",
+        {
+          moduleId,
+          jsonFile: jsonFileName,
+          metadata: jsonData.metadata,
+          tasks: jsonData.questions || [],
+          totalTasks: jsonData.questions?.length || 0,
         },
-      }
-    );
+        {
+          headers: {
+            "Cache-Control":
+              "public, s-maxage=3600, stale-while-revalidate=86400",
+          },
+        },
+      );
+    } catch (s3Error: any) {
+      console.error("S3 Fetch Error:", s3Error);
 
+      if (s3Error.name === "NoSuchKey") {
+        return NextResponse.json(
+          { error: "Practice module file not found in S3", key: s3Key },
+          { status: 404 },
+        );
+      }
+
+      throw s3Error;
+    }
   } catch (error) {
+    console.error("API Error:", error);
     return NextResponse.json(
       {
         error: "Failed to load Practice module",
         details: error instanceof Error ? error.message : "Unknown error",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

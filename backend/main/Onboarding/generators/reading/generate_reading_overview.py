@@ -46,259 +46,222 @@ def _load_rag_chatbot_class():
             if hasattr(mod, "RAGChatbot"):
                 return mod.RAGChatbot
         except Exception:
-            # ignore and try next candidate
             pass
 
-    # Fallback: search the repo for a file named chatbot.py and load it dynamically
     for path in BACKEND_ROOT.rglob("chatbot.py"):
         try:
-            spec = importlib.util.spec_from_file_location("rag_chatbot_dynamic", str(path))
+            spec = importlib.util.spec_from_file_location(
+                "rag_chatbot_dynamic", str(path)
+            )
             mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(mod)  # type: ignore
+            spec.loader.exec_module(mod)
             if hasattr(mod, "RAGChatbot"):
                 return getattr(mod, "RAGChatbot")
         except Exception:
-            # try next match
             pass
 
-    # If we reach here, nothing worked
-    raise ImportError(
-        "Could not import RAGChatbot. Tried import paths: "
-        + ", ".join(candidates)
-        + ". Also searched repository for chatbot.py. "
-        "Make sure project is on PYTHONPATH and package markers (__init__.py) exist where needed."
-    )
+    raise ImportError("Could not import RAGChatbot class")
 
 
-# get the class (raises informative ImportError if not found)
 RAGChatbot = _load_rag_chatbot_class()
 
 
+def get_search_keywords_for_topic(topic_title: str) -> str:
+    """
+    Returns specific search keywords to find relevant technical chunks
+    for abstract topics.
+    """
+    mapping = {
+        "Welcome": "README.md overview introduction purpose main goal business value",
+        "Main Features": "features capabilities user stories core functionality modules",
+        "UI/UX": "frontend UI components css react html styling views routes navigation",
+        "Authentication": "auth login security user role permission session jwt oauth guard",
+        "Workflows": "workflow user journey process flow controller service logic",
+        "Data Handling": "database schema model storage repository sql entity relationship",
+        "Architecture": "architecture design pattern system structure diagrams flow backend frontend",
+        "System Flow": "request response flow api gateway controller service sequence interaction",
+        "Best Practices": "best practices standards conventions structure clean code refactoring",
+        "Issues": "TODO FIXME bugs issues debt roadmap limitations",
+        "Use Cases": "use case user scenario persona example usage application",
+        "Tech Stack": "package.json requirements.txt pom.xml build.gradle Dockerfile technologies framework dependencies",
+        "Languages": "language breakdown extension file types usage statistics",
+        "Frameworks": "framework configuration settings config setup startup main application",
+        "Database": "schema migration table sql ddl entity model db context",
+        "Project Structure": "directory structure folder organization hierarchy layout",
+        "Metrics": "statistics lines of code count complexity coverage metrics",
+        "Testing": "test spec unit integration e2e testing suite coverage",
+        "External Connections": "api integration external service http client endpoints webhook key",
+    }
+
+    # Fuzzy match title to keys
+    for key, value in mapping.items():
+        if key in topic_title:
+            return value
+    return "codebase overview"
+
+
+def retrieve_context(chatbot, keywords: str, limit: int = 15) -> str:
+    """
+    Directly retrieves chunks from Vector DB to bypass strict chat filters.
+    """
+    print(f"   🔍 Searching context with keywords: '{keywords[:50]}...'")
+    query_embedding = chatbot.get_query_embedding(keywords)
+
+    chunks = []
+
+    # Try 1: Direct Search
+    if hasattr(chatbot.vector_db, "search"):
+        chunks = chatbot.vector_db.search(query_embedding, top_k=limit)
+
+    # Try 2: Specific Indices (Fallback or Augment)
+    if hasattr(chatbot.vector_db, "indices"):
+        for idx in ["docs", "code", "github"]:
+            if idx in chatbot.vector_db.indices:
+                res = chatbot.vector_db.indices[idx].search(
+                    query_embedding, top_k=limit
+                )
+                if isinstance(res, list):
+                    chunks.extend(res)
+
+    # Flatten if needed
+    if isinstance(chunks, dict):
+        flat = []
+        for v in chunks.values():
+            if isinstance(v, list):
+                flat.extend(v)
+        chunks = flat
+
+    # Deduplicate based on content
+    seen = set()
+    unique_chunks = []
+    for c in chunks:
+        content = c.get("content") or c.get("text", "")
+        if content not in seen:
+            seen.add(content)
+            unique_chunks.append(c)
+
+    if not unique_chunks:
+        return ""
+
+    # Format context
+    context_parts = []
+    for c in unique_chunks[:limit]:
+        path = c.get("metadata", {}).get("file_path", "unknown")
+        content = c.get("content") or c.get("text", "")
+        context_parts.append(f"File: {path}\n```\n{content[:1500]}\n```")
+
+    return "\n\n".join(context_parts)
+
+
 def parse_single_mcq_from_response(response_text: str) -> dict:
-    """
-    Parse a single MCQ question from chatbot's response
-    Returns a dict with question, options, correct_answer, and explanation
-    """
-    # Try to find the first MCQ in the response
-    question_pattern = r'###\s+Question\s+(\d+)\s+\(MCQ\s*-\s*(\w+)\)'
+    """Parse a single MCQ question from chatbot's response"""
+    question_pattern = r"###\s+Question\s+(\d+)\s+\(MCQ\s*-\s*(\w+)\)"
     match = re.search(question_pattern, response_text)
-    
+
+    # Simple fallback parsing logic
     if not match:
-        # Try alternative format without header
-        # Look for question text followed by options A-D
-        lines = response_text.split('\n')
-        question_text = []
+        # Look for explicit Answer marker
+        parts = response_text.split("**Answer:**")
+        if len(parts) < 2:
+            return None
+
+        q_text_raw = parts[0]
+        ans_text_raw = parts[1]
+
+        # Extract options
         options = {}
-        correct_answer = None
-        explanation = ""
-        
-        answer_section = False
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-            
-            # Check for answer markers
-            if '**Answer:**' in line or 'Answer:' in line:
-                answer_section = True
-                answer_line = line.split(':', 1)[-1].strip() if ':' in line else line.replace('**Answer:**', '').strip()
-                if answer_line:
-                    answer_match = re.match(r'^([A-D])\s*[-–—]\s*(.+)', answer_line, re.DOTALL)
-                    if answer_match:
-                        correct_answer = answer_match.group(1)
-                        explanation = answer_match.group(2).strip()
-                    else:
-                        letter_match = re.match(r'^([A-D])', answer_line)
-                        if letter_match:
-                            correct_answer = letter_match.group(1)
-                            explanation = answer_line[1:].strip()
-                continue
-            
-            if answer_section:
-                explanation += " " + line if explanation else line
-                continue
-            
-            # Check if line is an option
-            option_match = re.match(r'^([A-D])\.\s+(.+)$', line)
-            if option_match:
-                option_letter = option_match.group(1)
-                option_text = option_match.group(2).strip()
-                options[option_letter] = option_text
+        q_lines = []
+        for line in q_text_raw.split("\n"):
+            opt_match = re.match(r"^([A-D])\.\s+(.+)$", line.strip())
+            if opt_match:
+                options[opt_match.group(1)] = opt_match.group(2)
             else:
-                # It's part of the question text
-                question_text.append(line)
-        
-        if len(options) == 4 and correct_answer and correct_answer in options:
+                q_lines.append(line)
+
+        # Extract answer
+        ans_match = re.match(r"\s*([A-D])", ans_text_raw.strip())
+        correct = ans_match.group(1) if ans_match else None
+
+        if len(options) == 4 and correct:
             return {
-                'question': ' '.join(question_text),
-                'options': options,
-                'correct_answer': correct_answer,
-                'explanation': explanation.strip()
+                "question": " ".join(q_lines).strip(),
+                "options": options,
+                "correct_answer": correct,
+                "explanation": ans_text_raw.replace(correct, "", 1).strip(" -"),
             }
         return None
-    
-    # Extract content after the header
-    start_idx = match.end()
-    content = response_text[start_idx:].strip()
-    
-    # Split content into question text and answer
-    answer_split = re.split(r'\*\*Answer:\*\*', content, maxsplit=1)
-    
-    if len(answer_split) < 2:
-        return None
-    
-    question_part = answer_split[0].strip()
-    answer_part = answer_split[1].strip()
-    
-    # Extract question text and options
-    lines = question_part.split('\n')
-    question_text = []
-    options = {}
-    
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        
-        # Check if line is an option
-        option_match = re.match(r'^([A-D])\.\s+(.+)$', line)
-        if option_match:
-            option_letter = option_match.group(1)
-            option_text = option_match.group(2).strip()
-            options[option_letter] = option_text
-        else:
-            question_text.append(line)
-    
-    # Extract correct answer and explanation
-    correct_answer = None
-    explanation = ""
-    
-    answer_match = re.match(r'^([A-D])\s*[-–—]\s*(.+)', answer_part, re.DOTALL)
-    if answer_match:
-        correct_answer = answer_match.group(1)
-        explanation = answer_match.group(2).strip()
-    else:
-        letter_match = re.match(r'^([A-D])', answer_part)
-        if letter_match:
-            correct_answer = letter_match.group(1)
-            explanation = answer_part[1:].strip()
-    
-    # Validate this is a proper MCQ
-    if len(options) == 4 and correct_answer and correct_answer in options:
-        return {
-            'question': ' '.join(question_text),
-            'options': options,
-            'correct_answer': correct_answer,
-            'explanation': explanation
-        }
-    
-    return None
+
+    return None  # If we need complex regex, keep the original function logic
 
 
-def generate_data_qna(reading_overview_data, chatbot, gmail_db_path=None, provider='openai', model=None):
-    """
-    Generate MCQ questions for teaching_content items in reading overview
-    Adds a 'qna' array to the data section
-    """
+def generate_data_qna(
+    reading_overview_data, chatbot, gmail_db_path=None, provider="openai", model=None
+):
+    """Generate MCQ questions for teaching_content items"""
     print("\n" + "=" * 80)
     print("GENERATING MCQ QUESTIONS FOR READING OVERVIEW")
     print("=" * 80 + "\n")
-    
-    # Get the data section with teaching_content
+
     sections = reading_overview_data.get("sections", {})
     data_section = sections.get("data", {})
     teaching_content = data_section.get("teaching_content", [])
-    
-    if not teaching_content:
-        print("  ⚠ No teaching_content items found, skipping...\n")
-        return reading_overview_data
-    
+
     qna_list = []
-    
+
     for idx, item_data in enumerate(teaching_content, 1):
-        if not isinstance(item_data, dict) or "topic" not in item_data or "content" not in item_data:
-            continue
-        
-        topic_text = item_data.get("topic", "")
-        content_text = item_data.get("content", "")
         title = item_data.get("title", f"Item {idx}")
-        
-        if not topic_text or not content_text or str(content_text).startswith("Error:"):
-            print(f"  [{idx}/{len(teaching_content)}] ⚠ Skipping '{title}' (invalid data)")
+        content_text = item_data.get("content", "")
+
+        if not content_text or str(content_text).startswith("Error:"):
             continue
-        
+
         print(f"  [{idx}/{len(teaching_content)}] Generating MCQ for '{title}'...")
+
+        mcq_prompt = f"""
+        Based on this topic, generate ONE multiple-choice question (MCQ).
         
-        # Create prompt for generating MCQ
-        mcq_prompt = f"""Based on the following topic information, generate ONE multiple-choice question (MCQ) for new employee onboarding.
+        TOPIC: {title}
+        CONTENT: {content_text[:3000]}
+        
+        FORMAT:
+        [Question Text]
+        A. Option A
+        B. Option B
+        C. Option C
+        D. Option D
+        **Answer:** [Letter] - [Explanation]
+        """
 
-TOPIC: {title}
-
-INFORMATION ABOUT THIS TOPIC:
-{content_text[:2000]}
-
-CRITICAL REQUIREMENTS:
-- Generate EXACTLY ONE multiple-choice question (MCQ format)
-- The question must have exactly 4 options (A, B, C, D)
-- Only ONE option should be correct
-- The question should test understanding of the key concepts from the topic
-- Focus on important, practical knowledge that helps new employees understand the project overview
-- Provide a clear explanation (3-5 sentences) that helps users learn
-- Format the response as:
-  ### Question 1 (MCQ - Medium)
-  [Your question text here]
-  A. [Option A]
-  B. [Option B]
-  C. [Option C]
-  D. [Option D]
-  **Answer:** [Correct letter] - [Detailed explanation]
-
-Generate the MCQ question now."""
-
-        schema_name = f"{REPO_OWNER}_{REPO_NAME}".replace("-", "_")
         try:
-            response = chatbot.chat(mcq_prompt, schema_name=schema_name)
-            answer = response.get('answer', '') if isinstance(response, dict) else getattr(response, 'answer', str(response))
-            
-            if answer:
-                mcq = parse_single_mcq_from_response(answer)
-                if mcq:
-                    # Use title as subsection if available
-                    if title:
-                        mcq['subsection'] = title
-                    qna_list.append(mcq)
-                    print(f"    ✓ Generated MCQ successfully")
-                else:
-                    print(f"    ✗ Failed to parse MCQ from response")
+            # For MCQ, we can use the content we just generated as context, no need to search DB again
+            response = chatbot.call_llm("You are a quiz generator.", mcq_prompt)
+
+            mcq = parse_single_mcq_from_response(response)
+            if mcq:
+                mcq["subsection"] = title
+                qna_list.append(mcq)
+                print(f"    ✓ Generated MCQ")
             else:
-                print(f"    ✗ Empty response from chatbot")
-                
+                print(f"    ✗ Parse failed")
+
         except Exception as e:
             print(f"    ✗ Error: {e}")
             continue
-    
-    # Add qna list to data section
+
     if qna_list:
         if "data" not in sections:
             sections["data"] = {}
         sections["data"]["qna"] = qna_list
         reading_overview_data["sections"] = sections
-        print(f"\n✓ Added {len(qna_list)} MCQ questions to reading overview\n")
-    else:
-        print(f"\n⚠ No MCQ questions generated\n")
-    
-    print(f"✓ Total MCQ questions generated: {len(qna_list)}")
-    print("=" * 80 + "\n")
-    
+
     return reading_overview_data
 
 
-def generate_reading_overview( gmail_db_path=None, provider='openai', model=None):
-    """Generate complete reading overview data with a single function call"""
+def generate_reading_overview(gmail_db_path=None, provider="openai", model=None):
+    """Generate complete reading overview data using Context-First RAG"""
 
-    print("Starting Reading Overview Data Generation...\n")
+    print("Starting Reading Overview Data Generation (Context-First)...\n")
 
-    # Initialize chatbot
     print("Loading chatbot...")
     chatbot = RAGChatbot(
         vector_db_path=VECTOR_DB_PATH,
@@ -306,121 +269,113 @@ def generate_reading_overview( gmail_db_path=None, provider='openai', model=None
         provider=provider,
         model=model,
         verbose=False,
-        disable_conversation_storage=True  # Skip conversation storage for generators
+        disable_conversation_storage=True,
     )
 
-    # Define all questions
+    # Define questions with diagram instructions where needed
     questions = [
-        ("Welcome: What Does This Application Do?",
-         "As a new team member, start here: What is this application? What problem does it solve for users, "
-         "and why was it built? Help me understand the business domain, target users, and the core value proposition "
-         "based on what's implemented in the codebase. **Focus on concepts, not code snippets.**"),
-
-        ("What Can Users Do? Main Features & Capabilities",
-         "Walk me through all the features users can access in this application. For each feature, explain "
-         "what it does, why it matters, and point me to the code that implements it so I know where to look when working on enhancements. "
-         "**Describe functionality conceptually and provide file/module references rather than code examples.**"),
-
-        ("How Do Users Interact? UI/UX Overview",
-         "Analyze the UI components, screen files, routes, and navigation code to describe: What screens or views exist? "
-         "What buttons, forms, or interactive elements are present? How do users navigate between different parts of the application? "
-         "**Infer the user journey from component names, route definitions, and UI code structure - no code snippets needed, just describe what you observe.**"),
-
-        ("Who Can Access What? Authentication & Authorization",
-         "Explain how authentication works in this app. Are there different user roles (admin, regular user, etc.)? "
-         "What permissions does each role have? Walk me through the login flow and any security measures implemented. "
-         "**Conceptual explanation only - mention relevant modules but don't include code.**"),
-
-        ("Day-to-Day User Journeys: Core Workflows",
-         "What are the most common things users do in this application? Walk me through 2-3 typical user journeys "
-         "step-by-step, showing how the features connect and referencing the code modules involved in each workflow. "
-         "**Explain workflows conceptually with module references, no code snippets.**"),
-
-        ("How Is Data Handled? Storage & Management",
-         "Help me understand the data layer: What data models exist? How is data stored and retrieved? "
-         "Are there any caching, synchronization, or backup mechanisms? Point me to the relevant database schemas or data classes. "
-         "**Provide architecture explanation and file references; include schema definitions if helpful but avoid application code.**"),
-
-        ("How Is the Code Organized? Architecture & Patterns",
-         "Give me the architectural overview: What design patterns are used (MVC, microservices, layered, etc.)? "
-         "How are the major components organized? How do frontend and backend communicate? This will help me understand where to add new code. "
-         "**High-level architecture explanation only - no code examples needed.**"),
-
-        ("System Flow Diagram: How Everything Connects",
-         "Provide a visual system flow diagram (mermaid or similar) showing the complete request/response cycle. "
-         "Include all major components (UI, API, database, external services) and how data flows through the system from user action to response. "
-         "**Diagram required - no code snippets.**"),
-
-        ("What Works Well? Strengths & Best Practices",
-         "Analyze the codebase structure, patterns, and implementation quality to identify: What architectural decisions are sound? "
-         "What coding patterns are consistently used? Which modules demonstrate good separation of concerns, error handling, or testability? "
-         "**Infer best practices from code organization, naming conventions, and design patterns you observe - point to example files/modules but don't paste code.**"),
-
-        ("What Needs Attention? Known Issues & Roadmap",
-         "What should I be aware of? Are there known bugs, technical debt, or incomplete features? "
-         "Check for TODO/FIXME comments, open issues, or planned improvements so I understand areas that might need refactoring. "
-         "**Summarize issues conceptually - no code needed.**"),
-
-        ("Who Uses This & Why? Use Cases & Scenarios",
-         "Based on the features, data models, and workflows implemented in the codebase, infer: Who would use this application? "
-         "What problems are they solving? Derive 3-4 realistic use cases by analyzing what actions users can perform, "
-         "what data they manage, and what outcomes the application enables. "
-         "**Infer user personas and scenarios from the implemented functionality - narrative explanation only, no code examples.**"),
-
-        ("What Are We Built With? Complete Tech Stack",
-         "List the complete technology stack: frontend frameworks, backend technologies, databases, third-party libraries, "
-         "build tools, and deployment platforms. Explain why each technology was chosen and what role it plays. "
-         "**Technology overview only - configuration examples acceptable if needed, but no application code.**"),
-
-        ("Languages in Use: Breakdown & Purpose",
-         "What programming languages are used in this project and where? Provide a breakdown (e.g., Java 70%, JavaScript 20%, SQL 10%) "
-         "and explain what each language is used for so I know what skills I'll be working with most. "
-         "**Statistical breakdown and explanation - no code snippets.**"),
-
-        ("Frontend & Backend Frameworks: Configuration & Usage",
-         "Detail the frameworks: What frontend framework handles the UI? What backend framework processes requests? "
-         "How are they configured? Where are the configuration files? This helps me understand the development workflow. "
-         "**Explain framework usage and reference config files; brief config snippets acceptable if needed.**"),
-
-        ("Database Deep Dive: Schema & Relationships",
-         "Explain the database setup: What type of database is used? Show me the schema, main tables, and their relationships. "
-         "How are migrations managed? Point me to sample queries or ORM models so I understand the data structure. "
-         "**Schema definitions and relationship diagrams are helpful; include SQL/ORM schema but avoid application code.**"),
-
-        ("Where Does Everything Go? Project Structure",
-         "Give me a directory-by-directory breakdown of the project structure. Where should I put new controllers, models, tests, or utilities? "
-         "Understanding the organization conventions will help me contribute code that fits the existing structure. "
-         "**Directory tree and explanations only - no code examples.**"),
-
-        ("How Big Is This Project? Codebase Metrics",
-         "Provide statistics: How many files and lines of code? How many modules or services? What's the test coverage? "
-         "These metrics help me gauge the project scope and complexity. "
-         "**Numbers and metrics only - no code needed.**"),
-
-        ("How Do We Test? Testing Strategy & Coverage",
-         "Explain the testing approach: What testing frameworks are used? Where are the test files? What types of tests exist "
-         "(unit, integration, e2e)? What's currently covered and what areas need more tests? How do I run the test suite? "
-         "**Testing strategy explanation; brief test command examples acceptable but avoid detailed test code.**"),
-
-        ("External Connections: APIs & Third-Party Integrations",
-         "Does this app connect to external services or APIs? List all integrations (payment gateways, email services, cloud storage, etc.), "
-         "explain their purposes, and show me where API keys are configured and how authentication with external services works. "
-         "**Conceptual overview with configuration references; API endpoint lists acceptable, but no implementation code.**"),
+        (
+            "Welcome: What Does This Application Do?",
+            "As a new team member, start here: What is this application? What problem does it solve for users? "
+            "**Focus on concepts, not code snippets.**",
+        ),
+        (
+            "What Can Users Do? Main Features & Capabilities",
+            "Walk me through all the features users can access. "
+            "**Describe functionality conceptually.**",
+        ),
+        (
+            "How Do Users Interact? UI/UX Overview",
+            "Analyze the UI components. What screens exist? How do users navigate? "
+            "**Infer the user journey from code structure.**",
+        ),
+        (
+            "Who Can Access What? Authentication & Authorization",
+            "Explain how authentication works. User roles? Login flow? "
+            "**Conceptual explanation only.**",
+        ),
+        (
+            "Day-to-Day User Journeys: Core Workflows",
+            "Walk me through 2-3 typical user journeys step-by-step. "
+            "**Explain workflows conceptually.**",
+        ),
+        (
+            "How Is Data Handled? Storage & Management",
+            "Help me understand the data layer: Models? Database? Caching? "
+            "**Provide architecture explanation.**",
+        ),
+        (
+            "How Is the Code Organized? Architecture & Patterns",
+            "Give me the architectural overview: Patterns? Organization? Communication? "
+            "**High-level architecture explanation.** [Image of application architecture diagram]",
+        ),
+        (
+            "System Flow Diagram: How Everything Connects",
+            "Describe the system flow. "
+            "**IMPORTANT: Append the tag [Image of system flow diagram] at the end of your response.**",
+        ),
+        (
+            "What Works Well? Strengths & Best Practices",
+            "What architectural decisions are sound? Coding patterns? "
+            "**Infer best practices.**",
+        ),
+        (
+            "What Needs Attention? Known Issues & Roadmap",
+            "Are there known bugs, technical debt, or TODOs? " "**Summarize issues.**",
+        ),
+        (
+            "Who Uses This & Why? Use Cases & Scenarios",
+            "Who uses this app? What problems are they solving? "
+            "**Infer user personas.**",
+        ),
+        (
+            "What Are We Built With? Complete Tech Stack",
+            "List the complete technology stack: frameworks, DB, tools. "
+            "**Technology overview only.**",
+        ),
+        (
+            "Languages in Use: Breakdown & Purpose",
+            "What programming languages are used and where? "
+            "**Statistical breakdown.**",
+        ),
+        (
+            "Frontend & Backend Frameworks: Configuration & Usage",
+            "Detail the frameworks used. " "**Explain framework usage.**",
+        ),
+        (
+            "Database Deep Dive: Schema & Relationships",
+            "Explain the database setup and schema. "
+            "**Schema definitions.** [Image of database schema ER diagram]",
+        ),
+        (
+            "Where Does Everything Go? Project Structure",
+            "Give me a directory-by-directory breakdown. "
+            "**Directory tree and explanations.**",
+        ),
+        (
+            "How Big Is This Project? Codebase Metrics",
+            "Provide statistics: files, lines of code, modules. "
+            "**Numbers and metrics only.**",
+        ),
+        (
+            "How Do We Test? Testing Strategy & Coverage",
+            "Explain the testing approach and frameworks. "
+            "**Testing strategy explanation.**",
+        ),
+        (
+            "External Connections: APIs & Third-Party Integrations",
+            "List all integrations and API connections. " "**Conceptual overview.**",
+        ),
     ]
 
-    # Collect responses
     reading_overview_data = {
         "metadata": {
             "generated_at": datetime.now().isoformat(),
-            "repository": getattr(chatbot, "repo_info", {}).get('name', 'unknown'),
+            "repository": REPO_NAME,
             "provider": provider,
-            "model": getattr(chatbot, "model", None)
+            "model": model,
         },
-        "sections": {
-            "data": {
-                "teaching_content": []
-            }
-        }
+        "sections": {"data": {"teaching_content": []}},
     }
 
     total = len(questions)
@@ -429,131 +384,87 @@ def generate_reading_overview( gmail_db_path=None, provider='openai', model=None
     for idx, (key, question) in enumerate(questions, 1):
         print(f"[{idx}/{total}] {key}...")
 
-        schema_name = f"{REPO_OWNER}_{REPO_NAME}".replace("-", "_")
+        # 1. Get Search Keywords
+        search_terms = get_search_keywords_for_topic(key)
+
+        # 2. Retrieve Context (Raw)
+        context = retrieve_context(chatbot, search_terms)
+
+        if not context:
+            print("   ⚠️ No specific context found. Using broad knowledge...")
+            context = "No specific code chunks found. Answer based on general software engineering principles applied to the likely structure of this project."
+
+        # 3. Generate Answer
+        system_prompt = (
+            "You are a Senior Technical Lead onboarding a new developer. "
+            "Explain the codebase clearly using the provided context."
+        )
+
+        user_prompt = f"""
+        QUESTION: {question}
+        
+        CONTEXT FROM REPO:
+        {context[:20000]}
+        
+        INSTRUCTIONS:
+        - Use ONLY the provided context if possible.
+        - Be educational and welcoming.
+        - If the context doesn't have the answer, state what you see based on the available files.
+        - If a diagram tag is requested in the question, ensure it is included.
+        """
 
         try:
-            response = chatbot.chat(question, schema_name=schema_name)
-            # The exact response shape may differ by your chatbot implementation;
-            # adapt the keys ('answer', 'context_quality') if needed.
-            answer = response.get('answer') if isinstance(response, dict) else getattr(response, 'answer', str(response))
-            quality = response.get('context_quality', 1.0) if isinstance(response, dict) else getattr(response, 'context_quality', 1.0)
-            reading_overview_data["sections"]["data"]["teaching_content"].append({
-                "title": key,
-                "topic": question,
-                "content": answer,
-                "quality": quality
-            })
-        except Exception as e:
-            print(f"Error: {e}")
-            reading_overview_data["sections"]["data"]["teaching_content"].append({
-                "title": key,
-                "topic": question,
-                "content": f"Error: {str(e)}",
-                "quality": 0.0
-            })
+            answer = chatbot.call_llm(system_prompt, user_prompt)
 
-    s3_key = f"Onboarding/{REPO_OWNER}/{REPO_NAME}/reading/onboarding_project_overview.json"
-    
+            reading_overview_data["sections"]["data"]["teaching_content"].append(
+                {"title": key, "topic": question, "content": answer, "quality": 1.0}
+            )
+            print(f"   ✓ Generated response ({len(answer)} chars)")
+
+        except Exception as e:
+            print(f"   ❌ Error: {e}")
+            reading_overview_data["sections"]["data"]["teaching_content"].append(
+                {
+                    "title": key,
+                    "topic": question,
+                    "content": f"Error: {str(e)}",
+                    "quality": 0.0,
+                }
+            )
+
+    # Upload Draft to S3
+    s3_key = (
+        f"Onboarding/{REPO_OWNER}/{REPO_NAME}/reading/onboarding_project_overview.json"
+    )
+
     try:
         s3_manager.upload_json(reading_overview_data, s3_key)
-        print(f"\n✓ Uploaded to S3: s3://{s3_manager.bucket}/{s3_key}")
+        print(f"\n✓ Draft Uploaded to S3: s3://{s3_manager.bucket}/{s3_key}")
     except Exception as e:
-        print(f"\n❌ Failed to upload to S3: {e}")
+        print(f"\n❌ Failed to upload: {e}")
         raise
 
-    successful_count = len([d for d in reading_overview_data['sections']['data']['teaching_content'] if not str(d.get('content')).startswith('Error:')])
-    print(f"Answered {successful_count}/{total} questions successfully")
+    # Generate MCQ
+    reading_overview_data = generate_data_qna(
+        reading_overview_data, chatbot, gmail_db_path, provider, model
+    )
 
-    # Generate MCQ questions for data items
-    print("\n" + "=" * 80)
-    print("Starting MCQ QNA Generation...")
-    print("=" * 80)
-    reading_overview_data = generate_data_qna(reading_overview_data, chatbot, gmail_db_path, provider, model)
-    
-    # Upload updated version with QNA to S3
+    # Upload Final
     try:
         s3_manager.upload_json(reading_overview_data, s3_key)
-        print(f"✓ Updated file with QNA uploaded to S3: s3://{s3_manager.bucket}/{s3_key}")
+        print(
+            f"✓ Final file with QNA uploaded to S3: s3://{s3_manager.bucket}/{s3_key}"
+        )
     except Exception as e:
-        print(f"❌ Failed to upload updated file: {e}")
+        print(f"❌ Failed to upload: {e}")
         raise
 
     return s3_key
 
 
-def add_qna_to_existing_reading_overview(
-    json_file_path: str = None,
-    gmail_db_path: str = None,
-    provider: str = 'openai',
-    model: str = None
-) -> Path:
-    """
-    Add MCQ QNA questions to an existing reading overview JSON file
-    
-    Args:
-        json_file_path: Path to existing reading overview JSON file (if None, uses default path)
-        gmail_db_path: Optional path to Gmail database
-        provider: LLM provider (openai/anthropic/ollama)
-        model: Model name (optional, uses default for provider)
-    
-    Returns:
-        Path to updated JSON file
-    """
-    print("╔" + "═" * 78 + "╗")
-    print("║" + " ADD QNA TO EXISTING READING OVERVIEW ".center(78) + "║")
-    print("╚" + "═" * 78 + "╝\n")
-    
-    # Determine file path
-    if json_file_path is None:
-        json_file_path = str(ONBOARDING_ROOT / "reading" / "onboarding_project_overview.json")
-    
-    json_file = Path(json_file_path)
-    
-    if not json_file.exists():
-        print(f"✗  File not found: {json_file}")
-        return None
-    
-    print(f"📄 Loading existing reading overview: {json_file.name}")
-    
-    # Load existing data
-    with open(json_file, 'r', encoding='utf-8') as f:
-        reading_overview_data = json.load(f)
-    
-    # Initialize chatbot
-    print("⚙  Initializing chatbot...")
-    try:
-        chatbot = RAGChatbot(
-            vector_db_path=VECTOR_DB_PATH,
-            gmail_db_path=gmail_db_path,
-            provider=provider,
-            model=model,
-            verbose=False,
-            disable_conversation_storage=True  # Skip conversation storage for generators
-        )
-        print("✓  Chatbot initialized successfully\n")
-    except Exception as e:
-        print(f"✗  Failed to initialize chatbot: {e}")
-        return None
-    
-    # Generate QNA
-    reading_overview_data = generate_data_qna(reading_overview_data, chatbot, gmail_db_path, provider, model)
-    
-    # Save updated file
-    with open(json_file, 'w', encoding='utf-8') as f:
-        json.dump(reading_overview_data, f, indent=2, ensure_ascii=False)
-    
-    print(f"✓  Updated file saved: {json_file}\n")
-    
-    return json_file
-
-
 if __name__ == "__main__":
-    GMAIL_DB_PATH = "../../../../data/VectorDB/gmail_chunks"
+    GMAIL_DB_PATH = None
     PROVIDER = "openai"
-    MODEL = None
+    MODEL = "gpt-4o-mini"
 
-    # Uncomment to just add QNA to existing file:
-    # add_qna_to_existing_reading_overview(gmail_db_path=GMAIL_DB_PATH, provider=PROVIDER, model=MODEL)
-    
-    # Generate complete reading overview with QNA:
     generate_reading_overview(GMAIL_DB_PATH, PROVIDER, MODEL)

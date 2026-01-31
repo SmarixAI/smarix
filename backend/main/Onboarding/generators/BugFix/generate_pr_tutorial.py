@@ -6,11 +6,12 @@ Generates tutorials from 1 Easy, 1 Medium, and 1 Hard PR
 import sys
 import json
 import re
+import random
 from pathlib import Path
 from datetime import datetime
 import importlib
 import importlib.util
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 
 # --- Ensure backend/ is on PYTHONPATH ---
 BACKEND_ROOT = Path(__file__).resolve().parents[4]  # backend/
@@ -21,6 +22,7 @@ repo_root = BACKEND_ROOT
 
 from utils.repo_context import get_repo_context
 from utils.s3 import s3_manager
+from core.ChatBot.query_type import QueryType
 
 ctx = get_repo_context()
 
@@ -63,161 +65,161 @@ def _load_rag_chatbot_class():
 RAGChatbot = _load_rag_chatbot_class()
 
 
-def get_random_pr_prompt(difficulty: str) -> str:
-    """Generate prompt to get a random PR based on difficulty"""
+def fetch_candidate_prs(chatbot, limit: int = 50) -> Dict[int, List[Dict]]:
+    """
+    Directly searches the Vector DB for PR chunks to build a candidate pool.
+    Returns a dictionary mapping PR Numbers to their chunks.
+    """
+    print(f"   🔍 Scanning Vector DB for PR candidates...")
+    
+    # Generic keywords to cast a wide net for PRs
+    search_queries = ["pull request merge", "fix bug", "feature implementation", "refactor code"]
+    candidates = {}
 
-    prompt = f"Give me a random {difficulty} difficulty PR"
+    for q in search_queries:
+        try:
+            # 1. Get embedding
+            query_embedding = chatbot.get_query_embedding(q)
+            
+            # 2. Raw Search (Bypassing RAG filters)
+            chunks = []
+            if hasattr(chatbot.vector_db, 'search'):
+                chunks = chatbot.vector_db.search(query_embedding, top_k=limit)
+            
+            # Fallback to specific indices if main search fails or returns mixed results
+            if hasattr(chatbot.vector_db, 'indices'):
+                # Check 'pr' or 'github' indices if they exist
+                for idx_name in ['pr', 'github', 'code']:
+                    if idx_name in chatbot.vector_db.indices:
+                        results = chatbot.vector_db.indices[idx_name].search(query_embedding, top_k=limit)
+                        if isinstance(results, list):
+                            chunks.extend(results)
+            
+            # 3. Process & Group chunks
+            for c in chunks:
+                meta = c.get("metadata", {})
+                
+                # Check if it's actually a PR chunk
+                # (Some systems label 'type': 'pr', others might infer from fields like 'pr_number')
+                chunk_type = meta.get("type", "unknown")
+                pr_number = meta.get("pr_number") or meta.get("number")
+                
+                # If explicitly a PR or has a PR number, add it
+                if pr_number and (chunk_type == 'pr' or str(pr_number).isdigit()):
+                    pr_id = int(pr_number)
+                    if pr_id not in candidates:
+                        candidates[pr_id] = []
+                    candidates[pr_id].append(c)
+                    
+        except Exception as e:
+            print(f"   ⚠️ Search error for query '{q}': {e}")
+            continue
 
-    return prompt
+    print(f"   ✅ Found {len(candidates)} unique PR candidates.")
+    return candidates
 
 
-def get_tutorial_generation_prompt(pr_number: int) -> str:
-    """Generate prompt to create tutorial for a specific PR"""
+def categorize_pr_difficulty(chunks: List[Dict]) -> str:
+    """
+    Estimates difficulty based on content length and complexity.
+    """
+    total_len = sum(len(c.get("content", "") or c.get("text", "")) for c in chunks)
+    
+    # Heuristics for difficulty
+    if total_len < 1000:
+        return "Easy"
+    elif total_len < 4000:
+        return "Medium"
+    else:
+        return "Hard"
 
-    prompt = f"Generate a tutorial for PR #{pr_number}"
 
-    return prompt
-
-
-def extract_pr_details(response_text: str) -> Optional[Dict]:
-    if not response_text or len(response_text.strip()) < 50:
-        return None
-
-    pr_details = {}
-
-    # --- PR Number ---
-    pr_match = re.search(
-        r'PR\s*Number:\s*\*{0,2}#?(\d+)\*{0,2}',
-        response_text,
-        re.IGNORECASE
+def generate_tutorial_content(chatbot, pr_number: int, chunks: List[Dict], difficulty: str) -> str:
+    """
+    Generates the tutorial content using the LLM directly.
+    """
+    # Build Context
+    context_parts = []
+    for c in chunks:
+        content = c.get("content") or c.get("text", "")
+        meta = c.get("metadata", {})
+        path = meta.get("file_path") or c.get("file_path", "unknown")
+        context_parts.append(f"File: {path}\nContent:\n{content[:2000]}") # Truncate large chunks
+    
+    full_context = "\n\n".join(context_parts)
+    
+    system_prompt = (
+        "You are an expert technical educator. "
+        "Your task is to create a comprehensive, step-by-step tutorial based on the provided Pull Request code."
     )
-    if not pr_match:
-        pr_match = re.search(
-            r'Pull\s*Request.*?#(\d+)',
-            response_text,
-            re.IGNORECASE
-        )
+    
+    user_prompt = f"""
+    TASK: Generate a {difficulty} level tutorial for PR #{pr_number}.
 
-    if not pr_match:
-        return None
+    PR CONTEXT:
+    {full_context[:25000]}  # Context limit
 
-    pr_details["pr_number"] = int(pr_match.group(1))
+    TUTORIAL STRUCTURE:
+    ### 1. Overview
+    - What was changed and why? (2-3 sentences)
+    
+    ### 2. Problem Context
+    - What issue does this fix?
+    
+    ### 3. Step-by-Step Implementation
+    - Walk through the code changes logically.
+    - Explain *why* specific lines were changed.
+    
+    ### 4. Testing
+    - How would you test these changes?
+    
+    ### 5. Key Takeaways
+    - What can we learn from this PR?
 
-    # --- Title ---
-    title_match = re.search(
-        r'Pull\s*Request:\s*(.+)',
-        response_text,
-        re.IGNORECASE
-    )
-    if title_match:
-        pr_details["pr_title"] = title_match.group(1).strip()
-
-    # --- Author ---
-    author_match = re.search(
-        r'Author:\s*\*{0,2}(.+?)\*{0,2}',
-        response_text,
-        re.IGNORECASE
-    )
-    if author_match:
-        pr_details["author"] = author_match.group(1).strip()
-
-    # --- Code files modified ---
-    files_match = re.search(
-        r'Files\s*Modified.*?\n.*?`.*?`',
-        response_text,
-        re.IGNORECASE | re.DOTALL
-    )
-    pr_details["code_files_modified"] = (
-        len(re.findall(r'`[^`]+`', files_match.group(0)))
-        if files_match else 0
-    )
-
-    # --- Difficulty (fallback inference) ---
-    pr_details["difficulty"] = "Unknown"
-
-    # --- Brief description ---
-    summary_match = re.search(
-        r'Summary of Changes\s*\n(.+?)(?:\n\n|$)',
-        response_text,
-        re.IGNORECASE | re.DOTALL
-    )
-    if summary_match:
-        pr_details["brief_description"] = summary_match.group(1).strip()
-
-    return pr_details
+    Use markdown formatting. Be educational and clear.
+    """
+    
+    return chatbot.call_llm(system_prompt, user_prompt)
 
 
-
-def parse_tutorial(response_text: str, pr_details: Dict, tutorial_number: int) -> Optional[Dict]:
+def parse_tutorial(response_text: str, pr_number: int, difficulty: str) -> Optional[Dict]:
     """Parse tutorial response from chatbot"""
-
     if not response_text or len(response_text.strip()) < 200:
         return None
 
-    parsed_tutorial = {
-        'tutorial_number': tutorial_number,
-        'pr_number': pr_details.get('pr_number'),
-        'pr_title': pr_details.get('pr_title', 'N/A'),
-        'author': pr_details.get('author', 'Unknown'),
-        'difficulty': pr_details.get('difficulty', 'Unknown'),
-        'code_files_modified': pr_details.get('code_files_modified', 0),
-        'brief_description': pr_details.get('brief_description', 'N/A'),
+    # Basic parsing logic (can be expanded)
+    sections = {}
+    current_section = None
+    
+    for line in response_text.split('\n'):
+        if line.strip().startswith('###'):
+            current_section = line.strip('# ').lower().split('.')[0] # Get header
+            # Normalize keys
+            if 'overview' in current_section: current_section = 'overview'
+            elif 'problem' in current_section: current_section = 'problem_context'
+            elif 'step' in current_section: current_section = 'implementation_steps'
+            elif 'test' in current_section: current_section = 'testing'
+            elif 'takeaway' in current_section: current_section = 'key_takeaways'
+            sections[current_section] = []
+        elif current_section:
+            sections[current_section].append(line)
+
+    # Join lists back to strings
+    for k in sections:
+        sections[k] = '\n'.join(sections[k]).strip()
+
+    code_blocks = re.findall(r'```', response_text)
+    
+    return {
+        'tutorial_number': pr_number,
+        'pr_number': pr_number,
+        'difficulty': difficulty,
         'type': 'PR Tutorial',
         'raw_response': response_text,
-        'sections': {}
+        'sections': sections,
+        'code_blocks_count': len(code_blocks) // 2,
+        'total_code_lines': len(response_text.split('\n'))
     }
-
-    # Extract Overview section
-    overview_match = re.search(
-        r'###\s*1\.?\s*.*?Overview.*?\s*\n+(.*?)(?=###\s*2\.?|$)',
-        response_text,
-        re.DOTALL | re.IGNORECASE
-    )
-    if overview_match:
-        parsed_tutorial['sections']['overview'] = overview_match.group(1).strip()
-
-    # Extract Problem Context
-    problem_match = re.search(
-        r'###\s*2\.?\s*.*?Problem.*?\s*\n+(.*?)(?=###\s*3\.?|$)',
-        response_text,
-        re.DOTALL | re.IGNORECASE
-    )
-    if problem_match:
-        parsed_tutorial['sections']['problem_context'] = problem_match.group(1).strip()
-
-    # Extract Step-by-Step Implementation
-    steps_match = re.search(
-        r'###\s*3\.?\s*.*?Step.*?\s*\n+(.*?)(?=###\s*4\.?|$)',
-        response_text,
-        re.DOTALL | re.IGNORECASE
-    )
-    if steps_match:
-        parsed_tutorial['sections']['implementation_steps'] = steps_match.group(1).strip()
-
-    # Extract Testing section
-    testing_match = re.search(
-        r'###\s*(?:4|5)\.?\s*.*?Testing.*?\s*\n+(.*?)(?=###|$)',
-        response_text,
-        re.DOTALL | re.IGNORECASE
-    )
-    if testing_match:
-        parsed_tutorial['sections']['testing'] = testing_match.group(1).strip()
-
-    # Extract Key Takeaways/Summary
-    takeaways_match = re.search(
-        r'###\s*(?:5|6)\.?\s*.*?(?:Takeaways?|Summary).*?\s*\n+(.*?)(?=###|$)',
-        response_text,
-        re.DOTALL | re.IGNORECASE
-    )
-    if takeaways_match:
-        parsed_tutorial['sections']['key_takeaways'] = takeaways_match.group(1).strip()
-
-    # Count code blocks
-    code_blocks = re.findall(r'``````', response_text)
-    parsed_tutorial['code_blocks_count'] = len(code_blocks)
-    parsed_tutorial['total_code_lines'] = sum(len(block.split('\n')) for block in code_blocks)
-
-    return parsed_tutorial
 
 
 def generate_pr_tutorials(
@@ -230,16 +232,14 @@ def generate_pr_tutorials(
     """
     Generate PR tutorials: 1 Easy, 1 Medium, 1 Hard using Random PR Generator
     """
-
     print("=" * 80)
-    print("PR Tutorial Generator v2.0 (Random PR Generator)".center(80))
-    print("1 Easy | 1 Medium | 1 Hard".center(80))
+    print("PR Tutorial Generator v2.0 (Direct DB Access)".center(80))
     print("=" * 80 + "\n")
 
     if model is None:
         model = "gpt-4o" if provider == 'openai' else None
 
-    print("Initializing chatbot...")
+    # Initialize Chatbot
     try:
         chatbot = RAGChatbot(
             vector_db_path=VECTOR_DB_PATH,
@@ -250,155 +250,81 @@ def generate_pr_tutorials(
             verbose=True,
             routing_method=routing_method,
             enable_multi_query=False,
-            disable_conversation_storage=True  # Skip conversation storage for generators
+            disable_conversation_storage=True
         )
-
         print("✅ Chatbot initialized successfully\n")
-
-        if use_multi_index and hasattr(chatbot, 'multi_index_store') and chatbot.multi_index_store:
-            stats = chatbot.multi_index_store.get_statistics()
-            print(f"Multi-index: {stats.get('total_indices', 0)} indices, {stats.get('total_vectors', 0)} vectors")
-            print(f"Routing: {routing_method.upper()}\n")
-
     except Exception as e:
         print(f"❌ Failed to initialize chatbot: {e}")
         return None
 
-    difficulties = ["Easy", "Medium", "Hard"]
-    all_tutorials = []
+    # STEP 1: Fetch and Classify Candidates
+    candidates = fetch_candidate_prs(chatbot)
+    if not candidates:
+        print("❌ No PR candidates found in Vector DB.")
+        return None
 
-    print("=" * 80)
-    print("Generating PR Tutorials")
-    print("=" * 80 + "\n")
+    classified_prs = {"Easy": [], "Medium": [], "Hard": []}
+    for pr_num, chunks in candidates.items():
+        diff = categorize_pr_difficulty(chunks)
+        classified_prs[diff].append(pr_num)
+
+    print(f"   📊 Candidate Pool: Easy={len(classified_prs['Easy'])}, Medium={len(classified_prs['Medium'])}, Hard={len(classified_prs['Hard'])}\n")
+
+    all_tutorials = []
+    difficulties = ["Easy", "Medium", "Hard"]
 
     for idx, difficulty in enumerate(difficulties, 1):
         print(f"\n{'='*80}")
         print(f"Tutorial {idx}/3: {difficulty} Difficulty")
         print(f"{'='*80}\n")
 
-        # STEP 1: Get Random PR using Random PR Generator
-        print(f"STEP 1: Getting random {difficulty} PR...")
-        random_pr_prompt = get_random_pr_prompt(difficulty)
+        # Select Random PR
+        pool = classified_prs[difficulty]
+        if not pool:
+            # Fallback to any pool if specific difficulty missing
+            print(f"   ⚠️ No {difficulty} PRs found. Trying fallback...")
+            pool = [p for sublist in classified_prs.values() for p in sublist]
+            if not pool:
+                print("   ❌ No PRs available at all.")
+                continue
+        
+        selected_pr = random.choice(pool)
+        pr_chunks = candidates[selected_pr]
+        
+        print(f"   ✅ Selected PR #{selected_pr} ({len(pr_chunks)} chunks)")
 
-        schema_name = f"{REPO_OWNER}_{REPO_NAME}".replace("-", "_")
+        # STEP 2: Generate Tutorial
+        print(f"   🤖 Generating content via LLM...")
         try:
-            pr_response = chatbot.chat(random_pr_prompt, schema_name=schema_name)
-
-            if not pr_response or not isinstance(pr_response, dict):
-                print(f"❌ Invalid response from Random PR Generator\n")
-                continue
-
-            pr_response_text = pr_response.get('answer', '')
-
-            if not pr_response_text:
-                print(f"❌ Empty response from Random PR Generator\n")
-                continue
-
-            print(f"✅ Random PR Response received ({len(pr_response_text)} characters)")
-            print(f"\nPR Details:\n{'-'*60}")
-            print(pr_response_text)
-            print(f"{'-'*60}\n")
-
-            # Extract PR details from the 6-line response
-            pr_details = extract_pr_details(pr_response_text)
-
-            if not pr_details or 'pr_number' not in pr_details:
-                print(f"❌ Could not extract PR details from response\n")
-                continue
-
-            pr_number = pr_details['pr_number']
-            print(f"✅ Selected PR #{pr_number}: {pr_details.get('pr_title', 'N/A')}")
-            print(f"   Author: {pr_details.get('author', 'Unknown')}")
-            print(f"   Difficulty: {pr_details.get('difficulty', 'Unknown')}")
-            print(f"   Code Files: {pr_details.get('code_files_modified', 0)}\n")
-
-        except Exception as e:
-            print(f"❌ Error getting random PR: {e}\n")
-            continue
-
-        # STEP 2: Generate tutorial for the selected PR
-        print(f"STEP 2: Generating tutorial for PR #{pr_number}...")
-        tutorial_prompt = get_tutorial_generation_prompt(pr_number)
-
-        schema_name = f"{REPO_OWNER}_{REPO_NAME}".replace("-", "_")
-        try:
-            tutorial_response = chatbot.chat(tutorial_prompt, schema_name=schema_name)
-
-            if not tutorial_response or not isinstance(tutorial_response, dict):
-                print(f"❌ Invalid tutorial response\n")
-                continue
-
-            tutorial_text = tutorial_response.get('answer', '')
-
-            if not tutorial_text:
-                print(f"❌ Empty tutorial response\n")
-                continue
-
-            print(f"✅ Tutorial Generated ({len(tutorial_text):,} characters)")
-
-            # Parse tutorial
-            parsed = parse_tutorial(tutorial_text, pr_details, idx)
-
+            tutorial_text = generate_tutorial_content(chatbot, selected_pr, pr_chunks, difficulty)
+            
+            parsed = parse_tutorial(tutorial_text, selected_pr, difficulty)
             if parsed:
-                print(f"✅ Tutorial parsed successfully")
-                print(f"   - Sections: {len(parsed.get('sections', {}))}")
-                print(f"   - Code Blocks: {parsed.get('code_blocks_count', 0)}")
-                print(f"   - Total Code Lines: {parsed.get('total_code_lines', 0)}")
-
-                # Add selection response
-                parsed['pr_selection_response'] = pr_response_text
-
                 all_tutorials.append(parsed)
-                print(f"✅ Tutorial {idx} completed successfully\n")
+                print(f"   ✅ Tutorial generated and parsed successfully.")
             else:
-                print(f"❌ Failed to parse tutorial {idx}\n")
+                print(f"   ⚠️ Failed to parse generated tutorial.")
 
         except Exception as e:
-            print(f"❌ Error generating tutorial: {e}\n")
+            print(f"   ❌ Generation failed: {e}")
             continue
 
     # Create output structure
     tutorials_data = {
         "metadata": {
             "generated_at": datetime.now().isoformat(),
-            "generator_version": "2.0 (Random PR Generator)",
+            "generator_version": "2.0 (Direct DB Access)",
             "provider": provider,
-            "model": model or getattr(chatbot, 'model', 'unknown'),
-            "total_tutorials_requested": 3,
+            "model": model,
             "total_tutorials_generated": len(all_tutorials),
-            "tutorial_breakdown": "1 Easy, 1 Medium, 1 Hard",
-            "tutorial_type": "PR-Based Step-by-Step Implementation Tutorial",
-            "selection_method": "Random PR Generator with code-change filtering",
-            "multi_index_enabled": use_multi_index,
-            "routing_method": routing_method,
-            "features": [
-                "Random PR selection with difficulty-based filtering",
-                "Automatic code-change validation (excludes docs/configs/tests)",
-                "Comprehensive step-by-step tutorials",
-                "Real code from actual merged PRs",
-                "Problem context and solutions",
-                "Testing and practice exercises",
-                "Context-aware from repository"
-            ]
         },
         "tutorials": all_tutorials,
         "statistics": {
             "total_tutorials": len(all_tutorials),
-            "by_difficulty": {
-                "Easy": len([t for t in all_tutorials if t.get('difficulty') == 'Easy']),
-                "Medium": len([t for t in all_tutorials if t.get('difficulty') == 'Medium']),
-                "Hard": len([t for t in all_tutorials if t.get('difficulty') == 'Hard'])
-            },
-            "total_code_blocks": sum(t.get('code_blocks_count', 0) for t in all_tutorials),
-            "total_code_lines": sum(t.get('total_code_lines', 0) for t in all_tutorials),
-            "total_code_files_covered": sum(t.get('code_files_modified', 0) for t in all_tutorials),
-            "average_sections_per_tutorial": round(
-                sum(len(t.get('sections', {})) for t in all_tutorials) / len(all_tutorials), 1
-            ) if all_tutorials else 0
+            "by_difficulty": {d: len([t for t in all_tutorials if t['difficulty'] == d]) for d in difficulties}
         }
     }
 
-    # Save to JSON
     # Upload to S3
     s3_key = f"Onboarding/{REPO_OWNER}/{REPO_NAME}/bugfix/onboarding_pr_tutorials.json"
 
@@ -414,19 +340,11 @@ def generate_pr_tutorials(
     return s3_key
 
 
-    print("=" * 80 + "\n")
-    print(f"✅ PR tutorials saved to: {json_file}\n")
-
-    return json_file
-
-
 if __name__ == "__main__":
-    result = generate_pr_tutorials(
+    generate_pr_tutorials(
         gmail_db_path=None,
         provider="openai",
         model="gpt-4o-mini",
         use_multi_index=True,
         routing_method="llm"
     )
-
-
