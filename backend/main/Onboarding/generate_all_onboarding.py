@@ -4,6 +4,7 @@ Runs all onboarding data generators sequentially to create complete documentatio
 """
 
 import sys
+import inspect 
 from pathlib import Path
 from datetime import datetime
 import argparse
@@ -66,29 +67,6 @@ from main.Onboarding.generators.Practice.generate_practice_questions import (
 )
 
 # ---------------------------------------------------------------------
-# Import QnA generators
-# ---------------------------------------------------------------------
-
-from main.Onboarding.generators.QnA.generate_reading_questions import (
-    generate_overview_questions
-)
-from main.Onboarding.generators.QnA.generate_repo_structure_questions import (
-    generate_repo_structure_questions
-)
-from main.Onboarding.generators.QnA.generate_tech_stack_questions import (
-    generate_tech_stack_questions
-)
-from main.Onboarding.generators.QnA.generate_app_features_questions import (
-    generate_app_features_questions
-)
-from main.Onboarding.generators.QnA.generate_dev_setup_questions import (
-    generate_dev_setup_questions
-)
-from main.Onboarding.generators.QnA.generate_code_convention_questions import (
-    generate_code_conventions_questions
-)
-
-# ---------------------------------------------------------------------
 # Main orchestrator
 # ---------------------------------------------------------------------
 
@@ -100,8 +78,6 @@ def generate_all_onboarding_data(
 ):
     """
     Generate all onboarding documentation data.
-    This orchestrator is intentionally thin — all paths are resolved
-    via repo_context inside individual generators.
     """
 
     print("\n" + "=" * 70)
@@ -160,38 +136,6 @@ def generate_all_onboarding_data(
             "func": generate_practice_questions,
             "category": "practice",
         },
-
-        # ---------------- QnA ----------------
-        "repo_structure_questions": {
-            "name": "Repo Structure Questions",
-            "func": generate_repo_structure_questions,
-            "category": "qna",
-        },
-        "tech_stack_questions": {
-            "name": "Tech Stack Questions",
-            "func": generate_tech_stack_questions,
-            "category": "qna",
-        },
-        "overview_questions": {
-            "name": "Overview Questions",
-            "func": generate_overview_questions,
-            "category": "qna",
-        },
-        "app_features_questions": {
-            "name": "App Features Questions",
-            "func": generate_app_features_questions,
-            "category": "qna",
-        },
-        "dev_setup_questions": {
-            "name": "Dev Setup Questions",
-            "func": generate_dev_setup_questions,
-            "category": "qna",
-        },
-        "code_conventions_questions": {
-            "name": "Code Conventions Questions",
-            "func": generate_code_conventions_questions,
-            "category": "qna",
-        },
     }
 
     if generators_to_run is None:
@@ -219,28 +163,29 @@ def generate_all_onboarding_data(
 
         try:
             gen_start = datetime.now()
+            func = gen["func"]
+            
+            # --- DYNAMIC ARGUMENT HANDLING ---
+            # Instead of guessing based on category, we check what the function actually wants.
+            sig = inspect.signature(func)
+            call_kwargs = {}
 
-            if gen["category"] in {"bugfix", "practice"}:
-                output = gen["func"](
-                    db_path=VECTOR_DB_PATH,
-                    gmail_db_path=gmail_db_path,
-                    provider=provider,
-                    model=model,
-                )
+            # 1. Always try to pass these if the function accepts them
+            common_params = {
+                "gmail_db_path": gmail_db_path,
+                "provider": provider,
+                "model": model,
+                "db_path": VECTOR_DB_PATH, # We offer this to everyone
+            }
 
-            elif gen["category"] == "qna":
-                output = gen["func"](
-                    gmail_db_path=gmail_db_path,
-                    provider=provider,
-                    model=model,
-                )
-
-            else:  # reading
-                output = gen["func"](
-                    gmail_db_path=gmail_db_path,
-                    provider=provider,
-                    model=model,
-                )
+            for param_name in sig.parameters:
+                if param_name in common_params:
+                    call_kwargs[param_name] = common_params[param_name]
+                # If a function has **kwargs, we can pass everything, but usually better to be explicit
+            
+            # Call the function with only the arguments it asked for
+            output = func(**call_kwargs)
+            # ----------------------------------
 
             duration = (datetime.now() - gen_start).total_seconds()
 
@@ -258,6 +203,8 @@ def generate_all_onboarding_data(
 
         except Exception as e:
             print(f"❌ Failed: {e}\n")
+            # import traceback
+            # traceback.print_exc() # Uncomment for deep debugging
             results[gen_key] = {
                 "status": "error",
                 "error": str(e),

@@ -89,7 +89,7 @@ export default function Sidebar({
           }`}
         >
           <Database className={`w-5 h-5 ${activeView === "setup" ? "scale-110" : ""} transition-transform`} />
-          <span className={`${spaceGrotesk.className} font-medium`}>Setup Pipeline</span>
+          <span className={`${spaceGrotesk.className} font-medium`}>Add New Repo</span>
         </button>
         <button
           onClick={() => setActiveView("history")}
@@ -125,7 +125,7 @@ export default function Sidebar({
             <UserPlus className={`w-5 h-5 ${activeView === "onboarding" ? "scale-110" : ""} transition-transform`} />
             <span className={`${spaceGrotesk.className} font-medium`}>Onboarding</span>
           </button>
-          <button
+          {/* <button
             onClick={() => setActiveView("offboarding")}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
               activeView === "offboarding"
@@ -135,7 +135,7 @@ export default function Sidebar({
           >
             <UserMinus className={`w-5 h-5 ${activeView === "offboarding" ? "scale-110" : ""} transition-transform`} />
             <span className={`${spaceGrotesk.className} font-medium`}>Offboarding</span>
-          </button>
+          </button> */}
         </div>
       </nav>
     </aside>

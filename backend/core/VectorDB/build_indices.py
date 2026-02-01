@@ -22,6 +22,7 @@ import tempfile
 import concurrent.futures
 from functools import lru_cache
 from dotenv import load_dotenv
+from datetime import datetime
 
 load_dotenv()
 
@@ -77,6 +78,45 @@ def load_current_repo_from_state():
         )
 
     return owner, name
+
+def update_runtime_state(owner: str, name: str):
+    """
+    Updates the active repository in the S3 state file.
+    Required for Data Processing, Embedding, and VectorDB steps to know which repo to target.
+    """
+    state_s3_key = "Admin/state/runtime_state.json"
+    
+    print(f"🔵 Updating S3 runtime state to: {owner}/{name}")
+    
+    try:
+        try:
+            state = s3_manager.download_json(state_s3_key)
+            if not isinstance(state, dict):
+                state = {}
+        except Exception:
+            state = {}
+
+        state["curr_repo"] = {
+            "owner": owner,
+            "name": name,
+            "updated_at": str(datetime.now())
+        }
+        
+        s3_manager.upload_json(state, state_s3_key)
+        print("✅ Runtime state updated successfully in S3")
+        
+        return {
+            "success": True, 
+            "message": f"State updated to {owner}/{name}"
+        }
+
+    except Exception as e:
+        error_msg = f"Failed to update runtime state: {str(e)}"
+        print(f"❌ {error_msg}")
+        return {
+            "success": False, 
+            "error": error_msg
+        }
 
 
 REPO_OWNER, REPO_NAME = load_current_repo_from_state()

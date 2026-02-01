@@ -39,6 +39,7 @@ import FinalCallSection from "../offboarding/managerViewSections/FinalCallSectio
 import HandoverSection from "../offboarding/managerViewSections/HandoverSection";
 import DocumentationSection from "../offboarding/managerViewSections/DocumentationSection";
 import { Inter } from "next/font/google";
+import { useRouter } from "next/navigation";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -96,9 +97,6 @@ type Project = {
   status?: "idle" | "running" | "success" | "failed";
 };
 
-
-
-
 /* ================= UI HELPERS ================= */
 
 // Custom Tooltip for Recharts
@@ -141,13 +139,13 @@ export default function UnifiedDashboard() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
 
   const [onboardingEmployees, setOnboardingEmployees] = useState<Employee[]>(
-    []
+    [],
   );
   const [offboardingEmployees, setOffboardingEmployees] = useState<Employee[]>(
-    []
+    [],
   );
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(
-    null
+    null,
   );
   const [employeeProgress, setEmployeeProgress] =
     useState<EmployeeProgress | null>(null);
@@ -175,12 +173,15 @@ export default function UnifiedDashboard() {
 
   //dummy projecs just for UI designing- testing
   useEffect(() => {
-  setProjects([
-    { id: "smarix-backend", name: "smarix-backend", organization: "smarix" },
-    { id: "smarix-frontend", name: "smarix-frontend", organization: "smarix" },
-  ]);
-}, []);
-
+    setProjects([
+      { id: "smarix-backend", name: "smarix-backend", organization: "smarix" },
+      {
+        id: "smarix-frontend",
+        name: "smarix-frontend",
+        organization: "smarix",
+      },
+    ]);
+  }, []);
 
   // Fetch employees
   useEffect(() => {
@@ -225,7 +226,7 @@ export default function UnifiedDashboard() {
           console.error(
             "❌ Failed to fetch users:",
             response.status,
-            errorText
+            errorText,
           );
           setLoading(false);
           return;
@@ -239,7 +240,7 @@ export default function UnifiedDashboard() {
 
         // Log all employee users to see their structure
         const allEmployees = allUsers.filter(
-          (u: any) => (u.role || "").toLowerCase() === "employee"
+          (u: any) => (u.role || "").toLowerCase() === "employee",
         );
         console.log("Total employees found:", allEmployees.length);
         console.log(
@@ -250,7 +251,7 @@ export default function UnifiedDashboard() {
             employeeId: u.employeeId || u.employee_id,
             managers: u.managers,
             name: u.name,
-          }))
+          })),
         );
 
         // Filter employees managed by this manager
@@ -283,7 +284,7 @@ export default function UnifiedDashboard() {
               managerIdType: typeof managerId,
               directInclude: managers.includes(managerId),
               stringCompare: managers.some(
-                (m: any) => String(m) === String(managerId)
+                (m: any) => String(m) === String(managerId),
               ),
               statusType: typeof u.status,
               statusLower: (u.status || "").toLowerCase(),
@@ -300,7 +301,7 @@ export default function UnifiedDashboard() {
             username: u.username,
             status: u.status,
             name: u.name,
-          }))
+          })),
         );
 
         // Separate onboarding and offboarding employees
@@ -311,7 +312,7 @@ export default function UnifiedDashboard() {
           console.log(
             `Employee ${
               u.username
-            }: rawStatus="${rawStatus}" (type: ${typeof rawStatus}), normalized="${normalizedStatus}"`
+            }: rawStatus="${rawStatus}" (type: ${typeof rawStatus}), normalized="${normalizedStatus}"`,
           );
         });
 
@@ -321,7 +322,7 @@ export default function UnifiedDashboard() {
             const result = status === "onboard";
             if (result) {
               console.log(
-                `✓ Onboarding: ${u.username} - status: "${u.status}" (normalized: "${status}")`
+                `✓ Onboarding: ${u.username} - status: "${u.status}" (normalized: "${status}")`,
               );
             }
             return result;
@@ -355,10 +356,10 @@ export default function UnifiedDashboard() {
               (status && status.includes("offboard"));
 
             console.log(
-              `🔍 Checking offboarding for ${u.username || "unknown"}:`
+              `🔍 Checking offboarding for ${u.username || "unknown"}:`,
             );
             console.log(
-              `   - Raw status: "${rawStatus}" (type: ${typeof rawStatus})`
+              `   - Raw status: "${rawStatus}" (type: ${typeof rawStatus})`,
             );
             console.log(`   - Normalized: "${status}"`);
             console.log(`   - Match "offboard": ${status === "offboard"}`);
@@ -367,7 +368,7 @@ export default function UnifiedDashboard() {
 
             if (!isOffboarding && rawStatus) {
               console.warn(
-                `   ⚠️ Status "${rawStatus}" does not match offboarding criteria`
+                `   ⚠️ Status "${rawStatus}" does not match offboarding criteria`,
               );
             }
 
@@ -376,7 +377,7 @@ export default function UnifiedDashboard() {
           .map((u: any) => {
             const employeeId = u.employee_id || u.employeeId || u.username;
             console.log(
-              `✓ Mapping offboarding employee: ${u.username} -> ${employeeId}`
+              `✓ Mapping offboarding employee: ${u.username} -> ${employeeId}`,
             );
             return {
               id: employeeId,
@@ -400,7 +401,7 @@ export default function UnifiedDashboard() {
             username: u.username,
             status: u.status,
             statusType: typeof u.status,
-          }))
+          })),
         );
 
         setOnboardingEmployees(onboarding);
@@ -410,17 +411,17 @@ export default function UnifiedDashboard() {
           "✅ Final state - Onboarding:",
           onboarding.length,
           "Offboarding:",
-          offboarding.length
+          offboarding.length,
         );
       } catch (error) {
         console.error("❌ ERROR in fetchEmployees:", error);
         console.error(
           "Error details:",
-          error instanceof Error ? error.message : String(error)
+          error instanceof Error ? error.message : String(error),
         );
         console.error(
           "Error stack:",
-          error instanceof Error ? error.stack : "No stack"
+          error instanceof Error ? error.stack : "No stack",
         );
         setLoading(false);
       }
@@ -463,7 +464,7 @@ export default function UnifiedDashboard() {
               `${API_URL}/api/onboarding/tasks?employeeId=${employeeId}`,
               {
                 headers: { Authorization: `Bearer ${token}` },
-              }
+              },
             );
 
             if (progressResponse.ok) {
@@ -506,12 +507,12 @@ export default function UnifiedDashboard() {
               idx === 0
                 ? 4.3
                 : idx === 1
-                ? 3.2
-                : idx === 2
-                ? 2.8
-                : idx === 3
-                ? 4.1
-                : 0;
+                  ? 3.2
+                  : idx === 2
+                    ? 2.8
+                    : idx === 3
+                      ? 4.1
+                      : 0;
             const completion = spent ? Math.round((spent / expected) * 100) : 0;
             const status =
               idx < 2 ? "Pending" : idx === 3 ? "Pending" : "Completed";
@@ -524,14 +525,14 @@ export default function UnifiedDashboard() {
               completion: completion > 100 ? 149 : completion,
               value: spent ? Math.round(spent * 10) : undefined,
             };
-          }
+          },
         );
 
         const completed = dummySections.filter(
-          (s) => s.status === "Completed"
+          (s) => s.status === "Completed",
         ).length;
         const pending = dummySections.filter(
-          (s) => s.status === "Pending"
+          (s) => s.status === "Pending",
         ).length;
         const overallProgress = Math.round((completed / sections.length) * 100);
         const efficiency = Math.round(85 + Math.random() * 10);
@@ -549,7 +550,7 @@ export default function UnifiedDashboard() {
           day: i + 1,
           productivity: Math.min(
             100,
-            Math.round(20 + i * 2.5 + Math.random() * 10)
+            Math.round(20 + i * 2.5 + Math.random() * 10),
           ),
         }));
 
@@ -577,6 +578,8 @@ export default function UnifiedDashboard() {
     fetchEmployeeProgress();
   }, [selectedEmployee, token]);
 
+  const router = useRouter();
+
   // Filter employees based on search
   const filteredOnboarding = useMemo(() => {
     if (!searchQuery) return onboardingEmployees;
@@ -585,7 +588,7 @@ export default function UnifiedDashboard() {
       (emp) =>
         emp.name.toLowerCase().includes(query) ||
         emp.role.toLowerCase().includes(query) ||
-        emp.username.toLowerCase().includes(query)
+        emp.username.toLowerCase().includes(query),
     );
   }, [onboardingEmployees, searchQuery]);
 
@@ -596,7 +599,7 @@ export default function UnifiedDashboard() {
       (emp) =>
         emp.name.toLowerCase().includes(query) ||
         emp.role.toLowerCase().includes(query) ||
-        emp.username.toLowerCase().includes(query)
+        emp.username.toLowerCase().includes(query),
     );
   }, [offboardingEmployees, searchQuery]);
 
@@ -639,8 +642,6 @@ export default function UnifiedDashboard() {
     <div className={`min-h-screen flex bg-slate-50 ${inter.className}`}>
       {/* ================= SIDEBAR ================= */}
 
-     
-
       <div className="w-80 flex-shrink-0 bg-white border-r border-slate-200 flex flex-col h-screen z-20 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.1)]">
         {/* Sidebar Header */}
         <div className="px-6 py-6 border-b border-slate-100/80">
@@ -649,10 +650,14 @@ export default function UnifiedDashboard() {
               <img src="/logo.png" alt="Smarix Logo" className="w-6 h-6" />
             </div>
             <div>
-              <h2 className={`${inter.className} text-xl font-bold tracking-tight text-[#0E1B2E]`}>
+              <h2
+                className={`${inter.className} text-xl font-bold tracking-tight text-[#0E1B2E]`}
+              >
                 Smarix
               </h2>
-              <p className={`${inter.className} text-[10px] text-slate-400 font-semibold tracking-wider uppercase`}>
+              <p
+                className={`${inter.className} text-[10px] text-slate-400 font-semibold tracking-wider uppercase`}
+              >
                 Manager Dashboard
               </p>
             </div>
@@ -665,14 +670,20 @@ export default function UnifiedDashboard() {
             {user && (
               <>
                 <div className="flex items-center gap-3 overflow-hidden">
-                  <div className={`${inter.className} w-10 h-10 rounded-full bg-[#0E1B2E] text-white flex items-center justify-center font-bold text-sm shadow-sm shrink-0`}>
+                  <div
+                    className={`${inter.className} w-10 h-10 rounded-full bg-[#0E1B2E] text-white flex items-center justify-center font-bold text-sm shadow-sm shrink-0`}
+                  >
                     {user.name ? user.name.charAt(0).toUpperCase() : "M"}
                   </div>
                   <div className="min-w-0">
-                    <div className={`${inter.className} text-sm font-bold text-slate-900 truncate`}>
+                    <div
+                      className={`${inter.className} text-sm font-bold text-slate-900 truncate`}
+                    >
                       {user.name || user.username}
                     </div>
-                    <div className={`${inter.className} text-[11px] text-slate-500 capitalize font-medium truncate`}>
+                    <div
+                      className={`${inter.className} text-[11px] text-slate-500 capitalize font-medium truncate`}
+                    >
                       {user.role || "Manager"}
                     </div>
                   </div>
@@ -689,25 +700,25 @@ export default function UnifiedDashboard() {
           </div>
         </div>
 
-
-         {/* ================= PROJECTS ENTRY ================= */}
-<div className="px-4 pb-2">
-  <button
-    onClick={() => {
-      setShowProjects(true);
-      setSelectedEmployee(null);
-      setSelectedProject(null);
-    }}
-    className="w-full flex items-center gap-3 px-3 py-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition-all shadow-sm"
-  >
-    <BarChart3 className="w-5 h-5 text-[#0E1B2E]" />
-    <span className={`${inter.className} text-sm font-bold text-slate-700`}>
-      Projects & Pipelines
-    </span>
-  </button>
-</div>
-
-
+        {/* ================= PROJECTS ENTRY ================= */}
+        <div className="px-4 pb-2">
+          <button
+            onClick={() => {
+              setShowProjects(true);
+              setSelectedEmployee(null);
+              setSelectedProject(null);
+              router.push("/manager/pipeline");
+            }}
+            className="w-full flex items-center gap-3 px-3 py-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition-all shadow-sm"
+          >
+            <BarChart3 className="w-5 h-5 text-[#0E1B2E]" />
+            <span
+              className={`${inter.className} text-sm font-bold text-slate-700`}
+            >
+              Set Up Projects for Users
+            </span>
+          </button>
+        </div>
 
         {/* Search */}
         <div className="px-4 py-4">
@@ -731,7 +742,9 @@ export default function UnifiedDashboard() {
               onClick={() => setOnboardingExpanded(!onboardingExpanded)}
               className="w-full flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider hover:text-slate-700 transition-colors mb-2 px-1"
             >
-              <span className={`${inter.className}`}>Onboarding ({filteredOnboarding.length})</span>
+              <span className={`${inter.className}`}>
+                Onboarding ({filteredOnboarding.length})
+              </span>
               {onboardingExpanded ? (
                 <ChevronUp className="w-3 h-3" />
               ) : (
@@ -742,7 +755,9 @@ export default function UnifiedDashboard() {
             {onboardingExpanded && (
               <div className="space-y-1">
                 {filteredOnboarding.length === 0 ? (
-                  <div className={`${inter.className} py-4 text-center text-xs text-slate-400 italic bg-slate-50/50 rounded-lg border border-dashed border-slate-200`}>
+                  <div
+                    className={`${inter.className} py-4 text-center text-xs text-slate-400 italic bg-slate-50/50 rounded-lg border border-dashed border-slate-200`}
+                  >
                     No active onboarding
                   </div>
                 ) : (
@@ -782,14 +797,16 @@ export default function UnifiedDashboard() {
                         <div
                           className={`
                            ${inter.className} text-sm font-semibold truncate ${
-                            selectedEmployee?.id === emp.id
-                              ? "text-blue-900"
-                              : "text-slate-700 group-hover:text-slate-900"
-                          }`}
+                             selectedEmployee?.id === emp.id
+                               ? "text-blue-900"
+                               : "text-slate-700 group-hover:text-slate-900"
+                           }`}
                         >
                           {emp.name}
                         </div>
-                        <div className={`${inter.className} text-[11px] truncate text-slate-500 font-medium`}>
+                        <div
+                          className={`${inter.className} text-[11px] truncate text-slate-500 font-medium`}
+                        >
                           {emp.role}
                         </div>
                       </div>
@@ -806,7 +823,9 @@ export default function UnifiedDashboard() {
               onClick={() => setOffboardingExpanded(!offboardingExpanded)}
               className="w-full flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider hover:text-slate-700 transition-colors mb-2 px-1"
             >
-              <span className={`${inter.className}`}>Offboarding ({filteredOffboarding.length})</span>
+              <span className={`${inter.className}`}>
+                Offboarding ({filteredOffboarding.length})
+              </span>
               {offboardingExpanded ? (
                 <ChevronUp className="w-3 h-3" />
               ) : (
@@ -817,7 +836,9 @@ export default function UnifiedDashboard() {
             {offboardingExpanded && (
               <div className="space-y-1">
                 {filteredOffboarding.length === 0 ? (
-                  <div className={`${inter.className} py-4 text-center text-xs text-slate-400 italic bg-slate-50/50 rounded-lg border border-dashed border-slate-200`}>
+                  <div
+                    className={`${inter.className} py-4 text-center text-xs text-slate-400 italic bg-slate-50/50 rounded-lg border border-dashed border-slate-200`}
+                  >
                     No active offboarding
                   </div>
                 ) : (
@@ -863,7 +884,9 @@ export default function UnifiedDashboard() {
                         >
                           {emp.name}
                         </div>
-                        <div className={`${inter.className} text-[11px] truncate text-slate-500 font-medium`}>
+                        <div
+                          className={`${inter.className} text-[11px] truncate text-slate-500 font-medium`}
+                        >
                           {emp.role}
                         </div>
                       </div>
@@ -890,10 +913,14 @@ export default function UnifiedDashboard() {
                   <Users className="w-10 h-10 text-slate-400 group-hover:text-blue-600 transition-colors" />
                 </div>
               </div>
-              <h3 className={`${inter.className} text-2xl font-bold text-[#0E1B2E]`}>
+              <h3
+                className={`${inter.className} text-2xl font-bold text-[#0E1B2E]`}
+              >
                 Welcome Back, {user?.name?.split(" ")[0] || "Manager"}
               </h3>
-              <p className={`${inter.className} text-slate-500 mt-3 max-w-sm leading-relaxed text-sm`}>
+              <p
+                className={`${inter.className} text-slate-500 mt-3 max-w-sm leading-relaxed text-sm`}
+              >
                 Select an employee from the sidebar to track their progress,
                 manage tasks, or oversee handovers.
               </p>
@@ -929,7 +956,9 @@ export default function UnifiedDashboard() {
                   </div>
 
                   <div>
-                    <h1 className={`${inter.className} text-3xl font-bold text-[#0E1B2E] tracking-tight`}>
+                    <h1
+                      className={`${inter.className} text-3xl font-bold text-[#0E1B2E] tracking-tight`}
+                    >
                       {employeeProgress.employeeName}
                     </h1>
                     <div className="flex flex-wrap items-center gap-3 mt-2">
@@ -938,7 +967,9 @@ export default function UnifiedDashboard() {
                         {employeeProgress.employeeRole}
                       </div>
                       <span className="text-slate-300">|</span>
-                      <div className={`${inter.className} text-sm text-slate-500 font-mono`}>
+                      <div
+                        className={`${inter.className} text-sm text-slate-500 font-mono`}
+                      >
                         ID: {selectedEmployee.employeeId}
                       </div>
                     </div>
@@ -1008,7 +1039,7 @@ export default function UnifiedDashboard() {
                             : section.charAt(0).toUpperCase() +
                               section.slice(1)}
                         </button>
-                      )
+                      ),
                     )}
                   </div>
 
@@ -1058,7 +1089,9 @@ export default function UnifiedDashboard() {
                   >
                     <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow group">
                       <div className="flex items-center justify-between mb-4">
-                        <span className={`${inter.className} text-xs font-bold text-slate-400 uppercase tracking-wider`}>
+                        <span
+                          className={`${inter.className} text-xs font-bold text-slate-400 uppercase tracking-wider`}
+                        >
                           Pending Tasks
                         </span>
                         <div className="p-2 rounded-lg bg-orange-50 text-orange-600 border border-orange-100 group-hover:scale-110 transition-transform">
@@ -1066,10 +1099,14 @@ export default function UnifiedDashboard() {
                         </div>
                       </div>
                       <div className="flex items-end gap-2">
-                        <div className={`${inter.className} text-4xl font-bold text-slate-800 tracking-tight`}>
+                        <div
+                          className={`${inter.className} text-4xl font-bold text-slate-800 tracking-tight`}
+                        >
                           {employeeProgress.pendingSections}
                         </div>
-                        <div className={`${inter.className} text-sm font-medium text-slate-500 mb-1`}>
+                        <div
+                          className={`${inter.className} text-sm font-medium text-slate-500 mb-1`}
+                        >
                           Sections
                         </div>
                       </div>
@@ -1077,7 +1114,9 @@ export default function UnifiedDashboard() {
 
                     <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow group">
                       <div className="flex items-center justify-between mb-4">
-                        <span className={`${inter.className} text-xs font-bold text-slate-400 uppercase tracking-wider`}>
+                        <span
+                          className={`${inter.className} text-xs font-bold text-slate-400 uppercase tracking-wider`}
+                        >
                           Completed
                         </span>
                         <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-100 group-hover:scale-110 transition-transform">
@@ -1085,10 +1124,14 @@ export default function UnifiedDashboard() {
                         </div>
                       </div>
                       <div className="flex items-end gap-2">
-                        <div className={`${inter.className} text-4xl font-bold text-slate-800 tracking-tight`}>
+                        <div
+                          className={`${inter.className} text-4xl font-bold text-slate-800 tracking-tight`}
+                        >
                           {employeeProgress.completedSections}
                         </div>
-                        <div className={`${inter.className} text-sm font-medium text-slate-500 mb-1`}>
+                        <div
+                          className={`${inter.className} text-sm font-medium text-slate-500 mb-1`}
+                        >
                           Sections
                         </div>
                       </div>
@@ -1098,7 +1141,9 @@ export default function UnifiedDashboard() {
                       employeeProgress.qnaScore !== undefined && (
                         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow group">
                           <div className="flex items-center justify-between mb-4">
-                            <span className={`${inter.className} text-xs font-bold text-slate-400 uppercase tracking-wider`}>
+                            <span
+                              className={`${inter.className} text-xs font-bold text-slate-400 uppercase tracking-wider`}
+                            >
                               Quiz Score
                             </span>
                             <div className="p-2 rounded-lg bg-blue-50 text-blue-600 border border-blue-100 group-hover:scale-110 transition-transform">
@@ -1106,10 +1151,14 @@ export default function UnifiedDashboard() {
                             </div>
                           </div>
                           <div className="flex items-end gap-2">
-                            <div className={`${inter.className} text-4xl font-bold text-slate-800 tracking-tight`}>
+                            <div
+                              className={`${inter.className} text-4xl font-bold text-slate-800 tracking-tight`}
+                            >
                               {employeeProgress.qnaScore}%
                             </div>
-                            <div className={`${inter.className} text-sm font-medium text-slate-500 mb-1`}>
+                            <div
+                              className={`${inter.className} text-sm font-medium text-slate-500 mb-1`}
+                            >
                               Average
                             </div>
                           </div>
@@ -1118,7 +1167,9 @@ export default function UnifiedDashboard() {
 
                     <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow group">
                       <div className="flex items-center justify-between mb-4">
-                        <span className={`${inter.className} text-xs font-bold text-slate-400 uppercase tracking-wider`}>
+                        <span
+                          className={`${inter.className} text-xs font-bold text-slate-400 uppercase tracking-wider`}
+                        >
                           Efficiency
                         </span>
                         <div className="p-2 rounded-lg bg-purple-50 text-purple-600 border border-purple-100 group-hover:scale-110 transition-transform">
@@ -1126,10 +1177,14 @@ export default function UnifiedDashboard() {
                         </div>
                       </div>
                       <div className="flex items-end gap-2">
-                        <div className={`${inter.className} text-4xl font-bold text-slate-800 tracking-tight`}>
+                        <div
+                          className={`${inter.className} text-4xl font-bold text-slate-800 tracking-tight`}
+                        >
                           {employeeProgress.efficiency}%
                         </div>
-                        <div className={`${inter.className} text-sm font-medium text-slate-500 mb-1`}>
+                        <div
+                          className={`${inter.className} text-sm font-medium text-slate-500 mb-1`}
+                        >
                           Calculated
                         </div>
                       </div>
@@ -1142,10 +1197,14 @@ export default function UnifiedDashboard() {
                     {employeeProgress.timeToProductivity && (
                       <div className="lg:col-span-2 bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
                         <div className="mb-8">
-                          <h3 className={`${inter.className} text-lg font-bold text-[#0E1B2E]`}>
+                          <h3
+                            className={`${inter.className} text-lg font-bold text-[#0E1B2E]`}
+                          >
                             Productivity Ramp-up
                           </h3>
-                          <p className={`${inter.className} text-sm text-slate-500`}>
+                          <p
+                            className={`${inter.className} text-sm text-slate-500`}
+                          >
                             Estimated contribution level over the first 30 days
                           </p>
                         </div>
@@ -1220,10 +1279,14 @@ export default function UnifiedDashboard() {
                     {/* Donut Chart: Overall Status */}
                     <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
                       <div>
-                        <h3 className={`${inter.className} text-lg font-bold text-[#0E1B2E] mb-1`}>
+                        <h3
+                          className={`${inter.className} text-lg font-bold text-[#0E1B2E] mb-1`}
+                        >
                           Overall Status
                         </h3>
-                        <p className={`${inter.className} text-sm text-slate-500`}>
+                        <p
+                          className={`${inter.className} text-sm text-slate-500`}
+                        >
                           Completion breakdown
                         </p>
                       </div>
@@ -1250,10 +1313,14 @@ export default function UnifiedDashboard() {
                         </ResponsiveContainer>
                         {/* Centered Text */}
                         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                          <span className={`${inter.className} text-4xl font-bold text-[#0E1B2E] tracking-tight`}>
+                          <span
+                            className={`${inter.className} text-4xl font-bold text-[#0E1B2E] tracking-tight`}
+                          >
                             {employeeProgress.overallProgress}%
                           </span>
-                          <span className={`${inter.className} text-xs text-slate-400 font-bold uppercase tracking-wider mt-1`}>
+                          <span
+                            className={`${inter.className} text-xs text-slate-400 font-bold uppercase tracking-wider mt-1`}
+                          >
                             Done
                           </span>
                         </div>
@@ -1266,10 +1333,14 @@ export default function UnifiedDashboard() {
                             style={{ backgroundColor: COLORS.donut.pending }}
                           />
                           <div>
-                            <div className={`${inter.className} text-[10px] text-slate-500 font-bold uppercase tracking-wider`}>
+                            <div
+                              className={`${inter.className} text-[10px] text-slate-500 font-bold uppercase tracking-wider`}
+                            >
                               Pending
                             </div>
-                            <div className={`${inter.className} text-lg font-bold text-slate-700`}>
+                            <div
+                              className={`${inter.className} text-lg font-bold text-slate-700`}
+                            >
                               {100 - employeeProgress.overallProgress}%
                             </div>
                           </div>
@@ -1280,10 +1351,14 @@ export default function UnifiedDashboard() {
                             style={{ backgroundColor: COLORS.donut.completed }}
                           />
                           <div>
-                            <div className={`${inter.className} text-[10px] text-slate-500 font-bold uppercase tracking-wider`}>
+                            <div
+                              className={`${inter.className} text-[10px] text-slate-500 font-bold uppercase tracking-wider`}
+                            >
                               Done
                             </div>
-                            <div className={`${inter.className} text-lg font-bold text-[#0E1B2E]`}>
+                            <div
+                              className={`${inter.className} text-lg font-bold text-[#0E1B2E]`}
+                            >
                               {employeeProgress.overallProgress}%
                             </div>
                           </div>
@@ -1295,23 +1370,31 @@ export default function UnifiedDashboard() {
                     <div className="lg:col-span-3 bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
                         <div>
-                          <h3 className={`${inter.className} text-lg font-bold text-[#0E1B2E]`}>
+                          <h3
+                            className={`${inter.className} text-lg font-bold text-[#0E1B2E]`}
+                          >
                             Time Allocation
                           </h3>
-                          <p className={`${inter.className} text-sm text-slate-500`}>
+                          <p
+                            className={`${inter.className} text-sm text-slate-500`}
+                          >
                             Expected vs Actual hours per module
                           </p>
                         </div>
                         <div className="flex gap-6">
                           <div className="flex items-center gap-2">
                             <span className="w-3 h-3 rounded-full bg-slate-200 ring-2 ring-slate-50"></span>
-                            <span className={`${inter.className} text-xs font-bold text-slate-600 uppercase tracking-wide`}>
+                            <span
+                              className={`${inter.className} text-xs font-bold text-slate-600 uppercase tracking-wide`}
+                            >
                               Expected
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="w-3 h-3 rounded-full bg-emerald-500 ring-2 ring-emerald-50"></span>
-                            <span className={`${inter.className} text-xs font-bold text-slate-600 uppercase tracking-wide`}>
+                            <span
+                              className={`${inter.className} text-xs font-bold text-slate-600 uppercase tracking-wide`}
+                            >
                               Actual
                             </span>
                           </div>
@@ -1333,18 +1416,30 @@ export default function UnifiedDashboard() {
                               dataKey="section"
                               axisLine={false}
                               tickLine={false}
-                              tick={{ fill: COLORS.text, fontSize: 13, fontFamily: inter.style.fontFamily }}
+                              tick={{
+                                fill: COLORS.text,
+                                fontSize: 13,
+                                fontFamily: inter.style.fontFamily,
+                              }}
                               dy={15}
                             />
                             <YAxis
                               axisLine={false}
                               tickLine={false}
-                              tick={{ fill: COLORS.text, fontSize: 12, fontFamily: inter.style.fontFamily }}
+                              tick={{
+                                fill: COLORS.text,
+                                fontSize: 12,
+                                fontFamily: inter.style.fontFamily,
+                              }}
                               label={{
                                 value: "Hours",
                                 angle: -90,
                                 position: "insideLeft",
-                                style: { fill: COLORS.text, fontSize: 12, fontFamily: inter.style.fontFamily},
+                                style: {
+                                  fill: COLORS.text,
+                                  fontSize: 12,
+                                  fontFamily: inter.style.fontFamily,
+                                },
                               }}
                             />
                             <Tooltip content={<CustomTooltip />} />
@@ -1371,7 +1466,9 @@ export default function UnifiedDashboard() {
                   {/* Table Section */}
                   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                     <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-                      <h3 className={`${inter.className} text-lg font-bold text-[#0E1B2E]`}>
+                      <h3
+                        className={`${inter.className} text-lg font-bold text-[#0E1B2E]`}
+                      >
                         Module Details
                       </h3>
                       {/* <button className={`${inter.className} text-sm text-blue-600 font-bold hover:text-blue-700 transition-colors`}>
@@ -1382,16 +1479,24 @@ export default function UnifiedDashboard() {
                       <table className="w-full text-left border-collapse">
                         <thead>
                           <tr className="bg-slate-50/80 border-b border-slate-100">
-                            <th className={`${inter.className} py-4 px-6 text-xs font-bold uppercase tracking-wider text-slate-500`}>
+                            <th
+                              className={`${inter.className} py-4 px-6 text-xs font-bold uppercase tracking-wider text-slate-500`}
+                            >
                               Section
                             </th>
-                            <th className={`${inter.className} py-4 px-6 text-xs font-bold uppercase tracking-wider text-slate-500`}>
+                            <th
+                              className={`${inter.className} py-4 px-6 text-xs font-bold uppercase tracking-wider text-slate-500`}
+                            >
                               Status
                             </th>
-                            <th className={`${inter.className} py-4 px-6 text-xs font-bold uppercase tracking-wider text-slate-500`}>
+                            <th
+                              className={`${inter.className} py-4 px-6 text-xs font-bold uppercase tracking-wider text-slate-500`}
+                            >
                               Hours (Exp / Act)
                             </th>
-                            <th className={`${inter.className} py-4 px-6 text-xs font-bold uppercase tracking-wider text-slate-500 w-1/3`}>
+                            <th
+                              className={`${inter.className} py-4 px-6 text-xs font-bold uppercase tracking-wider text-slate-500 w-1/3`}
+                            >
                               Progress
                             </th>
                           </tr>
@@ -1402,7 +1507,9 @@ export default function UnifiedDashboard() {
                               key={idx}
                               className="hover:bg-slate-50/80 transition-colors group"
                             >
-                              <td className={`${inter.className} py-5 px-6 font-semibold text-slate-700 group-hover:text-[#0E1B2E] transition-colors`}>
+                              <td
+                                className={`${inter.className} py-5 px-6 font-semibold text-slate-700 group-hover:text-[#0E1B2E] transition-colors`}
+                              >
                                 {section.section}
                               </td>
                               <td className="py-5 px-6">
@@ -1423,8 +1530,12 @@ export default function UnifiedDashboard() {
                                   {section.status}
                                 </span>
                               </td>
-                              <td className={`${inter.className} py-5 px-6 text-sm text-slate-600 font-mono`}>
-                                <span className={`${inter.className} text-slate-400`}>
+                              <td
+                                className={`${inter.className} py-5 px-6 text-sm text-slate-600 font-mono`}
+                              >
+                                <span
+                                  className={`${inter.className} text-slate-400`}
+                                >
                                   {section.expectedHours}h
                                 </span>
                                 <span className="mx-2 text-slate-200">/</span>
@@ -1451,7 +1562,7 @@ export default function UnifiedDashboard() {
                                       style={{
                                         width: `${Math.min(
                                           section.completion,
-                                          100
+                                          100,
                                         )}%`,
                                       }}
                                     />
@@ -1471,35 +1582,34 @@ export default function UnifiedDashboard() {
               )}
 
               {showProjects && !selectedProject && (
-  <div className="space-y-6 max-w-4xl mx-auto animate-fadeIn">
-    <h2 className={`${inter.className} text-2xl font-bold text-[#0E1B2E]`}>
-      Projects
-    </h2>
+                <div className="space-y-6 max-w-4xl mx-auto animate-fadeIn">
+                  <h2
+                    className={`${inter.className} text-2xl font-bold text-[#0E1B2E]`}
+                  >
+                    Projects
+                  </h2>
 
-    <div className="grid gap-4">
-      {projects.map((project) => (
-        <div
-          key={project.id}
-          onClick={() => {
-            setSelectedProject(project);
-            setShowProjects(false);
-          }}
-          className="p-5 rounded-2xl border border-slate-200 bg-white hover:shadow-md cursor-pointer transition-all"
-        >
-          <div className="text-lg font-bold text-slate-800">
-            {project.name}
-          </div>
-          <div className="text-sm text-slate-500">
-            {project.organization}
-          </div>
-        </div>
-      ))}
-    </div>
-  </div>
-)}
-
-
-
+                  <div className="grid gap-4">
+                    {projects.map((project) => (
+                      <div
+                        key={project.id}
+                        onClick={() => {
+                          setSelectedProject(project);
+                          setShowProjects(false);
+                        }}
+                        className="p-5 rounded-2xl border border-slate-200 bg-white hover:shadow-md cursor-pointer transition-all"
+                      >
+                        <div className="text-lg font-bold text-slate-800">
+                          {project.name}
+                        </div>
+                        <div className="text-sm text-slate-500">
+                          {project.organization}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="h-full flex items-center justify-center">

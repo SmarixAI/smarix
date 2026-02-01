@@ -35,5 +35,22 @@ class S3Manager:
         """Return public S3 URL for the key."""
         return f"https://{self.bucket}.s3.{self.region}.amazonaws.com/{key}"
 
+    def list_files(self, prefix: str = "") -> list:
+        """
+        List all files in the bucket with the given prefix.
+        Returns a list of file keys (strings).
+        """
+        files = []
+        try:
+            paginator = self.s3.get_paginator("list_objects_v2")
+            for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
+                if "Contents" in page:
+                    for obj in page["Contents"]:
+                        files.append(obj["Key"])
+            return files
+        except Exception as e:
+            print(f"❌ Error listing S3 files: {e}")
+            return []
+
 
 s3_manager = S3Manager(bucket="smarix-data-apsouth1", region="ap-south-1")
