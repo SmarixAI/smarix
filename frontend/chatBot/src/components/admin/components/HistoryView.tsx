@@ -29,8 +29,6 @@ export default function HistoryView({
   const getActionTitle = (entry: HistoryEntry) => {
     if (entry.action_type === "onboarding") {
       return "Onboarding Generation";
-    } else if (entry.action_type === "offboarding") {
-      return "Offboarding Generation";
     } else if (entry.organization && entry.repo) {
       return `${entry.organization}/${entry.repo}`;
     }

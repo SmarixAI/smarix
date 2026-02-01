@@ -50,7 +50,45 @@ def load_current_repo_from_state():
     except Exception as e:
         print(f"⚠️  Warning: Could not read runtime_state.json from S3: {e}")
         return None, None
+    
+def update_runtime_state(owner: str, name: str):
+    """
+    Updates the active repository in the S3 state file.
+    Required for Data Processing, Embedding, and VectorDB steps to know which repo to target.
+    """
+    state_s3_key = "Admin/state/runtime_state.json"
+    
+    print(f"🔵 Updating S3 runtime state to: {owner}/{name}")
+    
+    try:
+        try:
+            state = s3_manager.download_json(state_s3_key)
+            if not isinstance(state, dict):
+                state = {}
+        except Exception:
+            state = {}
 
+        state["curr_repo"] = {
+            "owner": owner,
+            "name": name,
+            "updated_at": str(datetime.now())
+        }
+        
+        s3_manager.upload_json(state, state_s3_key)
+        print("✅ Runtime state updated successfully in S3")
+        
+        return {
+            "success": True, 
+            "message": f"State updated to {owner}/{name}"
+        }
+
+    except Exception as e:
+        error_msg = f"Failed to update runtime state: {str(e)}"
+        print(f"❌ {error_msg}")
+        return {
+            "success": False, 
+            "error": error_msg
+        }
 
 class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
 

@@ -34,7 +34,6 @@ CREATE TABLE IF NOT EXISTS template_schema.messages (
         ON DELETE CASCADE
 );
 
--- Add index for better query performance
 CREATE INDEX IF NOT EXISTS idx_messages_conversation_id 
     ON template_schema.messages(conversation_id);
 
@@ -68,8 +67,9 @@ CREATE TABLE IF NOT EXISTS users (
     employee_id VARCHAR(50) UNIQUE,
     last_day DATE,
     managers TEXT[] DEFAULT '{}',
+    active_repos TEXT[] DEFAULT '{}',
 
-    -- IMPORTANT: Stores the user's specific database schema name
+    -- Stores the user's specific database schema name
     schema_name VARCHAR(100),
 
     is_active BOOLEAN DEFAULT TRUE,
@@ -83,65 +83,110 @@ CREATE INDEX IF NOT EXISTS idx_users_employee_id ON users(employee_id);
 
 
 -- 5. Insert Initial Users
--- We assign them a 'schema_name' immediately so the backend can create it on startup.
 INSERT INTO users (
-    username, password_hash, role, status, name, designation, employee_id, last_day, managers, schema_name
+    username, password_hash, role, status, name, designation, employee_id, last_day, managers, active_repos, schema_name
 ) 
 VALUES 
+    -- 1. System Admin
     (
         'admin', 
         crypt('admin', gen_salt('bf')), 
         'admin', 
         'general', 
+        'System Admin', 
+        'Super User', 
+        'ADMIN-001', 
         NULL, 
-        NULL, 
-        NULL, 
-        NULL, 
+        '{}',
         '{}',
         'user_admin'
     ),
+
+    -- 2. Senior Manager (The Boss)
     (
         'manager1', 
         crypt('manager1', gen_salt('bf')), 
         'manager', 
         'general', 
-        'Rajesh Kumar', 
-        'Dev Manager', 
-        'EMP-123', 
+        'Manager One', 
+        'Senior Manager', 
+        'MGR-001', 
         NULL, 
-        ARRAY['EMP-1234'],
+        '{}',
+        '{}',
         'user_manager1'
     ),
+
+    -- 3. Team Lead (Reports to Manager1)
     (
         'manager2', 
         crypt('manager2', gen_salt('bf')), 
         'manager', 
         'general', 
-        'Suresh Kumar', 
-        'Infra Manager', 
-        'EMP-1234', 
+        'Manager Two', 
+        'Team Lead', 
+        'MGR-002', 
         NULL, 
+        ARRAY['MGR-001'], -- Reports to Manager One
         '{}',
         'user_manager2'
     ),
+
+    -- 4. Frontend Developer (Reports to Manager2)
     (
-        'Mastermind-sap', 
-        crypt('Mastermind-sap', gen_salt('bf')), 
+        'dev1', 
+        crypt('dev1', gen_salt('bf')), 
         'employee', 
         'onboard', 
-        'Mastermind-sap', 
+        'Developer One', 
         'Frontend Developer', 
-        'EMP-763326', 
+        'DEV-001', 
         '2025-12-29', 
-        ARRAY['EMP-123'],
-        'user_mastermind_sap'
+        ARRAY['MGR-002'], 
+        ARRAY['CCExtractor/taskwarrior-flutter'],
+        'user_dev1'
+    ),
+
+    -- 5. Backend Developer (Reports to Manager2)
+    (
+        'dev2', 
+        crypt('dev2', gen_salt('bf')), 
+        'employee', 
+        'offboard', 
+        'Developer Two', 
+        'Backend Developer', 
+        'DEV-002', 
+        '2026-01-26', 
+        ARRAY['MGR-002'], 
+        ARRAY['torvalds/test-tlb'],
+        'user_dev2'
+    ),
+
+    -- 6. QA Tester (Reports to Manager2)
+    (
+        'qa1', 
+        crypt('qa1', gen_salt('bf')), 
+        'employee', 
+        'onboard', 
+        'QA One', 
+        'Quality Engineer', 
+        'QA-001', 
+        NULL, 
+        ARRAY['MGR-002'], 
+        ARRAY['CCExtractor/taskwarrior-flutter'],
+        'user_qa1'
     )
 ON CONFLICT (username) DO UPDATE 
-SET schema_name = EXCLUDED.schema_name;
+SET 
+    schema_name = EXCLUDED.schema_name,
+    active_repos = EXCLUDED.active_repos,
+    managers = EXCLUDED.managers,
+    last_day = EXCLUDED.last_day,
+    status = EXCLUDED.status,
+    password_hash = EXCLUDED.password_hash;
 
 
 -- 6. Function to Clone Schema for New Users
--- This function will be called when creating user schemas
 CREATE OR REPLACE FUNCTION clone_schema_for_user(source_schema TEXT, dest_schema TEXT)
 RETURNS VOID AS $$
 DECLARE
@@ -156,7 +201,7 @@ BEGIN
         dest_schema, source_schema
     );
 
-    -- Clone messages table structure (without sequences yet)
+    -- Clone messages table structure
     EXECUTE format(
         'CREATE TABLE %I.messages (LIKE %I.messages INCLUDING DEFAULTS INCLUDING CONSTRAINTS INCLUDING INDEXES)',
         dest_schema, source_schema
@@ -165,7 +210,7 @@ BEGIN
     -- Create sequence for messages.id
     EXECUTE format('CREATE SEQUENCE %I.messages_id_seq', dest_schema);
 
-    -- Set the sequence as default for messages.id
+    -- Set the sequence as default
     EXECUTE format(
         'ALTER TABLE %I.messages ALTER COLUMN id SET DEFAULT nextval(%L)',
         dest_schema,
@@ -215,4 +260,6 @@ $$ LANGUAGE plpgsql;
 SELECT clone_schema_for_user('template_schema', 'user_admin');
 SELECT clone_schema_for_user('template_schema', 'user_manager1');
 SELECT clone_schema_for_user('template_schema', 'user_manager2');
-SELECT clone_schema_for_user('template_schema', 'user_mastermind_sap');
+SELECT clone_schema_for_user('template_schema', 'user_dev1');
+SELECT clone_schema_for_user('template_schema', 'user_dev2');
+SELECT clone_schema_for_user('template_schema', 'user_qa1');
