@@ -141,7 +141,13 @@ def generate_tutorial_content(chatbot, pr_number: int, chunks: List[Dict], diffi
     # Build Context
     context_parts = []
     for c in chunks:
-        content = c.get("content") or c.get("text", "")
+        content = (
+            c.get("diff")
+            or c.get("patch")
+            or c.get("content")
+            or c.get("text")
+            or ""
+        )
         meta = c.get("metadata", {})
         path = meta.get("file_path") or c.get("file_path", "unknown")
         context_parts.append(f"File: {path}\nContent:\n{content[:2000]}") # Truncate large chunks
@@ -154,30 +160,43 @@ def generate_tutorial_content(chatbot, pr_number: int, chunks: List[Dict], diffi
     )
     
     user_prompt = f"""
-    TASK: Generate a {difficulty} level tutorial for PR #{pr_number}.
+        You are creating a **deep educational tutorial** for a junior-to-mid level developer.
 
-    PR CONTEXT:
-    {full_context[:25000]}  # Context limit
+        PR NUMBER: #{pr_number}
+        DIFFICULTY: {difficulty}
 
-    TUTORIAL STRUCTURE:
-    ### 1. Overview
-    - What was changed and why? (2-3 sentences)
-    
-    ### 2. Problem Context
-    - What issue does this fix?
-    
-    ### 3. Step-by-Step Implementation
-    - Walk through the code changes logically.
-    - Explain *why* specific lines were changed.
-    
-    ### 4. Testing
-    - How would you test these changes?
-    
-    ### 5. Key Takeaways
-    - What can we learn from this PR?
+        STRICT REQUIREMENTS:
+        - Minimum **900 words**
+        - Each section must be **at least 2 paragraphs**
+        - Step-by-step section must explain:
+        - What changed
+        - Why it was wrong before
+        - Why this fix is correct
+        - What alternative solutions existed
+        - Assume the reader has **seen XML / code before but not this repo**
 
-    Use markdown formatting. Be educational and clear.
-    """
+        PR CONTEXT (diffs, grouped by file):
+        {full_context[:30000]}
+
+        MANDATORY STRUCTURE:
+
+        ### 1. Overview
+        (Explain intent, scope, and impact)
+
+        ### 2. Problem Context
+        (Explain the bug, how it manifests, and why it matters)
+
+        ### 3. Step-by-Step Implementation
+        (Subsections per file, explain diffs line-by-line)
+
+        ### 4. Testing & Validation
+        (Unit tests, manual testing, edge cases)
+
+        ### 5. Key Takeaways
+        (Generalizable lessons)
+
+        If information is missing, infer cautiously and explain assumptions.
+        """
     
     return chatbot.call_llm(system_prompt, user_prompt)
 
