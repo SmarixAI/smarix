@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { BookOpen, Code2, Sparkles } from 'lucide-react';
+import { BookOpen, Code2, Sparkles, ChevronRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Inter } from 'next/font/google';
 
@@ -230,67 +230,70 @@ export default function BugFixing({
       </div>
 
       {/* LIST */}
-      <div className="flex-1 overflow-y-auto px-0 py-4">
-        <div className="bg-white border border-slate-200 divide-y divide-slate-200 rounded-xl overflow-hidden mx-6">
-          {bugs.map((bug, idx) => (
+      <div className="flex-1 overflow-y-auto px-0 py-6 bg-slate-50/50">
+        <div className="mx-6 bg-white border border-slate-200 rounded-2xl shadow-sm divide-y divide-slate-100 overflow-hidden">
+          {bugs.map((bug) => (
             <div
               key={`${bug.type}-${bug.id}`}
               onClick={() => handleBugClick(bug)}
-              className="group relative px-6 py-5 cursor-pointer transition hover:bg-slate-50"
+              className="group relative px-6 py-5 cursor-pointer transition-all duration-200 hover:bg-blue-50/30 flex items-start gap-5"
             >
-              <div className="flex gap-5">
-                {/* Icon */}
-                {bug.type === 'tutorial' ? (
-                  <div className="mt-1 p-2 rounded-lg bg-blue-50 group-hover:bg-blue-100 transition-colors">
-                    <BookOpen className="w-5 h-5 text-blue-600" />
-                  </div>
-                ) : (
-                  <div className="mt-1 p-2 rounded-lg bg-amber-50 group-hover:bg-amber-100 transition-colors">
-                    <Code2 className="w-5 h-5 text-amber-600" />
-                  </div>
-                )}
+              {/* Visual Indicator Icon */}
+              <div className={`mt-1 p-2.5 rounded-xl transition-colors ${
+                bug.type === 'tutorial' 
+                  ? 'bg-blue-50 text-blue-600 group-hover:bg-blue-100' 
+                  : 'bg-amber-50 text-amber-600 group-hover:bg-amber-100'
+              }`}>
+                {bug.type === 'tutorial' ? <BookOpen className="w-5 h-5" /> : <Code2 className="w-5 h-5" />}
+              </div>
 
-                <div className="flex-1 space-y-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`px-2.5 py-0.5 rounded text-xs font-medium ${TYPE_STYLES[bug.type]}`}>
-                      {bug.type === 'tutorial' ? 'Tutorial' : 'Challenge'}
-                    </span>
-
-                    {/* Category Tag for Challenges */}
-                    {bug.category && (
-                      <span className="px-2.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
-                        {bug.category}
-                      </span>
-                    )}
-
-                    <p className="text-sm font-semibold text-slate-900">
-                      #{bug.id} · {bug.title}
+              {/* Content Area */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-4 mb-1">
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono font-medium text-slate-400">#{bug.id}</span>
+                      <h3 className="text-sm font-bold text-slate-900 truncate group-hover:text-blue-700 transition-colors">
+                        {bug.title}
+                      </h3>
+                    </div>
+                    <p className="text-sm text-slate-500 line-clamp-1 leading-relaxed">
+                      {bug.description}
                     </p>
                   </div>
 
-                  <p className="text-sm text-slate-600 leading-relaxed max-w-4xl line-clamp-2">
-                    {bug.description}
-                  </p>
-
-                  <div className="flex items-center gap-4 text-xs pt-1">
-                    <span className={`px-2 py-0.5 rounded font-medium ${DIFFICULTY_STYLES[bug.difficulty]}`}>
+                  {/* Status/Difficulty Badges on Right */}
+                  <div className="flex flex-col items-end gap-2 shrink-0">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-bold border ${DIFFICULTY_STYLES[bug.difficulty]}`}>
                       {bug.difficulty}
                     </span>
-
-                    {bug.type === 'tutorial' && (
-                      <span className="text-slate-500">
-                        {bug.filesChanged} file{bug.filesChanged !== 1 && 's'} changed
-                      </span>
-                    )}
                   </div>
                 </div>
+
+                {/* Footer Metadata */}
+                <div className="flex items-center gap-3 mt-3">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${TYPE_STYLES[bug.type]}`}>
+                      {bug.type === 'tutorial' ? 'Tutorial' : 'Challenge'}
+                    </span>
+                    {bug.category && (
+                      <span className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5">
+                        <span className="w-1 h-1 rounded-full bg-slate-300" />
+                        {bug.category}
+                      </span>
+                    )}
+                </div>
+              </div>
+
+              {/* Hover Arrow */}
+              <div className="self-center opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-slate-300">
+                <ChevronRight className="w-5 h-5" />
               </div>
             </div>
           ))}
 
           {bugs.length === 0 && (
-            <div className="py-12 text-center text-sm text-slate-500">
-              No bugs found.
+            <div className="py-16 text-center">
+              <p className="text-sm text-slate-400 font-medium">No items found in this view.</p>
             </div>
           )}
         </div>
