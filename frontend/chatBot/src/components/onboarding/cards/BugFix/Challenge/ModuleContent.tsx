@@ -270,6 +270,21 @@ export default function ChallengeContent({
                         {children}
                       </h2>
                     ),
+                    h3: ({ children }) => (
+                      <h3
+                        className={`${inter.className} text-sm font-bold mt-6 mb-3 text-[#0E1B2E]`}
+                      >
+                        {children}
+                      </h3>
+                    ),
+
+                    h4: ({ children }) => (
+                      <h4
+                        className={`${inter.className} text-xs font-semibold mt-4 mb-2 text-[#0E1B2E]/90 uppercase tracking-wide`}
+                      >
+                        {children}
+                      </h4>
+                    ),
                     p: ({ children }) => (
                       <p
                         className={`${inter.className} mb-4 leading-relaxed text-[#0E1B2E]/80`}
