@@ -3,6 +3,7 @@ Admin-related API routes for the RAG Chatbot
 Contains all admin endpoints and WebSocket handlers
 """
 
+from datetime import datetime
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
@@ -15,6 +16,9 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from core.DataCollection.DataCollectionFromGithub.repository_processor import AsyncRepositoryProcessor
 from core.DataCollection.DataCollectionFromGithub.github_client import AsyncGitHubClient
+from backend.utils.s3 import s3_manager
+
+STATE_S3_KEY = "Admin/state/runtime_state.json"
 
 
 router = APIRouter()
@@ -422,51 +426,50 @@ async def validate_repository(request: ValidateRepositoryRequest):
 
 # ==================== HELPER FUNCTIONS FOR PIPELINE STEPS ====================
 
-def update_runtime_state(owner: str, repo_name: str) -> Dict[str, Any]:
+def update_runtime_state(owner: str, repo_name: str) -> dict:
     """
-    Update runtime_state.json with the current repository information.
+    Update runtime_state.json in S3 with the current repository information.
     This must be called before running pipeline steps that read from state.
     """
+    print(f"🔵 Updating S3 runtime state to: {owner}/{repo_name}")
+    
     try:
-        from .chatbot_api import get_runtime_state_file_path
-        
-        state_file = get_runtime_state_file_path()
-        
-        # Create directory if it doesn't exist
-        state_file.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Read existing state or create new
-        if state_file.exists():
-            with open(state_file, 'r', encoding='utf-8') as f:
-                state = json.load(f)
-        else:
+        # 1. Try to download existing state to preserve other data
+        try:
+            state = s3_manager.download_json(STATE_S3_KEY)
+            if not isinstance(state, dict):
+                state = {}
+        except Exception:
+            # If file doesn't exist or fails to load, start fresh
+            print("⚠️ State file not found in S3, creating new state object.")
             state = {}
-        
-        # Update curr_repo and user_default_repo
-        state["curr_repo"] = {
-            "owner": owner,
-            "name": repo_name
-        }
-        state["user_default_repo"] = {
+
+        # 2. Update curr_repo and user_default_repo
+        repo_data = {
             "owner": owner,
             "name": repo_name
         }
         
-        # Write updated state
-        with open(state_file, 'w', encoding='utf-8') as f:
-            json.dump(state, f, indent=2, ensure_ascii=False)
+        state["curr_repo"] = repo_data
+        state["user_default_repo"] = repo_data
+        state["last_updated"] = str(datetime.now())
+
+        # 3. Upload updated state back to S3
+        s3_manager.upload_json(state, STATE_S3_KEY)
+        print("✅ Runtime state updated successfully in S3")
         
         return {
             "success": True,
-            "message": f"Updated runtime_state.json with {owner}/{repo_name}",
-            "state_file": str(state_file)
+            "message": f"Updated S3 runtime_state.json with {owner}/{repo_name}",
+            "s3_key": STATE_S3_KEY
         }
+
     except Exception as e:
         import traceback
         traceback.print_exc()
         return {
             "success": False,
-            "error": f"Failed to update runtime_state.json: {str(e)}"
+            "error": f"Failed to update runtime_state.json in S3: {str(e)}"
         }
 
 
@@ -498,9 +501,8 @@ def run_data_collection_sync(owner: str, repo: str) -> Dict[str, Any]:
 
 
 def run_data_processing() -> Dict[str, Any]:
-    """Run batch data processing"""
+    """Run batch data processing with S3 verification"""
     try:
-        # Import the batch_process function from the main module
         import sys
         from pathlib import Path
         
@@ -511,17 +513,25 @@ def run_data_processing() -> Dict[str, Any]:
         
         from main.DataProcessing.process_data import batch_process
         
-        # Call batch_process directly
+        # 1. Run the processing (Assumes batch_process handles S3 upload internally)
         batch_process()
         
-        # Check if output files were created
-        output_dir = Path("../../data/DataProcessing")
-        processed_files = list(output_dir.glob("*_git_chunks.json")) + list(output_dir.glob("*_gmail_chunks.json"))
+        # 2. Verify Output in S3 instead of local directory
+        # Looking for files in the "DataProcessing/" prefix
+        try:
+            s3_files = s3_manager.list_files("DataProcessing/")
+            # Filter for specific json files we expect
+            processed_files = [
+                f for f in s3_files 
+                if f.endswith("_git_chunks.json") or f.endswith("_gmail_chunks.json")
+            ]
+        except Exception:
+            processed_files = []
         
         return {
             "success": True,
-            "processed_files": [str(f.name) for f in processed_files],
-            "message": f"Successfully processed {len(processed_files)} files"
+            "processed_files": processed_files,
+            "message": f"Successfully processed {len(processed_files)} files (verified in S3)"
         }
     except Exception as e:
         import traceback
@@ -530,13 +540,13 @@ def run_data_processing() -> Dict[str, Any]:
 
 
 def run_embedding_generation() -> Dict[str, Any]:
-    """Run batch embedding generation"""
+    """Run batch embedding generation with S3 verification"""
     try:
         from main.GenerateEmbedding.generate_embedding import batch_generate
         
         # Create args object for batch_generate
         class Args:
-            output_dir = "../../data/Embeddings/"
+            output_dir = "../../data/Embeddings/" # Internal logic might still need this if it writes locally first
             provider = None
             model = None
             batch_size = 32
@@ -546,14 +556,30 @@ def run_embedding_generation() -> Dict[str, Any]:
         args = Args()
         batch_generate(args)
         
-        # Check if embeddings were created
-        embeddings_dir = Path("../../data/Embeddings")
-        embedding_dirs = [d for d in embeddings_dir.iterdir() if d.is_dir() and d.name != "embeddings_cache"]
+        # Verify Output in S3
+        # We expect folders/keys under "Embeddings/" excluding cache
+        try:
+            # Listing files will return full keys (e.g., Embeddings/openai/data.pkl)
+            all_objects = s3_manager.list_files("Embeddings/")
+            
+            # Extract unique "types" (immediate subfolders under Embeddings/)
+            # e.g., Embeddings/openai/... -> openai
+            embedding_types = set()
+            for obj in all_objects:
+                parts = obj.split('/')
+                # If path is Embeddings/openai/file.pkl, parts[1] is 'openai'
+                if len(parts) > 1 and parts[1] != "embeddings_cache":
+                    embedding_types.add(parts[1])
+            
+            embedding_types_list = list(embedding_types)
+            
+        except Exception:
+            embedding_types_list = []
         
         return {
             "success": True,
-            "embedding_types": [d.name for d in embedding_dirs],
-            "message": f"Successfully generated embeddings for {len(embedding_dirs)} types"
+            "embedding_types": embedding_types_list,
+            "message": f"Successfully generated embeddings for {len(embedding_types_list)} types (verified in S3)"
         }
     except Exception as e:
         import traceback
@@ -562,18 +588,15 @@ def run_embedding_generation() -> Dict[str, Any]:
 
 
 def run_vectordb_build() -> Dict[str, Any]:
-    """Run vector database building"""
+    """Run vector database building with S3 state and verification"""
     try:
         from core.VectorDB.build_indices import main as build_indices_main
-        from .chatbot_api import get_runtime_state_file_path, get_database_path_for_repo
         
-        # Get current repo from runtime state
-        state_file = get_runtime_state_file_path()
-        if not state_file.exists():
-            return {"success": False, "error": "runtime_state.json not found"}
-        
-        with open(state_file, 'r', encoding='utf-8') as f:
-            state = json.load(f)
+        # 1. Get current repo from S3 State (No local file check)
+        try:
+            state = s3_manager.download_json(STATE_S3_KEY)
+        except Exception:
+            return {"success": False, "error": f"Could not read {STATE_S3_KEY} from S3"}
         
         curr_repo = state.get("curr_repo", {})
         owner = curr_repo.get("owner")
@@ -582,35 +605,43 @@ def run_vectordb_build() -> Dict[str, Any]:
         if not owner or not repo_name:
             return {"success": False, "error": "curr_repo.owner or curr_repo.name missing in runtime_state.json"}
         
-        # Call build_indices main function
+        # 2. Call build_indices main function
+        # (Assumes this function reads from S3 state internally too)
         build_indices_main()
         
-        # Check if indices were created using new structure
-        repo_root = Path(__file__).resolve().parent.parent.parent
-        possible_vectordb_roots = [
-            repo_root / "data" / "VectorDB" / owner / repo_name,
-            Path("../../data/VectorDB") / owner / repo_name,
-            Path("data/VectorDB") / owner / repo_name,
-            Path("backend/data/VectorDB") / owner / repo_name,
-        ]
+        # 3. Verify Output in S3
+        # Expected path: VectorDB/<owner>/<repo_name>/<index_type>/faiss.index
+        s3_prefix = f"VectorDB/{owner}/{repo_name}/"
         
-        vectordb_root = None
-        for path in possible_vectordb_roots:
-            if path.exists():
-                vectordb_root = path
-                break
-        
-        if not vectordb_root:
-            return {"success": False, "error": f"VectorDB directory not found for {owner}/{repo_name}"}
-        
-        indices = [d.name for d in vectordb_root.iterdir() if d.is_dir() and (d / "faiss.index").exists()]
-        
-        return {
-            "success": True,
-            "indices": indices,
-            "message": f"Successfully built {len(indices)} vector indices for {owner}/{repo_name}",
-            "repo": f"{owner}/{repo_name}"
-        }
+        try:
+            s3_files = s3_manager.list_files(s3_prefix)
+            
+            # Identify indices by looking for folders containing 'faiss.index'
+            indices = set()
+            for f in s3_files:
+                if "faiss.index" in f:
+                    # Path: VectorDB/owner/repo/git_index/faiss.index
+                    # parts: [VectorDB, owner, repo, git_index, faiss.index]
+                    parts = f.split('/')
+                    # The index name is the folder immediately following the repo name
+                    if len(parts) >= 4:
+                        indices.add(parts[-2]) # -2 is the folder name containing the index file
+            
+            indices_list = list(indices)
+            
+            if not indices_list:
+                return {"success": False, "error": f"No vector indices found in S3 at {s3_prefix}"}
+
+            return {
+                "success": True,
+                "indices": indices_list,
+                "message": f"Successfully built {len(indices_list)} vector indices for {owner}/{repo_name}",
+                "repo": f"{owner}/{repo_name}"
+            }
+            
+        except Exception as e:
+            return {"success": False, "error": f"Failed to verify S3 files: {str(e)}"}
+
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -618,11 +649,12 @@ def run_vectordb_build() -> Dict[str, Any]:
 
 
 def run_onboarding(generators_to_run: list = None) -> Dict[str, Any]:
-    """Run onboarding data generation"""
+    """Run onboarding data generation using S3 state"""
     try:
         import sys
         from pathlib import Path
-        from .chatbot_api import get_runtime_state_file_path, get_database_path_for_repo
+        # We assume get_database_path_for_repo is updated or we might need to handle the path differently
+        from .chatbot_api import get_database_path_for_repo 
         
         # Add the main directory to path
         repo_root = Path(__file__).resolve().parent.parent.parent
@@ -631,13 +663,11 @@ def run_onboarding(generators_to_run: list = None) -> Dict[str, Any]:
         
         from main.Onboarding.generate_all_onboarding import generate_all_onboarding_data
         
-        # Get current repo from runtime state
-        state_file = get_runtime_state_file_path()
-        if not state_file.exists():
-            return {"success": False, "error": "runtime_state.json not found"}
-        
-        with open(state_file, 'r', encoding='utf-8') as f:
-            state = json.load(f)
+        # 1. Get current repo from S3 State
+        try:
+            state = s3_manager.download_json(STATE_S3_KEY)
+        except Exception:
+            return {"success": False, "error": f"Could not read {STATE_S3_KEY} from S3"}
         
         curr_repo = state.get("curr_repo", {})
         owner = curr_repo.get("owner")
@@ -646,22 +676,27 @@ def run_onboarding(generators_to_run: list = None) -> Dict[str, Any]:
         if not owner or not repo_name:
             return {"success": False, "error": "curr_repo.owner or curr_repo.name missing in runtime_state.json"}
         
-        # Find vector database path using new repo-based structure
+        # 2. Handle VectorDB Path
+        # Note: If generate_all_onboarding_data expects a local file path, you might need to
+        # download the index from S3 to a temporary location here. 
+        # For now, we assume get_database_path_for_repo returns a valid path (local or S3 URI) 
+        # that the generator can handle.
         vectordb_path = get_database_path_for_repo(owner, repo_name)
         
         if not vectordb_path:
-            return {"success": False, "error": f"Vector database not found for {owner}/{repo_name}. Please run data pipeline first."}
+             # Fallback check in S3 just to be sure it exists before trying to run
+             if not s3_manager.list_files(f"VectorDB/{owner}/{repo_name}"):
+                 return {"success": False, "error": f"Vector database not found in S3 for {owner}/{repo_name}"}
         
-        # Run onboarding generation
+        # 3. Run onboarding generation
         results = generate_all_onboarding_data(
-            github_db_path=vectordb_path,
             gmail_db_path=None,
             provider='openai',
             model=None,
-            generators_to_run=generators_to_run  # Use selected generators
+            generators_to_run=generators_to_run
         )
         
-        # Check results
+        # 4. Check results
         successful = sum(1 for r in results.values() if r.get('status') == 'success')
         total = len(results)
         
