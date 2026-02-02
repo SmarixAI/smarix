@@ -822,9 +822,9 @@ export default function Pipeline() {
               />
             )} */}
 
-            {/* {activeView === "users" && (
+            {activeView === "users" && (
               <UserManagementView darkMode={false} />
-            )} */}
+            )}
           </div>
         </main>
       </div>

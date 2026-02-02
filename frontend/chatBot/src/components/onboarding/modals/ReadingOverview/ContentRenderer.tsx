@@ -241,7 +241,7 @@ export default function ContentRenderer({ sections }: ContentRendererProps) {
 
             {section.type === 'code' && (
               <div
-                ref={el => (codeRefs.current[idx] = el)}
+                ref={el => { if (el) codeRefs.current[idx] = el; }}
                 className="rounded-xl overflow-hidden shadow-lg border border-slate-200/60 bg-[#282c34]"
               >
                 

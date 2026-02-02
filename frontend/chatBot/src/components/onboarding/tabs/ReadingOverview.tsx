@@ -1,42 +1,55 @@
-'use client';
+"use client";
 
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import ModuleCard from '../cards/ReadingOverview/ModuleCard';
-import OverviewModal from '../modals/ReadingOverview/ContentModal';
-import { modules } from '../constants/ReadingOverview/modules';
-import { useModuleContent } from '../hooks/ReadingOverview/useModuleContent';
-import type { Module } from '../../../../types/onboarding';
-import { Inter, JetBrains_Mono, Space_Grotesk } from 'next/font/google';
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import ModuleCard from "../cards/ReadingOverview/ModuleCard";
+import OverviewModal from "../modals/ReadingOverview/ContentModal";
+import { modules } from "../constants/ReadingOverview/modules";
+import { useModuleContent } from "../hooks/ReadingOverview/useModuleContent";
+import type { Module } from "../../../../types/onboarding";
+import { Inter, JetBrains_Mono, Space_Grotesk } from "next/font/google";
+// ✅ 1. Import Auth Context
+import { useAuth } from "@/components/auth/AuthContext";
 
 interface ReadingOverviewProps {
   employeeId?: string | null;
   activeRepos?: string[];
   onboardingData?: any;
   onUpdateProgress?: (section: string, itemId: string, updates: any) => void;
-  onModalChange?: (isOpen: boolean) => void; // New prop to notify parent
+  onModalChange?: (isOpen: boolean) => void;
 }
 
-const spaceGrotesk = Space_Grotesk({ subsets: ['latin'] });
-const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'] });
-const inter = Inter({ subsets: ['latin'], weight: ['400', '500', '600', '700'] });
+const spaceGrotesk = Space_Grotesk({ subsets: ["latin"] });
+const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"] });
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
 
-export default function ReadingOverview({ 
-  employeeId, 
-  activeRepos = [], 
-  onboardingData, 
+export default function ReadingOverview({
+  employeeId,
+  activeRepos: propActiveRepos = [], // Rename prop to avoid conflict
+  onboardingData,
   onUpdateProgress,
-  onModalChange // Destructure new prop
+  onModalChange,
 }: ReadingOverviewProps) {
+  // ✅ 2. Get User from Context
+  const { user } = useAuth();
+
+  // ✅ 3. Merge Prop with Auth Context (Fallback logic)
+  const activeRepos =
+    propActiveRepos.length > 0 ? propActiveRepos : user?.activeRepos || [];
+
   const [visibleModules, setVisibleModules] = useState<Set<string>>(
-    new Set(modules.map(m => `module-${m.id}`))
+    new Set(modules.map((m) => `module-${m.id}`)),
   );
   const moduleRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedModule, setSelectedModule] = useState<Module | null>(null);
   const [darkMode, setDarkMode] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-  
-  const { content, isLoading, error, fetchContent, clearContent } = useModuleContent();
+
+  const { content, isLoading, error, fetchContent, clearContent } =
+    useModuleContent();
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -46,7 +59,10 @@ export default function ReadingOverview({
           let hasChanges = false;
 
           entries.forEach((entry) => {
-            if (entry.isIntersecting && !newVisibleModules.has(entry.target.id)) {
+            if (
+              entry.isIntersecting &&
+              !newVisibleModules.has(entry.target.id)
+            ) {
               newVisibleModules.add(entry.target.id);
               hasChanges = true;
             }
@@ -55,7 +71,7 @@ export default function ReadingOverview({
           return hasChanges ? newVisibleModules : prevVisible;
         });
       },
-      { threshold: 0.1, rootMargin: '0px' }
+      { threshold: 0.1, rootMargin: "0px" },
     );
 
     Object.values(moduleRefs.current).forEach((ref) => {
@@ -66,29 +82,35 @@ export default function ReadingOverview({
       setMousePosition({ x: e.clientX, y: e.clientY });
     };
 
-    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener("mousemove", handleMouseMove);
 
     return () => {
       observer.disconnect();
-      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener("mousemove", handleMouseMove);
     };
   }, []);
 
-  const handleCardClick = useCallback(async (moduleId: string) => {
-    const module = modules.find((m) => m.id === moduleId);
-    if (!module || module.locked) return;
+  const handleCardClick = useCallback(
+    async (moduleId: string) => {
+      const module = modules.find((m) => m.id === moduleId);
+      if (!module || module.locked) return;
 
-    setSelectedModule(module);
-    setIsModalOpen(true);
-    if (onModalChange) onModalChange(true); // Notify parent: Modal Open
-    
-    const repo = activeRepos.length > 0 ? activeRepos[0] : undefined;
-    fetchContent(moduleId, repo);
-  }, [fetchContent, activeRepos, onModalChange]);
+      setSelectedModule(module);
+      setIsModalOpen(true);
+      if (onModalChange) onModalChange(true);
+
+      // ✅ 4. Use the derived activeRepos variable
+      const repo = activeRepos.length > 0 ? activeRepos[0] : "";
+
+      // Now this call primes the cache safely
+      fetchContent(moduleId, repo);
+    },
+    [fetchContent, activeRepos, onModalChange],
+  );
 
   const handleModalClose = useCallback(() => {
     setIsModalOpen(false);
-    if (onModalChange) onModalChange(false); // Notify parent: Modal Closed
+    if (onModalChange) onModalChange(false);
     clearContent();
     setTimeout(() => setSelectedModule(null), 300);
   }, [clearContent, onModalChange]);
@@ -98,11 +120,16 @@ export default function ReadingOverview({
   return (
     <>
       <div className="mb-10 relative">
-        <h2 className={`${inter.className} text-2xl font-semibold tracking-tight mb-3 text-[#0E1B2E] relative`}>
+        <h2
+          className={`${inter.className} text-2xl font-semibold tracking-tight mb-3 text-[#0E1B2E] relative`}
+        >
           Reading & Overview
         </h2>
-        <p className={`${jetbrainsMono.className} text-[15px] text-[#0E1B2E]/60 leading-relaxed`}>
-          Start your journey with these essential topics. Get familiar with the basics before diving deeper.
+        <p
+          className={`${jetbrainsMono.className} text-[15px] text-[#0E1B2E]/60 leading-relaxed`}
+        >
+          Start your journey with these essential topics. Get familiar with the
+          basics before diving deeper.
         </p>
       </div>
 
@@ -126,7 +153,7 @@ export default function ReadingOverview({
       </div>
 
       {error && (
-        <div className="fixed bottom-6 right-6 z-50">
+        <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
           <div className="px-5 py-4 rounded-xl shadow-xl bg-white/90 backdrop-blur-xl text-red-600 border border-red-200/60 flex items-center gap-3">
             <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
             {error}
@@ -141,7 +168,7 @@ export default function ReadingOverview({
           title={selectedModule.title}
           moduleId={selectedModule.id}
           activeRepos={activeRepos}
-          employeeId={employeeId}
+          employeeId={employeeId || user?.employeeId}
           onProgressUpdate={onUpdateProgress}
         />
       )}

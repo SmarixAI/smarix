@@ -4,17 +4,20 @@ import { useEffect, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
-  Code,
   Check,
   Shield,
   Lightbulb,
   AlertTriangle,
   Target,
+  AlertCircle,
+  ChevronDown,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Inter, JetBrains_Mono } from "next/font/google";
+// ✅ 1. Import Auth Context
+import { useAuth } from "@/components/auth/AuthContext";
 
 interface PracticeTasksProps {
   tasks?: any[];
@@ -39,12 +42,22 @@ export default function PracticeTasks({
   openTask,
   onSelectTask,
   employeeId,
-  activeRepos = [],
+  activeRepos: propActiveRepos = [], // Rename to avoid conflict
   onUpdateProgress,
 }: PracticeTasksProps) {
+  // ✅ 2. Get User from Context
+  const { user } = useAuth();
+
+  // ✅ 3. Merge Prop with Auth Context (The Fix)
+  // This ensures we have a repo even if the parent component forgot to pass it
+  const activeRepos =
+    propActiveRepos.length > 0 ? propActiveRepos : user?.activeRepos || [];
+
   const [data, setData] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [missingRepo, setMissingRepo] = useState(false);
+
   const [practicedMap, setPracticedMap] = useState<Record<number, boolean>>({});
   const [expandedCode, setExpandedCode] = useState<Record<string, boolean>>({});
   const [activeStepMap, setActiveStepMap] = useState<Record<number, number>>(
@@ -61,6 +74,7 @@ export default function PracticeTasks({
     const fetchTasks = async () => {
       setLoading(true);
       setError(null);
+      setMissingRepo(false);
 
       // 1. Check if tasks passed via props have the content we need
       if (tasks && tasks.length > 0) {
@@ -74,53 +88,46 @@ export default function PracticeTasks({
           setLoading(false);
           return;
         }
+      }
 
-        // 2. If props are shallow (just ID/Title), fetch full content
-        try {
-          // Fallback to generic practice API or specific logic
-          const response = await fetch("/api/onboarding/practice/practice1");
-          if (response.ok) {
-            const json = await response.json();
-            // Handle structure: { questions: [...] } or { tasks: [...] }
-            const allFullTasks = json.questions || json.tasks || [];
+      // 2. Standalone fetch Logic
+      const repo = activeRepos && activeRepos.length > 0 ? activeRepos[0] : "";
 
-            // Merge props with fetched content
-            const fullTasks = tasks.map((task: any) => {
-              const fullTask = allFullTasks.find(
-                (t: any) => t.question_number === task.question_number,
-              );
-              return fullTask ? { ...fullTask, ...task } : task;
-            });
-
-            setData({ questions: fullTasks });
-            setLoading(false);
-            return;
-          }
-        } catch (e) {
-          console.error("Fetch error:", e);
-        }
-
-        setData({ questions: tasks });
+      // Strict Guard Clause
+      if (!repo) {
+        console.warn(
+          "PracticeTasks: No active repository assigned (Context or Props).",
+        );
+        setMissingRepo(true);
         setLoading(false);
         return;
       }
 
-      // 3. Standalone fetch (if no props)
-      const repo =
-        activeRepos && activeRepos.length > 0 ? activeRepos[0] : undefined;
-      const repoParam = repo ? `?repo=${encodeURIComponent(repo)}` : "";
-
       try {
         const response = await fetch(
-          `/api/onboarding/practice/practice1${repoParam}`,
+          `/api/onboarding/practice/practice1?repo=${encodeURIComponent(repo)}`,
         );
+
         if (response.ok) {
           const json = await response.json();
-          setData({ questions: json.questions || json.tasks || [] });
+          let fetchedTasks = json.questions || json.tasks || [];
+
+          // Merge with props if available
+          if (tasks && tasks.length > 0) {
+            fetchedTasks = fetchedTasks.map((t: any) => {
+              const propTask = tasks.find(
+                (pt: any) => pt.question_number === t.question_number,
+              );
+              return propTask ? { ...t, ...propTask } : t;
+            });
+          }
+
+          setData({ questions: fetchedTasks });
         } else {
           setError("Failed to load practice tasks");
         }
       } catch (e) {
+        console.error("Practice fetch error", e);
         setError("Failed to load practice tasks");
       } finally {
         setLoading(false);
@@ -128,7 +135,7 @@ export default function PracticeTasks({
     };
 
     fetchTasks();
-  }, [tasks]);
+  }, [tasks, activeRepos]); // ✅ Depends on the derived activeRepos
 
   useEffect(() => {
     try {
@@ -142,10 +149,41 @@ export default function PracticeTasks({
     setExpandedCode((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const markTaskComplete = (taskNum: number) => {
+  const markTaskComplete = async (taskNum: number) => {
     const updated = { ...practicedMap, [taskNum]: true };
     setPracticedMap(updated);
     localStorage.setItem("onboard_practice_progress", JSON.stringify(updated));
+
+    // Send to Backend
+    if (employeeId && activeRepos.length > 0) {
+      const repo = activeRepos[0];
+      try {
+        await fetch("/api/onboarding/progress", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            employeeId,
+            section: "practice",
+            itemId: `practice1`,
+            updates: {
+              status: "in-progress",
+              progress: Math.round(
+                (Object.keys(updated).length / (data?.questions?.length || 1)) *
+                  100,
+              ),
+              completedTasks: Object.keys(updated).map(Number),
+            },
+            repo: repo,
+          }),
+        });
+
+        if (onUpdateProgress) {
+          onUpdateProgress("practice", `task-${taskNum}`, { completed: true });
+        }
+      } catch (error) {
+        console.error("Failed to save practice progress", error);
+      }
+    }
   };
 
   if (loading) {
@@ -159,6 +197,26 @@ export default function PracticeTasks({
             Loading practice tasks…
           </p>
         </div>
+      </div>
+    );
+  }
+
+  // Missing Repo UI
+  if (missingRepo) {
+    return (
+      <div className="p-12 text-center min-h-[300px] flex flex-col items-center justify-center">
+        <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mb-4 border border-amber-100">
+          <AlertCircle className="w-8 h-8 text-amber-500" />
+        </div>
+        <h3 className={`${inter.className} text-lg font-bold text-slate-800`}>
+          No Repository Assigned
+        </h3>
+        <p
+          className={`${inter.className} text-sm text-slate-500 mt-2 max-w-xs leading-relaxed`}
+        >
+          Practice tasks are tied to your assigned repository. Please ask your
+          manager to assign one.
+        </p>
       </div>
     );
   }
@@ -209,7 +267,6 @@ export default function PracticeTasks({
         {activeTask &&
           (() => {
             const task = activeTask;
-
             const isCompleted = practicedMap[task.question_number];
             const idx = activeStepMap[task.question_number] ?? 0;
             const total = task.steps?.length || 1;
@@ -221,7 +278,7 @@ export default function PracticeTasks({
                 key={task.question_number}
                 className="space-y-5 lg:space-y-6"
               >
-                {/* ================= TASK OVERVIEW ================= */}
+                {/* TASK OVERVIEW */}
                 <div className="rounded-2xl border-2 border-slate-200 p-6 bg-white/70 backdrop-blur-sm shadow-md">
                   <div className="flex items-start justify-between mb-3">
                     <h3
@@ -241,14 +298,13 @@ export default function PracticeTasks({
                   <p
                     className={`${inter.className} text-[15px] leading-relaxed text-slate-700`}
                   >
-                    {/* Handle question_description OR description */}
                     {task.question_description ||
                       task.description ||
-                      "Android Development Practice"}
+                      "Follow the steps below to complete this task."}
                   </p>
                 </div>
 
-                {/* ================= STEPS ================= */}
+                {/* STEPS */}
                 {task.steps && task.steps.length > 0 ? (
                   <div className="rounded-2xl border-2 border-slate-200 bg-white/70 backdrop-blur-sm shadow-lg overflow-hidden">
                     {/* STEP HEADER */}
@@ -294,15 +350,12 @@ export default function PracticeTasks({
 
                     {/* STEP CONTENT */}
                     <div className="px-6 py-6 space-y-5">
-                      {/* IMPLEMENTATION */}
                       <div className="rounded-xl border-2 border-blue-200 p-5 bg-blue-50/40">
                         <h4 className="text-sm font-bold mb-3 flex items-center gap-2">
                           <Target className="w-4 h-4 text-blue-600" />
                           What to implement
                         </h4>
-
                         <div className="prose prose-sm max-w-none text-slate-700">
-                          {/* FIX: Checking 'what_to_do' field which matches your S3 data */}
                           <ReactMarkdown>
                             {(
                               step?.what_to_do ||
@@ -314,7 +367,6 @@ export default function PracticeTasks({
                         </div>
                       </div>
 
-                      {/* TIPS */}
                       {step?.tips && step.tips.length > 0 && (
                         <div className="rounded-xl border-2 border-yellow-200 p-5 bg-yellow-50/40">
                           <h4 className="text-sm font-bold mb-3 flex items-center gap-2 text-yellow-700">
@@ -328,24 +380,6 @@ export default function PracticeTasks({
                           </ul>
                         </div>
                       )}
-
-                      {/* COMMON MISTAKES */}
-                      {step?.common_mistakes &&
-                        step.common_mistakes.length > 0 && (
-                          <div className="rounded-xl border-2 border-red-200 p-5 bg-red-50/40">
-                            <h4 className="text-sm font-bold mb-3 flex items-center gap-2 text-red-700">
-                              <AlertTriangle className="w-4 h-4" />
-                              Common Mistakes
-                            </h4>
-                            <ul className="list-disc pl-5 space-y-1 text-sm text-slate-700">
-                              {step.common_mistakes.map(
-                                (mistake: string, i: number) => (
-                                  <li key={i}>{mistake}</li>
-                                ),
-                              )}
-                            </ul>
-                          </div>
-                        )}
 
                       {/* CODE */}
                       <div

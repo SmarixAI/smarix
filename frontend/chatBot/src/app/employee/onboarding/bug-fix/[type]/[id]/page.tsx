@@ -9,6 +9,8 @@ import {
   CheckCircle2,
   Clock,
   Code2,
+  AlertCircle,
+  FileCode, // ✅ Added Icon
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -19,6 +21,8 @@ import ContentSection from "@/components/onboarding/utils/BugFix/ContentSection"
 import StepByStepSection from "@/components/onboarding/utils/BugFix/StepByStepSection";
 import EvaluationModal from "@/components/onboarding/utils/BugFix/EvaluationModal";
 import { parseTutorialContent } from "@/components/onboarding/utils/BugFix/contentParser";
+// ✅ 1. Import Auth Context
+import { useAuth } from "@/components/auth/AuthContext";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -35,12 +39,18 @@ export default function BugFixDetailPage() {
   const type = params.type as string;
   const id = params.id as string;
 
+  // ✅ 2. Use Context instead of manual state
+  const { user, loading: authLoading } = useAuth();
+
+  // Resolve active repo safely
+  const currentRepo =
+    user?.activeRepos && user.activeRepos.length > 0 ? user.activeRepos[0] : "";
+
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [leftPanelWidth, setLeftPanelWidth] = useState(50);
   const [isResizing, setIsResizing] = useState(false);
-  const [activeRepos, setActiveRepos] = useState<string[]>([]);
   const [challengeSolutionData, setChallengeSolutionData] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<
     "description" | "hints" | "solution"
@@ -50,53 +60,25 @@ export default function BugFixDetailPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [challengePrData, setChallengePrData] = useState<any>(null);
 
-  // 1. Fetch Active Repos
-  useEffect(() => {
-    const fetchActiveRepos = async () => {
-      try {
-        const storedUser = localStorage.getItem("user");
-        if (storedUser) {
-          const user = JSON.parse(storedUser);
-          let repos = user.active_repos || [];
-
-          if (!repos || repos.length === 0) {
-            const usersRes = await fetch("/api/users");
-            if (usersRes.ok) {
-              const usersData = await usersRes.json();
-              const currentUser = usersData.users?.find(
-                (u: any) =>
-                  u.employeeId === user.employeeId ||
-                  u.username === user.username,
-              );
-              if (currentUser?.active_repos) {
-                repos = currentUser.active_repos;
-              }
-            }
-          }
-          setActiveRepos(repos);
-        }
-      } catch (error) {
-        console.error("Error fetching active repos:", error);
-      }
-    };
-    fetchActiveRepos();
-  }, []);
-
-  // 2. Fetch Item Data (Tutorial or Challenge)
+  // 3. Fetch Item Data (Tutorial or Challenge)
   useEffect(() => {
     const fetchData = async () => {
+      // Wait for auth to initialize
+      if (authLoading) return;
+
       setLoading(true);
       setError(null);
 
-      // Guard: Wait for repos to be loaded to avoid 400 Bad Request
-      if (activeRepos.length === 0) return;
+      // Guard: If no repo after auth loads, stop and let UI handle it
+      if (!currentRepo) {
+        setLoading(false);
+        return;
+      }
 
       try {
-        const repo = activeRepos[0];
-        const repoParam = `?repo=${encodeURIComponent(repo)}`;
+        const repoParam = `?repo=${encodeURIComponent(currentRepo)}`;
 
-        // Use specific ID endpoints for both types
-        // Matches structure: /api/onboarding/bugFix/challenges/[id]
+        // Use specific ID endpoints
         const endpoint =
           type === "tutorial"
             ? `/api/onboarding/bugFix/tutorials/${id}${repoParam}`
@@ -113,7 +95,6 @@ export default function BugFixDetailPage() {
         }
 
         const result = await response.json();
-        // Result is now the specific item object, not a list
         setData(result);
       } catch (err: any) {
         console.error("Fetch Details Error:", err);
@@ -124,16 +105,14 @@ export default function BugFixDetailPage() {
     };
 
     fetchData();
-  }, [type, id, activeRepos]);
+  }, [type, id, currentRepo, authLoading]);
 
-  // 3. Fetch Solutions (Only for Challenges)
+  // 4. Fetch Solutions (Only for Challenges)
   useEffect(() => {
-    if (type === "challenge" && activeRepos.length > 0) {
+    if (type === "challenge" && currentRepo && !authLoading) {
       const fetchSolutionData = async () => {
         try {
-          const repo = activeRepos[0];
-          const repoParam = `?repo=${encodeURIComponent(repo)}`;
-          // Use 'bugFix/solutions' based on your provided file structure
+          const repoParam = `?repo=${encodeURIComponent(currentRepo)}`;
           const response = await fetch(
             `/api/onboarding/bugFix/solutions${repoParam}`,
           );
@@ -147,13 +126,12 @@ export default function BugFixDetailPage() {
       };
       fetchSolutionData();
     }
-  }, [type, activeRepos]);
+  }, [type, currentRepo, authLoading]);
 
-  // --- PARSE CHALLENGE CONTENT (Fix for empty fields) ---
+  // --- PARSE CHALLENGE CONTENT ---
   let challengeParsed: any = {};
   if (type === "challenge" && data) {
     try {
-      // If raw_response is a JSON string, parse it. Otherwise use it as string.
       challengeParsed =
         typeof data.raw_response === "string" &&
         data.raw_response.trim().startsWith("{")
@@ -170,20 +148,25 @@ export default function BugFixDetailPage() {
     challengeParsed.problem ||
     challengeParsed.description ||
     "No description available.";
+
+  // ✅ EXTRACT CODE SNIPPET FROM JSON
+  const challengeCode = challengeParsed.code_snippet || null;
+  const challengeSolutionText = challengeParsed.solution || null;
+
   const challengeDifficulty =
     challengeParsed.difficulty || data?.difficulty || "Medium";
   const challengeTime = challengeParsed.estimated_time || "30-60 min";
   const challengeCategory =
     challengeParsed.category || data?.category || "General";
 
-  // 4. Match Challenge to PR Data (Solution)
+  // 5. Match Challenge to PR Data
   useEffect(() => {
     if (type === "challenge" && data && challengeSolutionData) {
-      // 1. Try matching by question_number (most reliable)
-      // data is the specific challenge object now
-      const sol = (challengeSolutionData.challenges || []).find(
-        (s: any) => s.question_number?.toString() === id.toString(),
-      );
+      const sol = (
+        challengeSolutionData.challenges ||
+        challengeSolutionData.pull_requests ||
+        []
+      ).find((s: any) => s.question_number?.toString() === id.toString());
 
       if (sol) {
         setChallengePrData({
@@ -191,15 +174,10 @@ export default function BugFixDetailPage() {
           file_changes: sol.file_changes || [],
         });
       } else {
-        // 2. Fallback: Parse description for PR number
         const prMatch = challengeDescription.match(/Issue\/PR\s*#?(\d+)/i);
         if (prMatch) {
           const prNumber = parseInt(prMatch[1]);
-          // If we can't find files, we might just mock the PR ID so the editor opens
-          setChallengePrData({
-            pr_number: prNumber,
-            file_changes: [],
-          });
+          setChallengePrData({ pr_number: prNumber, file_changes: [] });
         }
       }
     } else if (type === "challenge" && !data) {
@@ -232,9 +210,7 @@ export default function BugFixDetailPage() {
       setLeftPanelWidth(Math.max(20, Math.min(80, newWidth)));
     };
 
-    const handleMouseUp = () => {
-      setIsResizing(false);
-    };
+    const handleMouseUp = () => setIsResizing(false);
 
     if (isResizing) {
       document.addEventListener("mousemove", handleMouseMove);
@@ -251,29 +227,48 @@ export default function BugFixDetailPage() {
     };
   }, [isResizing]);
 
-  // Parse Tutorial Content (Markdown)
   const parsedTutorial =
     type === "tutorial" && data?.raw_response
       ? parseTutorialContent(data.raw_response)
       : null;
 
-  // Prepare PR Data for Tutorial Mode
-  const tutorialPrData =
-    type === "tutorial" && data?.file_changes
-      ? {
-          pr_number: data.pr_number || data.tutorial_number,
-          file_changes: data.file_changes,
-        }
-      : null;
-
-  if (loading) {
+  // ✅ LOADING STATE
+  if (loading || authLoading) {
     return (
       <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          <p className="text-slate-500 font-medium">Loading content...</p>
+        </div>
       </div>
     );
   }
 
+  // ✅ NO REPO STATE
+  if (!currentRepo) {
+    return (
+      <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center">
+        <div className="flex flex-col items-center text-center p-8 bg-white rounded-2xl border-2 border-dashed border-slate-200">
+          <AlertCircle className="w-12 h-12 text-slate-300 mb-4" />
+          <h3 className="text-lg font-bold text-slate-700">
+            No Repository Found
+          </h3>
+          <p className="text-slate-500 mt-2 max-w-xs">
+            Please ensure you are logged in and have an active repository
+            assigned.
+          </p>
+          <button
+            onClick={() => router.back()}
+            className="mt-6 text-blue-600 font-medium hover:underline"
+          >
+            Go Back
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ✅ ERROR STATE
   if (error || !data) {
     return (
       <div className="min-h-screen bg-[#FAFAFA] flex items-center justify-center">
@@ -292,9 +287,8 @@ export default function BugFixDetailPage() {
 
   return (
     <div className="min-h-screen bg-[#FAFAFA]">
-      {/* Container */}
       <div className="h-screen w-screen flex gap-0 bugfix-detail-container relative overflow-hidden bg-white">
-        {/* LEFT PANEL: Content (Tutorial Steps or Challenge Description) */}
+        {/* LEFT PANEL */}
         <div
           className={`flex flex-col relative bg-white overflow-hidden border-r border-[#0E1B2E]/10 ${
             type === "challenge" && isFullscreen ? "hidden" : ""
@@ -332,7 +326,6 @@ export default function BugFixDetailPage() {
                 : data.pr_title || "Tutorial"}
             </h1>
 
-            {/* Challenge Metadata */}
             {type === "challenge" && (
               <div className="flex items-center gap-4 text-xs font-medium text-[#0E1B2E]/60 mt-3">
                 <div className="flex items-center gap-1.5">
@@ -346,7 +339,6 @@ export default function BugFixDetailPage() {
               </div>
             )}
 
-            {/* Challenge Tabs */}
             {type === "challenge" && (
               <div className="flex p-1 bg-[#0E1B2E]/5 rounded-lg border border-[#0E1B2E]/5 mt-4">
                 {[
@@ -371,50 +363,78 @@ export default function BugFixDetailPage() {
             )}
           </div>
 
-          {/* Scrollable Body */}
+          {/* Body */}
           <div className="flex-1 overflow-y-auto bg-slate-50/50">
             <div className="px-6 py-6 max-w-4xl mx-auto">
               {/* CHALLENGE CONTENT */}
               {type === "challenge" && (
                 <>
                   {activeTab === "description" && (
-                    <div className="prose prose-sm max-w-none prose-slate">
-                      <ReactMarkdown
-                        components={{
-                          code({ children, className }) {
-                            const match = /language-(\w+)/.exec(
-                              className || "",
-                            );
-                            return match ? (
-                              <div className="my-4 rounded-xl overflow-hidden border border-[#0E1B2E]/10 bg-white shadow-sm">
-                                <div className="px-3 py-1.5 bg-[#0E1B2E]/5 border-b text-xs font-bold uppercase text-[#0E1B2E]/60">
-                                  {match[1]}
+                    <div className="space-y-6">
+                      {/* 1. Description Text */}
+                      <div className="prose prose-sm max-w-none prose-slate">
+                        <ReactMarkdown
+                          components={{
+                            code({ children, className }) {
+                              const match = /language-(\w+)/.exec(
+                                className || "",
+                              );
+                              return match ? (
+                                <div className="my-4 rounded-xl overflow-hidden border border-[#0E1B2E]/10 bg-white shadow-sm">
+                                  <div className="px-3 py-1.5 bg-[#0E1B2E]/5 border-b text-xs font-bold uppercase text-[#0E1B2E]/60">
+                                    {match[1]}
+                                  </div>
+                                  <SyntaxHighlighter
+                                    PreTag="div"
+                                    language={match[1]}
+                                    style={oneLight}
+                                    customStyle={{
+                                      margin: 0,
+                                      padding: "1rem",
+                                      fontSize: "0.85rem",
+                                    }}
+                                  >
+                                    {String(children).replace(/\n$/, "")}
+                                  </SyntaxHighlighter>
                                 </div>
-                                <SyntaxHighlighter
-                                  PreTag="div"
-                                  language={match[1]}
-                                  style={oneLight}
-                                  customStyle={{
-                                    margin: 0,
-                                    padding: "1rem",
-                                    fontSize: "0.85rem",
-                                  }}
+                              ) : (
+                                <code
+                                  className={`${jetbrainsMono.className} px-1.5 py-0.5 rounded bg-[#0E1B2E]/5 border border-[#0E1B2E]/10 text-sm text-[#0E1B2E]`}
                                 >
-                                  {String(children).replace(/\n$/, "")}
-                                </SyntaxHighlighter>
-                              </div>
-                            ) : (
-                              <code
-                                className={`${jetbrainsMono.className} px-1.5 py-0.5 rounded bg-[#0E1B2E]/5 border border-[#0E1B2E]/10 text-sm text-[#0E1B2E]`}
-                              >
-                                {children}
-                              </code>
-                            );
-                          },
-                        }}
-                      >
-                        {challengeDescription}
-                      </ReactMarkdown>
+                                  {children}
+                                </code>
+                              );
+                            },
+                          }}
+                        >
+                          {challengeDescription}
+                        </ReactMarkdown>
+                      </div>
+
+                      {/* 2. Code Snippet Block (Rendered if code_snippet exists) */}
+                      {challengeCode && (
+                        <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm mt-4">
+                          <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex items-center gap-2">
+                            <FileCode className="w-4 h-4 text-blue-500" />
+                            <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+                              Context / Code Snippet
+                            </span>
+                          </div>
+                          <SyntaxHighlighter
+                            language="dart" // Defaulting to dart since context is Flutter, or use javascript
+                            style={oneLight}
+                            showLineNumbers
+                            customStyle={{
+                              margin: 0,
+                              padding: "1.5rem",
+                              fontSize: "0.85rem",
+                              backgroundColor: "white",
+                            }}
+                          >
+                            {challengeCode}
+                          </SyntaxHighlighter>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -427,14 +447,13 @@ export default function BugFixDetailPage() {
                         Hints
                       </h4>
                       <ul className="space-y-2 text-sm text-[#0E1B2E]/80 list-disc ml-5">
+                        <li>Analyze the requirements carefully.</li>
                         <li>
-                          Analyze the requirements carefully before coding.
+                          Check the provided code snippet for logic errors.
                         </li>
                         <li>
-                          Check if any specific file names or function
-                          signatures are required.
+                          Consider edge cases mentioned in the description.
                         </li>
-                        <li>Look for existing patterns in the codebase.</li>
                       </ul>
                     </div>
                   )}
@@ -446,6 +465,7 @@ export default function BugFixDetailPage() {
                         The solution will be revealed after you submit your
                         attempt.
                       </p>
+                      {/* Optional: Render hidden solution logic here if needed later */}
                     </div>
                   )}
                 </>
@@ -478,30 +498,22 @@ export default function BugFixDetailPage() {
           </div>
         </div>
 
-        {/* Resizer Handle */}
+        {/* Resizer */}
         {!isFullscreen && (
           <div
             onMouseDown={(e) => {
               e.preventDefault();
               setIsResizing(true);
             }}
-            className={`w-[4px] cursor-col-resize hover:bg-blue-500 transition-colors relative z-20 flex items-center justify-center group ${
-              isResizing ? "bg-blue-500" : "bg-slate-200"
-            }`}
+            className={`w-[4px] cursor-col-resize hover:bg-blue-500 transition-colors relative z-20 flex items-center justify-center group ${isResizing ? "bg-blue-500" : "bg-slate-200"}`}
           >
             <div className="w-1 h-8 bg-slate-400 rounded-full group-hover:bg-white" />
           </div>
         )}
 
-        {/* RIGHT PANEL: Code Editor / Steps */}
+        {/* RIGHT PANEL */}
         <div
-          className={`flex flex-col overflow-hidden ${
-            type === "challenge" ? "bg-[#1e1e1e]" : "bg-white"
-          } ${
-            isFullscreen
-              ? "fixed inset-0 z-50 w-screen h-screen"
-              : "relative flex-1"
-          }`}
+          className={`flex flex-col overflow-hidden ${type === "challenge" ? "bg-[#1e1e1e]" : "bg-white"} ${isFullscreen ? "fixed inset-0 z-50 w-screen h-screen" : "relative flex-1"}`}
         >
           {type === "challenge" ? (
             <div className="h-full">

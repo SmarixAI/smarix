@@ -20,6 +20,8 @@ export interface User {
   status?: string;
   schema_name?: string;
   db_identifier?: string;
+  // ✅ ADDED: Active Repositories field
+  activeRepos?: string[];
 }
 
 interface AuthContextType {
@@ -84,6 +86,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             name: decoded.name,
             schema_name: decoded.schema_name,
             db_identifier: decoded.db_identifier,
+            // ✅ ADDED: Extract activeRepos from stored token
+            activeRepos: decoded.activeRepos || [],
           });
         } else {
           // Token expired or invalid
@@ -133,7 +137,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         name: decoded.name,
         schema_name: decoded.schema_name,
         db_identifier: decoded.db_identifier,
+        // ✅ ADDED: Extract activeRepos from fresh login token
+        activeRepos: decoded.activeRepos || [],
       };
+
+      console.log(userData, "userData");
 
       setUser(userData);
       localStorage.setItem("user", JSON.stringify(userData));
