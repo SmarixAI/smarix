@@ -132,12 +132,6 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 export default function UnifiedDashboard() {
   const { user, logout, token } = useAuth();
-
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [projectsExpanded, setProjectsExpanded] = useState(true);
-  const [showProjects, setShowProjects] = useState(false);
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-
   const [onboardingEmployees, setOnboardingEmployees] = useState<Employee[]>(
     [],
   );
@@ -170,18 +164,6 @@ export default function UnifiedDashboard() {
     setManageOffboardingMode(false);
     setActiveOffboardingSection("finalcall");
   }, [selectedEmployee]);
-
-  //dummy projecs just for UI designing- testing
-  useEffect(() => {
-    setProjects([
-      { id: "smarix-backend", name: "smarix-backend", organization: "smarix" },
-      {
-        id: "smarix-frontend",
-        name: "smarix-frontend",
-        organization: "smarix",
-      },
-    ]);
-  }, []);
 
   // Fetch employees
   useEffect(() => {
@@ -704,9 +686,9 @@ export default function UnifiedDashboard() {
         <div className="px-4 pb-2">
           <button
             onClick={() => {
-              setShowProjects(true);
-              setSelectedEmployee(null);
-              setSelectedProject(null);
+              // setShowProjects(true);
+              // setSelectedEmployee(null);
+              // setSelectedProject(null);
               router.push("/manager/pipeline");
             }}
             className="w-full flex items-center gap-3 px-3 py-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition-all shadow-sm"
@@ -902,7 +884,7 @@ export default function UnifiedDashboard() {
       {/* ================= MAIN CONTENT ================= */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden bg-slate-50/50">
         <div className="flex-1 overflow-y-auto p-8 lg:p-10">
-          {!selectedEmployee && !showProjects && !selectedProject ? (
+          {!selectedEmployee ? (
             <div
               className="h-full flex flex-col items-center justify-center text-center opacity-0 animate-fadeIn"
               style={{ animationFillMode: "forwards" }}
@@ -1577,36 +1559,6 @@ export default function UnifiedDashboard() {
                         </tbody>
                       </table>
                     </div>
-                  </div>
-                </div>
-              )}
-
-              {showProjects && !selectedProject && (
-                <div className="space-y-6 max-w-4xl mx-auto animate-fadeIn">
-                  <h2
-                    className={`${inter.className} text-2xl font-bold text-[#0E1B2E]`}
-                  >
-                    Projects
-                  </h2>
-
-                  <div className="grid gap-4">
-                    {projects.map((project) => (
-                      <div
-                        key={project.id}
-                        onClick={() => {
-                          setSelectedProject(project);
-                          setShowProjects(false);
-                        }}
-                        className="p-5 rounded-2xl border border-slate-200 bg-white hover:shadow-md cursor-pointer transition-all"
-                      >
-                        <div className="text-lg font-bold text-slate-800">
-                          {project.name}
-                        </div>
-                        <div className="text-sm text-slate-500">
-                          {project.organization}
-                        </div>
-                      </div>
-                    ))}
                   </div>
                 </div>
               )}
