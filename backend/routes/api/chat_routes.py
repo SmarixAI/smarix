@@ -3,6 +3,7 @@ Chat-related API routes for the RAG Chatbot
 Contains all chat endpoints and WebSocket handlers
 """
 
+import boto3
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
@@ -15,15 +16,27 @@ import difflib
 from openai import OpenAI
 import re
 from backend.routes.api import shared
+from botocore.exceptions import ClientError
+from datetime import datetime
 
-# Import shared state and utilities from main module
-# All imports from chatbot_api are done inside functions (runtime imports)
-# to avoid circular dependency issues during module initialization
+router = APIRouter()
+
+S3_BUCKET = os.getenv("AWS_BUCKET_NAME", "smarix-data-apsouth1")
+S3_REGION = os.getenv("AWS_DEFAULT_REGION", "ap-south-1")
+
+s3_client = boto3.client(
+    "s3",
+    region_name=S3_REGION,
+    aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+    aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+)
+
 
 router = APIRouter()
 
 
 # ==================== PYDANTIC MODELS ====================
+
 
 class ChatRequest(BaseModel):
     query: str
@@ -61,6 +74,7 @@ class InitRequest(BaseModel):
 class EvaluationRequest(BaseModel):
     submission_id: str
     pr_number: int
+    repo_name: str
 
 
 class EvaluationResponse(BaseModel):
@@ -77,8 +91,10 @@ class EvaluationResponse(BaseModel):
     areas_for_improvement: List[str]
     evaluated_at: str
 
+
 class NewSessionRequest(BaseModel):
     username: str
+
 
 class ClearHistoryRequest(BaseModel):
     session_id: str
@@ -86,6 +102,7 @@ class ClearHistoryRequest(BaseModel):
 
 
 # ==================== HELPER FUNCTIONS ====================
+
 
 def calculate_similarity(submitted_code: str, solution_code: str) -> float:
     """Calculate similarity between submitted and solution code"""
@@ -104,24 +121,25 @@ def load_json_file(file_path: str) -> dict:
         raise HTTPException(
             status_code=500, detail=f"Invalid JSON in file: {file_path}"
         )
-    
+
 
 def get_user_schema_name(username: str) -> str:
     """Generate schema name from username (must match logic in auth/routes.py)"""
     if not username:
         # Fallback for anonymous/public users, or raise HTTPException
-        return "public" 
+        return "public"
     sanitized = re.sub(r"[^a-z0-9_]", "_", username.lower())
     return f"user_{sanitized}"
 
 
 # ==================== CHAT ENDPOINTS ====================
 
+
 @router.get("/")
 async def root():
     """Health check and status"""
     from .chatbot_api import chatbot_instance, chatbot_config, available_providers
-    
+
     return {
         "status": "online",
         "version": "2.1.0",
@@ -145,7 +163,7 @@ async def root():
 async def health_check():
     """Detailed health check"""
     from .chatbot_api import chatbot_instance, chatbot_config, available_providers
-    
+
     health = {
         "api": "healthy",
         "version": "2.1.0",
@@ -172,19 +190,22 @@ async def health_check():
             health["features"] = stats.get("features", [])
 
             # ✅ ADD SEMANTIC CACHE STATUS
-            if chatbot_instance.query_rewriter and chatbot_instance.query_rewriter.semantic_cache:
+            if (
+                chatbot_instance.query_rewriter
+                and chatbot_instance.query_rewriter.semantic_cache
+            ):
                 cache_stats = chatbot_instance.query_rewriter.semantic_cache.get_stats()
                 health["semantic_cache"] = {
                     "enabled": True,
                     "cache_size": cache_stats.get("cache_size", 0),
                     "hit_rate": cache_stats.get("overall_hit_rate", 0),
                     "total_queries": cache_stats.get("total_queries", 0),
-                    "cost_saved": cache_stats.get("cost_saved_usd", 0)
+                    "cost_saved": cache_stats.get("cost_saved_usd", 0),
                 }
             else:
                 health["semantic_cache"] = {
                     "enabled": False,
-                    "reason": "Redis or embeddings not configured"
+                    "reason": "Redis or embeddings not configured",
                 }
 
         except Exception as e:
@@ -212,6 +233,7 @@ async def initialize_chatbot(config: InitRequest):
     # Try to find databases if not provided
     if not github_db_path and not gmail_db_path:
         from .chatbot_api import find_vector_databases
+
         github_db_path, gmail_db_path = find_vector_databases()
 
     if not github_db_path and not gmail_db_path:
@@ -275,6 +297,7 @@ async def initialize_chatbot(config: InitRequest):
 
     except Exception as e:
         import traceback
+
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -285,14 +308,14 @@ async def chat(request: ChatRequest):
     # Import here to avoid circular dependency
     # Handle both relative (module) and absolute (script) imports
     import sys
-    
+
     # Try to get chatbot_api module from sys.modules first (handles script execution)
     # chatbot_api_module = None
     # for module_name in ['__main__', 'routes.api.chatbot_api', 'chatbot_api']:
     #     if module_name in sys.modules:
     #         chatbot_api_module = sys.modules[module_name]
     #         break
-    
+
     # if chatbot_api_module:
     #     # Use the already-loaded module
     #     chatbot_instance = chatbot_api_module.chatbot_instance
@@ -321,7 +344,7 @@ async def chat(request: ChatRequest):
     #             get_user_repo,
     #             ensure_chatbot_for_repo,
     #         )
-    
+
     if shared.chatbot_instance is None:
         # Provide more detailed error message
         error_detail = "Chatbot not initialized"
@@ -344,22 +367,28 @@ async def chat(request: ChatRequest):
 
         # Determine which repo to use based on username
         user_repo = shared.get_user_repo(request.username)
-        
+
         if user_repo:
             owner = user_repo.get("owner")
             repo_name = user_repo.get("name")
-            
+
             if owner and repo_name:
-                print(f"Using repo for user {request.username or 'anonymous'}: {owner}/{repo_name}")
+                print(
+                    f"Using repo for user {request.username or 'anonymous'}: {owner}/{repo_name}"
+                )
                 # Ensure chatbot is using the correct repo database
                 if not shared.ensure_chatbot_for_repo(owner, repo_name):
-                    print(f"⚠ Warning: Could not switch to repo {owner}/{repo_name}, using current database")
+                    print(
+                        f"⚠ Warning: Could not switch to repo {owner}/{repo_name}, using current database"
+                    )
         else:
             if request.username:
-                print(f"⚠ Warning: No repo found for user {request.username}, using default database")
+                print(
+                    f"⚠ Warning: No repo found for user {request.username}, using default database"
+                )
             else:
                 print("Using default database (no username provided)")
-        
+
         print(f"Query: {request.query[:100]}...")
         print(f"Session: {request.session_id or 'new'}")
         print(f"Role: {request.role or 'general'}")
@@ -367,11 +396,11 @@ async def chat(request: ChatRequest):
             print(f"User: {request.username}")
 
         result = shared.chatbot_instance.chat(
-            request.query, 
+            request.query,
             get_user_schema_name(request.username),
             request.filters,
             session_id=request.session_id,
-            role=request.role or "general"
+            role=request.role or "general",
         )
 
         enriched_sources = []
@@ -411,6 +440,7 @@ async def chat(request: ChatRequest):
     except Exception as e:
         print(f"Error: {e}\n")
         import traceback
+
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -418,29 +448,29 @@ async def chat(request: ChatRequest):
 @router.post("/new-session")
 async def new_session(request: NewSessionRequest):
     """Generate a fresh session ID in the user's schema."""
-    
+
     if shared.chatbot_instance is None:
         raise HTTPException(status_code=503, detail="Chatbot not initialized")
 
     schema_name = get_user_schema_name(request.username)
 
     new_session_id = shared.chatbot_instance.start_new_session(schema_name=schema_name)
-    
+
     print(f"NEW SESSION CREATED: {new_session_id} in {schema_name}")
     return {"session_id": new_session_id, "message": "New session created"}
+
 
 @router.post("/clear-history")
 async def clear_history(request: ClearHistoryRequest):
     if shared.chatbot_instance is None:
         raise HTTPException(status_code=503, detail="Chatbot not initialized")
 
-    schema_name = get_user_schema_name(request.username) 
+    schema_name = get_user_schema_name(request.username)
 
     session_id = shared.chatbot_instance.set_session(request.session_id)
-    
+
     shared.chatbot_instance.conversation_store.clear_session(
-        session_id, 
-        schema_name=schema_name 
+        session_id, schema_name=schema_name
     )
     print(f"History cleared for session {session_id[:8]} in {schema_name}...\n")
 
@@ -456,29 +486,30 @@ async def get_sessions(username: str, limit: int = 50):
         schema_name = get_user_schema_name(username)
 
         all_sessions = shared.chatbot_instance.conversation_store.get_all_sessions(
-            limit=limit, 
-            schema_name=schema_name
+            limit=limit, schema_name=schema_name
         )
 
         sessions = []
         for session_data in all_sessions:
-            sessions.append({
-                'session_id': session_data['session_id'],
-                'title': session_data.get('title', 'New Chat'),
-                'message_count': session_data.get('message_count', 0),
-                'last_message': str(session_data.get('updated_at', '')),
-                'first_message': str(session_data.get('created_at', '')),
-                'total_tokens': 0
-            })
+            sessions.append(
+                {
+                    "session_id": session_data["session_id"],
+                    "title": session_data.get("title", "New Chat"),
+                    "message_count": session_data.get("message_count", 0),
+                    "last_message": str(session_data.get("updated_at", "")),
+                    "first_message": str(session_data.get("created_at", "")),
+                    "total_tokens": 0,
+                }
+            )
 
         print(f"📋 Returning {len(sessions)} sessions to frontend")
-        return {'sessions': sessions}
-        
+        return {"sessions": sessions}
+
     except Exception as e:
         import traceback
+
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
 
 
 @router.get("/load-session/{session_id}")
@@ -489,48 +520,44 @@ async def load_session(session_id: str, username: str):
     try:
         schema_name = get_user_schema_name(username)
         print(f"📖 Loading session {session_id} from schema: {schema_name}")  # Debug
-        
+
         # Try to get messages - handle empty case
         try:
             messages = shared.chatbot_instance.conversation_store.get_full_history(
-                session_id, 
-                schema_name=schema_name
+                session_id, schema_name=schema_name
             )
             print(f"📖 Retrieved {len(messages)} messages")  # Debug
         except Exception as msg_error:
             print(f"⚠️ Error fetching messages: {msg_error}")
             import traceback
+
             traceback.print_exc()  # Full traceback
             # Return empty messages instead of failing
             messages = []
-        
+
         # Set current session
         shared.chatbot_instance.set_session(session_id, schema_name)
-        
+
         # Try to get stats - handle empty case
         try:
             stats = shared.chatbot_instance.conversation_store.get_session_stats(
-                session_id, 
-                schema_name=schema_name
+                session_id, schema_name=schema_name
             )
         except Exception as stats_error:
             print(f"⚠️ Error fetching stats: {stats_error}")
             # Return default stats instead of failing
             stats = {
-                'message_count': 0,
-                'last_message': '',
-                'first_message': '',
-                'total_tokens': 0
+                "message_count": 0,
+                "last_message": "",
+                "first_message": "",
+                "total_tokens": 0,
             }
 
-        return {
-            'session_id': session_id,
-            'messages': messages,
-            'stats': stats
-        }
+        return {"session_id": session_id, "messages": messages, "stats": stats}
     except Exception as e:
         print(f"❌ Full exception in /load-session: {e}")
         import traceback
+
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -543,8 +570,7 @@ async def delete_session(session_id: str, username: str):
     try:
         schema_name = get_user_schema_name(username)
         shared.chatbot_instance.conversation_store.delete_session(
-            session_id, 
-            schema_name=schema_name
+            session_id, schema_name=schema_name
         )
         return {"status": "success", "message": "Session deleted"}
     except Exception as e:
@@ -568,7 +594,9 @@ async def get_stats():
                 "github": {
                     "enabled": bool(shared.chatbot_instance.db),
                     "vectors": (
-                        shared.chatbot_instance.db.index.ntotal if shared.chatbot_instance.db else 0
+                        shared.chatbot_instance.db.index.ntotal
+                        if shared.chatbot_instance.db
+                        else 0
                     ),
                 },
                 "gmail": {
@@ -596,11 +624,13 @@ async def get_semantic_cache_stats():
 
     try:
         # Check if semantic cache is enabled
-        if not (shared.chatbot_instance.query_rewriter and
-                shared.chatbot_instance.query_rewriter.semantic_cache):
+        if not (
+            shared.chatbot_instance.query_rewriter
+            and shared.chatbot_instance.query_rewriter.semantic_cache
+        ):
             return {
                 "status": "disabled",
-                "message": "Semantic cache not enabled. Ensure Redis and embeddings are configured."
+                "message": "Semantic cache not enabled. Ensure Redis and embeddings are configured.",
             }
 
         # Get comprehensive stats
@@ -609,7 +639,7 @@ async def get_semantic_cache_stats():
         return {
             "status": "success",
             "cache_stats": cache_stats,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
     except Exception as e:
@@ -624,21 +654,24 @@ async def invalidate_semantic_cache(session_id: str):
         raise HTTPException(status_code=503, detail="Chatbot not initialized")
 
     try:
-        if not (shared.chatbot_instance.query_rewriter and
-                shared.chatbot_instance.query_rewriter.semantic_cache):
-            raise HTTPException(
-                status_code=400,
-                detail="Semantic cache not enabled"
-            )
+        if not (
+            shared.chatbot_instance.query_rewriter
+            and shared.chatbot_instance.query_rewriter.semantic_cache
+        ):
+            raise HTTPException(status_code=400, detail="Semantic cache not enabled")
 
         # Invalidate cache
-        count = shared.chatbot_instance.query_rewriter.semantic_cache.invalidate_session(session_id)
+        count = (
+            shared.chatbot_instance.query_rewriter.semantic_cache.invalidate_session(
+                session_id
+            )
+        )
 
         return {
             "status": "success",
             "message": f"Invalidated {count} cache entries for session",
             "session_id": session_id,
-            "entries_cleared": count
+            "entries_cleared": count,
         }
 
     except Exception as e:
@@ -653,35 +686,36 @@ async def clear_all_semantic_cache():
         raise HTTPException(status_code=503, detail="Chatbot not initialized")
 
     try:
-        if not (shared.chatbot_instance.query_rewriter and
-                shared.chatbot_instance.query_rewriter.semantic_cache):
-            raise HTTPException(
-                status_code=400,
-                detail="Semantic cache not enabled"
-            )
+        if not (
+            shared.chatbot_instance.query_rewriter
+            and shared.chatbot_instance.query_rewriter.semantic_cache
+        ):
+            raise HTTPException(status_code=400, detail="Semantic cache not enabled")
 
         # Clear in-memory index
-        initial_size = len(shared.chatbot_instance.query_rewriter.semantic_cache.cache_index)
+        initial_size = len(
+            shared.chatbot_instance.query_rewriter.semantic_cache.cache_index
+        )
         shared.chatbot_instance.query_rewriter.semantic_cache.cache_index.clear()
 
         # Reset stats
         shared.chatbot_instance.query_rewriter.semantic_cache.stats = {
-            'total_queries': 0,
-            'exact_matches': 0,
-            'very_high_matches': 0,
-            'high_matches': 0,
-            'medium_matches': 0,
-            'low_matches': 0,
-            'no_matches': 0,
-            'augmentations': 0,
-            'context_hints': 0,
-            'cost_saved_usd': 0.0,
+            "total_queries": 0,
+            "exact_matches": 0,
+            "very_high_matches": 0,
+            "high_matches": 0,
+            "medium_matches": 0,
+            "low_matches": 0,
+            "no_matches": 0,
+            "augmentations": 0,
+            "context_hints": 0,
+            "cost_saved_usd": 0.0,
         }
 
         return {
             "status": "success",
             "message": "Cleared all semantic cache",
-            "entries_cleared": initial_size
+            "entries_cleared": initial_size,
         }
 
     except Exception as e:
@@ -699,101 +733,117 @@ async def get_config():
     }
 
 
+def get_json_from_s3(key: str) -> Dict[str, Any]:
+    try:
+        response = s3_client.get_object(Bucket=S3_BUCKET, Key=key)
+        content = response["Body"].read().decode("utf-8")
+        return json.loads(content)
+    except ClientError as e:
+        error_code = e.response["Error"]["Code"]
+        if error_code == "NoSuchKey":
+            print(f"File not found in S3: {key}")
+            return None
+        else:
+            print(f"S3 Error: {str(e)}")
+            raise e
+    except Exception as e:
+        print(f"Error parsing S3 file {key}: {str(e)}")
+        raise e
+
+
+# --- Helper: Similarity Calculation ---
+import difflib
+
+
+def calculate_similarity(code1: str, code2: str) -> float:
+    return difflib.SequenceMatcher(None, code1, code2).ratio()
+
+
+# --- Main Evaluation Route ---
 @router.post("/evaluate-submission", response_model=EvaluationResponse)
 async def evaluate_submission(request: EvaluationRequest):
     """
-    Professional-grade code evaluation using multi-criteria rubric assessment.
-    Inspired by educational grading systems and LLM evaluation frameworks.
+    Evaluates submission using data strictly from S3.
     """
-
-    current_dir = Path(__file__).resolve().parent
-
-    # Try to find repo root
-    repo_root = None
-    test_path = current_dir
-    for _ in range(5):
-        if (test_path / "backend" / "data" / "Onboarding").exists():
-            repo_root = test_path
-            break
-        test_path = test_path.parent
+    print(f"🚀 START: Evaluating Submission {request.submission_id} for PR {request.pr_number}")
     
-    if repo_root is None:
-        repo_root = Path(__file__).resolve().parent.parent.parent
-    
-    possible_paths = [
-        {
-            "submitted": repo_root / "data" / "Onboarding" / "onboarding_bugfix_data" / "onboarding_challenge_submitted_code.json",
-            "solution": repo_root / "data" / "Onboarding" / "onboarding_bugfix_data" / "onboarding_challenge_solution.json",
-        },
-        {
-            "submitted": current_dir
-            / "../../../backend/data/Onboarding/onboarding_bugfix_data/onboarding_challenge_submitted_code.json",
-            "solution": current_dir
-            / "../../../backend/data/Onboarding/onboarding_bugfix_data/onboarding_challenge_solution.json",
-        },
-        {
-            "submitted": current_dir
-            / "../../data/Onboarding/onboarding_bugfix_data/onboarding_challenge_submitted_code.json",
-            "solution": current_dir
-            / "../../data/Onboarding/onboarding_bugfix_data/onboarding_challenge_solution.json",
-        },
-        {
-            "submitted": Path(
-                "backend/data/Onboarding/onboarding_bugfix_data/onboarding_challenge_submitted_code.json"
-            ),
-            "solution": Path(
-                "backend/data/Onboarding/onboarding_bugfix_data/onboarding_challenge_solution.json"
-            ),
-        },
-    ]
+    # 1. Define S3 Paths based on Repo Name
+    submitted_key = f"Onboarding/{request.repo_name}/bugfix/onboarding_challenge_submitted_code.json"
+    solution_key = f"Onboarding/{request.repo_name}/bugfix/onboarding_coding_questions.json"
 
-    submitted_path = None
-    solution_path = None
+    print(f"Fetching from S3 bucket: {S3_BUCKET}")
+    print(f"Submission Key: {submitted_key}")
+    print(f"Solution Key: {solution_key}")
 
-    for idx, paths in enumerate(possible_paths):
-        sub_path = paths["submitted"].resolve()
-        sol_path = paths["solution"].resolve()
+    # 2. Fetch Data from S3
+    submitted_data = get_json_from_s3(submitted_key)
+    solution_data = get_json_from_s3(solution_key)
 
-        if sub_path.exists() and sol_path.exists():
-            submitted_path = sub_path
-            solution_path = sol_path
-            break
+    if not submitted_data:
+        print(f"❌ Submission file missing at: {submitted_key}")
+        raise HTTPException(status_code=404, detail=f"Submission file not found: {submitted_key}")
 
-    if not submitted_path or not solution_path:
-        error_detail = {
-            "error": "Could not find submission or solution files",
-            "current_directory": str(Path.cwd()),
-            "api_location": str(current_dir),
-            "expected_files": [
-                "backend/data/Onboarding/onboarding_bugfix_data/onboarding_challenge_submitted_code.json",
-                "backend/data/Onboarding/onboarding_bugfix_data/onboarding_challenge_solution.json",
-            ],
-        }
-        raise HTTPException(status_code=404, detail=error_detail)
+    if not solution_data:
+        print(f"❌ Solution file missing at: {solution_key}")
+        raise HTTPException(status_code=404, detail=f"Solution file not found: {solution_key}")
 
-    submitted_data = load_json_file(str(submitted_path))
-    solution_data = load_json_file(str(solution_path))
-
+    # 3. Locate Specific Submission
     submission = None
-    for sub in submitted_data.get("submissions", []):
+    submissions_list = submitted_data.get("submissions", [])
+
+    for sub in submissions_list:
         if sub["submission_id"] == request.submission_id:
             submission = sub
             break
+    
+    # Fallback: If exact ID not found (rare race condition), try finding latest by PR
+    if not submission:
+        print(f"⚠️ Submission ID {request.submission_id} not found immediately. Searching by PR...")
+        matching = [s for s in submissions_list if str(s.get("pr_number")) == str(request.pr_number)]
+        if matching:
+            submission = matching[-1] # Take latest
+            print(f"✅ Found latest submission for PR {request.pr_number}: {submission['submission_id']}")
 
     if not submission:
         raise HTTPException(
-            status_code=404, detail=f"Submission {request.submission_id} not found"
+            status_code=404,
+            detail=f"Submission ID {request.submission_id} not found in S3 file",
         )
 
+    # 4. Locate Specific Solution (Robust Lookup)
     solution_pr = None
-    for pr in solution_data.get("pull_requests", []):
-        if pr["pr_number"] == request.pr_number:
+    
+    # ✅ FIX: Added "questions" to the lookup list to match your JSON format
+    pr_list = (
+        solution_data.get("pull_requests") 
+        or solution_data.get("challenges") 
+        or solution_data.get("questions")  # <--- Added this!
+        or []
+    )
+
+    available_ids = []
+    
+    for pr in pr_list:
+        # Check multiple possible ID fields
+        pr_id = str(
+            pr.get("pr_number") 
+            or pr.get("question_number") 
+            or pr.get("id") 
+        )
+        available_ids.append(pr_id)
+        
+        if pr_id == str(request.pr_number):
             solution_pr = pr
             break
 
     if not solution_pr:
+        # LOGGING FOR DEBUGGING
+        print(f"❌ PR {request.pr_number} not found.")
+        print(f"ℹ️  IDs actually found in file: {available_ids}")
+        
         raise HTTPException(
-            status_code=404, detail=f"Solution for PR #{request.pr_number} not found"
+            status_code=404,
+            detail=f"Solution for PR #{request.pr_number} not found in S3 file. Available IDs: {available_ids[:5]}..."
         )
 
     openai_api_key = os.getenv("OPENAI_API_KEY")
@@ -808,457 +858,161 @@ async def evaluate_submission(request: EvaluationRequest):
     total_completeness = 0.0
     files_evaluated = 0
 
+    # 5. Extract Files from Solution (Handling Nested Structure)
+    # Your JSON has: "solution": { "files": [ ... ] }
+    sol_files = []
+    if "solution" in solution_pr and "files" in solution_pr["solution"]:
+        sol_files = solution_pr["solution"]["files"]
+    elif "file_changes" in solution_pr:
+        sol_files = solution_pr["file_changes"]
+
+    if not sol_files:
+        print("⚠️ No solution files found in the PR object.")
+
     for submitted_file in submission["file_changes"]:
         file_path = submitted_file["file_path"]
         submitted_code = submitted_file["submitted_code"]
 
         solution_file = None
-        for sol_file in solution_pr["file_changes"]:
-            if sol_file["file_path"] == file_path:
+        for sol_file in sol_files:
+            # Match your JSON's "filename" to the submission's "file_path"
+            s_path = sol_file.get("filename") or sol_file.get("file_path")
+            if s_path == file_path:
                 solution_file = sol_file
                 break
 
         if not solution_file:
+            print(f"Warning: No matching solution file found for {file_path}")
             continue
 
-        solution_code = solution_file["after_code"]
+        solution_code = solution_file.get("after_code", "")
         before_code = solution_file.get("before_code", "")
 
         # Get PR context for better evaluation
         pr_title = solution_pr.get("title", "")
-        pr_description = solution_pr.get("description", "")
+        # Handle your JSON's nested scenario object
+        pr_description = (
+            solution_pr.get("description", "") 
+            or solution_pr.get("scenario", {}).get("problem_statement", "")
+            or solution_pr.get("scenario", {}).get("context", "")
+        )
 
         similarity_to_solution = calculate_similarity(submitted_code, solution_code)
-        similarity_to_before = calculate_similarity(submitted_code, before_code)
 
         print(f"\n{'=' * 80}")
         print(f"Evaluating: {file_path}")
         print(f"{'=' * 80}")
 
-        # STEP 1: Deep Code Analysis
-        analysis_prompt = f"""You are a senior software engineer conducting a thorough code review for a bug fix. Analyze this submission with the rigor and depth that a professional code reviewer at a top tech company would use.
+        # STEP 1: Deep Code Analysis (Single Call Optimization)
+        combined_prompt = f"""
+        You are a senior software engineer conducting a code review for a bug fix/feature challenge.
 
-            **PR Context:**
-            - Title: {pr_title}
-            - Description: {pr_description}
+        **CONTEXT:**
+        - Challenge Title: {pr_title}
+        - Problem: {pr_description}
+        - File: {file_path}
 
-            **Original Code (BROKEN - Contains Bug):**
-            {before_code}
+        **CODE COMPARISON:**
+        
+        1. ORIGINAL CODE (Before):
+        {before_code}
 
-            **Expected Solution (FIXED - Correct Implementation):**
-            {solution_code}
+        2. EXPECTED SOLUTION (Gold Standard):
+        {solution_code}
 
-            **Student's Submitted Code:**
-            {submitted_code}
+        3. STUDENT SUBMISSION:
+        {submitted_code}
 
+        **TASK:**
+        Evaluate the student submission against the expected solution. 
+        Note: The student might have different whitespace or variable names, focus on functional equivalence.
 
-            **Your Task - Comprehensive Analysis:**
-
-            Conduct a detailed, multi-faceted analysis covering:
-
-            1. **Functional Correctness Analysis:**
-            - Does the submitted code actually fix the bug described in the PR?
-            - Are the exact same changes present (or functionally equivalent)?
-            - Would this code work correctly in production?
-            - Are there any logical errors or missing fixes?
-
-            2. **Implementation Quality:**
-            - Is the implementation approach sound and well-reasoned?
-            - Are there any code smells or anti-patterns?
-            - Is the code maintainable and extensible?
-
-            3. **Completeness Check:**
-            - Are ALL necessary changes from the solution present?
-            - Are there any partially implemented fixes?
-            - Is anything missing that would cause the bug to persist?
-
-            4. **Code Comparison:**
-            - Line-by-line comparison: what changed vs what should have changed
-            - Are differences cosmetic (formatting) or substantive (logic)?
-            - Functional equivalence assessment
-
-            5. **Edge Cases & Robustness:**
-            - Does the fix handle edge cases properly?
-            - Are there potential runtime errors?
-
-            **Output Requirements:**
-
-            Provide a comprehensive JSON analysis:
-
-            {{
-            "bug_actually_fixed": <true/false>,
-            "functional_correctness": {{
-                "score": <0-100>,
-                "reasoning": "<Detailed explanation of why this score>"
+        **OUTPUT FORMAT (JSON ONLY):**
+        {{
+            "bug_fixed": <boolean>,
+            "scores": {{
+                "correctness": <0-10 score based on logic>,
+                "quality": <0-10 score based on code style/safety>,
+                "completeness": <0-10 score based on missing requirements>
             }},
-            "implementation_quality": {{
-                "score": <0-100>,
-                "reasoning": "<Assessment of code quality>"
+            "feedback": {{
+                "main_feedback": "<3-4 sentences speaking to the student about their approach>",
+                "strengths": ["<strength 1>", "<strength 2>"],
+                "improvements": ["<improvement 1>", "<improvement 2>"],
+                "suggestions": ["<suggestion 1>"]
             }},
-            "completeness": {{
-                "score": <0-100>,
-                "reasoning": "<All changes implemented?>"
-            }},
-            "changes_analysis": {{
-                "required_changes": ["<change 1>", "<change 2>"],
-                "implemented_changes": ["<change 1>", "<change 2>"],
-                "missing_changes": ["<what's missing>"],
-                "incorrect_changes": ["<what's wrong>"]
-            }},
-            "equivalence_assessment": "<identical/functionally-equivalent/partially-correct/incorrect/no-changes>",
-            "critical_issues": ["<List any critical problems>"],
-            "minor_issues": ["<List minor issues>"],
-            "strengths": ["<What was done well>"],
-            "overall_assessment": "<2-3 sentence professional summary>"
-            }}
-
-            Be thorough, precise, and honest. This is for learning - accuracy matters more than being nice."""
+            "critical_issues": ["<critical issue 1>"]
+        }}
+        """
 
         try:
-            # Get comprehensive analysis
-            print("  → Running deep code analysis...")
             analysis_response = client.chat.completions.create(
                 model="gpt-4o",
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a principal software engineer with 15+ years of experience reviewing code. You provide thorough, accurate, and educational feedback. You understand functional equivalence vs textual similarity. You catch subtle bugs and appreciate elegant solutions.",
+                        "content": "You are a principal software engineer. You provide strict but helpful feedback. Return only valid JSON.",
                     },
-                    {"role": "user", "content": analysis_prompt},
+                    {"role": "user", "content": combined_prompt},
                 ],
-                temperature=0.1,
+                temperature=0.2,
                 response_format={"type": "json_object"},
             )
 
-            analysis_result = json.loads(analysis_response.choices[0].message.content)
-
-            print(f"  → Bug Fixed: {analysis_result.get('bug_actually_fixed', False)}")
-            print(f"  → Equivalence: {analysis_result.get('equivalence_assessment', 'unknown')}")
-            print(f"  → Functional Correctness: {analysis_result['functional_correctness']['score']}/100")
-
-            # STEP 2: Rubric-Based Scoring
-            scoring_prompt = f"""You are an experienced computer science educator creating detailed scores for a programming assignment using a professional rubric.
-
-                **Code Analysis Results:**
-                {json.dumps(analysis_result, indent=2)}
-
-                **Similarity Metrics:**
-                - To Solution: {similarity_to_solution:.1%}
-                - To Original (Broken): {similarity_to_before:.1%}
-
-                **Professional Evaluation Rubric:**
-
-                **CORRECTNESS (0-10 points):**
-                - 9.5-10: Perfect fix, all bugs resolved, works flawlessly
-                - 8.5-9.4: Excellent fix, minor cosmetic differences only
-                - 7.0-8.4: Good fix, works correctly with small issues
-                - 5.0-6.9: Partial fix, some bugs addressed but not all
-                - 3.0-4.9: Attempted fix but critical bugs remain
-                - 0-2.9: No meaningful fix, bug persists
-
-                **CODE QUALITY (0-10 points):**
-                - 9.5-10: Exemplary code, professional standards
-                - 8.5-9.4: High quality, clean and maintainable
-                - 7.0-8.4: Good quality, minor improvements possible
-                - 5.0-6.9: Acceptable but needs refinement
-                - 3.0-4.9: Poor quality, multiple code smells
-                - 0-2.9: Very poor quality
-
-                **COMPLETENESS (0-10 points):**
-                - 9.5-10: All required changes implemented perfectly
-                - 8.5-9.4: All changes present, minor variations
-                - 7.0-8.4: Most changes implemented correctly
-                - 5.0-6.9: Some changes missing
-                - 3.0-4.9: Many changes missing
-                - 0-2.9: Critical changes not implemented
-
-                **Your Task:**
-                Based on the analysis results and rubric, assign precise scores. Be calibrated - a perfect solution should get 9.5-10, a complete failure should get 0-2.
-
-                Respond in JSON:
-                {{
-                "correctness_score": <0-10, one decimal>,
-                "correctness_justification": "<Why this specific score based on rubric>",
-                "quality_score": <0-10, one decimal>,
-                "quality_justification": "<Why this specific score based on rubric>",
-                "completeness_score": <0-10, one decimal>,
-                "completeness_justification": "<Why this specific score based on rubric>",
-                "rubric_adherence": "<Explanation of how scores map to rubric criteria>",
-                "calibration_check": "<Is this score fair compared to rubric standards?>"
-                }}"""
-
-            print("  → Applying evaluation rubric...")
-            scoring_response = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a fair and experienced educator who applies grading rubrics consistently. You give credit where it's due and honestly assess shortcomings. Your scores are well-calibrated to the rubric standards.",
-                    },
-                    {"role": "user", "content": scoring_prompt},
-                ],
-                temperature=0.1,
-                response_format={"type": "json_object"},
-            )
-
-            scoring_result = json.loads(scoring_response.choices[0].message.content)
-
-            correctness_score = float(scoring_result.get("correctness_score", 0))
-            quality_score = float(scoring_result.get("quality_score", 0))
-            completeness_score = float(scoring_result.get("completeness_score", 0))
-
-            print(f"  → Scores: C={correctness_score:.1f} Q={quality_score:.1f} CP={completeness_score:.1f}")
-
-            # STEP 3: Educational Feedback
-            feedback_prompt = f"""You are an expert programming mentor providing constructive, educational feedback to a student. Your goal is to help them learn and improve.
-
-                **Analysis:**
-                {json.dumps(analysis_result, indent=2)}
-
-                **Scores:**
-                - Correctness: {correctness_score}/10 - {scoring_result.get('correctness_justification', '')}
-                - Quality: {quality_score}/10 - {scoring_result.get('quality_justification', '')}
-                - Completeness: {completeness_score}/10 - {scoring_result.get('completeness_justification', '')}
-
-                **Your Task - Write Educational Feedback:**
-
-                Create feedback that:
-                1. Speaks directly to the student ("you", "your")
-                2. Starts with an honest overall assessment
-                3. Acknowledges what they did well (if anything)
-                4. Clearly explains what's wrong and why
-                5. Provides specific, actionable improvements
-                6. Encourages learning and growth
-
-                The feedback should be:
-                - **Honest** but **kind**
-                - **Specific** not generic
-                - **Educational** not just critical
-                - **Actionable** with concrete next steps
-
-                Respond in JSON:
-                {{
-                "main_feedback": "<3-4 sentences honest overall assessment using 'you/your'>",
-                "what_went_well": ["<Specific strength 1>", "<Specific strength 2>"],
-                "what_needs_improvement": ["<Specific issue 1 with why it matters>", "<Specific issue 2 with why it matters>"],
-                "specific_suggestions": ["<Actionable suggestion 1>", "<Actionable suggestion 2>", "<Actionable suggestion 3>"],
-                "learning_resources": ["<Concept to study>", "<Topic to review>"],
-                "encouragement": "<1 sentence encouragement appropriate to their performance level>"
-                }}
-
-                **Tone Guidance:**
-                - If scores 8.5+: Enthusiastic praise, minor refinements
-                - If scores 6-8.4: Positive recognition, constructive guidance
-                - If scores 3-5.9: Supportive but clear about shortcomings
-                - If scores <3: Honest that more work needed, but encouraging"""
-
-            print("  → Generating educational feedback...")
-            feedback_response = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a patient, knowledgeable programming mentor. You give honest feedback while maintaining a supportive, educational tone. You help students learn from mistakes without being harsh.",
-                    },
-                    {"role": "user", "content": feedback_prompt},
-                ],
-                temperature=0.3,
-                response_format={"type": "json_object"},
-            )
-
-            feedback_result = json.loads(feedback_response.choices[0].message.content)
+            result = json.loads(analysis_response.choices[0].message.content)
+            
+            scores = result.get("scores", {})
+            feedback = result.get("feedback", {})
+            
+            correctness = float(scores.get("correctness", 0))
+            quality = float(scores.get("quality", 0))
+            completeness = float(scores.get("completeness", 0))
 
             file_eval = {
                 "file_path": file_path,
                 "similarity_to_solution": round(similarity_to_solution * 100, 2),
-                "similarity_to_original": round(similarity_to_before * 100, 2),
-                "bug_fixed": analysis_result.get("bug_actually_fixed", False),
-                "equivalence_level": analysis_result.get("equivalence_assessment", "unknown"),
-                "correctness_score": round(correctness_score, 1),
-                "quality_score": round(quality_score, 1),
-                "completeness_score": round(completeness_score, 1),
-                "feedback": feedback_result.get("main_feedback", ""),
-                "strengths": feedback_result.get("what_went_well", []),
-                "improvements": feedback_result.get("what_needs_improvement", []),
-                "suggestions": feedback_result.get("specific_suggestions", []),
-                "learning_topics": feedback_result.get("learning_resources", []),
-                "critical_issues": analysis_result.get("critical_issues", []),
-                "changes_analysis": analysis_result.get("changes_analysis", {}),
-                "detailed_justifications": {
-                    "correctness": scoring_result.get("correctness_justification", ""),
-                    "quality": scoring_result.get("quality_justification", ""),
-                    "completeness": scoring_result.get("completeness_justification", ""),
-                },
+                "bug_fixed": result.get("bug_fixed", False),
+                "correctness_score": correctness,
+                "quality_score": quality,
+                "completeness_score": completeness,
+                "feedback": feedback.get("main_feedback", ""),
+                "strengths": feedback.get("strengths", []),
+                "improvements": feedback.get("improvements", []),
+                "suggestions": feedback.get("suggestions", []),
+                "critical_issues": result.get("critical_issues", []),
             }
 
             file_evaluations.append(file_eval)
 
-            total_correctness += correctness_score
-            total_quality += quality_score
-            total_completeness += completeness_score
+            total_correctness += correctness
+            total_quality += quality
+            total_completeness += completeness
             files_evaluated += 1
-
-            print(f"  ✓ Evaluation complete for {file_path}\n")
+            
+            print(f"  ✅ Evaluated {file_path} - Score: {correctness}/10")
 
         except Exception as e:
             print(f"  ✗ Error evaluating {file_path}: {e}")
-            import traceback
-            traceback.print_exc()
             continue
 
     if files_evaluated == 0:
-        raise HTTPException(
-            status_code=500,
-            detail="Could not evaluate any files for this submission and PR",
-        )
+        # Fallback if no files matched (avoid division by zero)
+        print("⚠️ No files were evaluated. Returning 0 score.")
+        avg_correctness = 0.0
+        avg_quality = 0.0
+        avg_completeness = 0.0
+        overall_score = 0.0
+        summary_text = "No matching files found between submission and solution to evaluate."
+    else:
+        avg_correctness = total_correctness / files_evaluated
+        avg_quality = total_quality / files_evaluated
+        avg_completeness = total_completeness / files_evaluated
+        overall_score = (avg_correctness + avg_quality + avg_completeness) / 3
+        summary_text = f"Evaluation complete. Overall Score: {overall_score:.1f}/10"
 
-    avg_correctness = total_correctness / files_evaluated
-    avg_quality = total_quality / files_evaluated
-    avg_completeness = total_completeness / files_evaluated
-    overall_score = (avg_correctness + avg_quality + avg_completeness) / 3
-
-    is_excellent = overall_score >= 8.5
-    is_good = 7.0 <= overall_score < 8.5
-    is_passing = 6.0 <= overall_score < 7.0
-    is_needs_work = 4.0 <= overall_score < 6.0
-    is_failing = overall_score < 4.0
-
-    print(f"\n{'='*80}")
-    print(f"OVERALL EVALUATION")
-    print(f"{'='*80}")
-    print(f"Correctness: {avg_correctness:.1f}/10")
-    print(f"Quality: {avg_quality:.1f}/10")
-    print(f"Completeness: {avg_completeness:.1f}/10")
-    print(f"Overall: {overall_score:.1f}/10")
-    print(f"{'='*80}\n")
-
-    # STEP 4: Overall Summary
-    summary_prompt = f"""You are writing the executive summary section of a professional code review report.
-
-        **Overall Performance:**
-        - Overall Score: {overall_score:.1f}/10
-        - Correctness: {avg_correctness:.1f}/10
-        - Code Quality: {avg_quality:.1f}/10  
-        - Completeness: {avg_completeness:.1f}/10
-        - Files Evaluated: {files_evaluated}
-
-        **Performance Band:** {"EXCELLENT (8.5-10)" if is_excellent else "GOOD (7.0-8.4)" if is_good else "PASSING (6.0-6.9)" if is_passing else "NEEDS IMPROVEMENT (4.0-5.9)" if is_needs_work else "FAILING (<4.0)"}
-
-        **Detailed Results:**
-        {json.dumps(file_evaluations, indent=2)}
-
-        **Your Task - Write Executive Summary:**
-
-        Create a professional summary that synthesizes the evaluation:
-
-        1. **Opening Statement:** Clear verdict on overall performance (2 sentences)
-        2. **Key Strengths:** What worked well across files
-        3. **Key Areas for Improvement:** Main issues that need attention
-        4. **Actionable Next Steps:** Concrete actions to improve
-        5. **Learning Path:** Topics/concepts to study
-
-        Respond in JSON:
-        {{
-        "executive_summary": "<Professional 3-4 sentence summary of performance>",
-        "performance_verdict": "<excellent/good/passing/needs-improvement/failing>",
-        "key_strengths": ["<Strength 1>", "<Strength 2>"],
-        "key_improvements": ["<Improvement 1>", "<Improvement 2>"],
-        "priority_actions": ["<Action 1>", "<Action 2>", "<Action 3>"],
-        "suggested_learning": ["<Topic 1>", "<Topic 2>"],
-        "next_challenge_recommendation": "<Should they move forward or retry? Why?>"
-        }}
-
-        **Tone:** Professional, balanced, educational. Match tone to performance level."""
-
-    try:
-        print("Generating overall summary...")
-        summary_response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a technical lead writing code review summaries. You provide clear, actionable feedback that helps developers improve. You're honest but constructive.",
-                },
-                {"role": "user", "content": summary_prompt},
-            ],
-            temperature=0.2,
-            response_format={"type": "json_object"},
-        )
-
-        summary_data = json.loads(summary_response.choices[0].message.content)
-        print("✓ Summary generated\n")
-
-    except Exception as e:
-        print(f"Error generating summary: {e}")
-        # Fallback summary
-        if is_excellent:
-            summary_data = {
-                "executive_summary": f"Outstanding work! Your submission scored {overall_score:.1f}/10, demonstrating excellent understanding of the bug fix requirements. Your implementation is nearly flawless, with all critical changes implemented correctly.",
-                "performance_verdict": "excellent",
-                "key_strengths": [
-                    "Correctly identified and fixed the bug",
-                    "Clean, maintainable code",
-                    "All required changes implemented",
-                ],
-                "key_improvements": [
-                    "Minor refinements possible in edge case handling"
-                ],
-                "priority_actions": [
-                    "Continue to next challenge",
-                    "Consider performance optimizations",
-                ],
-                "suggested_learning": [
-                    "Advanced design patterns",
-                    "Performance optimization techniques",
-                ],
-                "next_challenge_recommendation": "You're ready for more advanced challenges. Excellent work!",
-            }
-        elif is_failing:
-            summary_data = {
-                "executive_summary": f"Your submission scored {overall_score:.1f}/10. The bug was not successfully fixed, and critical implementation issues remain. This requires substantial revision before moving forward.",
-                "performance_verdict": "failing",
-                "key_strengths": ["Attempted the assignment"],
-                "key_improvements": [
-                    "Bug fix not implemented correctly",
-                    "Critical logic errors present",
-                    "Required changes missing",
-                ],
-                "priority_actions": [
-                    "Review the PR description carefully",
-                    "Compare your changes line-by-line with expected solution",
-                    "Test your code thoroughly before submission",
-                ],
-                "suggested_learning": [
-                    "Bug fixing fundamentals",
-                    "Code comparison techniques",
-                    "Testing strategies",
-                ],
-                "next_challenge_recommendation": "Please retry this challenge after reviewing the feedback and studying the required concepts.",
-            }
-        else:
-            summary_data = {
-                "executive_summary": f"Your submission scored {overall_score:.1f}/10. You've made progress on the bug fix, but there are important areas that need improvement before this can be considered complete.",
-                "performance_verdict": "needs-improvement",
-                "key_strengths": [
-                    "Partial implementation of required changes",
-                    "Attempted to address the bug",
-                ],
-                "key_improvements": [
-                    "Some required changes are missing",
-                    "Logic implementation needs refinement",
-                ],
-                "priority_actions": [
-                    "Review missing implementation details",
-                    "Test edge cases",
-                    "Verify all required changes are present",
-                ],
-                "suggested_learning": [
-                    "Complete implementation techniques",
-                    "Edge case handling",
-                ],
-                "next_challenge_recommendation": "Address the feedback and consider resubmitting before moving to the next challenge.",
-            }
-
+    # STEP 4: Generate Overall Summary (Optional - simple logic here to save time/cost)
+    # You can add another OpenAI call here if you want a synthesized summary of all files.
+    
     return EvaluationResponse(
         submission_id=request.submission_id,
         pr_number=request.pr_number,
@@ -1266,16 +1020,17 @@ async def evaluate_submission(request: EvaluationRequest):
         correctness_score=round(avg_correctness, 2),
         code_quality_score=round(avg_quality, 2),
         completeness_score=round(avg_completeness, 2),
-        evaluation_summary=summary_data.get("executive_summary", ""),
+        evaluation_summary=summary_text,
         file_evaluations=file_evaluations,
-        suggestions=summary_data.get("priority_actions", []),
-        strengths=summary_data.get("key_strengths", []),
-        areas_for_improvement=summary_data.get("key_improvements", []),
+        suggestions=[], # Populated from individual files in frontend if needed
+        strengths=[],
+        areas_for_improvement=[],
         evaluated_at=datetime.now().isoformat(),
     )
 
 
 # ==================== WEBSOCKET HANDLERS ====================
+
 
 @router.websocket("/ws/chat")
 async def websocket_chat(websocket: WebSocket):
@@ -1306,18 +1061,20 @@ async def websocket_chat(websocket: WebSocket):
 
             # Determine which repo to use based on username
             user_repo = shared.get_user_repo(username)
-            
+
             if user_repo:
                 owner = user_repo.get("owner")
                 repo_name = user_repo.get("name")
-                
+
                 if owner and repo_name:
                     # Ensure chatbot is using the correct repo database
                     if not shared.ensure_chatbot_for_repo(owner, repo_name):
-                        await websocket.send_json({
-                            "type": "status",
-                            "message": f"Warning: Could not switch to repo {owner}/{repo_name}, using current database"
-                        })
+                        await websocket.send_json(
+                            {
+                                "type": "status",
+                                "message": f"Warning: Could not switch to repo {owner}/{repo_name}, using current database",
+                            }
+                        )
 
             await websocket.send_json(
                 {"type": "status", "message": "Searching GitHub codebase..."}
@@ -1358,4 +1115,3 @@ async def websocket_chat(websocket: WebSocket):
     except Exception as e:
         print(f"WebSocket error: {e}\n")
         await websocket.send_json({"type": "error", "message": str(e)})
-
