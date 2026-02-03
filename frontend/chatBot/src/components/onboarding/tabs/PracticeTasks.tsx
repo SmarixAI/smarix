@@ -254,7 +254,7 @@ export default function PracticeTasks({
       : null;
 
   return (
-    <div className="w-full pt-0 pl-4 pr-4 pb-4 relative">
+    <div className="w-auto pt-0 pl-4 pr-4 pb-4 relative">
       <div className="relative z-10 space-y-5">
         {!activeTask && (
           <div className="p-12 text-center rounded-2xl border-2 border-slate-200 bg-white/60">
@@ -305,9 +305,20 @@ export default function PracticeTasks({
                 </div>
 
                 {/* STEPS */}
+                {/* STEPS */}
                 {task.steps && task.steps.length > 0 ? (
-                  <div className="rounded-2xl border-2 border-slate-200 bg-white/70 backdrop-blur-sm shadow-lg overflow-hidden">
-                    {/* STEP HEADER */}
+                  <div
+                    className="
+                      rounded-2xl border-2 border-slate-200 
+                      bg-white/70 backdrop-blur-sm 
+                      shadow-lg 
+                      max-h-[70vh]   
+                      w-full     
+                      flex flex-col       
+                      overflow-hidden
+                    "
+                  >
+                    {/* STEP HEADER (static inside card) */}
                     <div className="px-6 py-5 border-b-2 bg-gradient-to-r from-slate-50 to-blue-50/30">
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center space-x-4">
@@ -348,8 +359,13 @@ export default function PracticeTasks({
                       </div>
                     </div>
 
-                    {/* STEP CONTENT */}
-                    <div className="px-6 py-6 space-y-5">
+                    {/* STEP CONTENT (scrollable) */}
+                    <div
+                      className="
+                        px-6 py-6 space-y-5 
+                        overflow-y-auto 
+                      "
+                    >
                       <div className="rounded-xl border-2 border-blue-200 p-5 bg-blue-50/40">
                         <h4 className="text-sm font-bold mb-3 flex items-center gap-2">
                           <Target className="w-4 h-4 text-blue-600" />
@@ -419,8 +435,8 @@ export default function PracticeTasks({
                       </div>
                     </div>
 
-                    {/* NAVIGATION */}
-                    <div className="px-6 py-5 border-t flex justify-between">
+                    {/* NAVIGATION (static at bottom of card) */}
+                    <div className="px-6 py-5 border-t flex justify-between bg-white/80">
                       <button
                         disabled={idx === 0}
                         onClick={() =>

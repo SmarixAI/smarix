@@ -115,7 +115,7 @@ export default function Sidebar({
 
     return (
       <aside
-        className="flex-shrink-0 flex flex-col bg-white/70 backdrop-blur-xl rounded-2xl border-2 border-slate-200/60 shadow-lg shadow-slate-200/30 overflow-hidden"
+        className="flex-shrink-0 flex flex-col bg-white/70 rounded-2xl border-2 border-slate-200/60 shadow-lg shadow-slate-200/30 overflow-hidden"
         style={{ height: "calc(100vh - 200px)" }}
       >
         {/* HEADER */}
@@ -164,12 +164,12 @@ export default function Sidebar({
         {/* LIST */}
         <div className="flex-1 overflow-y-auto custom-scrollbar">
           <div className="p-5 space-y-4">
-            <div className="rounded-xl border-2 border-slate-200/60 shadow-sm bg-white/60 backdrop-blur-sm overflow-hidden">
+            <div className="rounded-xl border-2 border-slate-200/60 shadow-sm bg-white/60 overflow-hidden">
               <button
                 onClick={() => setTasksExpanded(!tasksExpanded)}
                 className={`${inter.className} w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors`}
               >
-                <div className="flex items-center space-x-2.5">
+                <div className="flex items-center space-x-2.5 mt-2">
                   <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center">
                     <ListTree className="w-4 h-4 text-slate-600" />
                   </div>
@@ -190,7 +190,7 @@ export default function Sidebar({
               </button>
 
               {tasksExpanded && (
-                <nav className="p-3 pt-0 space-y-2 border-t-2 border-slate-200/60">
+                <nav className="p-3 mt-2 space-y-2 border-t-2 border-slate-200/60">
                   {practiceTasks.length > 0 ? (
                     practiceTasks.map((task: any) => {
                       const isCompleted = completionMap[task.question_number];
@@ -205,7 +205,7 @@ export default function Sidebar({
                           className={`${inter.className} w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-all group text-left ${
                             isSelected
                               ? "bg-[#0E1B2E] text-white shadow-lg"
-                              : "hover:bg-slate-50 text-[#0E1B2E] border-2 border-transparent hover:border-slate-200"
+                              : "hover:bg-slate-50 text-[#0E1B2E] border-2 border-transparent hover:border-blue-200"
                           }`}
                         >
                           <div
@@ -213,23 +213,31 @@ export default function Sidebar({
                           >
                             {task.question_number}
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="font-semibold truncate">
+                          <div className="flex-1 min-w-0 flex items-center gap-2">
+                            <div className="font-semibold truncate flex-1">
                               {task.title || `Task #${task.question_number}`}
                             </div>
+
                             {task.difficulty && (
                               <span
-                                className={`text-[9px] px-1.5 py-0.5 rounded border uppercase ${isSelected ? "border-white/20" : getDifficultyColor(task.difficulty)}`}
+                                className={`text-xs px-4 py-1 rounded border text-[10px] flex items-center justify-center tracking-wide w-12 h-[18px] ${
+                                  isSelected
+                                    ? "border-white/20 bg-white/10"
+                                    : getDifficultyColor(task.difficulty)
+                                }`}
                               >
-                                {task.difficulty}
+                                {task.difficulty === "Intermediate"
+                                  ? "Medium"
+                                  : task.difficulty}
                               </span>
                             )}
                           </div>
+
                           {isCompleted && !isSelected && (
-                            <CheckCircle2 className="w-4 h-4 text-green-600" />
+                            <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0" />
                           )}
                           {isSelected && (
-                            <ChevronRight className="w-4 h-4 text-white" />
+                            <ChevronRight className="w-4 h-4 text-white flex-shrink-0" />
                           )}
                         </button>
                       );
@@ -266,7 +274,7 @@ export default function Sidebar({
   return (
     <aside className="flex-shrink-0 space-y-5 max-h-screen overflow-y-auto pr-2 custom-scrollbar">
       {/* BUG FIX OVERVIEW */}
-      <div className="rounded-2xl p-5 bg-white/70 backdrop-blur-sm border-2 border-slate-200/60 shadow-lg shadow-slate-200/30">
+      <div className="rounded-2xl p-5 bg-white/70 border-2 border-slate-200/60 shadow-lg shadow-slate-200/30">
         <div className="flex items-center gap-3 mb-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center shadow-md">
             <Bug className="w-5 h-5 text-white" />
@@ -417,7 +425,7 @@ export default function Sidebar({
 
 return (
   <aside className="flex-shrink-0">
-    <div className="rounded-2xl p-5 mb-5 bg-white/70 backdrop-blur-sm border-2 border-slate-200/60 shadow-lg shadow-slate-200/30">
+    <div className="rounded-2xl p-5 mb-5 bg-white/70 border-2 border-slate-200/60 shadow-lg shadow-slate-200/30">
       <div className="flex items-center gap-3 mb-4">
         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#0E1B2E] to-blue-900 flex items-center justify-center shadow-md">
           <BookOpen className="w-5 h-5 text-white" />

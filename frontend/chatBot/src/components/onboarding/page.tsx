@@ -11,7 +11,12 @@ import RightSidebar from "@/components/onboarding/RightSidebar";
 
 
 export default function OnboardingPage() {
-  const [activeTab, setActiveTab] = useState("reading");
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('onboardingActiveTab') || 'reading';
+    }
+    return 'reading';
+  });
   const [practiceTasks, setPracticeTasks] = useState<any[]>([]);
   const [selectedPracticeTask, setSelectedPracticeTask] = useState<number | null>(null);
   const [employeeId, setEmployeeId] = useState<string | null>(null);
@@ -22,6 +27,10 @@ export default function OnboardingPage() {
   
   // State to control Header visibility
   const [isHeaderVisible, setIsHeaderVisible] = useState(true);
+
+  useEffect(() => {
+    localStorage.setItem('onboardingActiveTab', activeTab);
+  }, [activeTab]);
 
   // Get employeeId from localStorage and fetch onboarding data
   useEffect(() => {

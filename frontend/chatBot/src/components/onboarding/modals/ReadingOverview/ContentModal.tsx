@@ -492,7 +492,7 @@ export default function OverviewModal({
           </aside>
 
           {/* CENTER CONTENT */}
-          <main className="min-h-0 overflow-y-auto custom-scrollbar p-4">
+          <main className="custom-scrollbar p-4">
             {isLoading ? (
               <div className="flex flex-col items-center justify-center py-32">
                 <Loader2 className="w-16 h-16 animate-spin text-blue-600" />
@@ -519,7 +519,7 @@ export default function OverviewModal({
                 No content available
               </div>
             ) : (
-              <div className="rounded-2xl bg-white/60 border shadow-lg p-6 animate-fade-in">
+              <div className="rounded-2xl bg-white/60 border border-blue-200/50 shadow-lg p-6 animate-fade-in max-h-[75vh] overflow-y-auto no-scrollbar">
                 {activeItem.title && (
                   <h4 className="mb-4 text-xl font-semibold text-slate-900">
                     {activeItem.title}

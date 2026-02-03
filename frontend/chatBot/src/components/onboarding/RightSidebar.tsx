@@ -20,7 +20,7 @@ export default function RightSidebar({
 }: RightSidebarProps) {
   return (
     <aside
-      className={`${inter.className} h-full overflow-y-auto px-3 py-4 space-y-4`}
+      className={`${inter.className} h-full fixed px-3 py-4 space-y-4 no-scrollbar`}
     >
       {/* ===================== CONTEXT HEADER ===================== */}
       <div className="rounded-xl border bg-white px-4 py-3">
@@ -61,13 +61,6 @@ export default function RightSidebar({
         <ChecklistItem text="Is the root cause clearly identified?" />
         <ChecklistItem text="Are edge cases handled?" />
         <ChecklistItem text="Does the fix affect other modules?" />
-      </Card>
-
-      {/* ===================== RESOURCES ===================== */}
-      <Card title="Helpful Resources">
-        <ResourceLink text="How to Read Large Diffs" />
-        <ResourceLink text="Effective Code Reviews" />
-        <ResourceLink text="Debugging Production Issues" />
       </Card>
 
       {/* ===================== PRO TIP ===================== */}

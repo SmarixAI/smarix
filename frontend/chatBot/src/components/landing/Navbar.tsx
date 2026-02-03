@@ -42,12 +42,12 @@ export const Navbar = () => {
           flex items-center justify-between px-6 py-3 rounded-full
           ${
             isScrolled
-              ? "w-[85%] md:w-[70%] lg:w-[800px] bg-white/20 backdrop-blur-2xl shadow-lg shadow-black/5 border border-white/25 ring-1 ring-black/5"
+              ? "w-[75%] md:w-[60%] lg:w-[750px] bg-white/20 backdrop-blur-2xl shadow-lg shadow-black/5 border border-white/25 ring-1 ring-black/5"
               : "w-[88%] md:w-[78%] lg:w-[850px] bg-white/35 backdrop-blur-xl shadow-md shadow-black/5 border border-white/30"
           }`}
       >
         {/* Logo */}
-        <Link href="/landing" className="flex items-center gap-2 shrink-0 hover:opacity-80 transition-opacity cursor-pointer">
+        <Link href="/  " className="flex items-center gap-2 shrink-0 hover:opacity-80 transition-opacity cursor-pointer">
           <div className="w-8 h-8 bg-[#0E1B2E] rounded-lg flex items-center justify-center overflow-hidden">
             <Image
               src="/logo.png"

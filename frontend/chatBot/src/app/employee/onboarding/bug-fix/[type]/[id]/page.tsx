@@ -384,7 +384,7 @@ export default function BugFixDetailPage() {
           </div>
 
           {/* Body */}
-          <div className="flex-1 overflow-y-auto bg-slate-50/50">
+          <div className="flex-1 overflow-y-auto bg-slate-50/50 no-scrollbar">
             <div className="px-6 py-6 max-w-4xl mx-auto">
               {type === "challenge" && (
                 <>
@@ -676,7 +676,7 @@ export default function BugFixDetailPage() {
               />
             </div>
           ) : parsedTutorialData ? (
-            <div className="flex-1 overflow-y-auto px-8 py-6 bg-slate-50">
+            <div className="flex-1 px-8 py-6 bg-[#0E1B2E] no-scrollbar">
               <div className="max-w-4xl mx-auto space-y-8">
                 {parsedTutorialData.steps.length > 0 && (
                   <StepByStepSection steps={parsedTutorialData.steps} />

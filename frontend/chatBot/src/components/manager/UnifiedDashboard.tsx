@@ -16,6 +16,7 @@ import {
   BarChart3,
   LogOut,
   MoreVertical,
+  Bot,
 } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthContext";
 import {
@@ -620,6 +621,10 @@ export default function UnifiedDashboard() {
       ]
     : [];
 
+  const handleChatbot = () => {
+    router.push("/chat");
+  };
+
   return (
     <div className={`min-h-screen flex bg-slate-50 ${inter.className}`}>
       {/* ================= SIDEBAR ================= */}
@@ -672,7 +677,7 @@ export default function UnifiedDashboard() {
                 </div>
                 <button
                   onClick={logout}
-                  className="p-2 text-slate-400 hover:text-red-500 hover:bg-white rounded-lg transition-all"
+                  className="p-2 text-red-500 hover:text-red-300 hover:bg-white rounded-lg transition-all"
                   title="Sign Out"
                 >
                   <LogOut className="w-4 h-4" />
@@ -701,6 +706,17 @@ export default function UnifiedDashboard() {
             </span>
           </button>
         </div>
+
+      <div className="px-4 pb-2">
+        <button
+            onClick={handleChatbot}
+            className={`${inter.className} w-full flex items-center justify-center gap-3 px-3 py-3 rounded-xl bg-[#0E1B2E] hover:bg-[#0E1B2E]/20 hover:text-[#0E1B2E] transition-all border-2 border-blue-500 hover:border-[#0E1B2E] text-sm font-semibold shadow-sm hover:shadow-md`}
+            title="Chatbot "
+          >
+            <Bot className="w-4 h-4" />
+            Smarix Chatbot
+          </button>
+          </div>
 
         {/* Search */}
         <div className="px-4 py-4">
