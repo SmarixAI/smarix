@@ -114,19 +114,19 @@ function UnifiedLoginContent() {
       {/* Background Grid Pattern */}
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#0E1B2E05_1px,transparent_1px),linear-gradient(to_bottom,#0E1B2E05_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
 
-      <div className="w-full max-w-md rounded-3xl bg-white/70 backdrop-blur-xl border border-white/60 shadow-xl p-8 relative z-10">
+      <div className="w-full max-w-md h-[60vh] rounded-3xl bg-white/70 backdrop-blur-xl border border-white/60 shadow-xl p-8 relative z-10">
         {/* Logo */}
-        <div className="flex justify-center mb-6">
-          <div className="w-14 h-14 rounded-2xl bg-black flex items-center justify-center">
-            <Image src="/logo.png" alt="Logo" width={32} height={32} />
+        <div className="flex justify-center mb-10">
+          <div className="w-20 h-20 rounded-2xl bg-black flex items-center justify-center">
+            <Image src="/logo.png" alt="Logo" width={50} height={50} />
           </div>
         </div>
 
         <h1 className="text-2xl font-bold tracking-tight text-black text-center mb-1">
-          Sign in with email
+          Sign in to Smarix
         </h1>
 
-        <p className="text-center text-sm text-gray-500 mb-6">
+        <p className="text-center text-sm text-gray-500 mb-4">
           Make your work life simpler with Smarix
         </p>
 
@@ -137,10 +137,10 @@ function UnifiedLoginContent() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-8 mt-10">
           <Input
             icon={<UserIcon size={18} />}
-            placeholder="Email or username"
+            placeholder="Username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
           />
@@ -158,7 +158,7 @@ function UnifiedLoginContent() {
             disabled={loading}
             className="w-full mt-4 bg-black text-white rounded-xl py-3 font-medium hover:bg-black/90 transition"
           >
-            {loading ? "Please wait..." : "Get Started"}
+            {loading ? "Please wait..." : "Log In"}
           </button>
         </form>
       </div>
