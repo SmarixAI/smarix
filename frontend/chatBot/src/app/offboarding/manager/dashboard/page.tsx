@@ -270,7 +270,7 @@ function ManagerDashboardContent() {
                   ? "bg-gradient-to-br from-indigo-500 to-purple-600"
                   : "bg-gradient-to-br from-indigo-500 to-purple-600"
               }`}>
-                <LogOut className="w-8 h-8 text-white" />
+                <LogOut className="w-8 h-8 text-red" />
               </div>
               <h2 className={`text-xl font-bold mb-2 ${
                 darkMode ? "text-gray-100" : "text-slate-900"

@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { BookOpen, Code, Wrench, Check, LogOut } from 'lucide-react';
+import { BookOpen, Code, Wrench, Check, LogOut, Bot } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthContext';
 import Image from 'next/image';
 import { Inter } from 'next/font/google';
+import { useRouter } from 'next/navigation';
 
 interface HeaderProps {
   activeTab: string;
@@ -15,6 +16,7 @@ const inter = Inter({ subsets: ['latin'], weight: ['400', '500', '600', '700'] }
 
 export default function Header({ activeTab, setActiveTab }: HeaderProps) {
   const { user, logout } = useAuth();
+  const router = useRouter();
 
   const tabs = [
     { id: 'reading', label: 'Reading & Overview', shortLabel: 'Overview', icon: <BookOpen className="w-4 h-4" /> },
@@ -29,6 +31,10 @@ export default function Header({ activeTab, setActiveTab }: HeaderProps) {
     if (index === activeIndex) return 'current';
     return 'available';
   };
+
+  const handleChatbot = () => {
+    router.push('/chat')
+  }
 
   return (
     <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-slate-200/60 shadow-sm">
@@ -118,7 +124,7 @@ export default function Header({ activeTab, setActiveTab }: HeaderProps) {
 
           {user && (
             <div className="flex items-center gap-3 flex-shrink-0 ml-auto">
-              <div className="text-right">
+              <div className="text-right mr-5">
                 <div className={`${inter.className} text-sm font-semibold text-[#0E1B2E] truncate`}>
                   {user.name || user.username}
                 </div>
@@ -126,6 +132,14 @@ export default function Header({ activeTab, setActiveTab }: HeaderProps) {
                   {user.role || 'Employee'}
                 </div>
               </div>
+              <button
+                onClick={handleChatbot}
+                className={`${inter.className} flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#0E1B2E] text-white hover:bg-blue-50 transition-all border-2 border-blue-500 hover:border-blue-200 hover:text-[#0E1B2E] text-sm font-semibold shadow-sm hover:shadow-md`}
+                title="Chatbot"
+              >
+                <Bot className="w-4 h-4" />
+                Smarix Chatbot
+              </button>
               <button
                 onClick={logout}
                 className={`${inter.className} flex items-center gap-2 px-4 py-2.5 rounded-xl hover:bg-red-50 transition-all text-red-600 border-2 border-red-200 hover:border-red-300 text-sm font-semibold shadow-sm hover:shadow-md`}

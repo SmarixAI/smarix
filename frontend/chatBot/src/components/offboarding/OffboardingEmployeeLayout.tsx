@@ -9,6 +9,7 @@ import {
   Calendar,
   AlertCircle,
   LogOut,
+  Bot,
 } from "lucide-react";
 import Image from "next/image";
 import Sidebar from "./Sidebar";
@@ -19,6 +20,7 @@ import Loader from "./Loader";
 import { useAuth } from "@/components/auth/AuthContext";
 import Chatbot from "@/components/onboarding/Chatbot";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import { useRouter } from "next/navigation";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -55,6 +57,12 @@ export default function OffboardingEmployeeLayout({}: OffboardingEmployeeLayoutP
     null
   );
   const [highRiskTasksPending, setHighRiskTasksPending] = useState<number>(0);
+
+  const router = useRouter();
+
+  const handleChatbot = () => {
+    router.push("/chat");
+  };
 
   useEffect(() => {
     const fetchEmployeeData = async () => {
@@ -265,8 +273,8 @@ export default function OffboardingEmployeeLayout({}: OffboardingEmployeeLayoutP
                   </div>
                   <button
                     onClick={logout}
-                    className={`${inter.className} flex items-center gap-2 px-4 py-2.5 rounded-xl hover:bg-slate-50 transition-all text-[#0E1B2E] border-2 border-slate-200 hover:border-slate-300 text-sm font-semibold shadow-sm hover:shadow-md`}
-                    title="Go Back"
+                    className={`${inter.className} flex items-center gap-2 px-4 py-2.5 rounded-xl hover:bg-slate-50 transition-all border-2 border-slate-200 text-[#F54927] hover:border-slate-300 text-sm font-semibold shadow-sm hover:shadow-md`}
+                    title="Logout"
                   >
                     <LogOut className="w-4 h-4" />
                     Logout
@@ -274,6 +282,17 @@ export default function OffboardingEmployeeLayout({}: OffboardingEmployeeLayoutP
                 </>
               )}
             </div>
+
+            <div className="pb-2 mb-2">
+              <button
+                  onClick={handleChatbot}
+                  className={`${inter.className} w-full flex items-center justify-center gap-3 px-3 py-5 rounded-xl bg-[#0E1B2E] hover:bg-[#0E1B2E]/20 hover:text-[#0E1B2E] transition-all border-2 border-blue-500 hover:border-[#0E1B2E] text-sm font-semibold shadow-sm hover:shadow-md`}
+                  title="Chatbot "
+                >
+                  <Bot className="w-4 h-4" />
+                  Smarix Chatbot
+                </button>
+          </div>
 
             {employee && (
               <div className="space-y-3">

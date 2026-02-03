@@ -228,7 +228,7 @@ export default function BugFixing({
   };
 
   return (
-    <div className={`${inter.className} h-full flex flex-col bg-[#FAFAFA]`}>
+    <div className={`${inter.className} h-auto flex flex-col bg-[#FAFAFA] relative no-scrollbar`}>
       {/* HEADER */}
       <div className="sticky top-0 z-20 bg-gradient-to-b from-white to-[#FAFAFA] border-b border-slate-200 flex-shrink-0">
         <div className="px-6 pt-5 pb-3">
@@ -243,15 +243,15 @@ export default function BugFixing({
         {/* Filters */}
         <div className="px-6 pb-4">
           <div className="flex items-center justify-between gap-4">
-            <div className="flex bg-slate-100 p-1 rounded-xl">
+            <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
               {(["all", "tutorials", "challenges"] as FilterType[]).map((f) => (
                 <button
                   key={f}
                   onClick={() => setFilter(f)}
                   className={`px-4 py-1.5 text-sm rounded-lg transition font-medium ${
                     filter === f
-                      ? "bg-white shadow-sm text-slate-900"
-                      : "text-slate-500 hover:text-slate-700"
+                      ? "bg-[#0E1B2E] shadow-sm text-white"
+                      : "text-slate-500 hover:text-slate-700 mx-2"
                   }`}
                 >
                   {f === "all"
@@ -269,7 +269,7 @@ export default function BugFixing({
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search bugs, PRs..."
-                className="w-full pl-9 pr-4 py-2 text-sm border rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
           </div>
@@ -277,8 +277,8 @@ export default function BugFixing({
       </div>
 
       {/* LIST */}
-      <div className="flex-1 overflow-y-auto px-0 py-6 bg-slate-50/50">
-        <div className="mx-6 bg-white border border-slate-200 rounded-2xl shadow-sm divide-y divide-slate-100 overflow-hidden">
+      <div className="flex-1 px-0 py-3 bg-slate-50/50">
+        <div className="max-h-[65vh] overflow-y-auto mx-6 bg-white border border-slate-200 rounded-2xl shadow-sm divide-y divide-slate-100 no-scrollbar">
           {bugs.map((bug) => (
             <div
               key={`${bug.type}-${bug.id}`}
@@ -317,16 +317,18 @@ export default function BugFixing({
 
                   <div className="flex flex-col items-end gap-2 shrink-0">
                     <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-bold border ${DIFFICULTY_STYLES[bug.difficulty]}`}
-                    >
-                      {bug.difficulty}
-                    </span>
+                        className={`px-2 py-1 rounded-full text-[10px] tracking-wider font-bold border flex items-center justify-center w-15 h-[18px] ${
+                          DIFFICULTY_STYLES[bug.difficulty]
+                        }`}
+                      >
+                        {bug.difficulty}
+                      </span>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-3 mt-3">
                   <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${TYPE_STYLES[bug.type]}`}
+                    className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs justify-center font-medium ${TYPE_STYLES[bug.type]} w-20`}
                   >
                     {bug.type === "tutorial" ? "Tutorial" : "Challenge"}
                   </span>
