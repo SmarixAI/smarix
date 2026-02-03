@@ -182,6 +182,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     localStorage.removeItem("access_token");
     localStorage.removeItem("user");
+    localStorage.removeItem("onboardingActiveTab")
 
     setUser(null);
     setToken(null);
