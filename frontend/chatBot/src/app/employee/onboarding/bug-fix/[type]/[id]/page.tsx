@@ -677,7 +677,7 @@ export default function BugFixDetailPage() {
             </div>
           ) : parsedTutorialData ? (
             <div className="flex-1 px-8 py-6 bg-[#0E1B2E] no-scrollbar">
-              <div className="max-w-4xl mx-auto space-y-8">
+              <div className="max-w-4xl mx-auto space-y-8 rounded-full">
                 {parsedTutorialData.steps.length > 0 && (
                   <StepByStepSection steps={parsedTutorialData.steps} />
                 )}

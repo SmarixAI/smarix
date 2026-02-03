@@ -146,11 +146,12 @@ export default function OverviewModal({
             return;
           }
 
-          const parsed = response.sections.map((section) => ({
-            sectionId: section.sectionId,
-            sectionTitle: section.sectionTitle,
-            items: Array.isArray(section.items) ? section.items : [],
+          const parsed = response.sections.map((section: any) => ({
+            sectionId: section.sectionId || `section-${Math.random().toString(36).slice(2)}`,
+            sectionTitle: section.sectionTitle || 'Untitled Section',
+            items: Array.isArray(section.items) ? section.items : [], 
           }));
+
 
           setSections(parsed);
           setCurrentSectionIndex(0);
@@ -505,9 +506,6 @@ export default function OverviewModal({
                         sections={ContentParser.parseContent(
                           activeItem.content || "",
                         )}
-                        renderedMermaid={
-                          renderedMermaid[activeSection.sectionId] || {}
-                        }
                       />
                     )}
                   </div>

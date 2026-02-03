@@ -622,7 +622,7 @@ export default function UnifiedDashboard() {
     : [];
 
   const handleChatbot = () => {
-    router.push("/chat");
+    window.open("/chat", "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -714,7 +714,7 @@ export default function UnifiedDashboard() {
             title="Chatbot "
           >
             <Bot className="w-4 h-4" />
-            Smarix Chatbot
+            Go to Smarix Chatbot
           </button>
           </div>
 

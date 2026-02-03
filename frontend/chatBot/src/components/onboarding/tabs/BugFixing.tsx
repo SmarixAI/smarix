@@ -342,8 +342,8 @@ export default function BugFixing({
 
                       {/* Difficulty badge */}
                       <span className={`
-                        flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-md
-                        text-[11px] font-semibold border
+                        flex-shrink-0 inline-flex items-center justify-center px-2 py-0.5 rounded-md
+                        text-[11px] font-semibold border w-15
                         ${diff.bg} ${diff.border} ${diff.text}
                       `}>
                         {bug.difficulty}

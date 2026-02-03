@@ -390,6 +390,7 @@ export default function ChallengeContent({
           <div className="h-full">
             <CodeEditor
               prData={prData || undefined}
+              repoName={activeRepos[0] || undefined}
               isFullscreen={isFullscreen}
               onToggleFullscreen={() => setIsFullscreen(!isFullscreen)}
               onEvaluationComplete={handleEvaluationComplete}

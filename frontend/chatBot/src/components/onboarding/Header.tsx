@@ -33,7 +33,7 @@ export default function Header({ activeTab, setActiveTab }: HeaderProps) {
   };
 
   const handleChatbot = () => {
-    router.push('/chat')
+    window.open("/chat", "_blank", "noopener,noreferrer");
   }
 
   return (
@@ -138,7 +138,7 @@ export default function Header({ activeTab, setActiveTab }: HeaderProps) {
                 title="Chatbot"
               >
                 <Bot className="w-4 h-4" />
-                Smarix Chatbot
+                Go to Smarix Chatbot
               </button>
               <button
                 onClick={logout}

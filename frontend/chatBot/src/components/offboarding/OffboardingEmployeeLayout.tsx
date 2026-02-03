@@ -61,7 +61,7 @@ export default function OffboardingEmployeeLayout({}: OffboardingEmployeeLayoutP
   const router = useRouter();
 
   const handleChatbot = () => {
-    router.push("/chat");
+    window.open("/chat", "_blank", "noopener,noreferrer");
   };
 
   useEffect(() => {
@@ -290,7 +290,7 @@ export default function OffboardingEmployeeLayout({}: OffboardingEmployeeLayoutP
                   title="Chatbot "
                 >
                   <Bot className="w-4 h-4" />
-                  Smarix Chatbot
+                  Go to Smarix Chatbot
                 </button>
           </div>
 

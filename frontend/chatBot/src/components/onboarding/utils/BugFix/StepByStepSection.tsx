@@ -35,7 +35,7 @@ export default function StepByStepSection({ steps }: StepByStepSectionProps) {
   return (
     <div className="rounded-2xl border-2 border-[#0E1B2E]/5 h-[95vh] bg-white shadow-lg shadow-[#0E1B2E]/5 flex flex-col">
       {/* Progress Header */}
-      <div className="px-6 py-5 border-b border-[#0E1B2E]/5 bg-gradient-to-r from-slate-50/50 to-white">
+      <div className="px-6 py-5 border-b border-[#0E1B2E]/5 bg-gradient-to-r from-slate-50/50 to-white rounded-full">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-[#0E1B2E] to-blue-900 shadow-md">
