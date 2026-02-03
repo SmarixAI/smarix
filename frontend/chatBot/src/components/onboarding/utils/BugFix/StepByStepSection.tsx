@@ -33,7 +33,7 @@ export default function StepByStepSection({ steps }: StepByStepSectionProps) {
   const currentStepData = steps[currentStep - 1];
 
   return (
-    <div className="rounded-2xl border-2 border-[#0E1B2E]/5 overflow-y-auto max-h-[95vh] bg-white shadow-lg shadow-[#0E1B2E]/5">
+    <div className="rounded-2xl border-2 border-[#0E1B2E]/5 h-[95vh] bg-white shadow-lg shadow-[#0E1B2E]/5 flex flex-col">
       {/* Progress Header */}
       <div className="px-6 py-5 border-b border-[#0E1B2E]/5 bg-gradient-to-r from-slate-50/50 to-white">
         <div className="flex items-center justify-between mb-4">
@@ -81,7 +81,7 @@ export default function StepByStepSection({ steps }: StepByStepSectionProps) {
       </div>
 
       {/* Step Content */}
-      <div className="px-6 py-6 bg-white min-h-[300px]">
+      <div className="flex-1 overflow-y-auto px-6 py-6 bg-white min-h-[300px]">
         <h2
           className={`${inter.className} text-lg font-bold mb-4 flex items-center gap-3 text-[#0E1B2E]`}
         >
@@ -91,7 +91,7 @@ export default function StepByStepSection({ steps }: StepByStepSectionProps) {
           <span>{currentStepData?.title}</span>
         </h2>
 
-        <div className="prose prose-sm max-w-none prose-slate">
+        <div className="prose prose-sm max-w-none prose-neutral">
           <ReactMarkdown
             components={{
               code(props) {
@@ -142,12 +142,14 @@ export default function StepByStepSection({ steps }: StepByStepSectionProps) {
                 </p>
               ),
               ul: ({ children }) => (
-                <ul className="list-disc list-outside mb-4 space-y-2 ml-4 text-sm text-[#0E1B2E]/80 marker:text-[#0E1B2E]/40">
+                <ul className="list-disc list-outside mb-4 space-y-2 ml-4 text-[#0E1B2E] marker:text-[#0E1B2E]/40">
                   {children}
                 </ul>
               ),
               li: ({ children }) => (
-                <li className={`${inter.className} leading-relaxed`}>
+                <li
+                  className={`${inter.className} leading-relaxed text-[15px] text-[#0E1B2E]/80`}
+                >
                   {children}
                 </li>
               ),
@@ -166,7 +168,7 @@ export default function StepByStepSection({ steps }: StepByStepSectionProps) {
       </div>
 
       {/* Navigation */}
-      <div className="px-6 py-5 border-t border-[#0E1B2E]/5 flex items-center justify-between bg-slate-50/50">
+      <div className="mt-auto px-6 py-5 border-t border-[#0E1B2E]/5 flex items-center justify-between bg-slate-50/90">
         <button
           onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
           disabled={currentStep === 1}

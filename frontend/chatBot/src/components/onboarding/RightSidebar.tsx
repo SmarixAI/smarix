@@ -63,24 +63,7 @@ export default function RightSidebar({
         <ChecklistItem text="Does the fix affect other modules?" />
       </Card>
 
-      {/* ===================== PRO TIP ===================== */}
-      <div className="rounded-xl border bg-gradient-to-br from-slate-50 to-white px-4 py-4">
-        <div className="flex items-start gap-2">
-          <span className="text-lg">💡</span>
-          <div>
-            <p className="text-sm font-medium text-slate-800">
-              Pro Tip
-            </p>
-            <p className="text-xs text-slate-600 leading-relaxed mt-1">
-              If a fix feels complex, step back and ask:
-              <br />
-              <strong>
-                “What assumption in the code is failing?”
-              </strong>
-            </p>
-          </div>
-        </div>
-      </div>
+      
     </aside>
   );
 }

@@ -261,14 +261,12 @@ export default function OnboardingPage() {
             />
           )}
 
-          <div className="max-w-[1800px] mx-auto px-3 py-4 relative">
+          <div className="max-w-[1800px] mx-auto px-3 pt-4 pb-0 relative">
             {activeTab !== "practice" && (
               <div className="absolute inset-0 bg-[linear-gradient(to_right,#0E1B2E05_1px,transparent_1px),linear-gradient(to_bottom,#0E1B2E05_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
             )}
 
-            <div
-              className="relative z-10 grid grid-cols-12 gap-2 h-[calc(100vh-180px)]"
-            >
+            <div className="relative z-10 grid grid-cols-12 gap-2 h-[calc(100vh-160px)] min-h-0">
 
               {/* LEFT SIDEBAR */}
               {(activeTab === "practice" || activeTab === "bugfix") && (
@@ -296,9 +294,11 @@ export default function OnboardingPage() {
                     : activeTab === "practice"
                     ? "col-span-9"
                     : "col-span-12"
-                } h-full overflow-y-auto overflow-x-hidden bg-[#FAFAFA] min-w-0`}
+                } h-full min-h-0 flex flex-col bg-[#FAFAFA] min-w-0`}
               >
-                {renderTabContent()}
+                <div className="flex-1 min-h-0">
+                  {renderTabContent()}
+                </div>
               </main>
 
 

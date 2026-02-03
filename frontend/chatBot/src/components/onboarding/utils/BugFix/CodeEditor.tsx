@@ -335,7 +335,7 @@ export default function CodeEditor({
       className={`rounded-lg border border-gray-200 overflow-hidden shadow-sm h-full flex flex-col bg-white ${inter.className}`}
     >
       {/* Header */}
-      <div className="px-6 py-2.5 border-b flex-shrink-0 bg-gray-900 border-gray-700">
+      <div className="px-6 py-2.5 border-b flex-shrink-0 bg-gray-900 border-gray-700 rounded-t-lg">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 rounded-md bg-gray-800 flex items-center justify-center">
@@ -527,7 +527,7 @@ export default function CodeEditor({
       </div>
 
       {/* Submit Button and Status */}
-      <div className="px-6 py-3 border-t flex-shrink-0 bg-gray-50 border-gray-200">
+      <div className="px-6 py-3 border-t flex-shrink-0 bg-gray-50 border-gray-200 rounded-b-lg">
         {submissionStatus === "idle" || submissionStatus === "complete" ? (
           <button
             onClick={handleSubmitCode}
