@@ -1,10 +1,10 @@
-'use client';
+"use client";
 
-import React, { useRef } from 'react';
-import { motion, useScroll, useTransform, useSpring } from 'framer-motion';
-import { Victor_Mono, Fira_Code, Google_Sans_Code } from 'next/font/google';
+import React, { useRef } from "react";
+import { motion, useScroll, useTransform, useSpring } from "framer-motion";
+import { Victor_Mono, Fira_Code } from "next/font/google";
 
-const firaCode = Google_Sans_Code({
+const firaCode = Fira_Code({
   weight: ["400", "500", "700"],
   subsets: ["latin"],
   display: "swap",
@@ -18,10 +18,10 @@ const victorMono = Victor_Mono({
 
 export const Transition = () => {
   const containerRef = useRef(null);
-  
+
   const { scrollYProgress } = useScroll({
     target: containerRef,
-    offset: ["start 90%", "center center"] 
+    offset: ["start 90%", "center center"],
   });
 
   const springConfig = { stiffness: 100, damping: 20, restDelta: 0.001 };
@@ -44,50 +44,58 @@ export const Transition = () => {
   const ySub = useTransform(smoothProgress, [0.6, 0.9], [20, 0]);
 
   return (
-    <section 
-      ref={containerRef} 
-      className="relative h-[50vh] flex flex-col items-center justify-center bg-[#F2F4F7] overflow-hidden border-t border-white/50"
+    <section
+      ref={containerRef}
+      className="relative h-[50vh] sm:h-[55vh] md:h-[60vh] lg:h-[50vh] flex flex-col items-center justify-center bg-[#F2F4F7] overflow-hidden border-t border-white/50"
     >
       <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-soft-light pointer-events-none" />
-      
-      <div className="relative z-10 w-full max-w-7xl px-6 flex flex-col items-center justify-center">
-        
-        <div className="flex flex-col md:flex-row items-center gap-4 md:gap-6 lg:gap-6">
-            
-            <motion.h2
-              style={{ opacity: opacity1, filter: `blur(${blur1}px)`, y: y1 }}
-              className={`${firaCode.className} text-5xl md:text-6xl lg:text-7xl font-tahoma font-bold tracking-tighter text-[#0E1B2E]`}
-            >
-              Capture
-              <span className={`${firaCode.className} text-blue-600`}>.</span>
-            </motion.h2>
 
-            <motion.h2
-              style={{ opacity: opacity2, filter: `blur(${blur2}px)`, y: y2 }}
-              className={`${firaCode.className} text-5xl md:text-6xl lg:text-7xl font-tahoma font-bold tracking-tighter text-[#0E1B2E]`}
-            >
-              Transfer
-              <span className={`${firaCode.className} text-blue-600`}>.</span>
-            </motion.h2>
+      <div className="relative z-10 w-full max-w-7xl px-4 sm:px-6 md:px-8 flex flex-col items-center justify-center">
+        <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-4 md:gap-5 lg:gap-6">
+          <motion.h2
+            style={{ opacity: opacity1, filter: `blur(${blur1}px)`, y: y1 }}
+            className={`${firaCode.className} text-4xl sm:text-5xl md:text-5xl lg:text-7xl font-bold tracking-tighter text-[#0E1B2E]`}
+          >
+            Capture
+            <span className={`${firaCode.className} text-blue-600`}>.</span>
+          </motion.h2>
 
-            <motion.h2
-               style={{ opacity: opacity3, filter: `blur(${blur3}px)`, y: y3, scale: scale3 }}
-               className={`${firaCode.className} text-5xl md:text-6xl lg:text-7xl font-tahoma font-bold tracking-tighter text-[#0E1B2E]`}
-            >
-                Retain
-                <span className={`${firaCode.className} text-green-500`}>.</span>
-            </motion.h2>
+          <motion.h2
+            style={{ opacity: opacity2, filter: `blur(${blur2}px)`, y: y2 }}
+            className={`${firaCode.className} text-4xl sm:text-5xl md:text-5xl lg:text-7xl font-bold tracking-tighter text-[#0E1B2E]`}
+          >
+            Transfer
+            <span className={`${firaCode.className} text-blue-600`}>.</span>
+          </motion.h2>
+
+          <motion.h2
+            style={{
+              opacity: opacity3,
+              filter: `blur(${blur3}px)`,
+              y: y3,
+              scale: scale3,
+            }}
+            className={`${firaCode.className} text-4xl sm:text-5xl md:text-5xl lg:text-7xl font-bold tracking-tighter text-[#0E1B2E]`}
+          >
+            Retain
+            <span className={`${firaCode.className} text-green-500`}>.</span>
+          </motion.h2>
         </div>
 
-        <motion.div 
+        <motion.div
           style={{ opacity: opacitySub, y: ySub }}
-          className="mt-10 flex flex-col items-center gap-6"
+          className="mt-6 sm:mt-8 md:mt-10 flex flex-col items-center gap-4 sm:gap-6"
         >
-          <p className={`${victorMono.className} text-lg md:text-xl text-gray-500 font-medium text-center max-w-xl leading-relaxed`}>
-             Turn employee transitions into <span className="text-[#0E1B2E] font-bold border-b-2 border-gray-200">knowledge continuity</span>.
+          <p
+            className={`${victorMono.className} text-base sm:text-lg md:text-xl text-gray-500 font-medium text-center max-w-xl leading-relaxed px-4 sm:px-0`}
+          >
+            Turn employee transitions into{" "}
+            <span className="text-[#0E1B2E] font-bold border-b-2 border-gray-200">
+              knowledge continuity
+            </span>
+            .
           </p>
         </motion.div>
-
       </div>
     </section>
   );

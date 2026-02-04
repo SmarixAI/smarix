@@ -38,16 +38,18 @@ export const Navbar = () => {
         initial={{ y: -100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+        // CHANGED: Adjusted width logic for 'md' (iPad) vs 'lg' (Desktop)
+        // On iPad (md), we use a tighter width (e.g. 50% or 60%) because we are showing the hamburger menu.
         className={`fixed top-4 left-0 right-0 mx-auto z-50 transition-all duration-500 ease-out
           flex items-center justify-between px-6 py-3 rounded-full
           ${
             isScrolled
-              ? "w-[75%] md:w-[60%] lg:w-[750px] bg-white/20 backdrop-blur-2xl shadow-lg shadow-black/5 border border-white/25 ring-1 ring-black/5"
-              : "w-[88%] md:w-[78%] lg:w-[850px] bg-white/35 backdrop-blur-xl shadow-md shadow-black/5 border border-white/30"
+              ? "w-[90%] md:w-[50%] lg:w-[750px] bg-white/20 backdrop-blur-2xl shadow-lg shadow-black/5 border border-white/25 ring-1 ring-black/5"
+              : "w-[92%] md:w-[60%] lg:w-[850px] bg-white/35 backdrop-blur-xl shadow-md shadow-black/5 border border-white/30"
           }`}
       >
         {/* Logo */}
-        <Link href="/  " className="flex items-center gap-2 shrink-0 hover:opacity-80 transition-opacity cursor-pointer">
+        <Link href="/" className="flex items-center gap-2 shrink-0 hover:opacity-80 transition-opacity cursor-pointer">
           <div className="w-8 h-8 bg-[#0E1B2E] rounded-lg flex items-center justify-center overflow-hidden">
             <Image
               src="/logo.png"
@@ -62,8 +64,9 @@ export const Navbar = () => {
           </span>
         </Link>
 
-        {/* Desktop Nav */}
-        <div className="hidden md:flex items-center gap-8 ml-auto mr-8 whitespace-nowrap">
+        {/* Desktop Nav - CHANGED: hidden md:flex -> hidden lg:flex */}
+        {/* This ensures iPad Portrait (768px) uses the hamburger menu to avoid overcrowding */}
+        <div className="hidden lg:flex items-center gap-8 ml-auto mr-8 whitespace-nowrap">
           {navLinks.map((link) => (
             <div key={link.name} className="whitespace-nowrap">
               <TypewriterLink text={link.name} href={link.href} />
@@ -71,8 +74,8 @@ export const Navbar = () => {
           ))}
         </div>
 
-        {/* CTA */}
-        <div className="hidden md:flex items-center shrink-0">
+        {/* CTA - CHANGED: hidden md:flex -> hidden lg:flex */}
+        <div className="hidden lg:flex items-center shrink-0">
           <Link href="/contact" className="group relative overflow-hidden rounded-full bg-[#0E1B2E] px-6 py-2.5 text-white transition-all hover:bg-[#1a2f4d] hover:shadow-lg hover:shadow-[#0E1B2E]/20">
             <div className="flex items-center gap-2 whitespace-nowrap">
               <span className="text-sm font-medium tracking-wide">
@@ -83,9 +86,9 @@ export const Navbar = () => {
           </Link>
         </div>
 
-        {/* Mobile Menu Toggle */}
+        {/* Mobile Menu Toggle - CHANGED: md:hidden -> lg:hidden */}
         <button
-          className="md:hidden text-[#0E1B2E]"
+          className="lg:hidden text-[#0E1B2E]"
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           aria-label="Toggle menu"
         >
@@ -93,7 +96,7 @@ export const Navbar = () => {
         </button>
       </motion.nav>
 
-      {/* Mobile Menu */}
+      {/* Mobile/Tablet Menu */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <motion.div
@@ -101,7 +104,9 @@ export const Navbar = () => {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -20 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            className="fixed inset-x-4 top-20 z-40 rounded-3xl bg-white/90 backdrop-blur-2xl p-6 shadow-2xl shadow-black/10 border border-white/30 md:hidden"
+            // CHANGED: Added md:w-[50%] md:mx-auto md:left-0 md:right-0
+            // This ensures the dropdown on iPad isn't full-screen width, but nicely centered
+            className="fixed inset-x-4 md:inset-x-0 md:w-[50%] md:mx-auto top-20 z-40 rounded-3xl bg-white/90 backdrop-blur-2xl p-6 shadow-2xl shadow-black/10 border border-white/30 lg:hidden"
           >
             <div className="flex flex-col gap-2">
               {navLinks.map((link, index) => (
@@ -111,7 +116,7 @@ export const Navbar = () => {
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.1 }}
-                  className="text-[#0E1B2E] text-base font-medium py-3 px-2 rounded-lg hover:bg-gray-100/50 transition-colors"
+                  className="text-[#0E1B2E] text-base font-medium py-3 px-4 rounded-lg hover:bg-gray-100/50 transition-colors"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   {link.name}
@@ -120,7 +125,7 @@ export const Navbar = () => {
 
               <Link 
                 href="/request-demo"
-                className="w-full mt-4 rounded-full bg-[#0E1B2E] py-3.5 text-white font-medium shadow-xl shadow-[#0E1B2E]/20 hover:bg-[#1a2f4d] transition-colors text-center"
+                className="w-full mt-4 rounded-full bg-[#0E1B2E] py-3.5 text-white font-medium shadow-xl shadow-[#0E1B2E]/20 hover:bg-[#1a2f4d] transition-colors text-center block"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 Contact Us

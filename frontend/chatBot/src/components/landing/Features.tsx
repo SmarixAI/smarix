@@ -152,7 +152,6 @@ const GifCarousel: React.FC<GifCarouselProps> = ({
   const [loadedGifs, setLoadedGifs] = useState<Set<number>>(new Set([0]));
   const autoScrollTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // --- LOGIC UPDATE: Use specific duration per GIF ---
   const currentDuration = gifs[currentGifIndex]?.duration || 5000;
 
   useEffect(() => {
@@ -175,7 +174,6 @@ const GifCarousel: React.FC<GifCarouselProps> = ({
         clearTimeout(autoScrollTimerRef.current);
       }
 
-      // Timer now uses the variable 'currentDuration'
       autoScrollTimerRef.current = setTimeout(() => {
         setIsTransitioning(true);
         setCurrentGifIndex((prev) => (prev + 1) % gifs.length);
@@ -220,36 +218,35 @@ const GifCarousel: React.FC<GifCarouselProps> = ({
   };
 
   return (
-    <div className="relative w-full h-full">
-      {/* Navigation Arrows */}
-      <div className="absolute -top-14 right-0 flex items-center gap-2 z-50">
+    <div className="relative w-full h-full mt-10 sm:mt-12 lg:mt-0">
+      <div className="absolute -top-10 sm:-top-12 lg:-top-14 right-0 flex items-center gap-2 z-50">
         <motion.button
           onClick={handlePrevious}
           disabled={isTransitioning}
-          className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center hover:border-slate-300 hover:shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed group"
+          className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-lg sm:rounded-xl bg-white border border-slate-200 flex items-center justify-center hover:border-slate-300 hover:shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed group"
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
         >
           <ChevronLeft
-            size={20}
-            className="text-slate-600 group-hover:text-slate-900 transition-colors"
+            size={18}
+            className="sm:w-5 sm:h-5 text-slate-600 group-hover:text-slate-900 transition-colors"
           />
         </motion.button>
 
         <motion.button
           onClick={handleNext}
           disabled={isTransitioning}
-          className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center hover:border-slate-300 hover:shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed group"
+          className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-lg sm:rounded-xl bg-white border border-slate-200 flex items-center justify-center hover:border-slate-300 hover:shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed group"
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
         >
           <ChevronRight
-            size={20}
-            className="text-slate-600 group-hover:text-slate-900 transition-colors"
+            size={18}
+            className="sm:w-5 sm:h-5 text-slate-600 group-hover:text-slate-900 transition-colors"
           />
         </motion.button>
 
-        <div className="flex items-center gap-1.5 ml-2 px-3 py-2 bg-white rounded-xl border border-slate-200">
+        <div className="flex items-center gap-1 sm:gap-1.5 ml-1 sm:ml-2 px-2 sm:px-3 py-1.5 sm:py-2 bg-white rounded-lg sm:rounded-xl border border-slate-200">
           {gifs.map((_, index) => (
             <motion.button
               key={index}
@@ -259,9 +256,9 @@ const GifCarousel: React.FC<GifCarouselProps> = ({
               whileTap={{ scale: 0.9 }}
             >
               <div
-                className={`w-2 h-2 rounded-full transition-all duration-500 cursor-pointer ${
+                className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full transition-all duration-500 cursor-pointer ${
                   currentGifIndex === index
-                    ? "w-6"
+                    ? "w-4 sm:w-6"
                     : "bg-slate-300 hover:bg-slate-400"
                 }`}
                 style={{
@@ -274,21 +271,21 @@ const GifCarousel: React.FC<GifCarouselProps> = ({
         </div>
       </div>
 
-      <div className="relative w-full aspect-[16/10] rounded-[2rem] bg-white p-2 shadow-2xl shadow-slate-200/50 border border-slate-100 ring-4 ring-slate-50 overflow-hidden flex flex-col">
-        <div className="h-10 bg-white/90 backdrop-blur z-20 border-b border-slate-100 flex items-center px-4 justify-between rounded-t-[1.5rem] flex-none">
-          <div className="flex gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-slate-200" />
-            <div className="w-2.5 h-2.5 rounded-full bg-slate-200" />
-            <div className="w-2.5 h-2.5 rounded-full bg-slate-200" />
+      <div className="relative w-full min-h-[280px] sm:min-h-[340px] md:min-h-[420px] lg:min-h-0 aspect-[4/3] sm:aspect-[16/11] md:aspect-[16/10] lg:aspect-[16/10] rounded-2xl sm:rounded-3xl lg:rounded-[2rem] bg-white p-1.5 sm:p-2 shadow-2xl shadow-slate-200/50 border border-slate-100 ring-2 sm:ring-4 ring-slate-50 overflow-hidden flex flex-col">
+        <div className="h-8 sm:h-9 lg:h-10 bg-white/90 backdrop-blur z-20 border-b border-slate-100 flex items-center px-3 sm:px-4 justify-between rounded-t-xl sm:rounded-t-2xl lg:rounded-t-[1.5rem] flex-none">
+          <div className="flex gap-1 sm:gap-1.5">
+            <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-slate-200" />
+            <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-slate-200" />
+            <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-slate-200" />
           </div>
           <div
-            className={`${jetbrainsMono.className} text-[10px] text-slate-400`}
+            className={`${jetbrainsMono.className} text-[9px] sm:text-[10px] text-slate-400`}
           >
             smarix-engine://{tag.toLowerCase()}
           </div>
         </div>
 
-        <div className="relative flex-1 w-full rounded-b-[1.5rem] overflow-hidden bg-slate-50">
+        <div className="relative flex-1 w-full min-h-[240px] rounded-b-xl sm:rounded-b-2xl lg:rounded-b-[1.5rem] overflow-hidden bg-slate-50">
           <AnimatePresence mode="wait">
             <motion.div
               key={`${activeFeatureIndex}-${currentGifIndex}`}
@@ -305,7 +302,7 @@ const GifCarousel: React.FC<GifCarouselProps> = ({
                 src={gifs[currentGifIndex].src}
                 alt={`Demo ${currentGifIndex + 1}`}
                 fill
-                className="object-cover" 
+                className="object-cover"
                 unoptimized
                 priority={currentGifIndex === 0}
                 loading={currentGifIndex === 0 ? "eager" : "lazy"}
@@ -313,11 +310,10 @@ const GifCarousel: React.FC<GifCarouselProps> = ({
             </motion.div>
           </AnimatePresence>
 
-          <div className="absolute inset-0 ring-1 ring-inset ring-black/5 rounded-b-[1.5rem] z-30 pointer-events-none" />
+          <div className="absolute inset-0 ring-1 ring-inset ring-black/5 rounded-b-xl sm:rounded-b-2xl lg:rounded-b-[1.5rem] z-30 pointer-events-none" />
 
-          {/* Progress Bar (Placed inside the flex container) */}
-          <div className="absolute bottom-4 left-4 right-4 z-40">
-            <div className="w-full h-1 bg-white/30 rounded-full overflow-hidden backdrop-blur">
+          <div className="absolute bottom-3 sm:bottom-4 left-3 sm:left-4 right-3 sm:right-4 z-40">
+            <div className="w-full h-0.5 sm:h-1 bg-white/30 rounded-full overflow-hidden backdrop-blur">
               <motion.div
                 key={`progress-${activeFeatureIndex}-${currentGifIndex}`}
                 className="h-full rounded-full"
@@ -444,7 +440,7 @@ export const Features = () => {
           className="absolute z-10 flex flex-col items-center justify-center text-center px-4 pointer-events-none"
         >
           <h1
-            className={`${spaceGrotesk.className} text-6xl md:text-8xl lg:text-9xl font-bold text-[#0E1B2E] tracking-tighter`}
+            className={`${spaceGrotesk.className} text-5xl sm:text-6xl md:text-8xl lg:text-9xl font-bold text-[#0E1B2E] tracking-tighter`}
           >
             Smarix
             <br />
@@ -454,42 +450,42 @@ export const Features = () => {
 
         <motion.div
           style={{ opacity: contentOpacity, y: contentY }}
-          className="relative z-20 w-full max-w-[1400px] px-6 h-full max-h-[900px] flex flex-col"
+          className="relative z-20 w-full max-w-[1400px] px-4 sm:px-5 md:px-6 h-full max-h-[900px] flex flex-col"
         >
-          <div className="w-full flex justify-between items-center py-8 border-b border-slate-100/50">
+          <div className="w-full flex justify-between items-center py-3 sm:py-4 md:py-6 lg:py-8 border-b border-slate-100/50">
             <div className="flex items-center gap-2">
               <span
-                className={`${spaceGrotesk.className} text-xl font-bold text-[#0E1B2E]`}
+                className={`${spaceGrotesk.className} text-base sm:text-lg lg:text-xl font-bold text-[#0E1B2E]`}
               >
                 Smarix
               </span>
               <span className="text-slate-300">/</span>
               <span
-                className={`${jetbrainsMono.className} text-sm font-medium text-slate-500`}
+                className={`${jetbrainsMono.className} text-[10px] sm:text-xs lg:text-sm font-medium text-slate-500`}
               >
                 Capabilities
               </span>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex gap-1.5 sm:gap-2">
               {features.map((_, i) => (
                 <motion.div
                   key={i}
                   animate={{
-                    width: activeIndex === i ? 32 : 8,
+                    width: activeIndex === i ? 24 : 6,
                     backgroundColor:
                       activeIndex === i
                         ? features[activeIndex].color
                         : "#E2E8F0",
                   }}
-                  className="h-2 rounded-full transition-all duration-500"
+                  className="h-1.5 sm:h-2 rounded-full transition-all duration-500"
                 />
               ))}
             </div>
           </div>
 
-          <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-20 items-center">
-            <div className="lg:col-span-5 flex flex-col justify-center">
+          <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 lg:gap-20 items-center overflow-hidden pb-4 lg:pb-0">
+            <div className="lg:col-span-5 flex flex-col justify-center h-full overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={activeIndex}
@@ -497,9 +493,9 @@ export const Features = () => {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 40 }}
                   transition={{ duration: 0.5, ease: "circOut" }}
-                  className="flex flex-col"
+                  className="flex flex-col py-2"
                 >
-                  <div className="mb-8">
+                  <div className="mb-4 sm:mb-6 lg:mb-8">
                     <motion.div
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
@@ -508,49 +504,52 @@ export const Features = () => {
                         stiffness: 200,
                         damping: 15,
                       }}
-                      className="w-16 h-16 rounded-2xl bg-white border border-slate-100 flex items-center justify-center mb-6 shadow-xl shadow-slate-200/50"
+                      className="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 lg:w-16 lg:h-16 rounded-xl sm:rounded-2xl bg-white border border-slate-100 flex items-center justify-center mb-3 sm:mb-4 lg:mb-6 shadow-xl shadow-slate-200/50"
                     >
                       {React.createElement(features[activeIndex].icon, {
                         color: features[activeIndex].color,
-                        size: 32,
+                        size: 28,
+                        className:
+                          "w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 lg:w-8 lg:h-8",
                       })}
                     </motion.div>
 
                     <h2
-                      className={`${spaceGrotesk.className} text-5xl lg:text-6xl font-bold leading-[1.05] tracking-tight mb-6 text-[#0E1B2E]`}
+                      className={`${spaceGrotesk.className} text-2xl sm:text-3xl md:text-4xl lg:text-6xl font-bold leading-[1.05] tracking-tight mb-3 sm:mb-4 lg:mb-6 text-[#0E1B2E]`}
                     >
                       {features[activeIndex].title}
                     </h2>
 
                     <p
-                      className={`${spaceGrotesk.className} text-xl leading-relaxed text-slate-500`}
+                      className={`${spaceGrotesk.className} text-sm sm:text-base md:text-lg lg:text-xl leading-relaxed text-slate-500`}
                     >
                       {features[activeIndex].desc}
                     </p>
                   </div>
 
-                  <div className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-2 sm:gap-3 lg:gap-4">
                     {features[activeIndex].points.map((point, idx) => (
                       <motion.div
                         key={idx}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.2 + idx * 0.1 }}
-                        className="flex items-start gap-4 p-4 rounded-xl hover:bg-white/80 hover:shadow-sm transition-all duration-300 border border-transparent hover:border-slate-100"
+                        className="flex items-start gap-2 sm:gap-3 lg:gap-4 p-2.5 sm:p-3 lg:p-4 rounded-lg sm:rounded-xl hover:bg-white/80 hover:shadow-sm transition-all duration-300 border border-transparent hover:border-slate-100 bg-white/40"
                       >
-                        <div className="mt-1 w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center shrink-0">
+                        <div className="mt-0.5 sm:mt-1 w-7 h-7 sm:w-8 sm:h-8 rounded-md sm:rounded-lg bg-slate-50 flex items-center justify-center shrink-0">
                           <point.icon
-                            size={16}
+                            size={14}
+                            className="sm:w-4 sm:h-4"
                             style={{ color: features[activeIndex].color }}
                           />
                         </div>
                         <div>
                           <h4
-                            className={`${spaceGrotesk.className} text-base font-bold text-[#0E1B2E] mb-1`}
+                            className={`${spaceGrotesk.className} text-xs sm:text-sm lg:text-base font-bold text-[#0E1B2E] mb-0.5 sm:mb-1`}
                           >
                             {point.title}
                           </h4>
-                          <p className="text-sm text-slate-500 leading-relaxed">
+                          <p className="text-[11px] sm:text-xs lg:text-sm text-slate-500 leading-relaxed">
                             {point.desc}
                           </p>
                         </div>
@@ -561,7 +560,7 @@ export const Features = () => {
               </AnimatePresence>
             </div>
 
-            <div className="lg:col-span-7 h-full max-h-[600px] flex items-center">
+            <div className="lg:col-span-7 h-auto lg:h-full lg:max-h-[600px] flex items-center w-full">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={activeIndex}

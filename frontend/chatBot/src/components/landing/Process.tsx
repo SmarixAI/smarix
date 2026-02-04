@@ -9,7 +9,6 @@ import {
   useInView,
 } from "framer-motion";
 import Image from "next/image";
-import Link from "next/link";
 import { Victor_Mono, Fira_Code } from "next/font/google";
 
 const firaCode = Fira_Code({
@@ -62,9 +61,9 @@ export const Process = () => {
   return (
     <section
       ref={containerRef}
-      className="relative w-full h-screen pt-36 px-6 bg-[#F5F8FF] text-[#0E1B2E] overflow-hidden"
+      className="relative w-full min-h-screen h-auto pt-36 pb-20 lg:pt-36 lg:pb-0 px-6 bg-[#F5F8FF] text-[#0E1B2E] overflow-hidden"
     >
-      <div className="absolute inset-0 opacity-60">
+      <div className="absolute inset-0 opacity-60 pointer-events-none">
         <motion.div
           animate={{
             scale: [1, 1.1, 1],
@@ -90,17 +89,19 @@ export const Process = () => {
         <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-30 brightness-100 contrast-150 mix-blend-overlay" />
       </div>
 
-      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-0 items-center relative z-10">
+      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-0 items-center relative z-10">
         <motion.div
-          style={{ y: yText }}
-          className="lg:col-span-4 flex flex-col gap-6"
+          style={{
+            y: yText,
+          }}
+          className="lg:col-span-4 flex flex-col gap-6 text-center lg:text-left items-center lg:items-start max-lg:!transform-none"
         >
           <motion.div
             initial={{ opacity: 0, x: -40 }}
             animate={isInView ? { opacity: 1, x: 0 } : {}}
             transition={{ duration: 0.8, ease: "easeOut" }}
           >
-            <h2 className="text-4xl md:text-5xl lg:text-6xl font-tahoma font-bold leading-[1] tracking-tight text-[#0E1B2E]">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-tahoma font-bold leading-[1.1] tracking-tight text-[#0E1B2E]">
               Systems designed to <br />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-700 via-blue-600 to-cyan-600">
                 democratize
@@ -108,7 +109,7 @@ export const Process = () => {
               knowledge.
             </h2>
             <p
-              className={`${victorMono.className} text-base text-[#0E1B2E]/70 max-w-sm leading-relaxed mt-5 font-medium`}
+              className={`${victorMono.className} text-sm sm:text-base text-[#0E1B2E]/70 max-w-sm leading-relaxed mt-5 font-medium mx-auto lg:mx-0`}
             >
               Knowledge continuity across the entire engineering lifecycle.{" "}
             </p>
@@ -201,7 +202,7 @@ export const Process = () => {
           </svg>
         </div>
 
-        <div className="lg:col-span-5 flex flex-col justify-center h-auto gap-16 py-10">
+        <div className="lg:col-span-5 flex flex-col justify-center h-auto gap-12 lg:gap-16 lg:py-10 pb-12">
           {steps.map((step, index) => (
             <motion.div
               key={step.id}
@@ -212,7 +213,7 @@ export const Process = () => {
                 delay: 0.4 + index * 0.15,
                 ease: "easeOut",
               }}
-              className="group relative pl-8"
+              className="group relative pl-8 lg:pl-8"
             >
               <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-blue-100 group-hover:bg-blue-600 transition-colors duration-500">
                 <div className="absolute top-0 left-0 w-full h-full bg-blue-600 scale-y-0 group-hover:scale-y-100 origin-top transition-transform duration-500" />
@@ -221,16 +222,16 @@ export const Process = () => {
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-3">
                   <span
-                    className={`${firaCode.className} text-4xl font-bold text-blue-200 group-hover:text-blue-600 transition-colors duration-300`}
+                    className={`${firaCode.className} text-3xl md:text-4xl font-bold text-blue-200 group-hover:text-blue-600 transition-colors duration-300`}
                   >
                     .{step.id}
                   </span>
-                  <h3 className="text-2xl md:text-3xl font-tahoma font-bold text-[#0E1B2E]">
+                  <h3 className="text-xl md:text-2xl lg:text-3xl font-tahoma font-bold text-[#0E1B2E]">
                     {step.title}
                   </h3>
                 </div>
 
-                <p className="text-lg text-[#0E1B2E]/60 font-body leading-relaxed max-w-md mt-1 group-hover:text-[#0E1B2E] transition-colors">
+                <p className="text-base md:text-lg text-[#0E1B2E]/60 font-body leading-relaxed max-w-md mt-1 group-hover:text-[#0E1B2E] transition-colors">
                   {step.desc}
                 </p>
               </div>
