@@ -118,14 +118,14 @@ export const Process = () => {
         <div className="lg:col-span-3 relative h-[600px] hidden lg:flex items-center justify-center">
           <motion.div
             style={{ y: yLogo }}
-            className="absolute left-0 top-1/2 -translate-y-1/2 z-20 w-20 h-20 bg-white/60 backdrop-blur-xl rounded-xl shadow-[0_20px_40px_-15px_rgba(37,99,235,0.2)] border border-white/80 flex items-center justify-center p-4 overflow-hidden"
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-20 w-25 h-25 bg-white/60 backdrop-blur-xl rounded-xl shadow-[0_20px_40px_-15px_rgba(37,99,235,0.2)] border border-white/80 flex items-center justify-center p-2 overflow-hidden"
           >
             <Image
               src="/logo.png"
               alt="SmariX Core"
-              width={48}
-              height={48}
-              className="object-contain rounded-xl"
+              width={65}
+              height={65}
+              className="rounded-xl"
             />
             <div className="absolute inset-0 rounded-xl ring-1 ring-blue-500/10" />
           </motion.div>

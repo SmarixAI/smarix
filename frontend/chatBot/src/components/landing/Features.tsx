@@ -19,6 +19,8 @@ import {
   Share2,
   Search,
   Bug,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import Image from "next/image";
@@ -26,13 +28,19 @@ import Image from "next/image";
 const spaceGrotesk = Space_Grotesk({ subsets: ["latin"] });
 const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"] });
 
+const S3_BASE_URL = "https://d285vgwdgs4ml7.cloudfront.net/GIFs";
+
 const features = [
   {
     id: 0,
     tag: "Onboarding",
     title: "AI-Powered Onboarding",
     desc: "Turn complex codebases into guided learning journeys. Help developers understand your product, tech stack, and standards—faster.",
-    image: "/onboarding-demo.gif",
+    gifs: [
+      { src: `${S3_BASE_URL}/reading_gif.gif`, duration: 23000 },
+      { src: `${S3_BASE_URL}/practice_gif.gif`, duration: 27000 },
+      { src: `${S3_BASE_URL}/bugfix_gif.gif`, duration: 33000 },
+    ],
     icon: Zap,
     color: "#3B82F6",
     bgGradient:
@@ -60,7 +68,11 @@ const features = [
     tag: "Offboarding",
     title: "AI-Powered Offboarding",
     desc: "Turn employee exits into knowledge continuity. Capture critical context and ensure seamless handovers without the chaos.",
-    image: "/offboarding-demo.gif",
+    gifs: [
+      { src: `${S3_BASE_URL}/offboarding1_gif.gif`, duration: 9000 },
+      { src: `${S3_BASE_URL}/offboarding2_gif.gif`, duration: 6000 },
+      { src: `${S3_BASE_URL}/offboarding3_gif.gif`, duration: 8000 },
+    ],
     icon: Shield,
     color: "#6366F1",
     bgGradient:
@@ -88,7 +100,11 @@ const features = [
     tag: "Smarix Assistance",
     title: "Smarix Assistance",
     desc: "Your 24×7 engineering companion—providing intelligent code analysis, dependency mapping, and impact tracing across complex codebases",
-    image: "/assistance-demo.gif",
+    gifs: [
+      { src: `${S3_BASE_URL}/chatbot1_gif.gif`, duration: 19000 },
+      { src: `${S3_BASE_URL}/chatbot2_gif.gif`, duration: 8000 },
+      { src: `${S3_BASE_URL}/chatbot3_gif.gif`, duration: 19000 },
+    ],
     icon: Code2,
     color: "#10B981",
     bgGradient:
@@ -112,6 +128,214 @@ const features = [
     ],
   },
 ];
+
+interface GifData {
+  src: string;
+  duration: number;
+}
+
+interface GifCarouselProps {
+  gifs: GifData[];
+  activeFeatureIndex: number;
+  color: string;
+  tag: string;
+}
+
+const GifCarousel: React.FC<GifCarouselProps> = ({
+  gifs,
+  activeFeatureIndex,
+  color,
+  tag,
+}) => {
+  const [currentGifIndex, setCurrentGifIndex] = useState(0);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [loadedGifs, setLoadedGifs] = useState<Set<number>>(new Set([0]));
+  const autoScrollTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // --- LOGIC UPDATE: Use specific duration per GIF ---
+  const currentDuration = gifs[currentGifIndex]?.duration || 5000;
+
+  useEffect(() => {
+    const preloadGif = (index: number) => {
+      if (index >= 0 && index < gifs.length && !loadedGifs.has(index)) {
+        const img = document.createElement("img");
+        img.src = gifs[index].src;
+        img.onload = () => {
+          setLoadedGifs((prev) => new Set(prev).add(index));
+        };
+      }
+    };
+    preloadGif(currentGifIndex + 1);
+    preloadGif(currentGifIndex - 1);
+  }, [currentGifIndex, gifs, loadedGifs]);
+
+  useEffect(() => {
+    const startAutoScroll = () => {
+      if (autoScrollTimerRef.current) {
+        clearTimeout(autoScrollTimerRef.current);
+      }
+
+      // Timer now uses the variable 'currentDuration'
+      autoScrollTimerRef.current = setTimeout(() => {
+        setIsTransitioning(true);
+        setCurrentGifIndex((prev) => (prev + 1) % gifs.length);
+        setTimeout(() => setIsTransitioning(false), 600);
+      }, currentDuration);
+    };
+
+    startAutoScroll();
+
+    return () => {
+      if (autoScrollTimerRef.current) {
+        clearTimeout(autoScrollTimerRef.current);
+      }
+    };
+  }, [currentGifIndex, gifs.length, currentDuration]);
+
+  useEffect(() => {
+    setCurrentGifIndex(0);
+    setLoadedGifs(new Set([0]));
+    setIsTransitioning(false);
+  }, [activeFeatureIndex]);
+
+  const handlePrevious = () => {
+    if (isTransitioning) return;
+    setIsTransitioning(true);
+    setCurrentGifIndex((prev) => (prev - 1 + gifs.length) % gifs.length);
+    setTimeout(() => setIsTransitioning(false), 600);
+  };
+
+  const handleNext = () => {
+    if (isTransitioning) return;
+    setIsTransitioning(true);
+    setCurrentGifIndex((prev) => (prev + 1) % gifs.length);
+    setTimeout(() => setIsTransitioning(false), 600);
+  };
+
+  const handleDotClick = (index: number) => {
+    if (isTransitioning || index === currentGifIndex) return;
+    setIsTransitioning(true);
+    setCurrentGifIndex(index);
+    setTimeout(() => setIsTransitioning(false), 600);
+  };
+
+  return (
+    <div className="relative w-full h-full">
+      {/* Navigation Arrows */}
+      <div className="absolute -top-14 right-0 flex items-center gap-2 z-50">
+        <motion.button
+          onClick={handlePrevious}
+          disabled={isTransitioning}
+          className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center hover:border-slate-300 hover:shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed group"
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+        >
+          <ChevronLeft
+            size={20}
+            className="text-slate-600 group-hover:text-slate-900 transition-colors"
+          />
+        </motion.button>
+
+        <motion.button
+          onClick={handleNext}
+          disabled={isTransitioning}
+          className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center hover:border-slate-300 hover:shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed group"
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+        >
+          <ChevronRight
+            size={20}
+            className="text-slate-600 group-hover:text-slate-900 transition-colors"
+          />
+        </motion.button>
+
+        <div className="flex items-center gap-1.5 ml-2 px-3 py-2 bg-white rounded-xl border border-slate-200">
+          {gifs.map((_, index) => (
+            <motion.button
+              key={index}
+              onClick={() => handleDotClick(index)}
+              className="relative"
+              whileHover={{ scale: 1.2 }}
+              whileTap={{ scale: 0.9 }}
+            >
+              <div
+                className={`w-2 h-2 rounded-full transition-all duration-500 cursor-pointer ${
+                  currentGifIndex === index
+                    ? "w-6"
+                    : "bg-slate-300 hover:bg-slate-400"
+                }`}
+                style={{
+                  backgroundColor:
+                    currentGifIndex === index ? color : undefined,
+                }}
+              />
+            </motion.button>
+          ))}
+        </div>
+      </div>
+
+      <div className="relative w-full aspect-[16/10] rounded-[2rem] bg-white p-2 shadow-2xl shadow-slate-200/50 border border-slate-100 ring-4 ring-slate-50 overflow-hidden flex flex-col">
+        <div className="h-10 bg-white/90 backdrop-blur z-20 border-b border-slate-100 flex items-center px-4 justify-between rounded-t-[1.5rem] flex-none">
+          <div className="flex gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full bg-slate-200" />
+            <div className="w-2.5 h-2.5 rounded-full bg-slate-200" />
+            <div className="w-2.5 h-2.5 rounded-full bg-slate-200" />
+          </div>
+          <div
+            className={`${jetbrainsMono.className} text-[10px] text-slate-400`}
+          >
+            smarix-engine://{tag.toLowerCase()}
+          </div>
+        </div>
+
+        <div className="relative flex-1 w-full rounded-b-[1.5rem] overflow-hidden bg-slate-50">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={`${activeFeatureIndex}-${currentGifIndex}`}
+              className="absolute inset-0"
+              initial={{ opacity: 0, scale: 1.05 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{
+                duration: 0.6,
+                ease: [0.43, 0.13, 0.23, 0.96],
+              }}
+            >
+              <Image
+                src={gifs[currentGifIndex].src}
+                alt={`Demo ${currentGifIndex + 1}`}
+                fill
+                className="object-cover" 
+                unoptimized
+                priority={currentGifIndex === 0}
+                loading={currentGifIndex === 0 ? "eager" : "lazy"}
+              />
+            </motion.div>
+          </AnimatePresence>
+
+          <div className="absolute inset-0 ring-1 ring-inset ring-black/5 rounded-b-[1.5rem] z-30 pointer-events-none" />
+
+          {/* Progress Bar (Placed inside the flex container) */}
+          <div className="absolute bottom-4 left-4 right-4 z-40">
+            <div className="w-full h-1 bg-white/30 rounded-full overflow-hidden backdrop-blur">
+              <motion.div
+                key={`progress-${activeFeatureIndex}-${currentGifIndex}`}
+                className="h-full rounded-full"
+                style={{ backgroundColor: color }}
+                initial={{ width: "0%" }}
+                animate={{ width: "100%" }}
+                transition={{
+                  duration: currentDuration / 1000,
+                  ease: "linear",
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export const Features = () => {
   const containerRef = useRef(null);
@@ -338,60 +562,23 @@ export const Features = () => {
             </div>
 
             <div className="lg:col-span-7 h-full max-h-[600px] flex items-center">
-              <div className="relative w-full aspect-[16/10] rounded-[2rem] bg-white p-2 shadow-2xl shadow-slate-200/50 border border-slate-100 ring-4 ring-slate-50">
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={activeIndex}
-                    className="relative w-full h-full rounded-[1.5rem] overflow-hidden bg-slate-50"
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 1.05 }}
-                    transition={{ duration: 0.6 }}
-                  >
-                    <div className="absolute top-0 left-0 right-0 h-10 bg-white/90 backdrop-blur z-20 border-b border-slate-100 flex items-center px-4 justify-between">
-                      <div className="flex gap-1.5">
-                        <div className="w-2.5 h-2.5 rounded-full bg-slate-200" />
-                        <div className="w-2.5 h-2.5 rounded-full bg-slate-200" />
-                        <div className="w-2.5 h-2.5 rounded-full bg-slate-200" />
-                      </div>
-                      <div
-                        className={`${jetbrainsMono.className} text-[10px] text-slate-400`}
-                      >
-                        smarix-engine://
-                        {features[activeIndex].tag.toLowerCase()}
-                      </div>
-                    </div>
-
-                    <Image
-                      src={features[activeIndex].image}
-                      alt={features[activeIndex].title}
-                      fill
-                      className="object-cover mt-10"
-                      unoptimized
-                    />
-
-                    <div className="absolute inset-0 ring-1 ring-inset ring-black/5 rounded-[1.5rem] z-30 pointer-events-none" />
-                  </motion.div>
-                </AnimatePresence>
-
+              <AnimatePresence mode="wait">
                 <motion.div
-                  key={`badge-${activeIndex}`}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.5 }}
-                  className="absolute -bottom-6 -right-6 px-6 py-3 bg-white rounded-2xl shadow-xl border border-slate-100 flex items-center gap-3 z-40"
+                  key={activeIndex}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 1.05 }}
+                  transition={{ duration: 0.6 }}
+                  className="w-full"
                 >
-                  <div
-                    className="w-2 h-2 rounded-full animate-pulse"
-                    style={{ backgroundColor: features[activeIndex].color }}
+                  <GifCarousel
+                    gifs={features[activeIndex].gifs}
+                    activeFeatureIndex={activeIndex}
+                    color={features[activeIndex].color}
+                    tag={features[activeIndex].tag}
                   />
-                  <span
-                    className={`${jetbrainsMono.className} text-xs font-bold text-[#0E1B2E]`}
-                  >
-                    LIVE PREVIEW
-                  </span>
                 </motion.div>
-              </div>
+              </AnimatePresence>
             </div>
           </div>
         </motion.div>
