@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, Terminal } from "lucide-react";
+import { ChevronLeft, ChevronRight, Terminal, BookOpen, Code2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
@@ -33,166 +33,156 @@ export default function StepByStepSection({ steps }: StepByStepSectionProps) {
   const currentStepData = steps[currentStep - 1];
 
   return (
-    <div className="rounded-2xl border-2 border-[#0E1B2E]/5 h-[95vh] bg-white shadow-lg shadow-[#0E1B2E]/5 flex flex-col">
-      {/* Progress Header */}
-      <div className="px-6 py-5 border-b border-[#0E1B2E]/5 bg-gradient-to-r from-slate-50/50 to-white rounded-full">
-        <div className="flex items-center justify-between mb-4">
+    <div className={`rounded-2xl border border-white/10 h-[95vh] bg-[#1E1F22] shadow-2xl flex flex-col overflow-hidden ${inter.className}`}>
+      
+      {/* HEADER: Editor Tab Style */}
+      <div className="px-6 py-4 border-b border-white/5 bg-[#1B1B1D] flex flex-col gap-4">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-[#0E1B2E] to-blue-900 shadow-md">
-              <span
-                className={`${jetbrainsMono.className} text-white font-bold text-lg`}
-              >
-                {currentStep}
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-[#2B2D31] border border-white/10 shadow-inner">
+              <span className={`${jetbrainsMono.className} text-emerald-400 font-bold text-lg`}>
+                {currentStep.toString().padStart(2, '0')}
               </span>
             </div>
             <div>
-              <p
-                className={`${inter.className} text-sm font-bold text-[#0E1B2E]`}
-              >
-                Step {currentStep} of {totalSteps}
-              </p>
-              <p
-                className={`${inter.className} text-xs text-[#0E1B2E]/50 font-medium`}
-              >
-                Implementation Guide
+              <div className="flex items-center gap-2">
+                <Code2 className="w-3.5 h-3.5 text-zinc-500" />
+                <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.2em]">
+                  Implementation Phase
+                </p>
+              </div>
+              <p className="text-sm font-semibold text-zinc-200">
+                Step {currentStep} <span className="text-zinc-600 mx-1">/</span> {totalSteps}
               </p>
             </div>
           </div>
-          <span
-            className={`${jetbrainsMono.className} text-xs font-bold text-[#0E1B2E] bg-[#0E1B2E]/5 px-3 py-1.5 rounded-lg border border-[#0E1B2E]/5`}
-          >
-            {Math.round(progress)}% Complete
-          </span>
+          
+          <div className="flex flex-col items-end gap-1">
+            <span className={`${jetbrainsMono.className} text-[10px] font-bold text-emerald-500/80 bg-emerald-500/5 px-2 py-1 rounded border border-emerald-500/10`}>
+              {Math.round(progress)}% COMPILED
+            </span>
+          </div>
         </div>
 
-        {/* Progress Bar */}
-        <div className="flex gap-1.5 h-1.5">
+        {/* Custom Progress Bar (Segmented) */}
+        <div className="flex gap-1 h-1">
           {Array.from({ length: totalSteps }).map((_, idx) => (
             <div
               key={idx}
               className={`flex-1 rounded-full transition-all duration-500 ${
                 idx < currentStep
-                  ? "bg-gradient-to-r from-[#0E1B2E] to-blue-600"
-                  : "bg-slate-200"
+                  ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]"
+                  : "bg-zinc-800"
               }`}
             />
           ))}
         </div>
       </div>
 
-      {/* Step Content */}
-      <div className="flex-1 overflow-y-auto px-6 py-6 bg-white min-h-[300px]">
-        <h2
-          className={`${inter.className} text-lg font-bold mb-4 flex items-center gap-3 text-[#0E1B2E]`}
-        >
-          <span className="flex items-center justify-center w-6 h-6 rounded bg-[#0E1B2E]/5 text-[#0E1B2E]/40 text-xs">
-            <Terminal className="w-3.5 h-3.5" />
-          </span>
-          <span>{currentStepData?.title}</span>
-        </h2>
+      {/* CONTENT: Editor Area */}
+      <div className="flex-1 overflow-y-auto px-8 py-8 bg-[#1E1F22] custom-scrollbar">
+        <div className="max-w-3xl mx-auto">
+          <h2 className="text-xl font-bold mb-8 flex items-center gap-3 text-zinc-100">
+            <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+              <Terminal className="w-4 h-4" />
+            </span>
+            <span>{currentStepData?.title}</span>
+          </h2>
 
-        <div className="prose prose-sm max-w-none prose-neutral">
-          <ReactMarkdown
-            components={{
-              code(props) {
-                const { children, className, node, ref, ...rest } = props;
-                const match = /language-(\w+)/.exec(className || "");
-                return match ? (
-                  <div className="my-4 rounded-xl overflow-hidden shadow-lg shadow-black/20 border border-slate-700/50">
-                    <div className="px-4 py-2 bg-[#1e222a] border-b border-slate-700/50 flex items-center gap-2">
-                      <div className="flex gap-1.5">
-                        <div className="w-2.5 h-2.5 rounded-full bg-red-500/80" />
-                        <div className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
-                        <div className="w-2.5 h-2.5 rounded-full bg-green-500/80" />
+          <div className="prose prose-invert prose-sm max-w-none">
+            <ReactMarkdown
+              components={{
+                code(props) {
+                  const { children, className } = props;
+                  const match = /language-(\w+)/.exec(className || "");
+                  return match ? (
+                    <div className="my-6 rounded-xl overflow-hidden border border-white/10 bg-[#0D0D0F]">
+                      <div className="px-4 py-2 bg-[#161618] border-b border-white/5 flex items-center justify-between">
+                        <div className="flex gap-1.5">
+                          <div className="w-2.5 h-2.5 rounded-full bg-[#FF5F56]" />
+                          <div className="w-2.5 h-2.5 rounded-full bg-[#FFBD2E]" />
+                          <div className="w-2.5 h-2.5 rounded-full bg-[#27C93F]" />
+                        </div>
+                        <span className={`${jetbrainsMono.className} text-[10px] text-zinc-500 uppercase tracking-widest font-bold`}>
+                          {match[1]}
+                        </span>
                       </div>
-                      <span
-                        className={`${jetbrainsMono.className} text-[10px] text-slate-400 ml-2 uppercase tracking-wider`}
+                      <SyntaxHighlighter
+                        PreTag="div"
+                        language={match[1]}
+                        style={oneDark}
+                        customStyle={{
+                          margin: 0,
+                          padding: "1.5rem",
+                          fontSize: "0.85rem",
+                          backgroundColor: "#0D0D0F",
+                          fontFamily: jetbrainsMono.style.fontFamily,
+                          lineHeight: "1.6",
+                        }}
                       >
-                        {match[1]}
-                      </span>
+                        {String(children).replace(/\n$/, "")}
+                      </SyntaxHighlighter>
                     </div>
-                    <SyntaxHighlighter
-                      PreTag="div"
-                      language={match[1]}
-                      style={oneDark}
-                      customStyle={{
-                        margin: 0,
-                        padding: "1.5rem",
-                        fontSize: "0.85rem",
-                        backgroundColor: "#282c34",
-                        fontFamily: jetbrainsMono.style.fontFamily,
-                      }}
-                    >
-                      {String(children).replace(/\n$/, "")}
-                    </SyntaxHighlighter>
-                  </div>
-                ) : (
-                  <code
-                    className={`${jetbrainsMono.className} px-1.5 py-0.5 rounded text-[13px] bg-[#0E1B2E]/5 text-[#0E1B2E] border border-[#0E1B2E]/10`}
-                  >
+                  ) : (
+                    <code className={`${jetbrainsMono.className} px-1.5 py-0.5 rounded text-[13px] bg-zinc-800 text-emerald-400 border border-white/5`}>
+                      {children}
+                    </code>
+                  );
+                },
+                p: ({ children }) => (
+                  <p className="mb-6 leading-relaxed text-[15px] text-zinc-400 font-medium">
                     {children}
-                  </code>
-                );
-              },
-              p: ({ children }) => (
-                <p
-                  className={`${inter.className} mb-4 leading-relaxed text-[15px] text-[#0E1B2E]/80`}
-                >
-                  {children}
-                </p>
-              ),
-              ul: ({ children }) => (
-                <ul className="list-disc list-outside mb-4 space-y-2 ml-4 text-[#0E1B2E] marker:text-[#0E1B2E]/40">
-                  {children}
-                </ul>
-              ),
-              li: ({ children }) => (
-                <li
-                  className={`${inter.className} leading-relaxed text-[15px] text-[#0E1B2E]/80`}
-                >
-                  {children}
-                </li>
-              ),
-              h3: ({ children }) => (
-                <h3
-                  className={`${inter.className} leading-relaxed text-black mb-2`}
-                >
-                  {children}
-                </h3>
-              ),
-            }}
-          >
-            {currentStepData?.content}
-          </ReactMarkdown>
+                  </p>
+                ),
+                ul: ({ children }) => (
+                  <ul className="list-none mb-6 space-y-3 ml-2">
+                    {children}
+                  </ul>
+                ),
+                li: ({ children }) => (
+                  <li className="flex items-start gap-3 text-[15px] text-zinc-400">
+                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-emerald-500/40 shrink-0" />
+                    <span>{children}</span>
+                  </li>
+                ),
+                h3: ({ children }) => (
+                  <h3 className="text-zinc-100 font-bold text-lg mt-8 mb-4 border-l-2 border-emerald-500 pl-4">
+                    {children}
+                  </h3>
+                ),
+              }}
+            >
+              {currentStepData?.content}
+            </ReactMarkdown>
+          </div>
         </div>
       </div>
 
-      {/* Navigation */}
-      <div className="mt-auto px-6 py-5 border-t border-[#0E1B2E]/5 flex items-center justify-between bg-slate-50/90">
+      {/* FOOTER: Navigation Bar */}
+      <div className="mt-auto px-8 py-5 border-t border-white/5 bg-[#1B1B1D] flex items-center justify-between">
         <button
           onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
           disabled={currentStep === 1}
-          className={`px-5 py-2.5 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all duration-200 ${
+          className={`px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all duration-200 border ${
             currentStep === 1
-              ? "bg-slate-100 text-slate-400 cursor-not-allowed"
-              : "bg-white text-[#0E1B2E] border border-[#0E1B2E]/10 hover:bg-slate-50 hover:border-[#0E1B2E]/20 shadow-sm"
+              ? "border-white/5 text-zinc-700 cursor-not-allowed"
+              : "border-white/10 bg-[#2B2D31] text-zinc-300 hover:bg-[#32353B] hover:text-white active:scale-95"
           }`}
         >
           <ChevronLeft className="w-4 h-4" />
-          <span>Previous</span>
+          PREVIOUS
         </button>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           {Array.from({ length: totalSteps }).map((_, idx) => (
-            <button
+            <div
               key={idx}
-              onClick={() => setCurrentStep(idx + 1)}
-              className={`h-1.5 rounded-full transition-all duration-300 ${
+              className={`h-1 rounded-full transition-all duration-500 ${
                 idx + 1 === currentStep
-                  ? "bg-[#0E1B2E] w-6"
+                  ? "bg-emerald-500 w-8"
                   : idx < currentStep
-                    ? "bg-blue-400 w-1.5"
-                    : "bg-slate-300 w-1.5 hover:bg-slate-400"
+                  ? "bg-emerald-500/20 w-2"
+                  : "bg-zinc-800 w-2"
               }`}
             />
           ))}
@@ -201,16 +191,33 @@ export default function StepByStepSection({ steps }: StepByStepSectionProps) {
         <button
           onClick={() => setCurrentStep(Math.min(totalSteps, currentStep + 1))}
           disabled={currentStep === totalSteps}
-          className={`px-6 py-2.5 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all duration-200 ${
+          className={`px-6 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all duration-200 ${
             currentStep === totalSteps
-              ? "bg-slate-100 text-slate-400 cursor-not-allowed"
-              : "bg-[#0E1B2E] text-white hover:bg-blue-900 shadow-md hover:shadow-lg"
+              ? "border border-white/5 text-zinc-700 cursor-not-allowed"
+              : "bg-emerald-600 text-white hover:bg-emerald-500 shadow-lg shadow-emerald-500/10 active:scale-95"
           }`}
         >
-          <span>Next Step</span>
+          {currentStep === totalSteps ? "COMPLETE" : "NEXT STEP"}
           <ChevronRight className="w-4 h-4" />
         </button>
       </div>
+
+      <style jsx global>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: #1E1F22;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #2B2D31;
+          border-radius: 10px;
+          border: 2px solid #1E1F22;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #32353B;
+        }
+      `}</style>
     </div>
   );
 }

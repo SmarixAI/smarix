@@ -9,15 +9,23 @@ import {
   ChevronLeft,
   ChevronRight,
   FileCode,
-  MoveHorizontal,
+  Maximize2,
   Minimize2,
   Sparkles,
-  ChevronsLeftRight,
+  Play,
+  AlertCircle,
+  Code2,
+  FileText,
 } from "lucide-react";
 import Editor from "@monaco-editor/react";
-import { Inter } from "next/font/google";
+import { JetBrains_Mono, DM_Sans } from "next/font/google";
 
-const inter = Inter({
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
+const dmSans = DM_Sans({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
 });
@@ -45,7 +53,7 @@ interface CodeEditorProps {
   isFullscreen?: boolean;
   onToggleFullscreen?: () => void;
   onEvaluationComplete?: (evaluationData: any) => void;
-  repoName: string; // ✅ Added Prop
+  repoName: string;
 }
 
 interface FileEditorState {
@@ -67,7 +75,7 @@ export default function CodeEditor({
     "idle" | "submitting" | "evaluating" | "complete"
   >("idle");
   const [showFileList, setShowFileList] = useState(true);
-  const [filesWidth, setFilesWidth] = useState(288);
+  const [filesWidth, setFilesWidth] = useState(280);
   const [isResizingFiles, setIsResizingFiles] = useState(false);
 
   useEffect(() => {
@@ -190,7 +198,6 @@ export default function CodeEditor({
   };
 
   const handleSubmitCode = async () => {
-    // 1. Validation
     if (!repoName) {
       alert("Error: Repository name is missing. Please refresh the page.");
       return;
@@ -199,7 +206,6 @@ export default function CodeEditor({
     setIsSubmitting(true);
     setSubmissionStatus("submitting");
 
-    // Create a timeout controller (60 seconds max) to prevent indefinite hanging
     const controller = new AbortController();
 
     try {
@@ -217,7 +223,6 @@ export default function CodeEditor({
         timestamp: new Date().toISOString(),
       };
 
-      // --- STEP 1: Save Submission to S3 (Next.js API) ---
       const response = await fetch(
         `/api/onboarding/bugFix/challenges?repo=${encodeURIComponent(
           repoName,
@@ -226,7 +231,7 @@ export default function CodeEditor({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(submissionData),
-          signal: controller.signal, // Link timeout
+          signal: controller.signal,
         },
       );
 
@@ -242,7 +247,6 @@ export default function CodeEditor({
 
       console.log("✅ [Step 1] Code saved. ID:", result.submission_id);
 
-      // --- STEP 2: Trigger Evaluation (Python Backend) ---
       setSubmissionStatus("evaluating");
       setIsEvaluating(true);
 
@@ -259,7 +263,7 @@ export default function CodeEditor({
             pr_number: safePrNumber,
             repo_name: repoName,
           }),
-          signal: controller.signal, // Reuse timeout
+          signal: controller.signal,
         });
 
         if (!evalResponse.ok) {
@@ -272,7 +276,6 @@ export default function CodeEditor({
         const evalResult = await evalResponse.json();
         console.log("✅ [Step 2] Evaluation received:", evalResult);
 
-        // Success State
         setSubmissionStatus("complete");
         if (onEvaluationComplete) {
           onEvaluationComplete(evalResult);
@@ -287,10 +290,8 @@ export default function CodeEditor({
         alert(`Error: ${error.message || "Something went wrong."}`);
       }
 
-      // Reset state on error so user can try again
       setSubmissionStatus("idle");
     } finally {
-      // Always clean up resources and loading states
       setIsSubmitting(false);
       setIsEvaluating(false);
     }
@@ -298,32 +299,37 @@ export default function CodeEditor({
 
   const getFileIcon = (filePath: string) => {
     const ext = filePath.split(".").pop()?.toLowerCase();
-    if (["js", "jsx", "ts", "tsx"].includes(ext || "")) return "📜";
-    if (["py"].includes(ext || "")) return "🐍";
-    if (["java"].includes(ext || "")) return "☕";
-    if (["dart"].includes(ext || "")) return "🎯";
-    if (["cpp", "c"].includes(ext || "")) return "⚙️";
-    if (["lock", "json", "yaml"].includes(ext || "")) return "📦";
-    if (["cmake"].includes(ext || "")) return "🔧";
-    return "📄";
+    const iconMap: Record<string, { icon: string; color: string }> = {
+      js: { icon: "JS", color: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20" },
+      jsx: { icon: "JSX", color: "bg-blue-500/10 text-blue-500 border-blue-500/20" },
+      ts: { icon: "TS", color: "bg-blue-600/10 text-blue-600 border-blue-600/20" },
+      tsx: { icon: "TSX", color: "bg-blue-600/10 text-blue-600 border-blue-600/20" },
+      py: { icon: "PY", color: "bg-green-500/10 text-green-500 border-green-500/20" },
+      java: { icon: "JAVA", color: "bg-orange-500/10 text-orange-500 border-orange-500/20" },
+      dart: { icon: "DART", color: "bg-cyan-500/10 text-cyan-500 border-cyan-500/20" },
+      cpp: { icon: "CPP", color: "bg-purple-500/10 text-purple-500 border-purple-500/20" },
+      c: { icon: "C", color: "bg-purple-500/10 text-purple-500 border-purple-500/20" },
+      lock: { icon: "LOCK", color: "bg-zinc-500/10 text-zinc-500 border-zinc-500/20" },
+      json: { icon: "JSON", color: "bg-amber-500/10 text-amber-500 border-amber-500/20" },
+      yaml: { icon: "YAML", color: "bg-pink-500/10 text-pink-500 border-pink-500/20" },
+      yml: { icon: "YML", color: "bg-pink-500/10 text-pink-500 border-pink-500/20" },
+      cmake: { icon: "CMAKE", color: "bg-red-500/10 text-red-500 border-red-500/20" },
+    };
+    return iconMap[ext || ""] || { icon: "FILE", color: "bg-zinc-500/10 text-zinc-500 border-zinc-500/20" };
   };
 
   if (!prData || prData.file_changes.length === 0) {
     return (
-      <div
-        className={`rounded-lg border border-gray-200 h-full overflow-hidden shadow-sm flex items-center justify-center bg-white ${inter.className}`}
-      >
-        <div className="flex flex-col items-center justify-center py-16 px-8">
-          <FileCode className="w-16 h-16 mb-4 text-gray-400" />
-          <p
-            className={`font-medium text-center text-lg text-gray-700 ${inter.className}`}
-          >
-            No PR data available
-          </p>
-          <p
-            className={`text-sm text-center mt-2 text-gray-500 ${inter.className}`}
-          >
-            Select a challenge to see the code editor
+      <div className={`h-full flex items-center justify-center bg-[#1E1E1E] ${dmSans.className}`}>
+        <div className="flex flex-col items-center justify-center py-20 px-8 text-center">
+          <div className="w-20 h-20 bg-zinc-900 border border-zinc-800 rounded-2xl flex items-center justify-center mb-6">
+            <FileCode className="w-10 h-10 text-zinc-600" />
+          </div>
+          <h3 className="font-semibold text-lg text-zinc-200 mb-2">
+            No Code Available
+          </h3>
+          <p className="text-sm text-zinc-500 max-w-sm">
+            Select a challenge from the list to start coding
           </p>
         </div>
       </div>
@@ -331,51 +337,46 @@ export default function CodeEditor({
   }
 
   return (
-    <div
-      className={`rounded-lg border border-gray-200 overflow-hidden shadow-sm h-full flex flex-col bg-white ${inter.className}`}
-    >
-      {/* Header */}
-      <div className="px-6 py-2.5 border-b flex-shrink-0 bg-gray-900 border-gray-700 rounded-t-lg">
+    <div className={`h-full flex flex-col bg-[#1E1E1E] ${dmSans.className}`}>
+      {/* SLEEK HEADER */}
+      <div className="px-4 py-2.5 border-b border-white/5 bg-[#1F2023] flex-shrink-0">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 rounded-md bg-gray-800 flex items-center justify-center">
-              <FileCode className="w-4 h-4 text-white" />
+          <div className="flex items-center gap-3">
+            <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center">
+              <Code2 className="w-4 h-4 text-white" />
             </div>
-            <h3
-              className={`text-base font-semibold text-white ${inter.className}`}
-            >
+            <h3 className="text-sm font-semibold text-zinc-200">
               Code Editor
             </h3>
           </div>
-          <div className="flex items-center space-x-2">
+          
+          <div className="flex items-center gap-2">
             {onToggleFullscreen && (
               <button
                 onClick={onToggleFullscreen}
-                className={`px-2.5 py-1.5 rounded-md text-white text-xs font-medium transition-all flex items-center bg-gray-700 hover:bg-gray-600 ${inter.className}`}
-                title={
-                  isFullscreen
-                    ? "Collapse Width Horizontally"
-                    : "Expand Width Horizontally"
-                }
+                className="p-2 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-all"
+                title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
               >
                 {isFullscreen ? (
-                  <ChevronsLeftRight className="w-4 h-4" />
+                  <Minimize2 className="w-4 h-4" />
                 ) : (
-                  <MoveHorizontal className="w-4 h-4" />
+                  <Maximize2 className="w-4 h-4" />
                 )}
               </button>
             )}
             <button
               onClick={handleReset}
               disabled={isSubmitting}
-              className="px-2.5 py-1.5 rounded-md text-xs font-medium text-white bg-gray-700 hover:bg-gray-600 disabled:opacity-50"
+              className="p-2 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Reset Code"
             >
               <RotateCcw className="w-4 h-4" />
             </button>
             <button
               onClick={handleDownload}
               disabled={!selectedFile || isSubmitting}
-              className="px-2.5 py-1.5 rounded-md text-xs font-medium text-white bg-gray-700 hover:bg-gray-600 disabled:opacity-50"
+              className="p-2 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Download File"
             >
               <Download className="w-4 h-4" />
             </button>
@@ -383,130 +384,139 @@ export default function CodeEditor({
         </div>
       </div>
 
-      {/* Editor Area */}
+      {/* EDITOR AREA */}
       <div className="flex flex-1 min-h-0 code-editor-container">
-        {/* File Sidebar */}
-        <div
-          className={`${showFileList ? "" : "w-12"} border-r overflow-hidden flex-shrink-0 transition-all duration-300 border-gray-200 bg-gray-50`}
-          style={showFileList ? { width: `${filesWidth}px` } : {}}
-        >
-          <div
-            className="px-4 py-3 border-b cursor-pointer flex items-center justify-between sticky top-0 z-10 border-gray-200 bg-gray-50"
-            onClick={() => setShowFileList(!showFileList)}
-          >
-            <div
-              className={`flex items-center space-x-2 ${showFileList ? "" : "opacity-0 w-0 overflow-hidden"}`}
-            >
-              <span
-                className={`font-semibold text-sm text-gray-900 ${inter.className}`}
-              >
-                Files
-              </span>
-              <span
-                className={`text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 ${inter.className}`}
-              >
-                {prData.file_changes.length}
-              </span>
-            </div>
-            <div className="flex-shrink-0">
-              {showFileList ? (
-                <ChevronLeft className="w-4 h-4 text-gray-600" />
-              ) : (
-                <ChevronRight className="w-4 h-4 text-gray-600" />
-              )}
-            </div>
-          </div>
 
-          {showFileList && (
-            <div className="py-1 overflow-y-auto h-[calc(100%-60px)]">
-              {prData.file_changes.map((fileChange) => (
-                <button
-                  key={fileChange.file_path}
-                  onClick={() => setSelectedFile(fileChange.file_path)}
-                  className={`w-full px-4 py-3 text-left transition-all border-b ${
-                    selectedFile === fileChange.file_path
-                      ? "bg-gray-100 border-gray-300"
-                      : "hover:bg-gray-100 border-gray-100"
-                  }`}
-                >
-                  <div className="flex items-start space-x-2">
-                    <span className="text-lg mt-0.5">
-                      {getFileIcon(fileChange.file_path)}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p
-                        className={`font-semibold truncate text-sm mb-1 text-gray-900 ${inter.className}`}
-                      >
-                        {fileChange.file_path.split("/").pop()}
-                      </p>
-                      <p
-                        className={`text-xs truncate mb-1.5 text-gray-600 ${inter.className}`}
-                      >
-                        {fileChange.file_path}
-                      </p>
-                    </div>
-                  </div>
-                </button>
-              ))}
+        {/* FILES RESIZER - Softer interactive state */}
+        {/* FILE SIDEBAR - Relaxed Charcoal Slate with Vertical Tiled Label when closed */}
+        <div
+          className={`flex flex-col border-r border-white/5 overflow-hidden flex-shrink-0 transition-all duration-300 bg-[#1E1F22] ${
+            !showFileList ? "w-10 cursor-pointer hover:bg-[#2B2D31]" : ""
+          }`}
+          style={showFileList ? { width: `${filesWidth}px` } : {}}
+          onClick={() => !showFileList && setShowFileList(true)}
+        >
+          {!showFileList ? (
+            /* --- VERTICAL TILED MODE (Closed) --- */
+            <div className="flex flex-col items-center py-4 h-full gap-8">
+              <ChevronRight className="w-4 h-4 text-zinc-500 mb-2" />
+              <div 
+                className="flex items-center gap-2" 
+                style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+              >
+                <span className="font-bold text-[11px] text-zinc-400 uppercase tracking-[0.2em]">
+                  Files
+                </span>
+                <FileText className="w-3.5 h-3.5 text-zinc-500 rotate-90" />
+              </div>
             </div>
+          ) : (
+            /* --- OPEN SIDEBAR CONTENT --- */
+            <>
+              {/* Sidebar Header */}
+              <div
+                className="px-4 py-3 border-b border-white/5 cursor-pointer flex items-center justify-between sticky top-0 z-10 bg-[#2B2D31]/50 backdrop-blur-md hover:bg-[#2B2D31] transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowFileList(false);
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <FileText className="w-3.5 h-3.5 text-zinc-400" />
+                  <span className="font-bold text-[10px] text-zinc-400 uppercase tracking-[0.15em]">
+                    Files
+                  </span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-md bg-[#2B2D31] text-zinc-500 font-medium ${jetbrainsMono.className}`}>
+                    {prData.file_changes.length}
+                  </span>
+                </div>
+                <ChevronLeft className="w-4 h-4 text-zinc-600" />
+              </div>
+
+              {/* File List */}
+              <div className="overflow-y-auto h-[calc(100%-48px)] custom-scrollbar">
+                {prData.file_changes.map((fileChange) => {
+                  const fileIconData = getFileIcon(fileChange.file_path);
+                  const isSelected = selectedFile === fileChange.file_path;
+                  
+                  return (
+                    <button
+                      key={fileChange.file_path}
+                      onClick={() => setSelectedFile(fileChange.file_path)}
+                      className={`w-full px-4 py-3 text-left transition-all border-b border-white/5 ${
+                        isSelected
+                          ? "bg-[#2B2D31] border-l-2 border-l-emerald-500 shadow-inner"
+                          : "hover:bg-[#2B2D31]/40 border-l-2 border-l-transparent"
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${fileIconData.color} ${jetbrainsMono.className} mt-0.5`}>
+                          {fileIconData.icon}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className={`font-semibold truncate text-[13px] mb-0.5 ${isSelected ? "text-white" : "text-zinc-400"}`}>
+                            {fileChange.file_path.split("/").pop()}
+                          </p>
+                          <p className={`text-[10px] truncate ${isSelected ? "text-zinc-500" : "text-zinc-600"} ${jetbrainsMono.className}`}>
+                            {fileChange.file_path}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
           )}
         </div>
 
-        {/* Files Resizer */}
-        {showFileList && (
-          <div
-            onMouseDown={(e) => {
-              e.preventDefault();
-              setIsResizingFiles(true);
-            }}
-            className={`w-1 cursor-col-resize hover:bg-gray-400 transition-colors flex-shrink-0 ${
-              isResizingFiles ? "bg-gray-400" : "bg-gray-300"
-            }`}
-            style={{ width: "4px" }}
-          >
-            <div className="w-full h-full" />
-          </div>
-        )}
-
-        {/* Editor */}
-        <div className="flex-1 flex flex-col min-w-0">
+        {/* CODE EDITOR */}
+        <div className="flex-1 flex flex-col min-w-0 bg-[#1E1E1E]">
           {selectedFile ? (
             <>
-              <div className="px-4 py-2.5 border-b flex items-center justify-between flex-shrink-0 bg-gray-50 border-gray-200">
-                <div className="flex items-center space-x-2">
-                  <span className="text-base">{getFileIcon(selectedFile)}</span>
-                  <span
-                    className={`font-medium text-sm text-gray-900 ${inter.className}`}
-                  >
+              {/* File Header */}
+              <div className="px-4 py-2 border-b border-zinc-800 flex items-center justify-between flex-shrink-0 bg-[#1E1E1E]">
+                <div className="flex items-center gap-2.5">
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${getFileIcon(selectedFile).color} ${jetbrainsMono.className}`}>
+                    {getFileIcon(selectedFile).icon}
+                  </span>
+                  <span className={`font-medium text-xs text-zinc-300 ${jetbrainsMono.className}`}>
                     {selectedFile}
                   </span>
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-700 ${inter.className}`}
-                  >
+                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-500 font-medium uppercase">
                     {getLanguageFromPath(selectedFile)}
                   </span>
                 </div>
               </div>
 
+              {/* Monaco Editor */}
               <div className="flex-1 min-h-0">
                 <Editor
                   height="100%"
                   language={getLanguageFromPath(selectedFile)}
                   value={fileContents[selectedFile] || ""}
                   onChange={(value) => handleCodeChange(selectedFile, value)}
-                  theme="vs-light"
+                  theme="vs-dark"
                   options={{
                     minimap: { enabled: true },
-                    fontSize: 14,
+                    fontSize: 13,
                     lineNumbers: "on",
                     scrollBeyondLastLine: false,
                     automaticLayout: true,
                     tabSize: 2,
                     wordWrap: "on",
                     padding: { top: 16, bottom: 16 },
-                    lineHeight: 22,
-                    fontFamily: "'Fira Code', 'Consolas', 'Monaco', monospace",
+                    lineHeight: 20,
+                    fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
+                    fontLigatures: true,
                     readOnly: isSubmitting,
+                    renderLineHighlight: "all",
+                    cursorBlinking: "smooth",
+                    smoothScrolling: true,
+                    scrollbar: {
+                      verticalScrollbarSize: 8,
+                      horizontalScrollbarSize: 8,
+                    },
                   }}
                 />
               </div>
@@ -514,11 +524,11 @@ export default function CodeEditor({
           ) : (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center">
-                <FileCode className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                <p
-                  className={`font-medium text-sm text-gray-600 ${inter.className}`}
-                >
-                  Select a file to edit
+                <div className="w-16 h-16 bg-zinc-900 border border-zinc-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <FileCode className="w-8 h-8 text-zinc-600" />
+                </div>
+                <p className="font-medium text-sm text-zinc-400">
+                  Select a file to start editing
                 </p>
               </div>
             </div>
@@ -526,51 +536,62 @@ export default function CodeEditor({
         </div>
       </div>
 
-      {/* Submit Button and Status */}
-      <div className="px-6 py-3 border-t flex-shrink-0 bg-gray-50 border-gray-200 rounded-b-lg">
+      {/* SUBMIT FOOTER */}
+      <div className="px-4 py-3 border-t border-zinc-800 flex-shrink-0 bg-[#0A0A0A]">
         {submissionStatus === "idle" || submissionStatus === "complete" ? (
           <button
             onClick={handleSubmitCode}
             disabled={isSubmitting}
-            className={`w-full px-6 py-3 rounded-lg font-semibold flex items-center justify-center space-x-2 transition-all ${
+            className={`w-full px-6 py-2.5 rounded-lg font-semibold flex items-center justify-center gap-2 transition-all text-sm ${
               isSubmitting
-                ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                : "bg-gray-900 text-white hover:bg-gray-800"
-            } ${inter.className}`}
+                ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
+                : "bg-emerald-600 text-white hover:bg-emerald-500 shadow-lg shadow-emerald-600/20"
+            }`}
           >
-            <CheckCircle className="w-5 h-5" />
-            <span>Submit Solution</span>
+            <Play className="w-4 h-4" />
+            <span>Run & Submit</span>
           </button>
         ) : (
-          <div
-            className={`w-full px-6 py-3 rounded-lg border flex items-center justify-center space-x-3 ${
+          <div className={`w-full px-6 py-2.5 rounded-lg border flex items-center justify-center gap-3 ${
               submissionStatus === "submitting"
-                ? "bg-blue-50 border-blue-200"
-                : "bg-gray-50 border-gray-200"
+                ? "bg-blue-600/10 border-blue-600/20"
+                : "bg-amber-600/10 border-amber-600/20"
             }`}
           >
             {submissionStatus === "submitting" ? (
               <>
-                <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
-                <span
-                  className={`font-medium text-blue-600 ${inter.className}`}
-                >
-                  Submitting your code...
+                <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
+                <span className="font-medium text-blue-400 text-sm">
+                  Submitting code...
                 </span>
               </>
             ) : (
               <>
-                <Sparkles className="w-5 h-5 animate-pulse text-gray-600" />
-                <span
-                  className={`font-medium text-gray-600 ${inter.className}`}
-                >
-                  Evaluating your submission...
+                <Sparkles className="w-4 h-4 animate-pulse text-amber-400" />
+                <span className="font-medium text-amber-400 text-sm">
+                  Evaluating submission...
                 </span>
               </>
             )}
           </div>
         )}
       </div>
+
+      <style jsx global>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: #0A0A0A;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #27272A;
+          border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #3F3F46;
+        }
+      `}</style>
     </div>
   );
 }

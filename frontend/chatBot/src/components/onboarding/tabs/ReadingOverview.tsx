@@ -118,44 +118,51 @@ export default function ReadingOverview({
   const memoizedModules = useMemo(() => modules, []);
 
   return (
-    <>
-      <div className="mb-10 relative">
-        <h2
-          className={`${inter.className} text-2xl font-semibold tracking-tight mb-3 text-[#0E1B2E] relative`}
-        >
+    // The wrapper must be flex-col and h-full to calculate the available space
+    <div className="flex flex-col h-full w-full overflow-hidden">
+      
+      {/* HEADER SECTION - Kept compact */}
+      <div className="flex-shrink-0 mb-4">
+        <h2 className={`${inter.className} text-2xl font-semibold tracking-tight mb-1 text-[#0E1B2E]`}>
           Reading & Overview
         </h2>
-        <p
-          className={`${jetbrainsMono.className} text-[15px] text-[#0E1B2E]/60 leading-relaxed`}
-        >
-          Start your journey with these essential topics. Get familiar with the
-          basics before diving deeper.
+        <p className={`${jetbrainsMono.className} text-sm text-[#0E1B2E]/60`}>
+          Start your journey with these essential topics. Get familiar with the basics before diving deeper.
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-6 mb-6">
+      {/* THE GRID - This is the critical change */}
+      <div className="grid grid-cols-3 grid-rows-2 gap-4 flex-1 min-h-0 min-w-0 mb-4">
         {memoizedModules.map((module, index) => (
-          <ModuleCard
-            key={module.id}
-            module={module}
-            index={index}
-            isVisible={visibleModules.has(`module-${module.id}`)}
-            onCardClick={handleCardClick}
-            darkMode={darkMode}
-            mousePosition={mousePosition}
+          <div 
+            key={module.id} 
+            // 'min-h-0' here allows the card to shrink smaller than the text inside it
+            className="flex min-h-0 min-w-0"
             ref={(el) => {
               if (el) {
                 moduleRefs.current[`module-${module.id}`] = el;
               }
             }}
-          />
+          >
+            <ModuleCard
+              key={module.id}
+              module={module}
+              index={index}
+              isVisible={visibleModules.has(`module-${module.id}`)}
+              onCardClick={handleCardClick}
+              darkMode={darkMode}
+              mousePosition={mousePosition}
+              // This prop must be used inside ModuleCard to set 'height: 100%'
+              className="h-full w-full"
+            />
+          </div>
         ))}
       </div>
 
+      {/* ERROR MESSAGE */}
       {error && (
-        <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
-          <div className="px-5 py-4 rounded-xl shadow-xl bg-white/90 backdrop-blur-xl text-red-600 border border-red-200/60 flex items-center gap-3">
-            <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+        <div className="fixed bottom-6 right-6 z-50">
+          <div className="px-5 py-4 rounded-xl shadow-xl bg-white text-red-600 border border-red-200 flex items-center gap-3">
             {error}
           </div>
         </div>
@@ -172,6 +179,6 @@ export default function ReadingOverview({
           onProgressUpdate={onUpdateProgress}
         />
       )}
-    </>
+    </div>
   );
 }

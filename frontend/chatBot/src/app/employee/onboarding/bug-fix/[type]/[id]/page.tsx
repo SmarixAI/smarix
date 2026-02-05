@@ -258,8 +258,13 @@ export default function BugFixDetailPage() {
       const container = document.querySelector(".bugfix-detail-container");
       if (!container) return;
       const rect = container.getBoundingClientRect();
-      const newWidth = ((e.clientX - rect.left) / rect.width) * 100;
-      setLeftPanelWidth(Math.max(20, Math.min(80, newWidth)));
+      let newWidth = ((e.clientX - rect.left) / rect.width) * 100;
+      
+      // Snap points for the "Tile" mode
+      if (newWidth < 7) newWidth = 0;   // Collapses Left side
+      if (newWidth > 93) newWidth = 100; // Collapses Right side
+      
+      setLeftPanelWidth(newWidth);
     };
     const handleMouseUp = () => setIsResizing(false);
     if (isResizing) {
@@ -318,393 +323,249 @@ export default function BugFixDetailPage() {
   }
 
   return (
-    <div className={`min-h-screen bg-[#FAFAFA] ${inter.className}`}>
-      <div className="h-screen w-screen flex gap-0 bugfix-detail-container relative overflow-hidden bg-white">
-        {/* LEFT PANEL */}
+    <div className={`h-screen w-screen bg-[#0A0A0A] p-2 overflow-hidden ${inter.className}`}>
+      <div className="h-full w-full flex gap-0 bugfix-detail-container relative overflow-hidden">
+        
+        {/* LEFT PANEL BOX */}
         <div
-          className={`flex flex-col relative bg-white overflow-hidden border-r border-[#0E1B2E]/10 ${type === "challenge" && isFullscreen ? "hidden" : ""}`}
-          style={{ width: `${leftPanelWidth}%` }}
+          className={`flex flex-col relative bg-white overflow-hidden rounded-xl border border-white/10 shadow-2xl
+            ${leftPanelWidth === 0 ? "w-[60px] min-w-[60px]" : ""} 
+            ${type === "challenge" && isFullscreen ? "hidden" : ""}`}
+          style={{ width: leftPanelWidth === 0 ? "60px" : `${leftPanelWidth}%` }}
         >
-          {/* Header */}
-          <div className="px-6 py-4 border-b border-[#0E1B2E]/10 bg-white flex-shrink-0">
-            <div className="flex items-center gap-3 mb-2">
-              <button
-                onClick={() => router.back()}
-                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"
+          {leftPanelWidth === 0 ? (
+            /* --- LEFT TILES (VERTICAL FASHION) --- */
+            <div className="flex flex-col items-center py-6 w-full gap-5 bg-white h-full border-r border-slate-100">
+              <button 
+                onClick={() => { setLeftPanelWidth(40); setActiveTab("description"); }}
+                className={`p-2.5 rounded-lg transition-all ${activeTab === 'description' ? 'bg-[#0E1B2E] text-white shadow-lg scale-110' : 'text-slate-400 hover:bg-slate-100'}`}
+                title="Description"
               >
-                <ArrowLeft className="w-5 h-5" />
+                <BookOpen className="w-5 h-5" />
               </button>
-              <div className="flex items-center gap-2">
-                <span
-                  className={`${jetbrainsMono.className} text-xs font-bold text-[#0E1B2E]/40 bg-[#0E1B2E]/5 px-2 py-1 rounded`}
-                >
-                  {type === "tutorial" ? `Module ${id}` : `Challenge ${id}`}
-                </span>
-                <span
-                  className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getDifficultyColor(challengeDifficulty)} ${inter.className}`}
-                >
-                  {challengeDifficulty.toLowerCase() === "junior"
-                    ? "Easy"
-                    : challengeDifficulty.toLowerCase() === "mid"
-                      ? "Medium"
-                      : challengeDifficulty}
-                </span>
-              </div>
+              <button 
+                onClick={() => { setLeftPanelWidth(40); setActiveTab("solution"); }}
+                className={`p-2.5 rounded-lg transition-all ${activeTab === 'solution' ? 'bg-[#0E1B2E] text-white shadow-lg scale-110' : 'text-slate-400 hover:bg-slate-100'}`}
+                title="Solution"
+              >
+                <CheckCircle2 className="w-5 h-5" />
+              </button>
             </div>
-
-            <h1
-              className={`text-lg font-bold text-[#0E1B2E] line-clamp-1 ${inter.className}`}
-            >
-              {challengeTitle}
-            </h1>
-
-            {type === "challenge" && (
-              <div className="flex items-center gap-4 text-xs font-medium text-[#0E1B2E]/60 mt-3">
-                <div className="flex items-center gap-1.5">
-                  <Code2 className="w-3.5 h-3.5" />
-                  <span className={inter.className}>{challengeCategory}</span>
+          ) : (
+            /* --- LEFT CONTENT (EXPANDED) --- */
+            <>
+              {/* Header */}
+              <div className="px-6 py-4 border-b border-slate-100 bg-white flex-shrink-0">
+                <div className="flex items-center gap-3 mb-2">
+                  <button onClick={() => router.back()} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors">
+                    <ArrowLeft className="w-5 h-5" />
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <span className={`${jetbrainsMono.className} text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded uppercase tracking-wider`}>
+                      {type === "tutorial" ? `Module ${id}` : `Challenge ${id}`}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getDifficultyColor(challengeDifficulty)}`}>
+                      {challengeDifficulty}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex gap-2 ml-auto">
-                  {[
-                    { id: "description", label: "Description", icon: BookOpen },
-                    { id: "solution", label: "Solution", icon: CheckCircle2 },
-                  ].map((tab) => (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id as any)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${inter.className} ${activeTab === tab.id ? "bg-[#0E1B2E]/5 text-[#0E1B2E]" : "text-[#0E1B2E]/40 hover:text-[#0E1B2E]"}`}
-                    >
-                      <tab.icon className="w-3.5 h-3.5" />
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
+
+                <h1 className="text-lg font-bold text-[#0E1B2E] line-clamp-1">{challengeTitle}</h1>
+
+                {type === "challenge" && (
+                  <div className="flex gap-2 mt-4 bg-slate-100/50 p-1 rounded-lg w-fit">
+                    {[
+                      { id: "description", label: "Description", icon: BookOpen },
+                      { id: "solution", label: "Solution", icon: CheckCircle2 },
+                    ].map((tab) => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id as any)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${activeTab === tab.id ? "bg-white text-[#0E1B2E] shadow-sm" : "text-slate-400 hover:text-slate-600"}`}
+                      >
+                        <tab.icon className="w-3.5 h-3.5" />
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
 
-          {/* Body */}
-          <div className="flex-1 overflow-y-auto bg-slate-50/50 no-scrollbar">
-            <div className="px-6 py-6 max-w-4xl mx-auto">
-              {type === "challenge" && (
-                <>
-                  {activeTab === "description" && (
-                    <div className="space-y-8">
-                      {/* Scenario Section */}
-                      {(scenarioContext || problemStatement) && (
-                        <div className="space-y-4">
-                          <div
-                            className={`flex items-center gap-2 text-sm font-bold text-[#0E1B2E] uppercase tracking-wider ${inter.className}`}
-                          >
-                            <Target className="w-4 h-4 text-blue-600" />
-                            Scenario
-                          </div>
-                          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
-                            {scenarioContext && (
-                              <div>
-                                <h4
-                                  className={`text-xs font-bold text-slate-400 mb-1 uppercase ${inter.className}`}
-                                >
-                                  Context
-                                </h4>
-                                <p
-                                  className={`text-sm text-slate-700 leading-relaxed ${inter.className}`}
-                                >
-                                  {scenarioContext}
-                                </p>
+              {/* Body */}
+              <div className="flex-1 overflow-y-auto bg-white no-scrollbar">
+                <div className="px-6 py-6 max-w-4xl mx-auto">
+                  {type === "challenge" ? (
+                    <>
+                      {activeTab === "description" && (
+                        <div className="space-y-8">
+                          {(scenarioContext || problemStatement) && (
+                            <div className="space-y-4">
+                              <div className="flex items-center gap-2 text-sm font-bold text-[#0E1B2E] uppercase tracking-wider">
+                                <Target className="w-4 h-4 text-blue-600" />
+                                Scenario
                               </div>
-                            )}
-                            {problemStatement && (
-                              <div>
-                                <h4
-                                  className={`text-xs font-bold text-slate-400 mb-1 uppercase ${inter.className}`}
-                                >
-                                  Problem Statement
-                                </h4>
-                                <p
-                                  className={`text-sm text-slate-700 leading-relaxed font-medium ${inter.className}`}
-                                >
-                                  {problemStatement}
-                                </p>
+                              <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 space-y-4">
+                                {scenarioContext && (
+                                  <div>
+                                    <h4 className="text-xs font-bold text-slate-400 mb-1 uppercase">Context</h4>
+                                    <p className="text-sm text-slate-700 leading-relaxed">{scenarioContext}</p>
+                                  </div>
+                                )}
+                                {problemStatement && (
+                                  <div>
+                                    <h4 className="text-xs font-bold text-slate-400 mb-1 uppercase">Problem Statement</h4>
+                                    <p className="text-sm text-slate-700 leading-relaxed font-medium">{problemStatement}</p>
+                                  </div>
+                                )}
                               </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Questions Section */}
-                      {questionsList.length > 0 && (
-                        <div className="space-y-4">
-                          <div
-                            className={`flex items-center gap-2 text-sm font-bold text-[#0E1B2E] uppercase tracking-wider ${inter.className}`}
-                          >
-                            <ListChecks className="w-4 h-4 text-blue-600" />
-                            Guiding Questions
-                          </div>
-                          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                            {questionsList.map((q: string, idx: number) => (
-                              <div
-                                key={idx}
-                                className="p-4 border-b border-slate-100 last:border-0 flex gap-3"
-                              >
-                                <span
-                                  className={`flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-blue-50 text-blue-600 text-xs font-bold ${inter.className}`}
-                                >
-                                  {idx + 1}
-                                </span>
-                                <p
-                                  className={`text-sm text-slate-700 leading-relaxed ${inter.className}`}
-                                >
-                                  {q}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Key Concepts */}
-                      {keyConcepts.length > 0 && (
-                        <div className="space-y-3">
-                          <div
-                            className={`flex items-center gap-2 text-sm font-bold text-[#0E1B2E] uppercase tracking-wider ${inter.className}`}
-                          >
-                            <Lightbulb className="w-4 h-4 text-amber-500" />
-                            Key Concepts
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {keyConcepts.map((concept: string, idx: number) => (
-                              <span
-                                key={idx}
-                                className={`px-3 py-1 rounded-full bg-amber-50 border border-amber-100 text-amber-700 text-xs font-bold shadow-sm ${inter.className}`}
-                              >
-                                {concept}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {activeTab === "solution" && (
-                    <div className="space-y-6">
-                      {!isSubmitted ? (
-                        // LOCKED STATE
-                        <div className="flex flex-col items-center justify-center py-20 text-center">
-                          <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-                            <Lock className="w-8 h-8 text-slate-400" />
-                          </div>
-                          <h3
-                            className={`text-lg font-bold text-slate-700 mb-2 ${inter.className}`}
-                          >
-                            Solution Locked
-                          </h3>
-                          <p
-                            className={`text-sm text-slate-500 max-w-sm mb-6 ${inter.className}`}
-                          >
-                            Submit your code attempt via the editor to unlock
-                            the detailed solution, analysis, and best practices.
-                          </p>
-                          <div
-                            className={`px-4 py-2 bg-slate-100 rounded-lg text-xs font-mono text-slate-500 border border-slate-200 ${inter.className}`}
-                          >
-                            Waiting for submission...
-                          </div>
-                        </div>
-                      ) : (
-                        // UNLOCKED STATE
-                        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                          {/* Success Banner */}
-                          <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 flex items-start gap-3">
-                            <ShieldCheck className="w-5 h-5 text-emerald-600 mt-0.5" />
-                            <div>
-                              <h4
-                                className={`text-sm font-bold text-emerald-800 ${inter.className}`}
-                              >
-                                Solution Unlocked
-                              </h4>
-                              <p
-                                className={`text-xs text-emerald-600 mt-1 ${inter.className}`}
-                              >
-                                Review the model answer below to compare with
-                                your approach.
-                              </p>
                             </div>
-                          </div>
+                          )}
 
-                          {/* Analysis & Solution */}
-                          <div className="space-y-4">
-                            <h3
-                              className={`text-sm font-bold text-[#0E1B2E] uppercase tracking-wider flex items-center gap-2 ${inter.className}`}
-                            >
-                              <Target className="w-4 h-4 text-blue-600" />
-                              Analysis
-                            </h3>
-                            <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                          {questionsList.length > 0 && (
+                            <div className="space-y-4">
+                              <div className="flex items-center gap-2 text-sm font-bold text-[#0E1B2E] uppercase tracking-wider">
+                                <ListChecks className="w-4 h-4 text-blue-600" />
+                                Guiding Questions
+                              </div>
+                              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                                {questionsList.map((q: string, idx: number) => (
+                                  <div key={idx} className="p-4 border-b border-slate-100 last:border-0 flex gap-3">
+                                    <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-blue-50 text-blue-600 text-xs font-bold">
+                                      {idx + 1}
+                                    </span>
+                                    <p className="text-sm text-slate-700 leading-relaxed">{q}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {activeTab === "solution" && (
+                        <div className="space-y-6">
+                          {!isSubmitted ? (
+                            <div className="flex flex-col items-center justify-center py-20 text-center">
+                              <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+                                <Lock className="w-8 h-8 text-slate-400" />
+                              </div>
+                              <h3 className="text-lg font-bold text-slate-700 mb-2">Solution Locked</h3>
+                              <p className="text-sm text-slate-500 max-w-sm mb-6">Submit your code attempt to unlock the solution.</p>
+                            </div>
+                          ) : (
+                            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                              <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 flex items-start gap-3">
+                                <ShieldCheck className="w-5 h-5 text-emerald-600 mt-0.5" />
+                                <div className="text-sm font-bold text-emerald-800">Solution Unlocked</div>
+                              </div>
                               {modelAnswer.problem_analysis && (
-                                <div className="p-5 border-b border-slate-100">
-                                  <h4
-                                    className={`text-xs font-bold text-slate-400 uppercase mb-2 ${inter.className}`}
-                                  >
-                                    Problem Analysis
-                                  </h4>
-                                  <p
-                                    className={`text-sm text-slate-700 leading-relaxed ${inter.className}`}
-                                  >
-                                    {modelAnswer.problem_analysis}
-                                  </p>
+                                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5">
+                                  <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">Problem Analysis</h4>
+                                  <p className="text-sm text-slate-700 leading-relaxed">{modelAnswer.problem_analysis}</p>
                                 </div>
                               )}
                               {modelAnswer.solution_explanation && (
-                                <div className="p-5">
-                                  <h4
-                                    className={`text-xs font-bold text-slate-400 uppercase mb-2 ${inter.className}`}
-                                  >
-                                    Solution Explanation
-                                  </h4>
-                                  <p
-                                    className={`text-sm text-slate-700 leading-relaxed ${inter.className}`}
-                                  >
-                                    {modelAnswer.solution_explanation}
-                                  </p>
+                                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5">
+                                  <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">Solution Explanation</h4>
+                                  <p className="text-sm text-slate-700 leading-relaxed">{modelAnswer.solution_explanation}</p>
                                 </div>
                               )}
                             </div>
-                          </div>
-
-                          {/* Trade-offs & Best Practices */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {modelAnswer.trade_offs && (
-                              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                                <h4
-                                  className={`text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-2 ${inter.className}`}
-                                >
-                                  <Zap className="w-3.5 h-3.5" /> Trade-offs
-                                </h4>
-                                <p
-                                  className={`text-sm text-slate-700 leading-relaxed ${inter.className}`}
-                                >
-                                  {modelAnswer.trade_offs}
-                                </p>
-                              </div>
-                            )}
-                            {modelAnswer.best_practices && (
-                              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                                <h4
-                                  className={`text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-2 ${inter.className}`}
-                                >
-                                  <CheckCircle2 className="w-3.5 h-3.5" /> Best
-                                  Practices
-                                </h4>
-                                <ul className="space-y-2">
-                                  {modelAnswer.best_practices.map(
-                                    (bp: string, i: number) => (
-                                      <li
-                                        key={i}
-                                        className={`text-sm text-slate-700 flex items-start gap-2 ${inter.className}`}
-                                      >
-                                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 flex-shrink-0" />
-                                        {bp}
-                                      </li>
-                                    ),
-                                  )}
-                                </ul>
-                              </div>
-                            )}
-                          </div>
+                          )}
                         </div>
                       )}
+                    </>
+                  ) : (
+                    /* Tutorial Content */
+                    <div className="space-y-8">
+                      {parsedTutorialData?.overview && <ContentSection title="Overview" content={parsedTutorialData.overview} />}
+                      {parsedTutorialData?.problemContext && <ContentSection title="Problem Context" content={parsedTutorialData.problemContext} />}
+                      {parsedTutorialData?.keyTakeaways && <ContentSection title="Key Takeaways" content={parsedTutorialData.keyTakeaways} />}
                     </div>
                   )}
-                </>
-              )}
-
-              {/* TUTORIAL RENDER */}
-              {type === "tutorial" && parsedTutorialData && (
-                <div className="space-y-8">
-                  {parsedTutorialData.overview && (
-                    <ContentSection
-                      title="Overview"
-                      content={parsedTutorialData.overview}
-                    />
-                  )}
-                  {parsedTutorialData.problemContext && (
-                    <ContentSection
-                      title="Problem Context"
-                      content={parsedTutorialData.problemContext}
-                    />
-                  )}
-                  {parsedTutorialData.keyTakeaways && (
-                    <ContentSection
-                      title="Key Takeaways"
-                      content={parsedTutorialData.keyTakeaways}
-                    />
-                  )}
                 </div>
-              )}
-            </div>
-          </div>
+              </div>
+            </>
+          )}
         </div>
 
-        {/* Resizer */}
+        {/* --- FLOATING RESIZER HANDLE WITH GRIP ICON --- */}
         {!isFullscreen && (
           <div
-            onMouseDown={(e) => {
-              e.preventDefault();
-              setIsResizing(true);
-            }}
-            className={`w-[4px] cursor-col-resize hover:bg-blue-500 transition-colors relative z-20 flex items-center justify-center group ${isResizing ? "bg-blue-500" : "bg-slate-200"}`}
+            onMouseDown={(e) => { e.preventDefault(); setIsResizing(true); }}
+            className="w-4 group cursor-col-resize relative z-30 flex items-center justify-center"
           >
-            <div className="w-1 h-8 bg-slate-400 rounded-full group-hover:bg-white" />
+            <div className={`
+              flex items-center justify-center rounded-full transition-all duration-300
+              ${isResizing 
+                ? "bg-blue-600 h-24 w-1.5 shadow-[0_0_15px_rgba(37,99,235,0.4)]" 
+                : "bg-white/10 w-1 h-14 group-hover:bg-white/30 group-hover:h-20 group-hover:w-1.5"
+              }
+            `}>
+              {/* Grip Indicator - only visible when not collapsed to 0 or 100 */}
+              {leftPanelWidth > 5 && leftPanelWidth < 95 && (
+                 <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute">
+                    <div className="flex flex-col gap-1">
+                      <div className="w-1 h-1 bg-white rounded-full" />
+                      <div className="w-1 h-1 bg-white rounded-full" />
+                      <div className="w-1 h-1 bg-white rounded-full" />
+                    </div>
+                 </div>
+              )}
+            </div>
           </div>
         )}
 
-        {/* RIGHT PANEL */}
+        {/* RIGHT PANEL BOX */}
         <div
-          className={`flex flex-col overflow-hidden ${type === "challenge" ? "bg-[#1e1e1e]" : "bg-white"} ${isFullscreen ? "fixed inset-0 z-50 w-screen h-screen" : "relative flex-1"}`}
+          className={`flex flex-col overflow-hidden rounded-xl border border-white/10 transition-all duration-200 ease-in-out shadow-2xl
+            ${leftPanelWidth === 100 ? "w-[60px] min-w-[60px]" : "flex-1"} 
+            ${type === "challenge" ? "bg-[#1E1E1E]" : "bg-white"} 
+            ${isFullscreen ? "fixed inset-0 z-50 rounded-none border-0" : "relative"}`}
+          style={{ width: leftPanelWidth === 100 ? "60px" : undefined }}
         >
-          {type === "challenge" ? (
-            <div className="h-full">
-              {/* ✅ PASSED repoName prop here */}
-              <CodeEditor
-                prData={challengePrData || undefined}
-                isFullscreen={isFullscreen}
-                onToggleFullscreen={() => setIsFullscreen(!isFullscreen)}
-                onEvaluationComplete={handleEvaluationComplete}
-                repoName={currentRepo}
-              />
-            </div>
-          ) : parsedTutorialData ? (
-            <div className="flex-1 px-8 py-6 bg-[#0E1B2E] no-scrollbar">
-              <div className="max-w-4xl mx-auto space-y-8 rounded-full">
-                {parsedTutorialData.steps.length > 0 && (
-                  <StepByStepSection steps={parsedTutorialData.steps} />
-                )}
-                {parsedTutorialData.codeExplanation && (
-                  <ContentSection
-                    title="Code Explanation"
-                    content={parsedTutorialData.codeExplanation}
-                  />
-                )}
-              </div>
+          {leftPanelWidth === 100 ? (
+            /* --- RIGHT TILES (VERTICAL FASHION) --- */
+            <div className="flex flex-col items-center py-6 w-full gap-5 h-full bg-[#1E1E1E] border-l border-white/5">
+              <button 
+                onClick={() => setLeftPanelWidth(60)}
+                className="p-2.5 rounded-lg bg-blue-600 text-white shadow-lg shadow-blue-500/40 hover:scale-110 transition-all"
+                title="Open Editor"
+              >
+                <Code2 className="w-5 h-5" />
+              </button>
             </div>
           ) : (
-            <div
-              className={`flex items-center justify-center h-full text-slate-400 ${inter.className}`}
-            >
-              <p>No code content available</p>
+            /* --- RIGHT CONTENT --- */
+            <div className="flex-1 h-full overflow-hidden">
+              {type === "challenge" ? (
+                <CodeEditor
+                  prData={challengePrData || undefined}
+                  isFullscreen={isFullscreen}
+                  onToggleFullscreen={() => setIsFullscreen(!isFullscreen)}
+                  onEvaluationComplete={handleEvaluationComplete}
+                  repoName={currentRepo}
+                />
+              ) : parsedTutorialData ? (
+                <div className="flex-1 px-8 py-6 bg-[#0E1B2E] overflow-y-auto h-full no-scrollbar">
+                  <div className="max-w-4xl mx-auto space-y-8">
+                    {parsedTutorialData.steps.length > 0 && <StepByStepSection steps={parsedTutorialData.steps} />}
+                    {parsedTutorialData.codeExplanation && <ContentSection title="Code Explanation" content={parsedTutorialData.codeExplanation} />}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-full text-slate-400">
+                  <p>No code content available</p>
+                </div>
+              )}
             </div>
           )}
         </div>
-      </div>
 
-      {showEvaluationModal && (
-        <EvaluationModal
-          evaluationData={evaluationData}
-          onClose={() => setShowEvaluationModal(false)}
-        />
-      )}
+        {showEvaluationModal && (
+          <EvaluationModal evaluationData={evaluationData} onClose={() => setShowEvaluationModal(false)} />
+        )}
+      </div>
     </div>
   );
 }
