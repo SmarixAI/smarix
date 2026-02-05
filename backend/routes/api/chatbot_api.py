@@ -40,7 +40,7 @@ S3_BUCKET = "smarix-data-apsouth1"
 S3_VECTORDB_PATH = "VectorDB"
 
 try:
-    from backend.routes.api import shared
+    from routes.api import shared
 except Exception:
     try:
         from . import shared

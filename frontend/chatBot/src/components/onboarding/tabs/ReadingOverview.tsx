@@ -152,8 +152,6 @@ export default function ReadingOverview({
               onCardClick={handleCardClick}
               darkMode={darkMode}
               mousePosition={mousePosition}
-              // This prop must be used inside ModuleCard to set 'height: 100%'
-              className="h-full w-full"
             />
           </div>
         ))}
