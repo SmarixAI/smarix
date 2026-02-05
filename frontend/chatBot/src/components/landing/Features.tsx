@@ -37,9 +37,9 @@ const features = [
     title: "AI-Powered Onboarding",
     desc: "Turn complex codebases into guided learning journeys. Help developers understand your product, tech stack, and standards—faster.",
     gifs: [
-      { src: `${S3_BASE_URL}/reading_gif.gif`, duration: 23000 },
-      { src: `${S3_BASE_URL}/practice_gif.gif`, duration: 27000 },
-      { src: `${S3_BASE_URL}/bugfix_gif.gif`, duration: 33000 },
+      { src: `${S3_BASE_URL}/onboarding1_gif.gif`, duration: 11000 },
+      { src: `${S3_BASE_URL}/onboarding2_gif.gif`, duration: 8000 },
+      { src: `${S3_BASE_URL}/onboarding3_gif.gif`, duration: 23000 },
     ],
     icon: Zap,
     color: "#3B82F6",
@@ -271,15 +271,15 @@ const GifCarousel: React.FC<GifCarouselProps> = ({
         </div>
       </div>
 
-      <div className="relative w-full min-h-[280px] sm:min-h-[340px] md:min-h-[420px] lg:min-h-0 aspect-[4/3] sm:aspect-[16/11] md:aspect-[16/10] lg:aspect-[16/10] rounded-2xl sm:rounded-3xl lg:rounded-[2rem] bg-white p-1.5 sm:p-2 shadow-2xl shadow-slate-200/50 border border-slate-100 ring-2 sm:ring-4 ring-slate-50 overflow-hidden flex flex-col">
-        <div className="h-8 sm:h-9 lg:h-10 bg-white/90 backdrop-blur z-20 border-b border-slate-100 flex items-center px-3 sm:px-4 justify-between rounded-t-xl sm:rounded-t-2xl lg:rounded-t-[1.5rem] flex-none">
+      <div className="relative w-full min-h-[280px] sm:min-h-[340px] md:min-h-[420px] lg:min-h-0 aspect-[4/3] sm:aspect-[16/11] md:aspect-[16/10] lg:aspect-[16/10] rounded-2xl sm:rounded-3xl lg:rounded-[2rem] bg-white p-1.5 sm:p-2 shadow-2xl shadow-slate-200/50 border border-slate-200 ring-2 sm:ring-4 ring-slate-50 overflow-hidden flex flex-col">
+        <div className="h-8 sm:h-9 lg:h-10 bg-[#0E1B2E] z-20 border-b border-slate-100 flex items-center px-3 sm:px-4 justify-between rounded-t-xl sm:rounded-t-2xl lg:rounded-t-[1.5rem] flex-none">
           <div className="flex gap-1 sm:gap-1.5">
-            <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-slate-200" />
-            <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-slate-200" />
-            <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-slate-200" />
+            <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-red-400" />
+            <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-yellow-400" />
+            <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-green-500" />
           </div>
           <div
-            className={`${jetbrainsMono.className} text-[9px] sm:text-[10px] text-slate-400`}
+            className={`${jetbrainsMono.className} text-[9px] sm:text-[10px] text-white`}
           >
             smarix-engine://{tag.toLowerCase()}
           </div>

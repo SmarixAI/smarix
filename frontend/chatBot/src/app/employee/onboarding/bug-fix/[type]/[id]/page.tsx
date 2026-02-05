@@ -150,8 +150,9 @@ export default function BugFixDetailPage() {
     }
   }
 
-  const challengeTitle =
-    parsedContent.title || data?.title || `Challenge #${id}`;
+  const challengeTitle = type === "tutorial" ? 
+    parsedContent.title || data?.title || `PR Tutorial #${id}` : 
+    parsedContent.title || data?.pr_title || `Challenge #${id}`;
   const challengeDifficulty =
     parsedContent.difficulty || data?.difficulty || "Medium";
   const challengeCategory =

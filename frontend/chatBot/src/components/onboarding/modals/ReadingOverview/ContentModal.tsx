@@ -444,7 +444,7 @@ export default function OverviewModal({
           </aside>
 
           {/* ── Main Content ─────────────────────────────────────────── */}
-          <main className="scrollbar-refined overflow-y-auto p-6 flex flex-col">
+          <main className="p-6 flex flex-col">
             {isLoading ? (
               /* Loading */
               <div className="flex-1 flex flex-col items-center justify-center">
@@ -476,7 +476,7 @@ export default function OverviewModal({
             ) : (
               /* Content card */
               <div className="flex-1 flex">
-                <div className="flex-1 bg-white rounded-xl border border-gray-200 shadow-[0_2px_8px_rgba(0,0,0,0.04)] overflow-y-auto scrollbar-hide anim-content">
+                <div className="flex-1 bg-white rounded-xl border border-gray-200 shadow-[0_2px_8px_rgba(0,0,0,0.04)] overflow-y-auto max-h-[80vh] scrollbar-hide anim-content">
                   <div className="p-8">
                     {/* Item title */}
                     {activeItem.title && (

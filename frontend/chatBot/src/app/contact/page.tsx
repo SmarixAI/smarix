@@ -31,7 +31,7 @@ export default function ContactPage() {
   const handleInputChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >
+    >,
   ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -71,62 +71,62 @@ export default function ContactPage() {
 
   return (
     <main
-      className={`min-h-screen bg-[#F8FAFC] text-[#0E1B2E] selection:bg-[#3B82F6] selection:text-white pt-50 pb-12 px-4 md:px-6 lg:px-8`}
+      className={`min-h-screen bg-[#F8FAFC] text-[#0E1B2E] selection:bg-[#3B82F6] selection:text-white pt-24 sm:pt-32 md:pt-40 lg:pt-50 pb-8 sm:pb-10 md:pb-12 px-4 sm:px-5 md:px-6 lg:px-8`}
     >
       <div className="fixed inset-0 bg-[linear-gradient(to_right,#0E1B2E05_1px,transparent_1px),linear-gradient(to_bottom,#0E1B2E05_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none -z-10" />
       <div className="fixed inset-0 bg-gradient-to-tr from-blue-50/50 via-transparent to-indigo-50/50 pointer-events-none -z-10" />
 
       <div className="max-w-7xl mx-auto h-full">
-        <div className="grid lg:grid-cols-12 gap-6 h-full items-start">
-          <div className="lg:col-span-5 flex flex-col gap-6 sticky top-24">
-            <div className="space-y-3">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 h-full items-start">
+          <div className="lg:col-span-5 flex flex-col gap-4 sm:gap-5 md:gap-6 lg:sticky lg:top-24">
+            <div className="space-y-2 sm:space-y-3">
               <h1
-                className={`${firaCode.className} text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-[#0E1B2E] leading-[0.9]`}
+                className={`${firaCode.className} text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-[#0E1B2E] leading-[0.9]`}
               >
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">
                   Contact Us
                 </span>
               </h1>
               <p
-                className={`${spaceGrotesk.className} text-lg text-[#0E1B2E]/70 max-w-md leading-relaxed font-medium`}
+                className={`${spaceGrotesk.className} text-base sm:text-lg text-[#0E1B2E]/70 max-w-md leading-relaxed font-medium`}
               >
                 Transform your workflow with Smarix. Technical questions or
                 partnership inquiries? We are ready.
               </p>
             </div>
 
-            <div className="group relative overflow-hidden bg-[#0E1B2E] text-white rounded-xl p-6 transition-all duration-300 shadow-xl shadow-blue-900/10 border border-[#0E1B2E]">
-              <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-              <div className="absolute bottom-0 left-0 w-32 h-32 bg-indigo-500/20 rounded-full blur-2xl translate-y-1/2 -translate-x-1/2" />
+            <div className="group relative overflow-hidden bg-[#0E1B2E] text-white rounded-xl p-5 sm:p-6 transition-all duration-300 shadow-xl shadow-blue-900/10 border border-[#0E1B2E]">
+              <div className="absolute top-0 right-0 w-48 h-48 sm:w-64 sm:h-64 bg-blue-600/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+              <div className="absolute bottom-0 left-0 w-24 h-24 sm:w-32 sm:h-32 bg-indigo-500/20 rounded-full blur-2xl translate-y-1/2 -translate-x-1/2" />
 
               <div className="relative z-10">
-                <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center justify-between mb-4 sm:mb-6">
                   <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm">
-                    <Mail className="w-5 h-5 text-blue-200" />
+                    <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-blue-200" />
                   </div>
                 </div>
 
                 <div className="space-y-1">
                   <p
-                    className={`${victorMono.className} text-xs text-blue-200/60`}
+                    className={`${victorMono.className} text-[10px] sm:text-xs text-blue-200/60`}
                   >
                     Email ID
                   </p>
-                  <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center justify-between gap-2 sm:gap-4">
                     <a
                       href="mailto:contact@smarix.net"
-                      className={`${firaCode.className} text-xl md:text-2xl font-bold hover:text-blue-300 transition-colors tracking-tight`}
+                      className={`${firaCode.className} text-base sm:text-xl md:text-2xl font-bold hover:text-blue-300 transition-colors tracking-tight break-all`}
                     >
                       contact@smarix.net
                     </a>
                     <button
                       onClick={copyEmail}
-                      className="p-2 rounded-lg bg-white/10 hover:bg-white/20 hover:text-blue-300 transition-all active:scale-95 border border-white/5"
+                      className="p-1.5 sm:p-2 rounded-lg bg-white/10 hover:bg-white/20 hover:text-blue-300 transition-all active:scale-95 border border-white/5 shrink-0"
                     >
                       {copied ? (
-                        <Check className="w-4 h-4 text-green-400" />
+                        <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-400" />
                       ) : (
-                        <Copy className="w-4 h-4" />
+                        <Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       )}
                     </button>
                   </div>
@@ -136,7 +136,7 @@ export default function ContactPage() {
 
             <div className="bg-white/60 backdrop-blur-sm rounded-xl border border-blue-100 overflow-hidden shadow-sm">
               <div
-                className={`px-5 py-3 border-b border-blue-100 bg-blue-50/50 ${victorMono.className} text-xs font-bold uppercase tracking-wider text-blue-900/70 flex items-center gap-2`}
+                className={`px-4 sm:px-5 py-2.5 sm:py-3 border-b border-blue-100 bg-blue-50/50 ${victorMono.className} text-[10px] sm:text-xs font-bold uppercase tracking-wider text-blue-900/70 flex items-center gap-2`}
               >
                 <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
                 Frequently Asked Questions
@@ -149,28 +149,28 @@ export default function ContactPage() {
                   >
                     <button
                       onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                      className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-white transition-colors group"
+                      className="w-full flex items-center justify-between px-4 sm:px-5 py-3 sm:py-4 text-left hover:bg-white transition-colors group"
                     >
                       <span
-                        className={`${firaCode.className} font-medium text-[#0E1B2E] text-xs md:text-sm group-hover:text-blue-700 transition-colors`}
+                        className={`${firaCode.className} font-medium text-[#0E1B2E] text-xs sm:text-sm group-hover:text-blue-700 transition-colors pr-3`}
                       >
                         {item.q}
                       </span>
                       {openFaq === i ? (
-                        <Minus className="w-3.5 h-3.5 text-blue-500" />
+                        <Minus className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-blue-500 shrink-0" />
                       ) : (
-                        <Plus className="w-3.5 h-3.5 text-gray-400 group-hover:text-blue-500 transition-colors" />
+                        <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-400 group-hover:text-blue-500 transition-colors shrink-0" />
                       )}
                     </button>
                     <div
                       className={`overflow-hidden transition-all duration-300 ease-in-out ${
                         openFaq === i
-                          ? "max-h-24 opacity-100"
+                          ? "max-h-32 opacity-100"
                           : "max-h-0 opacity-0"
                       }`}
                     >
                       <p
-                        className={`px-5 pb-5 pt-0 ${victorMono.className} text-xs text-[#0E1B2E]/60 leading-relaxed`}
+                        className={`px-4 sm:px-5 pb-4 sm:pb-5 pt-0 ${victorMono.className} text-[11px] sm:text-xs text-[#0E1B2E]/60 leading-relaxed`}
                       >
                         {item.a}
                       </p>
@@ -182,27 +182,27 @@ export default function ContactPage() {
           </div>
 
           <div className="lg:col-span-7">
-            <div className="h-full bg-white rounded-xl border border-blue-100 p-6 md:p-8 shadow-xl shadow-blue-900/5 relative overflow-hidden">
+            <div className="h-full bg-white rounded-xl border border-blue-100 p-5 sm:p-6 md:p-8 shadow-xl shadow-blue-900/5 relative overflow-hidden">
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-cyan-500" />
 
-              <div className="mb-6 flex items-end justify-between border-b border-slate-100 pb-6">
+              <div className="mb-5 sm:mb-6 flex flex-col sm:flex-row sm:items-end sm:justify-between border-b border-slate-100 pb-5 sm:pb-6 gap-2 sm:gap-0">
                 <div>
                   <h3
-                    className={`${firaCode.className} text-xl font-bold text-[#0E1B2E] mb-1 flex items-center gap-2`}
+                    className={`${firaCode.className} text-base sm:text-lg md:text-xl font-bold text-[#0E1B2E] mb-1 flex items-center gap-2`}
                   >
                     Fill out this form to get in touch
                     <span className="w-2 h-2 rounded-full bg-green-500" />
                   </h3>
                   <p
-                    className={`${victorMono.className} text-xs text-[#0E1B2E]/50`}
+                    className={`${victorMono.className} text-[10px] sm:text-xs text-[#0E1B2E]/50`}
                   >
-                    Our team will be in touch. 
+                    Our team will be in touch.
                   </p>
                 </div>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label
                       htmlFor="name"
@@ -243,11 +243,11 @@ export default function ContactPage() {
 
                 <div className="space-y-1.5">
                   <label
-                      htmlFor="subject"
-                      className={`${victorMono.className} text-[10px] font-bold uppercase tracking-wider text-blue-900/60`}
-                    >
-                      Reason for Contact *
-                    </label>
+                    htmlFor="subject"
+                    className={`${victorMono.className} text-[10px] font-bold uppercase tracking-wider text-blue-900/60`}
+                  >
+                    Reason for Contact *
+                  </label>
                   <div className="relative">
                     <select
                       id="subject"
@@ -295,7 +295,7 @@ export default function ContactPage() {
                     type="submit"
                     disabled={isSubmitting || submitStatus === "success"}
                     className={`
-                      w-full group relative px-6 py-3.5 
+                      w-full group relative px-5 sm:px-6 py-3 sm:py-3.5 
                       bg-gradient-to-r from-[#0E1B2E] via-[#1e3a8a] to-[#0E1B2E] bg-[length:200%_auto]
                       hover:bg-[position:right_center]
                       text-white rounded-lg overflow-hidden
@@ -303,15 +303,15 @@ export default function ContactPage() {
                       disabled:opacity-70 disabled:cursor-not-allowed
                     `}
                   >
-                    <div className="relative z-10 flex items-center justify-center gap-3">
+                    <div className="relative z-10 flex items-center justify-center gap-2 sm:gap-3">
                       <span
-                        className={`${firaCode.className} font-semibold tracking-wide`}
+                        className={`${firaCode.className} text-sm sm:text-base font-semibold tracking-wide`}
                       >
                         {isSubmitting
-                          ? "Subkitting form..."
+                          ? "Submitting form..."
                           : submitStatus === "success"
-                          ? "Form has been submitted!"
-                          : "SUBMIT"}
+                            ? "Form has been submitted!"
+                            : "SUBMIT"}
                       </span>
                       {isSubmitting ? (
                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
