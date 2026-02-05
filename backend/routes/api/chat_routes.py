@@ -15,7 +15,7 @@ from datetime import datetime
 import difflib
 from openai import OpenAI
 import re
-from backend.routes.api import shared
+from routes.api import shared
 from botocore.exceptions import ClientError
 from datetime import datetime
 

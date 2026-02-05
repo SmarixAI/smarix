@@ -340,7 +340,7 @@ def _import_route_module(module_name: str):
     else:
         # Running as module - use relative import
         try:
-            package = __package__ or "backend.routes.api"
+            package = __package__ or "routes.api"
             return import_module(f".{module_name}", package=package)
         except (ImportError, ValueError, AttributeError):
             # Fallback to absolute import if relative fails
