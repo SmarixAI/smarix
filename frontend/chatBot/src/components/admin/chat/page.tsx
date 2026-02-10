@@ -193,6 +193,9 @@ const MermaidDiagram = ({ code }: { code: string }) => {
     setZoom(1);
   };
 
+
+
+
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? -0.1 : 0.1;
@@ -392,6 +395,10 @@ export default function ChatPage() {
     "onboarding" | "offboarding" | "general"
   >("general");
   const messageRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState("");
+
 
   // Check if user has status "general"
   const showUserInfo = isAuthenticated && user && user.status === "general";
@@ -757,6 +764,84 @@ export default function ChatPage() {
       setIsLoading(false);
     }
   };
+
+  const resendEditedMessage = async (messageId: string) => {
+    if (!editingContent.trim() || isLoading || !user?.username) return;
+
+    const index = messages.findIndex((m) => m.id === messageId);
+    if (index === -1) return;
+
+    // 1️⃣ Remove everything AFTER edited message
+    const trimmedMessages = messages.slice(0, index);
+
+    // 2️⃣ Replace edited message
+    const editedMessage: Message = {
+      ...messages[index],
+      content: editingContent,
+      timestamp: new Date(),
+    };
+
+    const updatedMessages = [...trimmedMessages, editedMessage];
+
+    setMessages(updatedMessages);
+    setEditingMessageId(null);
+    setEditingContent("");
+    setIsLoading(true);
+
+    try {
+      const requestBody: {
+        query: string;
+        session_id?: string;
+        username: string;
+        role?: string;
+      } = {
+        query: editingContent,
+        role: selectedRole,
+        username: user.username,
+      };
+
+      if (sessionId) {
+        requestBody.session_id = sessionId;
+      }
+
+      const response = await fetch(`${baseURL}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) throw new Error("Failed to regenerate");
+
+      const data = await response.json();
+
+      const normalizedRelated = normalizeRelatedKnowledge(
+        data.related_knowledge,
+      );
+
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: data.answer,
+        sources: data.sources,
+        chunks_retrieved: data.chunks_retrieved,
+        flow_data: data.flow_data,
+        related_knowledge: {
+          issues: normalizedRelated.issues,
+          prs: normalizedRelated.prs,
+          commits: normalizedRelated.commits,
+        },
+        metrics_summary: normalizedRelated.metricsSummary,
+        timestamp: new Date(),
+      };
+
+      setMessages((prev) => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error("Resend failed:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -1688,9 +1773,41 @@ export default function ChatPage() {
                             {message.content.slice(0, 150)}...
                           </div>
                         ) : (
-                          <div className="text-white whitespace-pre-wrap break-words max-w-full overflow-x-auto">
-                            {message.content}
-                          </div>
+                          <>
+                            {editingMessageId === message.id ? (
+                              <div className="space-y-3">
+                                <textarea
+                                  value={editingContent}
+                                  onChange={(e) => setEditingContent(e.target.value)}
+                                  className="w-full p-3 rounded bg-white text-black text-sm"
+                                  rows={3}
+                                />
+
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    onClick={() => {
+                                      setEditingMessageId(null);
+                                      setEditingContent("");
+                                    }}
+                                    className="text-xs px-3 py-1 bg-gray-500 text-white rounded"
+                                  >
+                                    Cancel
+                                  </button>
+
+                                  <button
+                                    onClick={() => resendEditedMessage(message.id)}
+                                    className="text-xs px-3 py-1 bg-white text-[#0E1B2E] rounded font-medium"
+                                  >
+                                    Save & Resend
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-white whitespace-pre-wrap break-words max-w-full overflow-x-auto">
+                                {message.content}
+                              </div>
+                            )}
+                          </>
                         )}
                       </>
                     )}
@@ -1816,6 +1933,18 @@ export default function ChatPage() {
                           </>
                         )}
                       </button>
+
+                      {/* Edit Button */}
+                      <button
+                        onClick={() => {
+                          setEditingMessageId(message.id);
+                          setEditingContent(message.content);
+                        }}
+                        className="text-xs text-white/70 hover:text-white transition-colors flex items-center gap-1.5 px-2 py-1 hover:bg-white/10 rounded"
+                      >
+                        ✏️ Edit
+                      </button>
+
 
                     </div>
                   )}

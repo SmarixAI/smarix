@@ -403,8 +403,24 @@ async def chat(request: ChatRequest):
             role=request.role or "general",
         )
 
+        # 🔒 HARD NORMALIZATION (ADD THIS)
+        result = result or {}
+
+        result.setdefault("answer", "")
+        result.setdefault("sources", [])
+        result.setdefault("chunks_retrieved", 0)
+        result.setdefault("related_knowledge", None)
+        result.setdefault("emails", [])
+        result.setdefault("has_diagram", False)
+        result.setdefault("flow_data", None)
+        result.setdefault("query_type", None)
+        result.setdefault("context_quality", None)
+
+
+        sources = result.get("sources", []) or []
+
         enriched_sources = []
-        for source in result["sources"]:
+        for source in sources:
             enriched_source = {
                 **source,
                 "file": source.get("file", "unknown"),
@@ -414,8 +430,13 @@ async def chat(request: ChatRequest):
             }
             enriched_sources.append(enriched_source)
 
+
         email_count = len(result.get("emails", []))
-        print(f"Response: {result['chunks_retrieved']} code chunks", end="")
+        
+        chunks_retrieved = result.get("chunks_retrieved", 0)
+        print(f"Response: {chunks_retrieved} code chunks", end="")
+
+
         if email_count > 0:
             print(f" + {email_count} emails")
         else:
