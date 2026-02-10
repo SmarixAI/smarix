@@ -6,7 +6,7 @@ from ..state.repo_state import load_current_repo_from_state
 import json
 
 # Import S3Manager
-from backend.utils.s3 import s3_manager
+from utils.s3 import s3_manager
 
 REPO_OWNER, REPO_NAME = load_current_repo_from_state()
 

@@ -5,7 +5,7 @@ from ..state.repo_state import REPO_OWNER, REPO_NAME
 from .multi_source import process_multi_source_data
 
 # Import S3Manager
-from backend.utils.s3 import s3_manager
+from utils.s3 import s3_manager
 
 # S3 config
 S3_BUCKET = "smarix-data-apsouth1"
