@@ -51,10 +51,15 @@ class ContextBuilderMixin:
     def build_context_from_chunks(self, chunks: List[Dict], query_type: str) -> str:
         """Build context string from retrieved chunks."""
 
-        # Special handling for direct lookup results (exact PR match)
+        # Special handling for direct lookup results (exact issue/PR match)
         if chunks and chunks[0].get('source') == 'direct_lookup':
-            print(f"✅ CONTEXT_BUILDER | Direct lookup detected - building direct PR context")
-            return self._build_direct_lookup_context(chunks[0], query_type)
+            match_type = chunks[0].get('match_type', 'unknown')
+            if match_type == 'exact_issue_match':
+                print(f"✅ CONTEXT_BUILDER | Direct lookup detected - building direct issue context")
+                return self._build_direct_lookup_issue_context(chunks[0], query_type)
+            elif match_type == 'exact_pr_match':
+                print(f"✅ CONTEXT_BUILDER | Direct lookup detected - building direct PR context")
+                return self._build_direct_lookup_pr_context(chunks[0], query_type)
 
         # Special handling for FILE_LOOKUP queries with file-specific results
         if query_type == QueryType.FILE_LOOKUP and chunks:
@@ -240,7 +245,127 @@ class ContextBuilderMixin:
         return "\n".join(context_parts)
 
 
-    def _build_direct_lookup_context(self, chunk: Dict, query_type: str) -> str:
+    def _build_direct_lookup_issue_context(self, chunk: Dict, query_type: str) -> str:
+        """
+        Build context specifically for direct lookup issue data.
+        This handles issue data retrieved via exact issue number match.
+        """
+        context_parts = []
+        
+        # Get the full issue data
+        issue_data = chunk.get('content', {})
+        
+        if not issue_data:
+            print("⚠️ CONTEXT_BUILDER | _build_direct_lookup_issue_context: No issue data available")
+            return "No data available for this issue."
+        
+        # Extract key information
+        entities = issue_data.get('entities', {})
+        temporal = issue_data.get('temporal', {})
+        raw = issue_data.get('raw_data', {})
+        comments = issue_data.get('comments', [])
+        content_info = issue_data.get('content', {})
+        
+        # Header
+        issue_number = entities.get('issue_number', 'Unknown')
+        repo_name = issue_data.get('repo_name', '')
+        repo_owner = issue_data.get('repo_owner', '')
+        
+        print(f"✅ CONTEXT_BUILDER | Building context for issue #{issue_number}")
+        
+        context_parts.append(f"# Issue #{issue_number}")
+        if repo_owner and repo_name:
+            context_parts.append(f"Repository: {repo_owner}/{repo_name}")
+        context_parts.append("")
+        
+        # Core metadata
+        if isinstance(content_info, dict):
+            title = content_info.get('title', '')
+        else:
+            title = ''
+        
+        if title:
+            context_parts.append(f"**Title:** {title}")
+        
+        state = content_info.get('state') or entities.get('issue_status', '')
+        if state:
+            context_parts.append(f"**State:** {state}")
+        
+        # Temporal information
+        created_at = temporal.get('created_at', '')
+        if created_at:
+            context_parts.append(f"**Created At:** {created_at}")
+        
+        updated_at = temporal.get('updated_at', '')
+        if updated_at:
+            context_parts.append(f"**Updated At:** {updated_at}")
+        
+        closed_at = temporal.get('closed_at', '')
+        if closed_at:
+            context_parts.append(f"**Closed At:** {closed_at}")
+        
+        # Author and labels
+        author = entities.get('author', '')
+        if author:
+            context_parts.append(f"**Author:** {author}")
+        
+        labels = entities.get('labels', [])
+        if labels:
+            context_parts.append(f"**Labels:** {', '.join(labels[:5])}")
+        
+        # Related issues/PRs
+        linked_issues = entities.get('linked_issues', [])
+        linked_prs = entities.get('linked_prs', [])
+        
+        if linked_issues or linked_prs:
+            context_parts.append("")
+            if linked_issues:
+                context_parts.append(f"**Related Issues:** {', '.join([f'#{i}' for i in linked_issues[:5]])}")
+            if linked_prs:
+                context_parts.append(f"**Related PRs:** {', '.join([f'#{p}' for p in linked_prs[:5]])}")
+        
+        context_parts.append("")
+        
+        # Description/Body
+        if isinstance(content_info, dict):
+            body = content_info.get('body', '')
+        else:
+            body = str(content_info) if content_info else ''
+        
+        if body and body.strip():
+            context_parts.append("## Description\n")
+            # Limit body length
+            max_length = 4000
+            if len(body) > max_length:
+                body = body[:max_length] + "\n... (truncated)"
+            context_parts.append(body)
+            context_parts.append("")
+        
+        # Comments summary
+        if comments:
+            context_parts.append(f"## Comments ({len(comments)} total)\n")
+            
+            # Show first 3 comments
+            for i, comment in enumerate(comments[:3], 1):
+                commenter = comment.get('author', 'Anonymous')
+                comment_body = comment.get('body', '')
+                context_parts.append(f"### Comment {i} by {commenter}")
+                
+                if len(comment_body) > 500:
+                    comment_body = comment_body[:500] + "\n... (truncated)"
+                context_parts.append(comment_body)
+                context_parts.append("")
+            
+            if len(comments) > 3:
+                context_parts.append(f"... and {len(comments) - 3} more comments")
+        
+        context_parts.append("")
+        context_parts.append("=" * 70)
+        
+        return "\n".join(context_parts)
+
+
+    def _build_direct_lookup_pr_context(self, chunk: Dict, query_type: str) -> str:
         """
         Build context specifically for direct lookup PR data.
         This handles PR data retrieved via exact PR number match.
@@ -251,7 +376,7 @@ class ContextBuilderMixin:
         pr_data = chunk.get('content', {})
         
         if not pr_data:
-            print("⚠️ CONTEXT_BUILDER | _build_direct_lookup_context: No PR data available")
+            print("⚠️ CONTEXT_BUILDER | _build_direct_lookup_pr_context: No PR data available")
             return "No data available for this PR."
         
         # Extract key information

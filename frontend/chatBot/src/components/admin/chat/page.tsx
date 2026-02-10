@@ -38,6 +38,9 @@ import {
   MessageSquare,
   ArrowLeft,
   LogOut,
+  ChevronUp,
+  Minimize2,
+  Maximize2,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -370,6 +373,9 @@ export default function ChatPage() {
   const [showRelatedKnowledge, setShowRelatedKnowledge] = useState<{
     [key: string]: boolean;
   }>({});
+  const [collapsedMessages, setCollapsedMessages] = useState<{
+    [key: string]: boolean;
+  }>({});
   const [stats, setStats] = useState<any>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState([]);
@@ -392,6 +398,7 @@ export default function ChatPage() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -599,7 +606,6 @@ export default function ChatPage() {
       );
       const data = await response.json();
 
-      // ✅ Add detailed logging
       console.log("📦 Full response data:", data);
       console.log("📨 Messages array:", data.messages);
       console.log("📊 Messages length:", data.messages?.length);
@@ -607,7 +613,7 @@ export default function ChatPage() {
 
       const formattedMessages = (data.messages || []).map(
         (msg: any, index: number) => {
-          console.log(`📄 Formatting message ${index}:`, msg); // ✅ Log each message
+          console.log(`📄 Formatting message ${index}:`, msg);
           return {
             id:
               msg.id?.toString() ||
@@ -654,7 +660,6 @@ export default function ChatPage() {
     if (messageElement) {
       messageElement.scrollIntoView({ behavior: "smooth", block: "center" });
       setSelectedMessageId(messageId);
-      // Remove highlight after 2 seconds
       setTimeout(() => setSelectedMessageId(null), 2000);
     }
   };
@@ -799,6 +804,13 @@ export default function ChatPage() {
 
   const toggleRelatedKnowledge = (messageId: string) => {
     setShowRelatedKnowledge((prev) => ({
+      ...prev,
+      [messageId]: !prev[messageId],
+    }));
+  };
+
+  const toggleCollapse = (messageId: string) => {
+    setCollapsedMessages((prev) => ({
       ...prev,
       [messageId]: !prev[messageId],
     }));
@@ -1316,311 +1328,393 @@ export default function ChatPage() {
                   >
                     {message.role === "assistant" ? (
                       <div className="space-y-4">
-                        {message.flow_data &&
-                          message.flow_data.nodes &&
-                          message.flow_data.nodes.length > 0 && (
-                            <div className="mb-6 p-5 bg-white/60 backdrop-blur-sm border border-[#0E1B2E]/10 rounded-xl shadow-md">
-                              <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center gap-2">
-                                  <div className="p-2 bg-[#0E1B2E]/10 rounded-lg">
-                                    <Workflow className="w-5 h-5 text-[#0E1B2E]" />
-                                  </div>
-                                  <div>
-                                    <h3
-                                      className={`text-lg font-semibold text-[#0E1B2E] ${spaceGrotesk.className}`}
-                                    >
-                                      Code Flow Diagram
-                                    </h3>
-                                    <p
-                                      className={`text-xs text-[#0E1B2E]/60 mt-0.5 ${spaceGrotesk.className}`}
-                                    >
-                                      Interactive visualization of code
-                                      structure
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-3 text-xs">
-                                  <span
-                                    className={`px-2 py-1 bg-[#0E1B2E]/10 text-[#0E1B2E] rounded-full ${spaceGrotesk.className}`}
-                                  >
-                                    {message.flow_data.nodes.length} nodes
-                                  </span>
-                                  <span
-                                    className={`px-2 py-1 bg-[#0E1B2E]/10 text-[#0E1B2E] rounded-full ${spaceGrotesk.className}`}
-                                  >
-                                    {message.flow_data.edges.length} connections
-                                  </span>
-                                </div>
-                              </div>
-
-                              <MermaidDiagram
-                                code={convertFlowDataToMermaid(
-                                  message.flow_data,
-                                )}
-                              />
-
-                              <div
-                                className={`mt-3 flex items-center gap-2 text-xs text-[#0E1B2E]/70 ${spaceGrotesk.className}`}
-                              >
-                                <div className="flex items-center gap-1.5">
-                                  <div className="w-3 h-3 bg-[#0E1B2E] rounded"></div>
-                                  <span>Functions</span>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                  <div className="w-3 h-3 bg-[#0E1B2E]/70 rounded"></div>
-                                  <span>Classes</span>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                  <div className="w-3 h-3 bg-[#0E1B2E]/50 rounded"></div>
-                                  <span>Methods</span>
-                                </div>
-                              </div>
+                        {/* Collapsed Preview */}
+                        {collapsedMessages[message.id] ? (
+                          <div className="space-y-3">
+                            <div className="flex items-start gap-2">
+                              <Sparkles className="w-4 h-4 text-[#0E1B2E] flex-shrink-0 mt-1" />
+                              <p className={`text-sm text-[#0E1B2E]/70 line-clamp-2 ${spaceGrotesk.className}`}>
+                                {message.content.slice(0, 150)}...
+                              </p>
                             </div>
-                          )}
-
-                        <div className="markdown-content prose max-w-none antialiased overflow-x-auto">
-                          <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            rehypePlugins={[rehypeHighlight, rehypeRaw]}
-                            components={{
-                              h1: ({ node, ...props }) => (
-                                <h1
-                                  className={`text-2xl font-bold text-[#0E1B2E] mb-4 mt-6 first:mt-0 border-b border-[#0E1B2E]/20 pb-2 antialiased ${spaceGrotesk.className}`}
-                                  {...props}
-                                />
-                              ),
-                              h2: ({ node, ...props }) => (
-                                <h2
-                                  className={`text-xl font-bold text-[#0E1B2E] mb-3 mt-5 first:mt-0 antialiased ${spaceGrotesk.className}`}
-                                  {...props}
-                                />
-                              ),
-                              h3: ({ node, ...props }) => (
-                                <h3
-                                  className={`text-lg font-semibold text-[#0E1B2E] mb-2 mt-4 first:mt-0 antialiased ${spaceGrotesk.className}`}
-                                  {...props}
-                                />
-                              ),
-                              p: ({ node, ...props }) => (
-                                <p
-                                  className={`text-[#0E1B2E]/80 leading-relaxed mb-4 last:mb-0 antialiased ${spaceGrotesk.className}`}
-                                  {...props}
-                                />
-                              ),
-                              ul: ({ node, ...props }) => (
-                                <ul
-                                  className={`list-disc list-outside ml-5 space-y-2 mb-4 text-[#0E1B2E]/80 antialiased ${spaceGrotesk.className}`}
-                                  {...props}
-                                />
-                              ),
-                              ol: ({ node, ...props }) => (
-                                <ol
-                                  className={`list-decimal list-outside ml-5 space-y-2 mb-4 text-[#0E1B2E]/80 antialiased ${spaceGrotesk.className}`}
-                                  {...props}
-                                />
-                              ),
-                              li: ({ node, ...props }) => (
-                                <li
-                                  className={`text-[#0E1B2E]/80 leading-relaxed pl-2 antialiased ${spaceGrotesk.className}`}
-                                  {...props}
-                                />
-                              ),
-                              code: ({
-                                node,
-                                inline,
-                                className,
-                                children,
-                                ...props
-                              }: any) => {
-                                const match = /language-(\w+)/.exec(
-                                  className || "",
-                                );
-                                const language = match ? match[1] : "";
-
-                                if (!inline && language === "mermaid") {
-                                  const mermaidCode = String(children).replace(
-                                    /\n$/,
-                                    "",
-                                  );
-                                  return <MermaidDiagram code={mermaidCode} />;
-                                }
-
-                                return !inline && match ? (
-                                  <div className="relative group my-4">
-                                    <div className="absolute right-2 top-2 z-10">
-                                      <button
-                                        onClick={() => {
-                                          navigator.clipboard.writeText(
-                                            String(children),
-                                          );
-                                        }}
-                                        className="px-2 py-1 bg-[#0E1B2E]/10 hover:bg-[#0E1B2E]/20 rounded text-xs text-[#0E1B2E] opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1"
-                                      >
-                                        <Copy className="w-3 h-3" />
-                                        Copy
-                                      </button>
+                            
+                          </div>
+                        ) : (
+                          <>
+                            {message.flow_data &&
+                              message.flow_data.nodes &&
+                              message.flow_data.nodes.length > 0 && (
+                                <div className="mb-6 p-5 bg-white/60 backdrop-blur-sm border border-[#0E1B2E]/10 rounded-xl shadow-md">
+                                  <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center gap-2">
+                                      <div className="p-2 bg-[#0E1B2E]/10 rounded-lg">
+                                        <Workflow className="w-5 h-5 text-[#0E1B2E]" />
+                                      </div>
+                                      <div>
+                                        <h3
+                                          className={`text-lg font-semibold text-[#0E1B2E] ${spaceGrotesk.className}`}
+                                        >
+                                          Code Flow Diagram
+                                        </h3>
+                                        <p
+                                          className={`text-xs text-[#0E1B2E]/60 mt-0.5 ${spaceGrotesk.className}`}
+                                        >
+                                          Interactive visualization of code
+                                          structure
+                                        </p>
+                                      </div>
                                     </div>
-                                    <pre className="!bg-[#0E1B2E]/5 !p-4 rounded-lg overflow-x-auto border border-[#0E1B2E]/10">
+                                    <div className="flex items-center gap-3 text-xs">
+                                      <span
+                                        className={`px-2 py-1 bg-[#0E1B2E]/10 text-[#0E1B2E] rounded-full ${spaceGrotesk.className}`}
+                                      >
+                                        {message.flow_data.nodes.length} nodes
+                                      </span>
+                                      <span
+                                        className={`px-2 py-1 bg-[#0E1B2E]/10 text-[#0E1B2E] rounded-full ${spaceGrotesk.className}`}
+                                      >
+                                        {message.flow_data.edges.length}{" "}
+                                        connections
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <MermaidDiagram
+                                    code={convertFlowDataToMermaid(
+                                      message.flow_data,
+                                    )}
+                                  />
+
+                                  <div
+                                    className={`mt-3 flex items-center gap-2 text-xs text-[#0E1B2E]/70 ${spaceGrotesk.className}`}
+                                  >
+                                    <div className="flex items-center gap-1.5">
+                                      <div className="w-3 h-3 bg-[#0E1B2E] rounded"></div>
+                                      <span>Functions</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <div className="w-3 h-3 bg-[#0E1B2E]/70 rounded"></div>
+                                      <span>Classes</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <div className="w-3 h-3 bg-[#0E1B2E]/50 rounded"></div>
+                                      <span>Methods</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
+                            <div className="markdown-content prose max-w-none antialiased overflow-x-auto">
+                              <ReactMarkdown
+                                remarkPlugins={[remarkGfm]}
+                                rehypePlugins={[rehypeHighlight, rehypeRaw]}
+                                components={{
+                                  h1: ({ node, ...props }) => (
+                                    <h1
+                                      className={`text-2xl font-bold text-[#0E1B2E] mb-4 mt-6 first:mt-0 border-b border-[#0E1B2E]/20 pb-2 antialiased ${spaceGrotesk.className}`}
+                                      {...props}
+                                    />
+                                  ),
+                                  h2: ({ node, ...props }) => (
+                                    <h2
+                                      className={`text-xl font-bold text-[#0E1B2E] mb-3 mt-5 first:mt-0 antialiased ${spaceGrotesk.className}`}
+                                      {...props}
+                                    />
+                                  ),
+                                  h3: ({ node, ...props }) => (
+                                    <h3
+                                      className={`text-lg font-semibold text-[#0E1B2E] mb-2 mt-4 first:mt-0 antialiased ${spaceGrotesk.className}`}
+                                      {...props}
+                                    />
+                                  ),
+                                  p: ({ node, ...props }) => (
+                                    <p
+                                      className={`text-[#0E1B2E]/80 leading-relaxed mb-4 last:mb-0 antialiased ${spaceGrotesk.className}`}
+                                      {...props}
+                                    />
+                                  ),
+                                  ul: ({ node, ...props }) => (
+                                    <ul
+                                      className={`list-disc list-outside ml-5 space-y-2 mb-4 text-[#0E1B2E]/80 antialiased ${spaceGrotesk.className}`}
+                                      {...props}
+                                    />
+                                  ),
+                                  ol: ({ node, ...props }) => (
+                                    <ol
+                                      className={`list-decimal list-outside ml-5 space-y-2 mb-4 text-[#0E1B2E]/80 antialiased ${spaceGrotesk.className}`}
+                                      {...props}
+                                    />
+                                  ),
+                                  li: ({ node, ...props }) => (
+                                    <li
+                                      className={`text-[#0E1B2E]/80 leading-relaxed pl-2 antialiased ${spaceGrotesk.className}`}
+                                      {...props}
+                                    />
+                                  ),
+                                  code: ({
+                                    node,
+                                    inline,
+                                    className,
+                                    children,
+                                    ...props
+                                  }: any) => {
+                                    const match = /language-(\w+)/.exec(
+                                      className || "",
+                                    );
+                                    const language = match ? match[1] : "";
+
+                                    if (!inline && language === "diff") {
+                                      return (
+                                        <details className="my-4 border border-[#374151] rounded-lg bg-[#1f2937] text-gray-200">
+                                          <summary className="cursor-pointer px-4 py-2 text-xs text-gray-400 hover:text-white border-b border-[#374151] select-none">
+                                            View Changes (Diff)
+                                          </summary>
+                                          <div className="max-h-[400px] overflow-y-auto overflow-x-auto border-t border-[#0E1B2E]/10">
+                                            <pre className="p-4 text-xs font-mono leading-relaxed">
+                                              {children}
+                                            </pre>
+                                          </div>
+                                        </details>
+                                      );
+                                    }
+
+                                    if (!inline && language === "mermaid") {
+                                      const mermaidCode = String(
+                                        children,
+                                      ).replace(/\n$/, "");
+                                      return (
+                                        <MermaidDiagram code={mermaidCode} />
+                                      );
+                                    }
+
+                                    return !inline && match ? (
+                                      <details className="my-4 group border border-[#374151] rounded-lg bg-[#1f2937] text-gray-200">
+                                        <summary className="cursor-pointer text-xs px-4 py-2 text-gray-400 hover:text-white border-b border-[#374151] select-none">
+                                          View Code
+                                        </summary>
+
+                                        <div className="relative">
+                                          <div className="max-h-[500px] overflow-y-auto overflow-x-auto">
+                                            <pre className="p-4 text-sm font-mono leading-relaxed bg-[#1f2937]">
+                                              <code
+                                                className={`${className} ${firaCode.className}`}
+                                                {...props}
+                                              >
+                                                {children}
+                                              </code>
+                                            </pre>
+                                          </div>
+                                        </div>
+                                      </details>
+                                    ) : (
                                       <code
-                                        className={`${className} !bg-transparent text-sm leading-relaxed ${firaCode.className}`}
+                                        className={`px-1.5 py-0.5 bg-[#0E1B2E]/10 text-[#0E1B2E] rounded text-sm ${firaCode.className}`}
                                         {...props}
                                       >
                                         {children}
                                       </code>
-                                    </pre>
-                                  </div>
-                                ) : (
-                                  <code
-                                    className={`px-1.5 py-0.5 bg-[#0E1B2E]/10 text-[#0E1B2E] rounded text-sm ${firaCode.className}`}
-                                    {...props}
-                                  >
-                                    {children}
-                                  </code>
-                                );
-                              },
-                              blockquote: ({ node, ...props }) => (
-                                <blockquote
-                                  className={`border-l-4 border-[#0E1B2E]/30 pl-4 py-2 my-4 italic text-[#0E1B2E]/70 bg-[#0E1B2E]/5 rounded-r ${spaceGrotesk.className}`}
-                                  {...props}
-                                />
-                              ),
-                              a: ({ node, ...props }) => (
-                                <a
-                                  className="text-[#0E1B2E] hover:text-[#1a2f4d] underline decoration-[#0E1B2E]/30 hover:decoration-[#1a2f4d] inline-flex items-center gap-1 transition-colors"
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  {...props}
-                                >
-                                  {props.children}
-                                  <ExternalLink className="w-3 h-3 inline" />
-                                </a>
-                              ),
-                              table: ({ node, ...props }: any) => {
-                                // Check if this is a file changes table by examining children
-                                const isFileTable = node?.children?.some((child: any) => 
-                                  child?.children?.some((th: any) => 
-                                    th?.children?.some((text: any) => {
-                                      const textContent = typeof text === 'string' ? text : text?.value || '';
-                                      return /file|status|addition|deletion/i.test(textContent);
-                                    })
-                                  )
-                                );
+                                    );
+                                  },
+                                  blockquote: ({ node, ...props }) => (
+                                    <blockquote
+                                      className={`border-l-4 border-[#0E1B2E]/30 pl-4 py-2 my-4 italic text-[#0E1B2E]/70 bg-[#0E1B2E]/5 rounded-r ${spaceGrotesk.className}`}
+                                      {...props}
+                                    />
+                                  ),
+                                  a: ({ node, ...props }) => (
+                                    <a
+                                      className="text-[#0E1B2E] hover:text-[#1a2f4d] underline decoration-[#0E1B2E]/30 hover:decoration-[#1a2f4d] inline-flex items-center gap-1 transition-colors"
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      {...props}
+                                    >
+                                      {props.children}
+                                      <ExternalLink className="w-3 h-3 inline" />
+                                    </a>
+                                  ),
+                                  table: ({ node, ...props }: any) => {
+                                    const isFileTable = node?.children?.some(
+                                      (child: any) =>
+                                        child?.children?.some((th: any) =>
+                                          th?.children?.some((text: any) => {
+                                            const textContent =
+                                              typeof text === "string"
+                                                ? text
+                                                : text?.value || "";
+                                            return /file|status|addition|deletion/i.test(
+                                              textContent,
+                                            );
+                                          }),
+                                        ),
+                                    );
 
-                                return (
-                                  <div className={`overflow-x-auto my-6 rounded-xl border border-[#0E1B2E]/15 bg-white/80 backdrop-blur-sm shadow-md ${isFileTable ? 'overflow-visible' : ''}`}>
-                                    <table className="min-w-full border-collapse" {...props} />
-                                  </div>
-                                );
-                              },
-                              thead: ({ node, ...props }) => (
-                                <thead className="bg-[#0E1B2E]/10 border-b border-[#0E1B2E]/20" {...props} />
-                              ),
-                              th: ({ node, ...props }: any) => {
-                                const textContent = typeof props.children === 'string' 
-                                  ? props.children 
-                                  : props.children?.props?.children || '';
-                                const isFileColumn = /file/i.test(textContent);
-                                
-                                return (
-                                  <th
-                                    className={`px-4 py-3 text-left text-sm font-semibold text-[#0E1B2E] ${isFileColumn ? 'min-w-[200px]' : ''} ${spaceGrotesk.className}`}
-                                    {...props}
-                                  />
-                                );
-                              },
-                              td: ({ node, ...props }: any) => {
-                                const cellContent = typeof props.children === 'string' 
-                                  ? props.children 
-                                  : props.children?.props?.children || '';
-                                
-                                // Check if cell contains file path
-                                const isFilePath = /`[^`]+`/.test(cellContent) || /\//.test(cellContent);
-                                // Check if cell contains status
-                                const isStatus = /^(Modified|Added|Deleted|Renamed)/i.test(cellContent);
-                                // Check if cell contains change numbers
-                                const isChange = /^[+\-]\d+/.test(cellContent);
-                                
-                                return (
-                                  <td
-                                    className={`px-4 py-3 text-sm text-[#0E1B2E] border-b border-[#0E1B2E]/10 ${
-                                      isFilePath ? 'font-mono text-xs' : ''
-                                    } ${spaceGrotesk.className}`}
-                                    {...props}
-                                  >
-                                    {isFilePath ? (
-                                      <code className="bg-[#0E1B2E]/10 px-2 py-1 rounded text-[#0E1B2E] border border-[#0E1B2E]/20">
-                                        {cellContent.replace(/`/g, '')}
-                                      </code>
-                                    ) : isStatus ? (
-                                      <span
-                                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-                                          cellContent.toLowerCase().includes('added')
-                                            ? 'bg-green-100 text-green-800'
-                                            : cellContent.toLowerCase().includes('deleted')
-                                            ? 'bg-red-100 text-red-800'
-                                            : cellContent.toLowerCase().includes('modified')
-                                            ? 'bg-blue-100 text-blue-800'
-                                            : 'bg-gray-100 text-gray-800'
-                                        }`}
+                                    return (
+                                      <div
+                                        className={`overflow-x-auto my-6 rounded-xl border border-[#0E1B2E]/15 bg-white/80 backdrop-blur-sm shadow-md ${isFileTable ? "overflow-visible" : ""}`}
                                       >
-                                        {cellContent}
-                                      </span>
-                                    ) : isChange ? (
-                                      <span
-                                        className={`font-mono font-semibold ${
-                                          cellContent.startsWith('+')
-                                            ? 'text-green-600'
-                                            : cellContent.startsWith('-')
-                                            ? 'text-red-600'
-                                            : 'text-[#0E1B2E]'
-                                        }`}
+                                        <table
+                                          className="min-w-full border-collapse"
+                                          {...props}
+                                        />
+                                      </div>
+                                    );
+                                  },
+                                  thead: ({ node, ...props }) => (
+                                    <thead
+                                      className="bg-[#0E1B2E]/10 border-b border-[#0E1B2E]/20"
+                                      {...props}
+                                    />
+                                  ),
+                                  th: ({ node, ...props }: any) => {
+                                    const textContent =
+                                      typeof props.children === "string"
+                                        ? props.children
+                                        : props.children?.props?.children || "";
+                                    const isFileColumn = /file/i.test(
+                                      textContent,
+                                    );
+
+                                    return (
+                                      <th
+                                        className={`px-4 py-3 text-left text-sm font-semibold text-[#0E1B2E] ${isFileColumn ? "min-w-[200px]" : ""} ${spaceGrotesk.className}`}
+                                        {...props}
+                                      />
+                                    );
+                                  },
+                                  td: ({ node, ...props }: any) => {
+                                    const cellContent =
+                                      typeof props.children === "string"
+                                        ? props.children
+                                        : props.children?.props?.children || "";
+
+                                    const isFilePath =
+                                      /`[^`]+`/.test(cellContent) ||
+                                      /\//.test(cellContent);
+                                    const isStatus =
+                                      /^(Modified|Added|Deleted|Renamed)/i.test(
+                                        cellContent,
+                                      );
+                                    const isChange = /^[+\-]\d+/.test(
+                                      cellContent,
+                                    );
+
+                                    return (
+                                      <td
+                                        className={`px-4 py-3 text-sm text-[#0E1B2E] border-b border-[#0E1B2E]/10 ${
+                                          isFilePath ? "font-mono text-xs" : ""
+                                        } ${spaceGrotesk.className}`}
+                                        {...props}
                                       >
-                                        {cellContent}
-                                      </span>
-                                    ) : (
-                                      props.children
-                                    )}
-                                  </td>
-                                );
-                              },
-                              tbody: ({ node, ...props }: any) => {
-                                // Add alternating row colors
-                                return (
-                                  <tbody className="[&>tr:nth-child(even)]:bg-[#0E1B2E]/5 [&>tr:hover]:bg-[#0E1B2E]/10 [&>tr]:transition-colors" {...props} />
-                                );
-                              },
-                              strong: ({ node, ...props }) => (
-                                <strong
-                                  className={`font-bold text-[#0E1B2E] ${spaceGrotesk.className}`}
-                                  {...props}
-                                />
-                              ),
-                              em: ({ node, ...props }) => (
-                                <em
-                                  className={`italic text-[#0E1B2E]/80 ${spaceGrotesk.className}`}
-                                  {...props}
-                                />
-                              ),
-                              hr: ({ node, ...props }) => (
-                                <hr
-                                  className="my-6 border-t border-[#0E1B2E]/20"
-                                  {...props}
-                                />
-                              ),
-                            }}
-                          >
-                            {message.content}
-                          </ReactMarkdown>
-                        </div>
+                                        {isFilePath ? (
+                                          <code className="bg-[#0E1B2E]/10 px-2 py-1 rounded text-[#0E1B2E] border border-[#0E1B2E]/20">
+                                            {cellContent.replace(/`/g, "")}
+                                          </code>
+                                        ) : isStatus ? (
+                                          <span
+                                            className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+                                              cellContent
+                                                .toLowerCase()
+                                                .includes("added")
+                                                ? "bg-green-100 text-green-800"
+                                                : cellContent
+                                                      .toLowerCase()
+                                                      .includes("deleted")
+                                                  ? "bg-red-100 text-red-800"
+                                                  : cellContent
+                                                        .toLowerCase()
+                                                        .includes("modified")
+                                                    ? "bg-blue-100 text-blue-800"
+                                                    : "bg-gray-100 text-gray-800"
+                                            }`}
+                                          >
+                                            {cellContent}
+                                          </span>
+                                        ) : isChange ? (
+                                          <span
+                                            className={`font-mono font-semibold ${
+                                              cellContent.startsWith("+")
+                                                ? "text-green-600"
+                                                : cellContent.startsWith("-")
+                                                  ? "text-red-600"
+                                                  : "text-[#0E1B2E]"
+                                            }`}
+                                          >
+                                            {cellContent}
+                                          </span>
+                                        ) : (
+                                          props.children
+                                        )}
+                                      </td>
+                                    );
+                                  },
+                                  tbody: ({ node, ...props }: any) => {
+                                    return (
+                                      <tbody
+                                        className="[&>tr:nth-child(even)]:bg-[#0E1B2E]/5 [&>tr:hover]:bg-[#0E1B2E]/10 [&>tr]:transition-colors"
+                                        {...props}
+                                      />
+                                    );
+                                  },
+                                  strong: ({ node, ...props }) => (
+                                    <strong
+                                      className={`font-bold text-[#0E1B2E] ${spaceGrotesk.className}`}
+                                      {...props}
+                                    />
+                                  ),
+                                  em: ({ node, ...props }) => (
+                                    <em
+                                      className={`italic text-[#0E1B2E]/80 ${spaceGrotesk.className}`}
+                                      {...props}
+                                    />
+                                  ),
+                                  hr: ({ node, ...props }) => (
+                                    <hr
+                                      className="my-6 border-t border-[#0E1B2E]/20"
+                                      {...props}
+                                    />
+                                  ),
+                                }}
+                              >
+                                {message.content.replace(/\bCopy\b/g, "")}
+                              </ReactMarkdown>
+                            </div>
+                          </>
+                        )}
                       </div>
                     ) : (
-                      <div className="text-white whitespace-pre-wrap break-words max-w-full overflow-x-auto">
-                        {message.content}
-                      </div>
+                      <>
+                        {collapsedMessages[message.id] ? (
+                          <div className="text-white/70 text-sm line-clamp-2">
+                            {message.content.slice(0, 150)}...
+                          </div>
+                        ) : (
+                          <div className="text-white whitespace-pre-wrap break-words max-w-full overflow-x-auto">
+                            {message.content}
+                          </div>
+                        )}
+                      </>
                     )}
+
 
                     {message.role === "assistant" && (
                       <div className="mt-4 flex items-center gap-3 pt-4 border-t border-[#0E1B2E]/10">
+                        <button
+                          onClick={() => toggleCollapse(message.id)}
+                          className={`text-xs text-[#0E1B2E]/70 hover:text-[#0E1B2E] transition-colors flex items-center gap-1.5 px-2 py-1 hover:bg-[#0E1B2E]/5 rounded ${spaceGrotesk.className}`}
+                        >
+                          {collapsedMessages[message.id] ? (
+                            <>
+                              <Maximize2 className="w-3 h-3" />
+                              Expand
+                            </>
+                          ) : (
+                            <>
+                              <Minimize2 className="w-3 h-3" />
+                              Collapse
+                            </>
+                          )}
+                        </button>
+
                         <button
                           onClick={() =>
                             copyToClipboard(message.content, message.id)
@@ -1684,6 +1778,48 @@ export default function ChatPage() {
                         )}
                       </div>
                     )}
+                    {message.role === "user" && (
+                    <div className="mt-3 flex justify-end items-center gap-3 pt-3 border-t border-white/20">
+                      
+                      {/* Collapse Button */}
+                      <button
+                        onClick={() => toggleCollapse(message.id)}
+                        className="text-xs text-white/70 hover:text-white transition-colors flex items-center gap-1.5 px-2 py-1 hover:bg-white/10 rounded"
+                      >
+                        {collapsedMessages[message.id] ? (
+                          <>
+                            <Maximize2 className="w-3 h-3" />
+                            Expand
+                          </>
+                        ) : (
+                          <>
+                            <Minimize2 className="w-3 h-3" />
+                            Collapse
+                          </>
+                        )}
+                      </button>
+
+                      {/* Copy Button */}
+                      <button
+                        onClick={() => copyToClipboard(message.content, message.id)}
+                        className="text-xs text-white/70 hover:text-white transition-colors flex items-center gap-1.5 px-2 py-1 hover:bg-white/10 rounded"
+                      >
+                        {copiedId === message.id ? (
+                          <>
+                            <Check className="w-3 h-3" />
+                            Copied
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3 h-3" />
+                            Copy
+                          </>
+                        )}
+                      </button>
+
+                    </div>
+                  )}
+
 
                     {/* Sources Display */}
                     {message.role === "assistant" &&

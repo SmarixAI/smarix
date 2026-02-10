@@ -468,6 +468,68 @@ class RetrievalMixin(
                 return vector_results[:self.top_k * 2]
 
         # -------------------------------------------------------
+        # DIRECT ISSUE LOOKUP: Check for exact issue number match
+        # This runs for ALL queries (not just issue-specific types)
+        # -------------------------------------------------------
+        if query_text:
+            self.logger.info(f"DIRECT_LOOKUP | Checking query for issue number: '{query_text[:100]}'...")
+            self.logger.debug(f"DIRECT_LOOKUP | Query type: {query_type}")
+            
+            try:
+                from ..direct_lookup import get_issue_lookup
+                issue_lookup = get_issue_lookup()
+                
+                if not issue_lookup.is_loaded():
+                    self.logger.debug("DIRECT_LOOKUP | Issue lookup not loaded, skipping direct issue lookup")
+                else:
+                    self.logger.debug(f"DIRECT_LOOKUP | Issue lookup loaded with {len(issue_lookup.get_available_issue_numbers())} issues")
+                    
+                    # Extract issue number from query
+                    issue_number = issue_lookup.extract_issue_number_from_query(query_text)
+                    
+                    if issue_number:
+                        self.logger.info(f"DIRECT_LOOKUP | Extracted issue number: #{issue_number} from query")
+                        
+                        # Try to retrieve issue data
+                        direct_issue_data = issue_lookup.lookup_by_number(issue_number)
+                        
+                        if direct_issue_data:
+                            self.logger.info(
+                                f"✅ DIRECT_LOOKUP | SUCCESS: Found issue #{issue_number} in chunks database"
+                            )
+                            
+                            # Convert issue chunk to retrieval result format
+                            result = {
+                                'chunk_id': direct_issue_data.get('chunk_id', f"direct_issue_{issue_number}"),
+                                'metadata': {
+                                    'issue_number': issue_number,
+                                    'repo_name': direct_issue_data.get('repo_name', ''),
+                                    'repo_owner': direct_issue_data.get('repo_owner', ''),
+                                    'chunk_type': 'issue',
+                                    'retrieval_priority': 1,
+                                },
+                                'content': direct_issue_data,  # Store full issue data
+                                'score': 100.0,  # Highest score for direct match
+                                'source': 'direct_lookup',
+                                'match_type': 'exact_issue_match',
+                                'index_type': 'issue'
+                            }
+                            self.logger.info(f"DIRECT_LOOKUP | Returning direct issue lookup result with score 100.0")
+                            self.logger.info(f"DIRECT_LOOKUP | Bypassing multi-index retrieval for exact issue match")
+                            return [result]  # Return only direct match
+                        else:
+                            self.logger.info(f"DIRECT_LOOKUP | Issue #{issue_number} not found in chunks database, continuing with normal retrieval")
+                    else:
+                        self.logger.debug(f"DIRECT_LOOKUP | No issue number pattern found in query")
+                        
+            except ImportError as e:
+                self.logger.warning(f"DIRECT_LOOKUP | Issue lookup module not available: {e}")
+            except Exception as e:
+                self.logger.error(f"DIRECT_LOOKUP | Error during issue lookup: {e}", exc_info=True)
+                import traceback
+                self.logger.debug(f"DIRECT_LOOKUP | Traceback:\n{traceback.format_exc()}")
+
+        # -------------------------------------------------------
         # DIRECT PR LOOKUP: Check for exact PR number match
         # This runs for ALL queries (not just PR-specific types)
         # -------------------------------------------------------
