@@ -41,6 +41,9 @@ import {
   ChevronUp,
   Minimize2,
   Maximize2,
+  ChevronUp,
+  Minimize2,
+  Maximize2,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -192,6 +195,9 @@ const MermaidDiagram = ({ code }: { code: string }) => {
   const handleReset = () => {
     setZoom(1);
   };
+
+
+
 
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
@@ -376,6 +382,9 @@ export default function ChatPage() {
   const [collapsedMessages, setCollapsedMessages] = useState<{
     [key: string]: boolean;
   }>({});
+  const [collapsedMessages, setCollapsedMessages] = useState<{
+    [key: string]: boolean;
+  }>({});
   const [stats, setStats] = useState<any>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState([]);
@@ -393,11 +402,16 @@ export default function ChatPage() {
   >("general");
   const messageRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState("");
+
+
   // Check if user has status "general"
   const showUserInfo = isAuthenticated && user && user.status === "general";
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  
   
 
   useEffect(() => {
@@ -614,6 +628,7 @@ export default function ChatPage() {
       const formattedMessages = (data.messages || []).map(
         (msg: any, index: number) => {
           console.log(`📄 Formatting message ${index}:`, msg);
+          console.log(`📄 Formatting message ${index}:`, msg);
           return {
             id:
               msg.id?.toString() ||
@@ -758,6 +773,84 @@ export default function ChatPage() {
     }
   };
 
+  const resendEditedMessage = async (messageId: string) => {
+    if (!editingContent.trim() || isLoading || !user?.username) return;
+
+    const index = messages.findIndex((m) => m.id === messageId);
+    if (index === -1) return;
+
+    // 1️⃣ Remove everything AFTER edited message
+    const trimmedMessages = messages.slice(0, index);
+
+    // 2️⃣ Replace edited message
+    const editedMessage: Message = {
+      ...messages[index],
+      content: editingContent,
+      timestamp: new Date(),
+    };
+
+    const updatedMessages = [...trimmedMessages, editedMessage];
+
+    setMessages(updatedMessages);
+    setEditingMessageId(null);
+    setEditingContent("");
+    setIsLoading(true);
+
+    try {
+      const requestBody: {
+        query: string;
+        session_id?: string;
+        username: string;
+        role?: string;
+      } = {
+        query: editingContent,
+        role: selectedRole,
+        username: user.username,
+      };
+
+      if (sessionId) {
+        requestBody.session_id = sessionId;
+      }
+
+      const response = await fetch(`${baseURL}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) throw new Error("Failed to regenerate");
+
+      const data = await response.json();
+
+      const normalizedRelated = normalizeRelatedKnowledge(
+        data.related_knowledge,
+      );
+
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: data.answer,
+        sources: data.sources,
+        chunks_retrieved: data.chunks_retrieved,
+        flow_data: data.flow_data,
+        related_knowledge: {
+          issues: normalizedRelated.issues,
+          prs: normalizedRelated.prs,
+          commits: normalizedRelated.commits,
+        },
+        metrics_summary: normalizedRelated.metricsSummary,
+        timestamp: new Date(),
+      };
+
+      setMessages((prev) => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error("Resend failed:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -804,6 +897,13 @@ export default function ChatPage() {
 
   const toggleRelatedKnowledge = (messageId: string) => {
     setShowRelatedKnowledge((prev) => ({
+      ...prev,
+      [messageId]: !prev[messageId],
+    }));
+  };
+
+  const toggleCollapse = (messageId: string) => {
+    setCollapsedMessages((prev) => ({
       ...prev,
       [messageId]: !prev[messageId],
     }));
@@ -1378,13 +1478,86 @@ export default function ChatPage() {
                                       </span>
                                     </div>
                                   </div>
+                        {/* Collapsed Preview */}
+                        {collapsedMessages[message.id] ? (
+                          <div className="space-y-3">
+                            <div className="flex items-start gap-2">
+                              <Sparkles className="w-4 h-4 text-[#0E1B2E] flex-shrink-0 mt-1" />
+                              <p className={`text-sm text-[#0E1B2E]/70 line-clamp-2 ${spaceGrotesk.className}`}>
+                                {message.content.slice(0, 150)}...
+                              </p>
+                            </div>
+                            
+                          </div>
+                        ) : (
+                          <>
+                            {message.flow_data &&
+                              message.flow_data.nodes &&
+                              message.flow_data.nodes.length > 0 && (
+                                <div className="mb-6 p-5 bg-white/60 backdrop-blur-sm border border-[#0E1B2E]/10 rounded-xl shadow-md">
+                                  <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center gap-2">
+                                      <div className="p-2 bg-[#0E1B2E]/10 rounded-lg">
+                                        <Workflow className="w-5 h-5 text-[#0E1B2E]" />
+                                      </div>
+                                      <div>
+                                        <h3
+                                          className={`text-lg font-semibold text-[#0E1B2E] ${spaceGrotesk.className}`}
+                                        >
+                                          Code Flow Diagram
+                                        </h3>
+                                        <p
+                                          className={`text-xs text-[#0E1B2E]/60 mt-0.5 ${spaceGrotesk.className}`}
+                                        >
+                                          Interactive visualization of code
+                                          structure
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-3 text-xs">
+                                      <span
+                                        className={`px-2 py-1 bg-[#0E1B2E]/10 text-[#0E1B2E] rounded-full ${spaceGrotesk.className}`}
+                                      >
+                                        {message.flow_data.nodes.length} nodes
+                                      </span>
+                                      <span
+                                        className={`px-2 py-1 bg-[#0E1B2E]/10 text-[#0E1B2E] rounded-full ${spaceGrotesk.className}`}
+                                      >
+                                        {message.flow_data.edges.length}{" "}
+                                        connections
+                                      </span>
+                                    </div>
+                                  </div>
 
                                   <MermaidDiagram
                                     code={convertFlowDataToMermaid(
                                       message.flow_data,
                                     )}
                                   />
+                                  <MermaidDiagram
+                                    code={convertFlowDataToMermaid(
+                                      message.flow_data,
+                                    )}
+                                  />
 
+                                  <div
+                                    className={`mt-3 flex items-center gap-2 text-xs text-[#0E1B2E]/70 ${spaceGrotesk.className}`}
+                                  >
+                                    <div className="flex items-center gap-1.5">
+                                      <div className="w-3 h-3 bg-[#0E1B2E] rounded"></div>
+                                      <span>Functions</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <div className="w-3 h-3 bg-[#0E1B2E]/70 rounded"></div>
+                                      <span>Classes</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <div className="w-3 h-3 bg-[#0E1B2E]/50 rounded"></div>
+                                      <span>Methods</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
                                   <div
                                     className={`mt-3 flex items-center gap-2 text-xs text-[#0E1B2E]/70 ${spaceGrotesk.className}`}
                                   >
@@ -1477,6 +1650,79 @@ export default function ChatPage() {
                                         </details>
                                       );
                                     }
+                            <div className="markdown-content prose max-w-none antialiased overflow-x-auto">
+                              <ReactMarkdown
+                                remarkPlugins={[remarkGfm]}
+                                rehypePlugins={[rehypeHighlight, rehypeRaw]}
+                                components={{
+                                  h1: ({ node, ...props }) => (
+                                    <h1
+                                      className={`text-2xl font-bold text-[#0E1B2E] mb-4 mt-6 first:mt-0 border-b border-[#0E1B2E]/20 pb-2 antialiased ${spaceGrotesk.className}`}
+                                      {...props}
+                                    />
+                                  ),
+                                  h2: ({ node, ...props }) => (
+                                    <h2
+                                      className={`text-xl font-bold text-[#0E1B2E] mb-3 mt-5 first:mt-0 antialiased ${spaceGrotesk.className}`}
+                                      {...props}
+                                    />
+                                  ),
+                                  h3: ({ node, ...props }) => (
+                                    <h3
+                                      className={`text-lg font-semibold text-[#0E1B2E] mb-2 mt-4 first:mt-0 antialiased ${spaceGrotesk.className}`}
+                                      {...props}
+                                    />
+                                  ),
+                                  p: ({ node, ...props }) => (
+                                    <p
+                                      className={`text-[#0E1B2E]/80 leading-relaxed mb-4 last:mb-0 antialiased ${spaceGrotesk.className}`}
+                                      {...props}
+                                    />
+                                  ),
+                                  ul: ({ node, ...props }) => (
+                                    <ul
+                                      className={`list-disc list-outside ml-5 space-y-2 mb-4 text-[#0E1B2E]/80 antialiased ${spaceGrotesk.className}`}
+                                      {...props}
+                                    />
+                                  ),
+                                  ol: ({ node, ...props }) => (
+                                    <ol
+                                      className={`list-decimal list-outside ml-5 space-y-2 mb-4 text-[#0E1B2E]/80 antialiased ${spaceGrotesk.className}`}
+                                      {...props}
+                                    />
+                                  ),
+                                  li: ({ node, ...props }) => (
+                                    <li
+                                      className={`text-[#0E1B2E]/80 leading-relaxed pl-2 antialiased ${spaceGrotesk.className}`}
+                                      {...props}
+                                    />
+                                  ),
+                                  code: ({
+                                    node,
+                                    inline,
+                                    className,
+                                    children,
+                                    ...props
+                                  }: any) => {
+                                    const match = /language-(\w+)/.exec(
+                                      className || "",
+                                    );
+                                    const language = match ? match[1] : "";
+
+                                    if (!inline && language === "diff") {
+                                      return (
+                                        <details className="my-4 border border-[#374151] rounded-lg bg-[#1f2937] text-gray-200">
+                                          <summary className="cursor-pointer px-4 py-2 text-xs text-gray-400 hover:text-white border-b border-[#374151] select-none">
+                                            View Changes (Diff)
+                                          </summary>
+                                          <div className="max-h-[400px] overflow-y-auto overflow-x-auto border-t border-[#0E1B2E]/10">
+                                            <pre className="p-4 text-xs font-mono leading-relaxed">
+                                              {children}
+                                            </pre>
+                                          </div>
+                                        </details>
+                                      );
+                                    }
 
                                     if (!inline && language === "mermaid") {
                                       const mermaidCode = String(
@@ -1486,7 +1732,75 @@ export default function ChatPage() {
                                         <MermaidDiagram code={mermaidCode} />
                                       );
                                     }
+                                    if (!inline && language === "mermaid") {
+                                      const mermaidCode = String(
+                                        children,
+                                      ).replace(/\n$/, "");
+                                      return (
+                                        <MermaidDiagram code={mermaidCode} />
+                                      );
+                                    }
 
+                                    return !inline && match ? (
+                                      <details className="my-4 group border border-[#374151] rounded-lg bg-[#1f2937] text-gray-200">
+                                        <summary className="cursor-pointer text-xs px-4 py-2 text-gray-400 hover:text-white border-b border-[#374151] select-none">
+                                          View Code
+                                        </summary>
+
+                                        <div className="relative">
+                                          <div className="max-h-[500px] overflow-y-auto overflow-x-auto">
+                                            <pre className="p-4 text-sm font-mono leading-relaxed bg-[#1f2937]">
+                                              <code
+                                                className={`${className} ${firaCode.className}`}
+                                                {...props}
+                                              >
+                                                {children}
+                                              </code>
+                                            </pre>
+                                          </div>
+                                        </div>
+                                      </details>
+                                    ) : (
+                                      <code
+                                        className={`px-1.5 py-0.5 bg-[#0E1B2E]/10 text-[#0E1B2E] rounded text-sm ${firaCode.className}`}
+                                        {...props}
+                                      >
+                                        {children}
+                                      </code>
+                                    );
+                                  },
+                                  blockquote: ({ node, ...props }) => (
+                                    <blockquote
+                                      className={`border-l-4 border-[#0E1B2E]/30 pl-4 py-2 my-4 italic text-[#0E1B2E]/70 bg-[#0E1B2E]/5 rounded-r ${spaceGrotesk.className}`}
+                                      {...props}
+                                    />
+                                  ),
+                                  a: ({ node, ...props }) => (
+                                    <a
+                                      className="text-[#0E1B2E] hover:text-[#1a2f4d] underline decoration-[#0E1B2E]/30 hover:decoration-[#1a2f4d] inline-flex items-center gap-1 transition-colors"
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      {...props}
+                                    >
+                                      {props.children}
+                                      <ExternalLink className="w-3 h-3 inline" />
+                                    </a>
+                                  ),
+                                  table: ({ node, ...props }: any) => {
+                                    const isFileTable = node?.children?.some(
+                                      (child: any) =>
+                                        child?.children?.some((th: any) =>
+                                          th?.children?.some((text: any) => {
+                                            const textContent =
+                                              typeof text === "string"
+                                                ? text
+                                                : text?.value || "";
+                                            return /file|status|addition|deletion/i.test(
+                                              textContent,
+                                            );
+                                          }),
+                                        ),
+                                    );
                                     return !inline && match ? (
                                       <details className="my-4 group border border-[#374151] rounded-lg bg-[#1f2937] text-gray-200">
                                         <summary className="cursor-pointer text-xs px-4 py-2 text-gray-400 hover:text-white border-b border-[#374151] select-none">
@@ -1688,16 +2002,66 @@ export default function ChatPage() {
                             {message.content.slice(0, 150)}...
                           </div>
                         ) : (
-                          <div className="text-white whitespace-pre-wrap break-words max-w-full overflow-x-auto">
-                            {message.content}
-                          </div>
+                          <>
+                            {editingMessageId === message.id ? (
+                              <div className="space-y-3">
+                                <textarea
+                                  value={editingContent}
+                                  onChange={(e) => setEditingContent(e.target.value)}
+                                  className="w-full p-3 rounded bg-white text-black text-sm"
+                                  rows={3}
+                                />
+
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    onClick={() => {
+                                      setEditingMessageId(null);
+                                      setEditingContent("");
+                                    }}
+                                    className="text-xs px-3 py-1 bg-gray-500 text-white rounded"
+                                  >
+                                    Cancel
+                                  </button>
+
+                                  <button
+                                    onClick={() => resendEditedMessage(message.id)}
+                                    className="text-xs px-3 py-1 bg-white text-[#0E1B2E] rounded font-medium"
+                                  >
+                                    Save & Resend
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-white whitespace-pre-wrap break-words max-w-full overflow-x-auto">
+                                {message.content}
+                              </div>
+                            )}
+                          </>
                         )}
                       </>
                     )}
 
 
+
                     {message.role === "assistant" && (
                       <div className="mt-4 flex items-center gap-3 pt-4 border-t border-[#0E1B2E]/10">
+                        <button
+                          onClick={() => toggleCollapse(message.id)}
+                          className={`text-xs text-[#0E1B2E]/70 hover:text-[#0E1B2E] transition-colors flex items-center gap-1.5 px-2 py-1 hover:bg-[#0E1B2E]/5 rounded ${spaceGrotesk.className}`}
+                        >
+                          {collapsedMessages[message.id] ? (
+                            <>
+                              <Maximize2 className="w-3 h-3" />
+                              Expand
+                            </>
+                          ) : (
+                            <>
+                              <Minimize2 className="w-3 h-3" />
+                              Collapse
+                            </>
+                          )}
+                        </button>
+
                         <button
                           onClick={() => toggleCollapse(message.id)}
                           className={`text-xs text-[#0E1B2E]/70 hover:text-[#0E1B2E] transition-colors flex items-center gap-1.5 px-2 py-1 hover:bg-[#0E1B2E]/5 rounded ${spaceGrotesk.className}`}
@@ -1816,6 +2180,18 @@ export default function ChatPage() {
                           </>
                         )}
                       </button>
+
+                      {/* Edit Button */}
+                      <button
+                        onClick={() => {
+                          setEditingMessageId(message.id);
+                          setEditingContent(message.content);
+                        }}
+                        className="text-xs text-white/70 hover:text-white transition-colors flex items-center gap-1.5 px-2 py-1 hover:bg-white/10 rounded"
+                      >
+                        ✏️ Edit
+                      </button>
+
 
                     </div>
                   )}

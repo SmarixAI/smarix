@@ -537,6 +537,19 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             query_type = QueryType.GREETING
             self.logger.info("CLASSIFICATION | Rule-based: GREETING (detected early)")
             return save_assistant_message(self.greeting_handler.handle_greeting(query, query_type, active_session_id, schema_name=schema_name))
+        
+        # 🚫 LLM Noise Detection
+        if self._is_noise_llm(query):
+            self.logger.info("LLM NOISE DETECTED | Skipping rewrite and routing")
+            result = {
+                "answer": "I couldn't understand that. Could you rephrase your question?",
+                "query_type": "invalid",
+                "context_quality": 0.0,
+                "emails": []
+            }
+            return save_assistant_message(result)
+
+
 
         # Early entity detection to decide if rewriting is needed
         has_pr = bool(re.search(r'\bPR\s*#?\s*\d+|\bpull request\s*#?\s*\d+', query, re.IGNORECASE))
@@ -825,6 +838,45 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         self.cache_handler.update_caches(query, result, active_session_id)
 
         return save_assistant_message(result)
+    
+    def _is_noise_llm(self, query: str) -> bool:
+        """
+        Uses LLM to determine if query is meaningful or random noise.
+        Returns True if noise.
+        """
+
+        prompt = f"""
+    You are a strict classifier.
+
+    Determine whether the following user input is:
+    1. A meaningful question/request
+    2. Random noise or meaningless input
+
+    Respond ONLY with:
+    MEANINGFUL
+    or
+    NOISE
+
+    User Input:
+    {query}
+    """
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                temperature=0,
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+            verdict = response.choices[0].message.content.strip().upper()
+
+            return verdict == "NOISE"
+
+        except Exception as e:
+            self.logger.warning(f"NOISE_CHECK_FAILED | {e}")
+            return False  # Fail open
+
+
 
     def _respond_with_results(
         self,
@@ -980,6 +1032,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             }
 
         return stats
+
 
 
 def main():
