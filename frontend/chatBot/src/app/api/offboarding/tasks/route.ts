@@ -1,35 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
+import { readJsonFromS3WithFallback, writeJsonToS3 } from '../../../../components/offboarding/s3Utils';
 
 export async function GET() {
   try {
-    const possiblePaths = [
-      path.join(process.cwd(), '..', '..', 'backend', 'data', 'Offboarding', '4employee_tasks_with_metadata_finalCallData.json'),
-      path.join(process.cwd(), '..', 'backend', 'data', 'Offboarding', '4employee_tasks_with_metadata_finalCallData.json'),
-      path.join(process.cwd(), 'backend', 'data', 'Offboarding', '4employee_tasks_with_metadata_finalCallData.json'),
+    const possibleFiles = [
+      '4employee_tasks_with_metadata_finalCallData.json',
     ];
 
-    let fileContent: string | null = null;
-
-    for (const filePath of possiblePaths) {
-      try {
-        await fs.access(filePath);
-        fileContent = await fs.readFile(filePath, 'utf-8');
-        break;
-      } catch {
-        continue;
-      }
-    }
-
-    if (!fileContent) {
-      return NextResponse.json(
-        { error: 'Tasks file not found' },
-        { status: 404 }
-      );
-    }
-
-    const jsonData = JSON.parse(fileContent);
+    const { data: jsonData } = await readJsonFromS3WithFallback(possibleFiles);
 
     return NextResponse.json(jsonData, {
       headers: {
@@ -49,6 +27,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { employeeId, taskId, priority, status, source, title, action } = body;
 
+    const fileName = '4employee_tasks_with_metadata_finalCallData.json';
+
     // For adding new manager task
     if (action === 'add' && title && priority) {
       if (!employeeId) {
@@ -58,38 +38,11 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Find the file
-      const possiblePaths = [
-        path.join(process.cwd(), '..', '..', 'backend', 'data', 'offboarding', '4employee_tasks_with_metadata_finalCallData.json'),
-        path.join(process.cwd(), '..', 'backend', 'data', 'offboarding', '4employee_tasks_with_metadata_finalCallData.json'),
-        path.join(process.cwd(), 'backend', 'data', 'offboarding', '4employee_tasks_with_metadata_finalCallData.json'),
-      ];
-
-      let filePath: string | null = null;
-
-      for (const p of possiblePaths) {
-        try {
-          await fs.access(p);
-          filePath = p;
-          break;
-        } catch {
-          continue;
-        }
-      }
-
-      if (!filePath) {
-        return NextResponse.json(
-          { error: 'Tasks file not found' },
-          { status: 404 }
-        );
-      }
-
       // Read current data
-      const fileContent = await fs.readFile(filePath, 'utf-8');
-      const jsonData = JSON.parse(fileContent);
+      const jsonData = await readJsonFromS3WithFallback([fileName]);
 
       // Find employee
-      const employeeIndex = jsonData.employees.findIndex(
+      const employeeIndex = jsonData.data.employees.findIndex(
         (emp: any) => emp.employeeId === employeeId
       );
 
@@ -101,22 +54,22 @@ export async function POST(request: NextRequest) {
       }
 
       // Ensure tasks object exists
-      if (!jsonData.employees[employeeIndex].tasks) {
-        jsonData.employees[employeeIndex].tasks = {};
+      if (!jsonData.data.employees[employeeIndex].tasks) {
+        jsonData.data.employees[employeeIndex].tasks = {};
       }
 
       // Ensure manager array exists
-      if (!jsonData.employees[employeeIndex].tasks.manager) {
-        jsonData.employees[employeeIndex].tasks.manager = [];
+      if (!jsonData.data.employees[employeeIndex].tasks.manager) {
+        jsonData.data.employees[employeeIndex].tasks.manager = [];
       }
 
       // Generate task ID
-      const managerTasks = jsonData.employees[employeeIndex].tasks.manager || [];
-      const taskId = `${employeeId}-m${managerTasks.length + 1}`;
+      const managerTasks = jsonData.data.employees[employeeIndex].tasks.manager || [];
+      const newTaskId = `${employeeId}-m${managerTasks.length + 1}`;
 
-      // Create new manager task with minimal fields
+      // Create new manager task
       const newTask = {
-        id: taskId,
+        id: newTaskId,
         title: title,
         priority: priority,
         tags: ['Manual'],
@@ -124,14 +77,10 @@ export async function POST(request: NextRequest) {
       };
 
       // Add to manager tasks
-      jsonData.employees[employeeIndex].tasks.manager.push(newTask);
+      jsonData.data.employees[employeeIndex].tasks.manager.push(newTask);
 
-      // Write back to file
-      await fs.writeFile(
-        filePath,
-        JSON.stringify(jsonData, null, 2),
-        'utf-8'
-      );
+      // Write back to S3
+      await writeJsonToS3(fileName, jsonData.data);
 
       return NextResponse.json(
         { success: true, task: newTask },
@@ -143,7 +92,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // For updating existing task status (not needed)
+    // For updating existing task status
     if (status && !priority) {
       if (!employeeId || !taskId) {
         return NextResponse.json(
@@ -152,38 +101,10 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Find the file
-      const possiblePaths = [
-        path.join(process.cwd(), '..', '..', 'backend', 'data', 'offboarding', '4employee_tasks_with_metadata_finalCallData.json'),
-        path.join(process.cwd(), '..', 'backend', 'data', 'offboarding', '4employee_tasks_with_metadata_finalCallData.json'),
-        path.join(process.cwd(), 'backend', 'data', 'offboarding', '4employee_tasks_with_metadata_finalCallData.json'),
-      ];
-
-      let filePath: string | null = null;
-
-      for (const p of possiblePaths) {
-        try {
-          await fs.access(p);
-          filePath = p;
-          break;
-        } catch {
-          continue;
-        }
-      }
-
-      if (!filePath) {
-        return NextResponse.json(
-          { error: 'Tasks file not found' },
-          { status: 404 }
-        );
-      }
-
-      // Read current data
-      const fileContent = await fs.readFile(filePath, 'utf-8');
-      const jsonData = JSON.parse(fileContent);
+      const jsonData = await readJsonFromS3WithFallback([fileName]);
 
       // Find employee
-      const employeeIndex = jsonData.employees.findIndex(
+      const employeeIndex = jsonData.data.employees.findIndex(
         (emp: any) => emp.employeeId === employeeId
       );
 
@@ -195,7 +116,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Find and update task
-      const tasks = jsonData.employees[employeeIndex].tasks || {};
+      const tasks = jsonData.data.employees[employeeIndex].tasks || {};
       const aiTasks = tasks.ai || [];
       const managerTasks = tasks.manager || [];
       
@@ -227,12 +148,8 @@ export async function POST(request: NextRequest) {
         tasks.ai[taskIndex].status = status;
       }
 
-      // Write back to file
-      await fs.writeFile(
-        filePath,
-        JSON.stringify(jsonData, null, 2),
-        'utf-8'
-      );
+      // Write back to S3
+      await writeJsonToS3(fileName, jsonData.data);
 
       return NextResponse.json(
         { success: true, task: isManagerTask ? tasks.manager[taskIndex] : tasks.ai[taskIndex] },
@@ -252,38 +169,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find the file
-    const possiblePaths = [
-      path.join(process.cwd(), '..', '..', 'backend', 'data', 'Offboarding', '4employee_tasks_with_metadata_finalCallData.json'),
-      path.join(process.cwd(), '..', 'backend', 'data', 'Offboarding', '4employee_tasks_with_metadata_finalCallData.json'),
-      path.join(process.cwd(), 'backend', 'data', 'Offboarding', '4employee_tasks_with_metadata_finalCallData.json'),
-    ];
-
-    let filePath: string | null = null;
-
-    for (const p of possiblePaths) {
-      try {
-        await fs.access(p);
-        filePath = p;
-        break;
-      } catch {
-        continue;
-      }
-    }
-
-    if (!filePath) {
-      return NextResponse.json(
-        { error: 'Tasks file not found' },
-        { status: 404 }
-      );
-    }
-
-    // Read current data
-    const fileContent = await fs.readFile(filePath, 'utf-8');
-    const jsonData = JSON.parse(fileContent);
+    const jsonData = await readJsonFromS3WithFallback([fileName]);
 
     // Find employee
-    const employeeIndex = jsonData.employees.findIndex(
+    const employeeIndex = jsonData.data.employees.findIndex(
       (emp: any) => emp.employeeId === employeeId
     );
 
@@ -295,18 +184,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Find and update task
-    const tasks = jsonData.employees[employeeIndex].tasks || {};
-    
-    // Search in both ai and manager arrays
+    const tasks = jsonData.data.employees[employeeIndex].tasks || {};
     const aiTasks = tasks.ai || [];
     const managerTasks = tasks.manager || [];
     
-    // Try to find in ai tasks first
     let taskIndex = aiTasks.findIndex((t: any) => t.id === taskId);
     let taskList = aiTasks;
     let isManagerTask = false;
     
-    // If not found in ai, try manager tasks
     if (taskIndex === -1) {
       taskIndex = managerTasks.findIndex((t: any) => t.id === taskId);
       if (taskIndex !== -1) {
@@ -322,10 +207,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update priority in the correct array
+    // Update priority
     taskList[taskIndex].priority = priority;
     
-    // Ensure the tasks object has the correct structure
     if (isManagerTask) {
       if (!tasks.manager) {
         tasks.manager = [];
@@ -335,12 +219,8 @@ export async function POST(request: NextRequest) {
       tasks.ai[taskIndex].priority = priority;
     }
 
-    // Write back to file
-    await fs.writeFile(
-      filePath,
-      JSON.stringify(jsonData, null, 2),
-      'utf-8'
-    );
+    // Write back to S3
+    await writeJsonToS3(fileName, jsonData.data);
 
     return NextResponse.json(
       { success: true, task: isManagerTask ? tasks.manager[taskIndex] : tasks.ai[taskIndex] },
@@ -357,4 +237,3 @@ export async function POST(request: NextRequest) {
     }, { status: 500 });
   }
 }
-

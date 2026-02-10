@@ -1,69 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
+import { readJsonFromS3WithFallback, writeJsonToS3 } from '../../../../components/offboarding/s3Utils';
 
 export async function GET() {
   try {
-    const possiblePaths = [
-      path.join(process.cwd(), '..', '..', 'backend', 'data', 'Offboarding', 'documentation_tasks.json'),
-      path.join(process.cwd(), '..', 'backend', 'data', 'Offboarding', 'documentation_tasks.json'),
-      path.join(process.cwd(), 'backend', 'data', 'Offboarding', 'documentation_tasks.json'),
-      path.join(process.cwd(), '..', '..', 'backend', 'data', 'Offboarding', '6employee_documents.json'),
-      path.join(process.cwd(), '..', 'backend', 'data', 'Offboarding', '6employee_documents.json'),
-      path.join(process.cwd(), 'backend', 'data', 'Offboarding', '6employee_documents.json'),
+    const possibleFiles = [
+      'documentation_tasks.json',
+      '6employee_documents.json',
     ];
 
-    let fileContent: string | null = null;
-    let filePath: string | null = null;
-
-    for (const p of possiblePaths) {
-      try {
-        await fs.access(p);
-        fileContent = await fs.readFile(p, 'utf-8');
-        filePath = p;
-        break;
-      } catch {
-        continue;
-      }
-    }
-
-    if (!fileContent) {
-      return NextResponse.json(
-        { error: 'Documents file not found' },
-        { status: 404 }
-      );
-    }
-
-    const jsonData = JSON.parse(fileContent);
+    const { data: jsonData, fileName: filePath } = await readJsonFromS3WithFallback(possibleFiles);
 
     // Transform data structure to match frontend expectations
-    // If file is documentation_tasks.json, transform it
-    if (filePath && filePath.includes('documentation_tasks.json')) {
+    if (filePath.includes('documentation_tasks.json')) {
       // Try to load users.json to map names to employeeIds
       let usersMap: Record<string, string> = {};
       try {
-        const usersPaths = [
-          path.join(process.cwd(), '..', '..', 'backend', 'data', 'Admin', 'users.json'),
-          path.join(process.cwd(), '..', 'backend', 'data', 'Admin', 'users.json'),
-          path.join(process.cwd(), 'backend', 'data', 'Admin', 'users.json'),
-        ];
-        for (const usersPath of usersPaths) {
-          try {
-            const usersContent = await fs.readFile(usersPath, 'utf-8');
-            const usersData = JSON.parse(usersContent);
-            usersData.users?.forEach((user: any) => {
-              if (user.employeeId && user.name) {
-                usersMap[user.name.toLowerCase()] = user.employeeId;
-              }
-              if (user.employeeId && user.username) {
-                usersMap[user.username.toLowerCase()] = user.employeeId;
-              }
-            });
-            break;
-          } catch {
-            continue;
+        const usersData = await readJsonFromS3WithFallback(['users.json', 'Admin/users.json']);
+        usersData.data.users?.forEach((user: any) => {
+          if (user.employeeId && user.name) {
+            usersMap[user.name.toLowerCase()] = user.employeeId;
           }
-        }
+          if (user.employeeId && user.username) {
+            usersMap[user.username.toLowerCase()] = user.employeeId;
+          }
+        });
       } catch (e) {
         console.log('Could not load users.json for mapping:', e);
       }
@@ -72,7 +32,6 @@ export async function GET() {
         employees: jsonData.employees.map((emp: any) => {
           const tasks = emp.documentation_tasks?.tasks || [];
           const employeeName = emp.employee_name || emp.name || '';
-          // Try to find employeeId from users.json by name or username
           const employeeId = emp.employeeId || 
                             emp.employee_id || 
                             usersMap[employeeName.toLowerCase()] || 
@@ -137,37 +96,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Find the file
-    const possiblePaths = [
-      path.join(process.cwd(), '..', '..', 'backend', 'data', 'Offboarding', 'documentation_tasks.json'),
-      path.join(process.cwd(), '..', 'backend', 'data', 'Offboarding', 'documentation_tasks.json'),
-      path.join(process.cwd(), 'backend', 'data', 'Offboarding', 'documentation_tasks.json'),
-      path.join(process.cwd(), '..', '..', 'backend', 'data', 'Offboarding', '6employee_documents.json'),
-      path.join(process.cwd(), '..', 'backend', 'data', 'Offboarding', '6employee_documents.json'),
-      path.join(process.cwd(), 'backend', 'data', 'Offboarding', '6employee_documents.json'),
+    const possibleFiles = [
+      'documentation_tasks.json',
+      '6employee_documents.json',
     ];
 
-    let filePath: string | null = null;
-
-    for (const p of possiblePaths) {
-      try {
-        await fs.access(p);
-        filePath = p;
-        break;
-      } catch {
-        continue;
-      }
-    }
-
-    if (!filePath) {
-      return NextResponse.json(
-        { error: 'Documents file not found' },
-        { status: 404 }
-      );
-    }
-
-    // Read current data
-    const fileContent = await fs.readFile(filePath, 'utf-8');
-    const jsonData = JSON.parse(fileContent);
+    const { data: jsonData, fileName } = await readJsonFromS3WithFallback(possibleFiles);
 
     // Find employee
     const employeeIndex = jsonData.employees.findIndex(
@@ -200,12 +134,8 @@ export async function POST(request: NextRequest) {
       documents[documentIndex].status = status;
     }
 
-    // Write back to file
-    await fs.writeFile(
-      filePath,
-      JSON.stringify(jsonData, null, 2),
-      'utf-8'
-    );
+    // Write back to S3
+    await writeJsonToS3(fileName, jsonData);
 
     return NextResponse.json(
       { success: true, document: documents[documentIndex] },
@@ -222,4 +152,3 @@ export async function POST(request: NextRequest) {
     }, { status: 500 });
   }
 }
-
