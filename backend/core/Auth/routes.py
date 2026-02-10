@@ -13,55 +13,34 @@ import re
 
 from . import models, schemas, utils
 
-# Database configuration
-FORCE_SQLITE = os.environ.get("FORCE_SQLITE", "").lower() in ("1", "true", "yes")
+# Database configuration - PostgreSQL only
 MEMORY_DB_URL = os.environ.get("MEMORY_DB_URL", "")
 
-# Determine which database to use
-use_postgres = (
-    not FORCE_SQLITE and MEMORY_DB_URL and MEMORY_DB_URL.startswith("postgresql://")
-)
+if not MEMORY_DB_URL or not MEMORY_DB_URL.startswith("postgresql://"):
+    raise RuntimeError("MEMORY_DB_URL must be set to a valid PostgreSQL connection string")
 
-if use_postgres:
-    DATABASE_URL = MEMORY_DB_URL
-    connect_args = {}
-    print(f"Attempting to use PostgreSQL database from MEMORY_DB_URL")
-    try:
-        from sqlalchemy import text
+DATABASE_URL = MEMORY_DB_URL
+print(f"Using PostgreSQL database from MEMORY_DB_URL")
 
-        test_engine = create_engine(DATABASE_URL, connect_args=connect_args)
-        with test_engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-        print("✓ PostgreSQL connection successful")
-    except Exception as e:
-        print(f"⚠ PostgreSQL connection failed: {e}")
-        print("   Falling back to SQLite...")
-        use_postgres = False
+try:
+    from sqlalchemy import text
 
-if not use_postgres:
-    db_path = os.path.join(
-        os.path.dirname(__file__), "..", "..", "..", "data", "local_db.sqlite"
-    )
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    DATABASE_URL = f"sqlite:///{db_path}"
-    print(f"✓ Using SQLite database: {db_path}")
+    test_engine = create_engine(DATABASE_URL)
+    with test_engine.connect() as conn:
+        conn.execute(text("SELECT 1"))
+    print("✓ PostgreSQL connection successful")
+except Exception as e:
+    print(f"❌ PostgreSQL connection failed: {e}")
+    raise
 
-# SQLite-specific configuration
-connect_args = {}
-if DATABASE_URL.startswith("sqlite"):
-    connect_args = {"check_same_thread": False}
-    os.environ["FORCE_SQLITE"] = "1"
-    import importlib
-
-    importlib.reload(models)
-
-engine = create_engine(DATABASE_URL, connect_args=connect_args)
+# Create engine and session (no connect_args needed for PostgreSQL)
+engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 
 # ========================================
 # Schema Management Functions
 # ========================================
-
 
 def get_user_schema_name(username: str) -> str:
     """Generate safe schema name from username"""
@@ -73,9 +52,6 @@ def create_user_schema_postgres(username: str, schema_name: str):
     """
     Create a new schema for a user in PostgreSQL by cloning templates.
     """
-    if not use_postgres:
-        return
-
     try:
         conn = psycopg2.connect(MEMORY_DB_URL)
         conn.autocommit = True
@@ -92,10 +68,11 @@ def create_user_schema_postgres(username: str, schema_name: str):
                 # Check tables and sequences...
                 cur.execute(
                     """
-                    SELECT table_name 
-                    FROM information_schema.tables 
-                    WHERE table_schema = %s AND table_name IN ('conversations', 'messages', 'tasks')
-                """,
+                    SELECT table_name
+                    FROM information_schema.tables
+                    WHERE table_schema = %s
+                      AND table_name IN ('conversations', 'messages', 'tasks')
+                    """,
                     (schema_name,),
                 )
                 existing_tables = {row[0] for row in cur.fetchall()}
@@ -105,20 +82,20 @@ def create_user_schema_postgres(username: str, schema_name: str):
                     # Check sequence
                     cur.execute(
                         """
-                        SELECT column_default 
-                        FROM information_schema.columns 
-                        WHERE table_schema = %s 
-                        AND table_name = 'messages' 
-                        AND column_name = 'id'
-                    """,
+                        SELECT column_default
+                        FROM information_schema.columns
+                        WHERE table_schema = %s
+                          AND table_name = 'messages'
+                          AND column_name = 'id'
+                        """,
                         (schema_name,),
                     )
                     default_val = cur.fetchone()
 
                     if (
-                        default_val
-                        and default_val[0]
-                        and "nextval" in str(default_val[0])
+                            default_val
+                            and default_val[0]
+                            and "nextval" in str(default_val[0])
                     ):
                         return
                     else:
@@ -135,50 +112,120 @@ def create_user_schema_postgres(username: str, schema_name: str):
                 # Create template tables (Conversations, Messages, Tasks)
                 cur.execute(
                     """
-                    CREATE TABLE IF NOT EXISTS template_schema.conversations (
-                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                        session_id VARCHAR(255) UNIQUE NOT NULL,
-                        user_id VARCHAR(255),
-                        created_at TIMESTAMP DEFAULT NOW(),
-                        updated_at TIMESTAMP DEFAULT NOW(),
+                    CREATE TABLE IF NOT EXISTS template_schema.conversations
+                    (
+                        id
+                        UUID
+                        PRIMARY
+                        KEY
+                        DEFAULT
+                        gen_random_uuid
+                    (
+                    ),
+                        session_id VARCHAR
+                    (
+                        255
+                    ) UNIQUE NOT NULL,
+                        user_id VARCHAR
+                    (
+                        255
+                    ),
+                        created_at TIMESTAMP DEFAULT NOW
+                    (
+                    ),
+                        updated_at TIMESTAMP DEFAULT NOW
+                    (
+                    ),
                         title TEXT,
                         metadata JSONB DEFAULT '{}'::jsonb
-                    )
-                """
+                        )
+                    """
                 )
                 cur.execute(
                     """
-                    CREATE TABLE IF NOT EXISTS template_schema.messages (
-                        id BIGSERIAL PRIMARY KEY,
-                        conversation_id UUID NOT NULL,
-                        role VARCHAR(20) NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
+                    CREATE TABLE IF NOT EXISTS template_schema.messages
+                    (
+                        id
+                        BIGSERIAL
+                        PRIMARY
+                        KEY,
+                        conversation_id
+                        UUID
+                        NOT
+                        NULL,
+                        role
+                        VARCHAR
+                    (
+                        20
+                    ) NOT NULL CHECK
+                    (
+                        role
+                        IN
+                    (
+                        'user',
+                        'assistant',
+                        'system'
+                    )),
                         content TEXT NOT NULL,
                         tokens_used INTEGER DEFAULT 0,
                         response_time_ms INTEGER,
-                        created_at TIMESTAMP DEFAULT NOW(),
+                        created_at TIMESTAMP DEFAULT NOW
+                    (
+                    ),
                         metadata JSONB DEFAULT '{}'::jsonb,
-                        CONSTRAINT fk_conversation 
-                            FOREIGN KEY (conversation_id) 
-                            REFERENCES template_schema.conversations(id) 
-                            ON DELETE CASCADE
+                        CONSTRAINT fk_conversation
+                        FOREIGN KEY
+                    (
+                        conversation_id
                     )
-                """
+                        REFERENCES template_schema.conversations
+                    (
+                        id
+                    )
+                        ON DELETE CASCADE
+                        )
+                    """
                 )
                 cur.execute(
                     """
-                    CREATE TABLE IF NOT EXISTS template_schema.tasks (
-                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    CREATE TABLE IF NOT EXISTS template_schema.tasks
+                    (
+                        id
+                        UUID
+                        PRIMARY
+                        KEY
+                        DEFAULT
+                        gen_random_uuid
+                    (
+                    ),
                         title TEXT NOT NULL,
                         description TEXT,
-                        category VARCHAR(50) DEFAULT 'day-to-day',
-                        priority VARCHAR(20) DEFAULT 'medium',
-                        status VARCHAR(20) DEFAULT 'pending',
+                        category VARCHAR
+                    (
+                        50
+                    ) DEFAULT 'day-to-day',
+                        priority VARCHAR
+                    (
+                        20
+                    ) DEFAULT 'medium',
+                        status VARCHAR
+                    (
+                        20
+                    ) DEFAULT 'pending',
                         deadline DATE,
-                        assigned_to_username VARCHAR(50),
-                        assigned_by VARCHAR(50) DEFAULT 'Self',
-                        created_at TIMESTAMP DEFAULT NOW()
+                        assigned_to_username VARCHAR
+                    (
+                        50
+                    ),
+                        assigned_by VARCHAR
+                    (
+                        50
+                    ) DEFAULT 'Self',
+                        created_at TIMESTAMP DEFAULT NOW
+                    (
                     )
-                """
+                        )
+                    """
                 )
                 cur.execute(
                     "CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON template_schema.messages(conversation_id)"
@@ -191,11 +238,12 @@ def create_user_schema_postgres(username: str, schema_name: str):
             # 3. Use clone function if available
             cur.execute(
                 """
-                SELECT EXISTS (
-                    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid
-                    WHERE n.nspname = 'public' AND p.proname = 'clone_schema_for_user'
-                )
-            """
+                SELECT EXISTS (SELECT 1
+                               FROM pg_proc p
+                                        JOIN pg_namespace n ON p.pronamespace = n.oid
+                               WHERE n.nspname = 'public'
+                                 AND p.proname = 'clone_schema_for_user')
+                """
             )
             if cur.fetchone()[0]:
                 cur.execute(
@@ -213,18 +261,20 @@ def create_user_schema_postgres(username: str, schema_name: str):
                 cur.execute(f"CREATE SCHEMA IF NOT EXISTS {schema_name}")
 
             # Manual table cloning logic...
-            if "conversations" not in existing_tables if schema_exists else True:
+            existing_tables_set = existing_tables if schema_exists else set()
+
+            if "conversations" not in existing_tables_set:
                 cur.execute(
                     f"CREATE TABLE IF NOT EXISTS {schema_name}.conversations (LIKE template_schema.conversations INCLUDING DEFAULTS INCLUDING CONSTRAINTS INCLUDING INDEXES)"
                 )
 
-            if "messages" not in existing_tables if schema_exists else True:
+            if "messages" not in existing_tables_set:
                 cur.execute(
                     f"CREATE TABLE IF NOT EXISTS {schema_name}.messages (LIKE template_schema.messages INCLUDING DEFAULTS INCLUDING CONSTRAINTS INCLUDING INDEXES)"
                 )
                 _fix_messages_sequence(cur, schema_name)
 
-            if "tasks" not in existing_tables if schema_exists else True:
+            if "tasks" not in existing_tables_set:
                 cur.execute(
                     f"CREATE TABLE IF NOT EXISTS {schema_name}.tasks (LIKE template_schema.tasks INCLUDING DEFAULTS INCLUDING CONSTRAINTS INCLUDING INDEXES)"
                 )
@@ -244,7 +294,6 @@ def create_user_schema_postgres(username: str, schema_name: str):
     except Exception as e:
         print(f"⚠ Error creating schema {schema_name}: {e}")
         import traceback
-
         traceback.print_exc()
 
 
@@ -312,7 +361,7 @@ def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
         employee_id=user.employee_id,
         managers=user.managers,
         last_day=user.last_day,
-        schema_name=schema_name if use_postgres else None,
+        schema_name=schema_name,  # Always use schema_name since we're PostgreSQL only
     )
 
     try:
@@ -320,9 +369,8 @@ def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(new_user)
 
-        # 4. Create User Schema (Postgres Only)
-        if use_postgres:
-            create_user_schema_postgres(user.username, schema_name)
+        # 4. Create User Schema
+        create_user_schema_postgres(user.username, schema_name)
 
         return new_user
     except Exception as e:
@@ -332,7 +380,7 @@ def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/token", response_model=schemas.Token)
 def login(
-    form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
+        form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
 ):
     user = (
         db.query(models.User).filter(models.User.username == form_data.username).first()
@@ -360,7 +408,7 @@ def login(
 
 
 def get_current_user(
-    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+        token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
 ):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -385,17 +433,18 @@ def get_current_user(
 
 @router.get("/users", response_model=List[schemas.UserResponse])
 def get_all_users(
-    db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
+        db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
 ):
     users = db.query(models.User).all()
     return users
 
+
 @router.put("/users/{username}", response_model=schemas.UserResponse)
 def update_user(
-    username: str,
-    user_update: schemas.UserUpdate,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
+        username: str,
+        user_update: schemas.UserUpdate,
+        db: Session = Depends(get_db),
+        current_user: models.User = Depends(get_current_user)
 ):
     if current_user.role not in ['admin', 'manager']:
         raise HTTPException(status_code=403, detail="Not authorized to update users")
@@ -404,16 +453,13 @@ def update_user(
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Update basic fields
     if user_update.name is not None: db_user.name = user_update.name
     if user_update.role is not None: db_user.role = user_update.role
     if user_update.status is not None: db_user.status = user_update.status
     if user_update.designation is not None: db_user.designation = user_update.designation
     if user_update.employee_id is not None: db_user.employee_id = user_update.employee_id
     if user_update.last_day is not None: db_user.last_day = user_update.last_day
-    
-    # Update active_repos: 
-    # Prioritize specific array if sent, otherwise wrap singular string
+
     if user_update.active_repos is not None:
         db_user.active_repos = user_update.active_repos
     elif user_update.active_repo is not None:
@@ -430,6 +476,7 @@ def update_user(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.get("/repositories")
 def get_s3_repositories(current_user: models.User = Depends(get_current_user)):
     """
@@ -443,32 +490,32 @@ def get_s3_repositories(current_user: models.User = Depends(get_current_user)):
     s3 = boto3.client("s3", region_name="ap-south-1")
     bucket_name = "smarix-data-apsouth1"
     base_prefix = "DataCollectionFromGit/"
-    
+
     repos = []
 
     try:
         org_response = s3.list_objects_v2(
-            Bucket=bucket_name, 
-            Prefix=base_prefix, 
+            Bucket=bucket_name,
+            Prefix=base_prefix,
             Delimiter='/'
         )
-        
+
         org_prefixes = [p.get('Prefix') for p in org_response.get('CommonPrefixes', [])]
 
         for org_path in org_prefixes:
             org_name = org_path.replace(base_prefix, "").strip("/")
-            
+
             repo_response = s3.list_objects_v2(
-                Bucket=bucket_name, 
-                Prefix=org_path, 
+                Bucket=bucket_name,
+                Prefix=org_path,
                 Delimiter='/'
             )
-            
+
             repo_prefixes = [r.get('Prefix') for r in repo_response.get('CommonPrefixes', [])]
-            
+
             for repo_path in repo_prefixes:
                 repo_name = repo_path.replace(org_path, "").strip("/")
-                
+
                 repos.append(f"{org_name}/{repo_name}")
 
         return {"repositories": repos}
@@ -477,15 +524,17 @@ def get_s3_repositories(current_user: models.User = Depends(get_current_user)):
         print(f"Error scanning S3: {e}")
         return {"repositories": [], "error": str(e)}
 
+
 class StatusUpdate(BaseModel):
     status: str
 
+
 @router.put("/users/{username}/status")
 def update_user_status(
-    username: str,
-    status_update: StatusUpdate,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+        username: str,
+        status_update: StatusUpdate,
+        db: Session = Depends(get_db),
+        current_user: models.User = Depends(get_current_user),
 ):
     if current_user.role not in ["admin", "manager"]:
         raise HTTPException(status_code=403, detail="Not authorized")
@@ -503,7 +552,7 @@ def update_user_status(
 
 @router.get("/tasks", response_model=List[schemas.TaskResponse])
 def get_my_tasks(
-    db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
+        db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)
 ):
     return (
         db.query(models.Task)
@@ -514,9 +563,9 @@ def get_my_tasks(
 
 @router.post("/tasks", response_model=schemas.TaskResponse)
 def create_task(
-    task: schemas.TaskCreate,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+        task: schemas.TaskCreate,
+        db: Session = Depends(get_db),
+        current_user: models.User = Depends(get_current_user),
 ):
     target_user = (
         task.assigned_to_username
@@ -548,10 +597,10 @@ def create_task(
 
 @router.put("/tasks/{task_id}", response_model=schemas.TaskResponse)
 def update_task(
-    task_id: str,
-    task_update: schemas.TaskUpdate,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+        task_id: str,
+        task_update: schemas.TaskUpdate,
+        db: Session = Depends(get_db),
+        current_user: models.User = Depends(get_current_user),
 ):
     task = db.query(models.Task).filter(models.Task.id == task_id).first()
 
@@ -559,8 +608,8 @@ def update_task(
         raise HTTPException(status_code=404, detail="Task not found")
 
     if (
-        task.assigned_to_username != current_user.username
-        and task.assigned_by != current_user.username
+            task.assigned_to_username != current_user.username
+            and task.assigned_by != current_user.username
     ):
         if current_user.role != "admin":
             raise HTTPException(
