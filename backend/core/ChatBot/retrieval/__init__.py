@@ -467,6 +467,68 @@ class RetrievalMixin(
                 self.logger.info(f"FILE_LOOKUP | Found {len(vector_results)} results from vector search")
                 return vector_results[:self.top_k * 2]
 
+        # -------------------------------------------------------
+        # DIRECT PR LOOKUP: Check for exact PR number match
+        # This runs for ALL queries (not just PR-specific types)
+        # -------------------------------------------------------
+        if query_text:
+            self.logger.info(f"DIRECT_LOOKUP | Checking query for PR number: '{query_text[:100]}'...")
+            self.logger.debug(f"DIRECT_LOOKUP | Query type: {query_type}")
+            
+            try:
+                from ..direct_lookup import get_pr_lookup
+                pr_lookup = get_pr_lookup()
+                
+                if not pr_lookup.is_loaded():
+                    self.logger.debug("DIRECT_LOOKUP | PR lookup not loaded, skipping direct lookup")
+                else:
+                    self.logger.debug(f"DIRECT_LOOKUP | PR lookup loaded with {len(pr_lookup.get_available_pr_numbers())} PRs")
+                    
+                    # Extract PR number from query
+                    pr_number = pr_lookup.extract_pr_number_from_query(query_text)
+                    
+                    if pr_number:
+                        self.logger.info(f"DIRECT_LOOKUP | Extracted PR number: #{pr_number} from query")
+                        
+                        # Try to retrieve PR data
+                        direct_pr_data = pr_lookup.lookup_by_number(pr_number)
+                        
+                        if direct_pr_data:
+                            self.logger.info(
+                                f"✅ DIRECT_LOOKUP | SUCCESS: Found PR #{pr_number} in chunks database"
+                            )
+                            
+                            # Convert PR chunk to retrieval result format
+                            result = {
+                                'chunk_id': direct_pr_data.get('chunk_id', f"direct_pr_{pr_number}"),
+                                'metadata': {
+                                    'pr_number': pr_number,
+                                    'repo_name': direct_pr_data.get('repo_name', ''),
+                                    'repo_owner': direct_pr_data.get('repo_owner', ''),
+                                    'chunk_type': 'pr',
+                                    'retrieval_priority': 1,
+                                },
+                                'content': direct_pr_data,  # Store full PR data
+                                'score': 100.0,  # Highest score for direct match
+                                'source': 'direct_lookup',
+                                'match_type': 'exact_pr_match',
+                                'index_type': 'pr'
+                            }
+                            self.logger.info(f"DIRECT_LOOKUP | Returning direct PR lookup result with score 100.0")
+                            self.logger.info(f"DIRECT_LOOKUP | Bypassing multi-index retrieval for exact PR match")
+                            return [result]  # Return only direct match
+                        else:
+                            self.logger.info(f"DIRECT_LOOKUP | PR #{pr_number} not found in chunks database, continuing with normal retrieval")
+                    else:
+                        self.logger.debug(f"DIRECT_LOOKUP | No PR number pattern found in query")
+                        
+            except ImportError as e:
+                self.logger.warning(f"DIRECT_LOOKUP | PR lookup module not available: {e}")
+            except Exception as e:
+                self.logger.error(f"DIRECT_LOOKUP | Error during PR lookup: {e}", exc_info=True)
+                import traceback
+                self.logger.debug(f"DIRECT_LOOKUP | Traceback:\n{traceback.format_exc()}")
+
         if query_type in ["impact_analysis", "traceability"] and self.multi_index_store:
             print(f"Executing Graph-Enhanced Retrieval ({query_type})...")
             

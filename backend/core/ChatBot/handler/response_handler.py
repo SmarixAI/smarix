@@ -668,9 +668,34 @@ class ResponseHandler:
         intent: Optional[str] = None
     ) -> Dict[str, Any]:
         
-        # ============================================================
-        # 🔥 EARLY PR CODING TUTORIAL GUARD (MUST RUN FIRST)
-        # ============================================================
+
+        
+        if (
+            query_type == QueryType.PR_SPECIFIC
+            and github_results
+            and intent == "status"
+        ):
+            meta = self._get_metadata(github_results[0])
+
+            if meta.get("type") == "pr":
+                pr_number = meta.get("pr_number")
+                state = meta.get("state") or meta.get("pr_status")
+
+                merged_by = meta.get("merged_by")
+
+                answer = f"PR #{pr_number} is {state}."
+                if merged_by:
+                    answer += f" It was merged by {merged_by}."
+
+                return self.package_response(
+                    answer,
+                    github_results,
+                    [],
+                    query_type,
+                    intent=intent
+                )
+
+
 
         if query_type == QueryType.PR_ISSUE_CODING_QUESTION:
             has_code = self._has_executable_repo_code(github_results)
@@ -687,8 +712,7 @@ class ResponseHandler:
                     QueryType.PR_SPECIFIC,
                     intent="summary"
                 )
-        # ⛔ HARD LOCK — from here on, behave ONLY like PR
-        query_type = QueryType.PR_SPECIFIC
+       
 
         if query_type == QueryType.FILE_LOOKUP:
 
@@ -866,7 +890,7 @@ class ResponseHandler:
             meta = self._get_metadata(github_results[0])
 
             pr_number = meta.get("pr_number")
-            state = meta.get("state") or meta.get("pr_status")
+            state = meta.get("state") or meta.get("pr_status") or meta.get("pr_status")
             merged_by = meta.get("merged_by")
             created_at = meta.get("created_at")
             merged_at = meta.get("merged_at")
