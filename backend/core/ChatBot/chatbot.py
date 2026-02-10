@@ -32,6 +32,8 @@ from .handler import (
 )
 from sentence_transformers import SentenceTransformer
 from utils.s3 import s3_manager
+from core.ChatBot.direct_lookup.pr_lookup import get_pr_lookup
+
 
 S3_BUCKET = "smarix-data-apsouth1"
 S3_DEFAULT_REGION = "ap-south-1"
@@ -280,6 +282,15 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         self.history: List[Dict[str, Any]] = []
         self.repo_info = self.load_repo_info()
         self.repo_metrics = self.load_repository_metrics()
+
+        # Initialize PR JSON direct lookup
+        self.pr_lookup = get_pr_lookup()
+
+        if self.pr_lookup and self.pr_lookup.is_loaded():
+            self.logger.info("PR_DIRECT_LOOKUP | Loaded successfully")
+        else:
+            self.logger.warning("PR_DIRECT_LOOKUP | NOT loaded or empty")
+
 
         print("=" * 70)
         print("ENTERPRISE RAG CHATBOT v3.6 (Multi-Index)")
@@ -594,15 +605,49 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
                 self.cache_handler.update_caches(query, result, active_session_id)
                 return save_assistant_message(result)
 
-        # DIRECT LOOKUP - PR
+        # DIRECT LOOKUP - PR (JSON-based O(1) lookup FIRST)
         if entity and entity.get("type") == "pr":
-            result = self.pr_handler.handle_pr_direct_lookup(
-                entity, query, expanded_query, active_session_id, role=role
-            )
-            if result:
-                # Store RAW query if result found
+
+            pr_number = entity.get("number")
+
+            # 1️⃣ Try JSON direct lookup first
+            if self.pr_lookup:
+                direct_pr = self.pr_lookup.lookup_by_number(pr_number)
+            else:
+                direct_pr = None
+
+            if direct_pr:
+                self.logger.info(f"PR_DIRECT_LOOKUP | HIT for PR #{pr_number}")
+
+                wrapped_chunk = {
+                    "source": "direct_lookup",
+                    "content": direct_pr,
+                    "score": 1.0
+                }
+
+                result = self._respond_with_results(
+                    [wrapped_chunk],
+                    QueryType.PR_SPECIFIC,
+                    query,
+                    expanded_query,
+                    role=role
+                )
+
                 self.cache_handler.update_caches(query, result, active_session_id)
                 return save_assistant_message(result)
+
+            else:
+                self.logger.info(f"PR_DIRECT_LOOKUP | MISS for PR #{pr_number}")
+
+                # 2️⃣ Fallback to existing metadata-based handler
+                result = self.pr_handler.handle_pr_direct_lookup(
+                    entity, query, expanded_query, active_session_id, role=role
+                )
+
+                if result:
+                    self.cache_handler.update_caches(query, result, active_session_id)
+                    return save_assistant_message(result)
+
 
         # DIRECT LOOKUP - Commit
         if entity and entity.get("type") == "commit":
@@ -741,19 +786,13 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         expanded_query,
         role: Optional[str] = None
     ):
-        query_lower = query.lower()
-
-        intent = None
-        if query_type == QueryType.PR_SPECIFIC:
-            intent = self._detect_pr_intent(query_lower)
-
         return self.response_handler.respond_with_results(
             github_results,
             query_type,
             query,
             expanded_query,
             role=role,
-            intent=intent  # optional
+            intent=None
         )
 
 

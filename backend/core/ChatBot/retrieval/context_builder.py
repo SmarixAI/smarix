@@ -50,23 +50,27 @@ class ContextBuilderMixin:
     
     def build_context_from_chunks(self, chunks: List[Dict], query_type: str) -> str:
         """Build context string from retrieved chunks."""
+
+        # Special handling for direct lookup results (exact PR match)
+        if chunks and chunks[0].get('source') == 'direct_lookup':
+            print(f"✅ CONTEXT_BUILDER | Direct lookup detected - building direct PR context")
+            return self._build_direct_lookup_context(chunks[0], query_type)
+
         # Special handling for FILE_LOOKUP queries with file-specific results
         if query_type == QueryType.FILE_LOOKUP and chunks:
-            # Check if all chunks are from the same file (file-specific query)
             file_paths = set()
             for chunk in chunks:
                 meta_norm = MetadataNormalizer(chunk.get('metadata', {}), chunk)
                 file_path = meta_norm.get_file_path()
                 if file_path:
                     file_paths.add(file_path)
-            
-            # If all chunks are from a single file, use file-specific context builder
+
             if len(file_paths) == 1:
                 return self._build_file_specific_context(chunks, list(file_paths)[0])
-        
-        # Regular context building for other cases
+
         context_parts: List[str] = []
 
+        # Determine max chunks
         if query_type == QueryType.FLOW_ARCHITECTURE:
             max_chunks = 15
         elif query_type in [QueryType.HOW_TO, QueryType.FILE_LOOKUP, QueryType.QUESTION_GENERATION]:
@@ -80,16 +84,13 @@ class ContextBuilderMixin:
 
         for i, chunk in enumerate(chunks[:max_chunks], 1):
             metadata = chunk.get('metadata', {})
-            # Use metadata normalizer for unified access
             meta_norm = MetadataNormalizer(metadata, chunk)
 
             context_parts.append(f"## Source {i}")
-            
-            # Get chunk type with fallback lookups
+
             chunk_type = meta_norm.get_chunk_type('unknown')
             context_parts.append(f"Type: {chunk_type}")
 
-            # Get file path with fallback lookups
             file_path = meta_norm.get_file_path()
             if file_path:
                 context_parts.append(f"File: {file_path}")
@@ -97,51 +98,267 @@ class ContextBuilderMixin:
             if metadata.get('line_start') and metadata.get('line_end'):
                 context_parts.append(f"Lines: {metadata['line_start']}-{metadata['line_end']}")
 
-            # Get issue/PR numbers with fallback lookups
             issue_number = meta_norm.get_issue_number()
             if issue_number is not None:
                 context_parts.append(f"Issue: #{issue_number}")
+
             pr_number = meta_norm.get_pr_number()
             if pr_number is not None:
                 context_parts.append(f"PR: #{pr_number}")
+
             if metadata.get('author'):
                 context_parts.append(f"Author: {metadata['author']}")
+
             if metadata.get('title'):
                 context_parts.append(f"Title: {metadata['title']}")
 
-            # Get content with fallback lookups
-            content = meta_norm.get_content() or chunk.get('content', '')
-            if content:
-                if query_type == QueryType.FLOW_ARCHITECTURE:
-                    max_length = 5000
-                elif query_type in [QueryType.HOW_TO, QueryType.FILE_LOOKUP, QueryType.CONCEPTUAL, QueryType.QUESTION_GENERATION]:
-                    max_length = 3500
-                elif query_type in [QueryType.PR_ISSUE_TUTORIAL, QueryType.PR_ISSUE_CODING_QUESTION]:
-                    max_length = 6000
-                elif query_type == QueryType.RANDOM_PR_GENERATOR:
-                    max_length = 2000
-                elif query_type == QueryType.TROUBLESHOOTING:
-                    max_length = 2500
+            # =========================
+            # PR STRUCTURED RENDERING
+            # =========================
+            if chunk_type == "pr":
+
+                entities = chunk.get("entities", {})
+                temporal = chunk.get("temporal", {})
+                
+                raw = chunk.get("raw_data", {})
+                file_changes = chunk.get("file_changes", [])
+
+                content_raw = chunk.get("content", {})
+
+                if isinstance(content_raw, dict):
+                    content_info = content_raw
                 else:
-                    max_length = 2000
+                    content_info = {}
 
-                if len(content) <= max_length * 1.1:
-                    context_parts.append(f"\nContent:\n{content}")
-                else:
-                    truncated = content[:max_length]
+                state = content_info.get("state") or entities.get("pr_status")
+                created_at = temporal.get("created_at")
+                merged_at = temporal.get("merged_at")
+                closed_at = temporal.get("closed_at")
+                merged_by = entities.get("merged_by")
 
-                    last_newline = truncated.rfind('\n\n')
-                    if last_newline > int(max_length * 0.8):
-                        truncated = truncated[:last_newline]
-                    elif truncated.rfind('\n') > int(max_length * 0.9):
-                        truncated = truncated[:truncated.rfind('\n')]
+                changed_files_count = raw.get("changed_files_count")
+                additions = raw.get("additions")
+                deletions = raw.get("deletions")
 
-                    context_parts.append(f"\nContent:\n{truncated}\n... (truncated, {len(content) - len(truncated)} chars omitted)")
+                print("FILE CHANGES COUNT:", len(file_changes))
+
+
+
+                if state:
+                    context_parts.append(f"State: {state}")
+                if created_at:
+                    context_parts.append(f"Created At: {created_at}")
+                if merged_at:
+                    context_parts.append(f"Merged At: {merged_at}")
+                if closed_at:
+                    context_parts.append(f"Closed At: {closed_at}")
+                if merged_by:
+                    context_parts.append(f"Merged By: {merged_by}")
+
+                raw = chunk.get("raw_data", {})
+                file_changes = chunk.get("file_changes", [])
+
+                changed_files_count = raw.get("changed_files_count")
+                additions = raw.get("additions")
+                deletions = raw.get("deletions")
+
+                if changed_files_count:
+                    context_parts.append(f"\nFiles Changed: {changed_files_count}")
+
+                if additions is not None and deletions is not None:
+                    context_parts.append(f"Additions: {additions}, Deletions: {deletions}")
+
+                if file_changes:
+                    context_parts.append("\nModified Files Summary:")
+
+                    # Show most impactful files first
+                    sorted_files = sorted(
+                        file_changes,
+                        key=lambda f: (f.get("status") == "removed", f.get("deletions", 0)),
+                        reverse=True
+                    )
+
+                    for file in sorted_files[:5]:
+                        context_parts.append(
+                            f"- {file.get('filename')} "
+                            f"({file.get('status')}, +{file.get('additions', 0)} -{file.get('deletions', 0)})"
+                        )
+
+                # Detect architectural changes
+                if file_changes:
+                    if any(
+                        f.get("filename") == "lib/api_service.dart" and f.get("status") == "removed"
+                        for f in file_changes
+                    ):
+                        context_parts.append("\nMajor Change: Removed legacy api_service.dart")
+
+                    if any("v3/" in f.get("filename", "") for f in file_changes):
+                        context_parts.append("Major Change: Introduced new v3 modular architecture")
+
+                # Description
+                content_dict = chunk.get("content", {})
+                body = ""
+                if isinstance(content_dict, dict):
+                    body = content_dict.get("body", "")
+                elif isinstance(content_dict, str):
+                    body = content_dict
+
+
+                if body and body.strip():
+                    context_parts.append(f"\nDescription:\n{body}")
+
+            # =========================
+            # NON-PR CONTENT RENDERING
+            # =========================
+            else:
+                content = meta_norm.get_content() or chunk.get('content', '')
+                if content:
+
+                    if query_type == QueryType.FLOW_ARCHITECTURE:
+                        max_length = 5000
+                    elif query_type in [QueryType.HOW_TO, QueryType.FILE_LOOKUP, QueryType.CONCEPTUAL, QueryType.QUESTION_GENERATION]:
+                        max_length = 3500
+                    elif query_type in [QueryType.PR_ISSUE_TUTORIAL, QueryType.PR_ISSUE_CODING_QUESTION]:
+                        max_length = 6000
+                    elif query_type == QueryType.RANDOM_PR_GENERATOR:
+                        max_length = 2000
+                    elif query_type == QueryType.TROUBLESHOOTING:
+                        max_length = 2500
+                    else:
+                        max_length = 2000
+
+                    if len(content) <= max_length:
+                        context_parts.append(f"\nContent:\n{content}")
+                    else:
+                        truncated = content[:max_length]
+                        context_parts.append(
+                            f"\nContent:\n{truncated}\n... (truncated)"
+                        )
 
             context_parts.append("\n" + "=" * 60 + "\n")
 
         return "\n".join(context_parts)
-    
+
+
+    def _build_direct_lookup_context(self, chunk: Dict, query_type: str) -> str:
+        """
+        Build context specifically for direct lookup PR data.
+        This handles PR data retrieved via exact PR number match.
+        """
+        context_parts = []
+        
+        # Get the full PR data (content field contains the complete PR chunk)
+        pr_data = chunk.get('content', {})
+        
+        if not pr_data:
+            print("⚠️ CONTEXT_BUILDER | _build_direct_lookup_context: No PR data available")
+            return "No data available for this PR."
+        
+        # Extract key information
+        entities = pr_data.get('entities', {})
+        temporal = pr_data.get('temporal', {})
+        raw = pr_data.get('raw_data', {})
+        file_changes = pr_data.get('file_changes', [])
+        content_info = pr_data.get('content', {})
+        
+        # Header
+        pr_number = entities.get('pr_number', 'Unknown')
+        repo_name = pr_data.get('repo_name', '')
+        repo_owner = pr_data.get('repo_owner', '')
+        
+        print(f"✅ CONTEXT_BUILDER | Building context for PR #{pr_number}")
+        
+        context_parts.append(f"# PR #{pr_number}")
+        if repo_owner and repo_name:
+            context_parts.append(f"Repository: {repo_owner}/{repo_name}")
+        context_parts.append("")
+        
+        # Core metadata
+        if isinstance(content_info, dict):
+            title = content_info.get('title', '')
+        else:
+            title = ''
+        
+        if title:
+            context_parts.append(f"**Title:** {title}")
+        
+        state = content_info.get('state') or entities.get('pr_status', '')
+        if state:
+            context_parts.append(f"**State:** {state}")
+        
+        # Temporal information
+        created_at = temporal.get('created_at', '')
+        if created_at:
+            context_parts.append(f"**Created At:** {created_at}")
+        
+        merged_at = temporal.get('merged_at', '')
+        if merged_at:
+            context_parts.append(f"**Merged At:** {merged_at}")
+        
+        closed_at = temporal.get('closed_at', '')
+        if closed_at:
+            context_parts.append(f"**Closed At:** {closed_at}")
+        
+        merged_by = entities.get('merged_by', '')
+        if merged_by:
+            context_parts.append(f"**Merged By:** {merged_by}")
+        
+        # Statistics
+        changed_files_count = raw.get('changed_files_count', 0)
+        additions = raw.get('additions', 0)
+        deletions = raw.get('deletions', 0)
+        
+        if changed_files_count:
+            context_parts.append(f"**Files Changed:** {changed_files_count}")
+        
+        if additions is not None or deletions is not None:
+            context_parts.append(f"**Additions:** {additions}, **Deletions:** {deletions}")
+        
+        context_parts.append("")
+        
+        # Modified files
+        if file_changes:
+            context_parts.append("## Modified Files\n")
+            
+            # Show most impactful files first
+            sorted_files = sorted(
+                file_changes,
+                key=lambda f: (f.get("status") == "removed", f.get("deletions", 0)),
+                reverse=True
+            )
+            
+            for file in sorted_files[:10]:
+                filename = file.get('filename', 'unknown')
+                status = file.get('status', '')
+                adds = file.get('additions', 0)
+                dels = file.get('deletions', 0)
+                context_parts.append(f"- **{filename}** ({status}, +{adds} -{dels})")
+            
+            if len(sorted_files) > 10:
+                context_parts.append(f"... and {len(sorted_files) - 10} more files")
+        
+        context_parts.append("")
+        
+        # Description/Body
+        if isinstance(content_info, dict):
+            body = content_info.get('body', '')
+        else:
+            body = str(content_info) if content_info else ''
+        
+        if body and body.strip():
+            context_parts.append("## Description\n")
+            # Limit body length based on query type
+            max_length = 4000
+            if len(body) > max_length:
+                body = body[:max_length] + "\n... (truncated)"
+            context_parts.append(body)
+        
+        context_parts.append("")
+        context_parts.append("=" * 70)
+        
+        return "\n".join(context_parts)
+
+
     def _build_file_specific_context(self, chunks: List[Dict], file_path: str) -> str:
         """
         Build context specifically for a single file query.
@@ -220,6 +437,7 @@ class ContextBuilderMixin:
                     context_parts.append(f"### Method: {method_name}\n")
                     context_parts.append(content)
                     context_parts.append("\n")
+                    
             
             context_parts.append("=" * 70 + "\n")
         
