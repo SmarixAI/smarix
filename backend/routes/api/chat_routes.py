@@ -138,14 +138,14 @@ def get_user_schema_name(username: str) -> str:
 @router.get("/")
 async def root():
     """Health check and status"""
-    from .chatbot_api import chatbot_instance, chatbot_config, available_providers
+    from . import shared
 
     return {
         "status": "online",
         "version": "2.1.0",
-        "chatbot_ready": chatbot_instance is not None,
-        "config": chatbot_config,
-        "available_providers": available_providers,
+        "chatbot_ready": shared.chatbot_instance is not None,
+        "config": shared.chatbot_config,
+        "available_providers": shared.available_providers,
         "endpoints": {
             "chat": "POST /chat",
             "init": "POST /init",
@@ -159,59 +159,58 @@ async def root():
     }
 
 
-@router.get("/health")
-async def health_check():
-    """Detailed health check"""
-    from .chatbot_api import chatbot_instance, chatbot_config, available_providers
+# @router.get("/health")
+# async def health_check():
+#     """Detailed health check"""
+#     from . import shared
 
-    health = {
-        "api": "healthy",
-        "version": "2.1.0",
-        "chatbot": "ready" if chatbot_instance else "not initialized",
-        "api_keys": available_providers,
-        "github_db": (
-            "configured" if chatbot_config.get("github_db_path") else "not configured"
-        ),
-        "gmail_db": (
-            "configured" if chatbot_config.get("gmail_db_path") else "not configured"
-        ),
-    }
+#     health = {
+#         "api": "healthy",
+#         "version": "2.1.0",
+#         "chatbot": "ready" if shared.chatbot_instance else "not initialized",
+#         "api_keys": shared.available_providers,
+#         "github_db": (
+#             "configured" if shared.chatbot_config.get("github_db_path") else "not configured"
+#         ),
+#         "gmail_db": (
+#             "configured" if shared.chatbot_config.get("gmail_db_path") else "not configured"
+#         ),
+#     }
 
-    if chatbot_instance:
-        try:
-            stats = chatbot_instance.get_stats()
+#     if shared.chatbot_instance:
+#         try:
+#             stats = shared.chatbot_instance.get_stats()
+#             health["github_chunks"] = stats.get("total_chunks", 0)
+#             health["conversation_length"] = stats.get("conversation_length", 0)
 
-            health["github_chunks"] = stats.get("total_chunks", 0)
-            health["conversation_length"] = stats.get("conversation_length", 0)
+#             if "gmail_indexed" in stats:
+#                 health["gmail_emails"] = stats.get("gmail_indexed", 0)
 
-            if "gmail_indexed" in stats:
-                health["gmail_emails"] = stats.get("gmail_indexed", 0)
+#             health["features"] = stats.get("features", [])
 
-            health["features"] = stats.get("features", [])
+#             # ✅ ADD SEMANTIC CACHE STATUS
+#             if (
+#                 shared.chatbot_instance.query_rewriter
+#                 and shared.chatbot_instance.query_rewriter.semantic_cache
+#             ):
+#                 cache_stats = shared.chatbot_instance.query_rewriter.semantic_cache.get_stats()
+#                 health["semantic_cache"] = {
+#                     "enabled": True,
+#                     "cache_size": cache_stats.get("cache_size", 0),
+#                     "hit_rate": cache_stats.get("overall_hit_rate", 0),
+#                     "total_queries": cache_stats.get("total_queries", 0),
+#                     "cost_saved": cache_stats.get("cost_saved_usd", 0),
+#                 }
+#             else:
+#                 health["semantic_cache"] = {
+#                     "enabled": False,
+#                     "reason": "Redis or embeddings not configured",
+#                 }
 
-            # ✅ ADD SEMANTIC CACHE STATUS
-            if (
-                chatbot_instance.query_rewriter
-                and chatbot_instance.query_rewriter.semantic_cache
-            ):
-                cache_stats = chatbot_instance.query_rewriter.semantic_cache.get_stats()
-                health["semantic_cache"] = {
-                    "enabled": True,
-                    "cache_size": cache_stats.get("cache_size", 0),
-                    "hit_rate": cache_stats.get("overall_hit_rate", 0),
-                    "total_queries": cache_stats.get("total_queries", 0),
-                    "cost_saved": cache_stats.get("cost_saved_usd", 0),
-                }
-            else:
-                health["semantic_cache"] = {
-                    "enabled": False,
-                    "reason": "Redis or embeddings not configured",
-                }
+#         except Exception as e:
+#             health["error"] = str(e)
 
-        except Exception as e:
-            health["error"] = str(e)
-
-    return health
+#     return health
 
 
 @router.post("/init")

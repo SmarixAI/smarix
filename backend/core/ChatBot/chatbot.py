@@ -287,7 +287,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         self.repo_metrics = self.load_repository_metrics()
 
         # Initialize PR JSON direct lookup
-        self.pr_lookup = get_pr_lookup()
+        self.pr_lookup = get_pr_lookup(repo_owner, repo_name)
 
         if self.pr_lookup and self.pr_lookup.is_loaded():
             self.logger.info("PR_DIRECT_LOOKUP | Loaded successfully")
@@ -296,7 +296,7 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
 
         
         # Initialize Issue JSON direct lookup
-        self.issue_lookup = get_issue_lookup()
+        self.issue_lookup = get_issue_lookup(repo_owner, repo_name)
 
         if self.issue_lookup and self.issue_lookup.is_loaded():
             self.logger.info("ISSUE_DIRECT_LOOKUP | Loaded successfully")
