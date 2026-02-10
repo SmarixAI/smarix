@@ -33,6 +33,9 @@ from .handler import (
 from sentence_transformers import SentenceTransformer
 from utils.s3 import s3_manager
 from core.ChatBot.direct_lookup.pr_lookup import get_pr_lookup
+from core.ChatBot.direct_lookup.issue_lookup import get_issue_lookup
+
+
 
 
 S3_BUCKET = "smarix-data-apsouth1"
@@ -290,6 +293,16 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             self.logger.info("PR_DIRECT_LOOKUP | Loaded successfully")
         else:
             self.logger.warning("PR_DIRECT_LOOKUP | NOT loaded or empty")
+
+        
+        # Initialize Issue JSON direct lookup
+        self.issue_lookup = get_issue_lookup()
+
+        if self.issue_lookup and self.issue_lookup.is_loaded():
+            self.logger.info("ISSUE_DIRECT_LOOKUP | Loaded successfully")
+        else:
+            self.logger.warning("ISSUE_DIRECT_LOOKUP | NOT loaded or empty")
+
 
 
         print("=" * 70)
@@ -595,15 +608,50 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
 
             return save_assistant_message(result)
 
-        # DIRECT LOOKUP - Issue
+
+        # DIRECT LOOKUP - Issue (JSON O(1) FIRST)
         if entity and entity.get("type") == "issue":
-            result = self.issue_handler.handle_issue_direct_lookup(
-                entity, query, expanded_query, query_type, active_session_id, role=role
-            )
-            if result:
-                # Store RAW query if result found
+
+            issue_number = entity.get("number")
+
+            # 1️⃣ Try JSON direct lookup first
+            if self.issue_lookup:
+                direct_issue = self.issue_lookup.lookup_by_number(issue_number)
+            else:
+                direct_issue = None
+
+            if direct_issue:
+                self.logger.info(f"ISSUE_DIRECT_LOOKUP | HIT for Issue #{issue_number}")
+
+                wrapped_chunk = {
+                    "source": "direct_lookup",
+                    "content": direct_issue,
+                    "score": 1.0
+                }
+
+                result = self._respond_with_results(
+                    [wrapped_chunk],
+                    QueryType.ISSUE_SPECIFIC,
+                    query,
+                    expanded_query,
+                    role=role
+                )
+
                 self.cache_handler.update_caches(query, result, active_session_id)
                 return save_assistant_message(result)
+
+            else:
+                self.logger.info(f"ISSUE_DIRECT_LOOKUP | MISS for Issue #{issue_number}")
+
+                # 2️⃣ Fallback to metadata-based handler
+                result = self.issue_handler.handle_issue_direct_lookup(
+                    entity, query, expanded_query, query_type, active_session_id, role=role
+                )
+
+                if result:
+                    self.cache_handler.update_caches(query, result, active_session_id)
+                    return save_assistant_message(result)
+
 
         # DIRECT LOOKUP - PR (JSON-based O(1) lookup FIRST)
         if entity and entity.get("type") == "pr":

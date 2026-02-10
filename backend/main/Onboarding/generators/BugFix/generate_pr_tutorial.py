@@ -21,13 +21,41 @@ repo_root = BACKEND_ROOT
 
 from utils.repo_context import get_repo_context
 from utils.s3 import s3_manager
-from core.ChatBot.query_type import QueryType
 
 ctx = get_repo_context()
 REPO_OWNER = ctx["owner"]
 REPO_NAME = ctx["repo"]
-VECTOR_DB_PATH = ctx["vector_db"]
 ONBOARDING_ROOT = ctx["onboarding"]
+
+PR_JSON_PATH = (
+    BACKEND_ROOT /
+    "data" /
+    "DataProcessing" /
+    REPO_OWNER /
+    REPO_NAME /
+    "chunks" /
+    "pr_chunks.json"
+)
+
+def load_pr_chunks():
+    if not PR_JSON_PATH.exists():
+        raise FileNotFoundError(f"PR JSON not found at {PR_JSON_PATH}")
+    with open(PR_JSON_PATH, "r") as f:
+        return json.load(f)
+
+def build_pr_map(pr_chunks):
+    pr_map = {}
+    for chunk in pr_chunks:
+        pr_number = (
+            chunk.get("entities", {}).get("pr_number")
+            or chunk.get("metadata", {}).get("pr_number")
+            or chunk.get("metadata", {}).get("number")
+        )
+        if pr_number:
+            pr_number = int(pr_number)
+            pr_map.setdefault(pr_number, []).append(chunk)
+    return pr_map
+
 
 
 def _load_rag_chatbot_class():
@@ -61,61 +89,6 @@ def _load_rag_chatbot_class():
 
 
 RAGChatbot = _load_rag_chatbot_class()
-
-
-def fetch_candidate_prs(chatbot, limit: int = 50) -> Dict[int, List[Dict]]:
-    """
-    Directly searches the Vector DB for PR chunks to build a candidate pool.
-    Returns a dictionary mapping PR Numbers to their chunks.
-    """
-    print(f"🔍 Scanning Vector DB for PR candidates...")
-    
-    # Generic keywords to cast a wide net for PRs
-    search_queries = ["pull request merge", "fix bug", "feature implementation", "refactor code"]
-    
-    candidates = {}
-    
-    for q in search_queries:
-        try:
-            # 1. Get embedding
-            query_embedding = chatbot.get_query_embedding(q)
-            
-            # 2. Raw Search (Bypassing RAG filters)
-            chunks = []
-            
-            if hasattr(chatbot.vector_db, 'search'):
-                chunks = chatbot.vector_db.search(query_embedding, top_k=limit)
-            
-            # Fallback to specific indices if main search fails or returns mixed results
-            if hasattr(chatbot.vector_db, 'indices'):
-                # Check 'pr' or 'github' indices if they exist
-                for idx_name in ['pr', 'github', 'code']:
-                    if idx_name in chatbot.vector_db.indices:
-                        results = chatbot.vector_db.indices[idx_name].search(query_embedding, top_k=limit)
-                        if isinstance(results, list):
-                            chunks.extend(results)
-            
-            # 3. Process & Group chunks
-            for c in chunks:
-                meta = c.get("metadata", {})
-                
-                # Check if it's actually a PR chunk
-                chunk_type = meta.get("type", "unknown")
-                pr_number = meta.get("pr_number") or meta.get("number")
-                
-                # If explicitly a PR or has a PR number, add it
-                if pr_number and (chunk_type == 'pr' or str(pr_number).isdigit()):
-                    pr_id = int(pr_number)
-                    if pr_id not in candidates:
-                        candidates[pr_id] = []
-                    candidates[pr_id].append(c)
-        
-        except Exception as e:
-            print(f"⚠️ Search error for query '{q}': {e}")
-            continue
-    
-    print(f"✅ Found {len(candidates)} unique PR candidates.")
-    return candidates
 
 
 def extract_patches_from_chunk(chunk: Dict) -> List[Dict]:
@@ -583,11 +556,8 @@ def parse_tutorial(response_text: str, pr_number: int, difficulty: str) -> Optio
 
 
 def generate_pr_tutorials(
-    gmail_db_path: str = None,
-    provider: str = 'openai',
-    model: str = None,
-    use_multi_index: bool = True,
-    routing_method: str = 'llm'
+    provider: str = "openai",
+    model: str = None
 ) -> str:
     """
     Generate PR tutorials: 1 Easy, 1 Medium, 1 Hard with comprehensive implementation steps
@@ -602,27 +572,37 @@ def generate_pr_tutorials(
     # Initialize Chatbot
     try:
         chatbot = RAGChatbot(
-            vector_db_path=VECTOR_DB_PATH,
-            gmail_db_path=gmail_db_path,
+            vector_db_path=ctx["vector_db"],
+            gmail_db_path=None,
             provider=provider,
             model=model,
-            temperature=0.7,  # Slightly higher for more detailed responses
-            verbose=True,
-            routing_method=routing_method,
-            enable_multi_query=False,
+            temperature=0.7,
+            verbose=False,
             disable_conversation_storage=True
         )
+
         print("✅ Chatbot initialized successfully\n")
     except Exception as e:
         print(f"❌ Failed to initialize chatbot: {e}")
         return None
     
     # STEP 1: Fetch and Classify Candidates
-    candidates = fetch_candidate_prs(chatbot, limit=100)
-    
+
+    # STEP 1: Load PR chunks directly from JSON
+    print("📂 Loading PR chunks from local JSON...")
+
+    all_chunks = load_pr_chunks()
+    candidates = build_pr_map(all_chunks)
+
+    # 🔥 ADD THESE TWO LINES RIGHT HERE
+    print(f"📄 Using PR JSON: {PR_JSON_PATH}")
+    print(f"📦 Total PRs found: {len(candidates)}")
+
     if not candidates:
-        print("❌ No PR candidates found in Vector DB.")
+        print("❌ No PR candidates found in pr_chunks.json.")
         return None
+
+
     
     # Classify PRs by difficulty with smart categorization
     classified_prs = {"Easy": [], "Medium": [], "Hard": []}
@@ -732,9 +712,6 @@ def generate_pr_tutorials(
 
 if __name__ == "__main__":
     generate_pr_tutorials(
-        gmail_db_path=None,
         provider="openai",
-        model="gpt-4o",
-        use_multi_index=True,
-        routing_method="llm"
+        model="gpt-4o"
     )
