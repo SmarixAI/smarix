@@ -50,6 +50,8 @@ services:
       target: production
     container_name: chatbot_backend
     working_dir: /app/routes/api
+    env_file:
+      - .env.production
     environment:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       GITHUB_TOKEN: ${GITHUB_TOKEN}

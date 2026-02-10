@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from backend.utils.s3 import s3_manager
+from utils.s3 import s3_manager
 
 S3_BUCKET = "smarix-data-apsouth1"
 STATE_S3_KEY = "Admin/state/runtime_state.json"

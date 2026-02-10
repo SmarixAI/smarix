@@ -16,7 +16,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from core.DataCollection.DataCollectionFromGithub.repository_processor import AsyncRepositoryProcessor
 from core.DataCollection.DataCollectionFromGithub.github_client import AsyncGitHubClient
-from backend.utils.s3 import s3_manager
+from utils.s3 import s3_manager
 
 STATE_S3_KEY = "Admin/state/runtime_state.json"
 
