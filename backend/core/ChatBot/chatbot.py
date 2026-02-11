@@ -168,6 +168,8 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             
             
         
+
+        
         # Load Gmail database (optional, single-index for Gmail only)
         self.gmail_db = None
         if gmail_db_path and os.path.exists(gmail_db_path):
@@ -198,6 +200,21 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             self.query_router.llm_client = self.client if hasattr(self, 'client') else None
         
         self.setup_logging(log_file)
+
+        self.keyword_index = None
+        self.keyword_idf = None
+
+        try:
+            keyword_prefix = f"VectorDB/{self.repo_owner}/{self.repo_name}/keyword_index/"
+            self.keyword_index = s3_manager.download_json(
+                f"{keyword_prefix}inverted_index.json"
+            )
+            self.keyword_idf = s3_manager.download_json(
+                f"{keyword_prefix}idf_scores.json"
+            )
+            self.logger.info("KEYWORD_INDEX | Loaded successfully")
+        except Exception as e:
+            self.logger.warning(f"KEYWORD_INDEX | Not loaded: {e}")
 
         memory_db_url = os.getenv("MEMORY_DB_URL", "")
         # Use SQLite if no PostgreSQL URL is provided
@@ -287,7 +304,11 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         self.repo_metrics = self.load_repository_metrics()
 
         # Initialize PR JSON direct lookup
-        self.pr_lookup = get_pr_lookup(repo_owner, repo_name)
+        self.pr_lookup = get_pr_lookup(
+            org_name=self.repo_owner,
+            repo_name=self.repo_name
+        )
+
 
         if self.pr_lookup and self.pr_lookup.is_loaded():
             self.logger.info("PR_DIRECT_LOOKUP | Loaded successfully")
@@ -296,7 +317,11 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
 
         
         # Initialize Issue JSON direct lookup
-        self.issue_lookup = get_issue_lookup(repo_owner, repo_name)
+        self.issue_lookup = get_issue_lookup(
+            org_name=self.repo_owner,
+            repo_name=self.repo_name
+        )
+
 
         if self.issue_lookup and self.issue_lookup.is_loaded():
             self.logger.info("ISSUE_DIRECT_LOOKUP | Loaded successfully")

@@ -153,6 +153,49 @@ class MultiIndexRetrievalMixin:
         # CRITICAL: Filter by repo after deduplication
         unique_results = self._filter_by_repo(unique_results)
 
+        # ================================
+        # 🔎 HYBRID LEXICAL RETRIEVAL
+        # ================================
+        if self.use_hybrid_retrieval and query_text and hasattr(self, "keyword_index") and self.keyword_index:
+            try:
+                query_tokens = self._tokenize_query(query_text)
+
+                strong_tokens = [
+                    t for t in query_tokens
+                    if self.keyword_idf.get(t, 0) > 1.5
+                ]
+
+                candidate_ids = set()
+
+                for token in strong_tokens:
+                    if token in self.keyword_index:
+                        candidate_ids.update(self.keyword_index[token])
+
+                if candidate_ids:
+                    existing_ids = {r.get("chunk_id") for r in unique_results if r.get("chunk_id")}
+
+                    for chunk_id in candidate_ids:
+                        if chunk_id not in existing_ids:
+                            chunk = self.multi_index_store.get_chunk_by_id(chunk_id)
+                            if chunk:
+                                matched_tokens = [
+                                    t for t in strong_tokens
+                                    if t in self.keyword_index and chunk_id in self.keyword_index[t]
+                                ]
+
+                                lexical_score = sum(self.keyword_idf.get(t, 0) for t in matched_tokens)
+
+                                chunk["score"] = 5.0 + lexical_score   # strong boost
+                                chunk["lexical_score"] = lexical_score
+                                chunk["index_type"] = "keyword"
+                                unique_results.append(chunk)
+
+                    self.logger.info(f"HYBRID | Added {len(candidate_ids)} lexical candidates")
+
+            except Exception as e:
+                self.logger.warning(f"HYBRID | Lexical retrieval failed: {e}")
+
+
         # 🚨 HARD STOP: Ambiguous filename for FILE_LOOKUP
         if query_type == QueryType.FILE_LOOKUP and query_text:
             # Normalize filename from query (e.g. Contents.json)
@@ -247,6 +290,10 @@ class MultiIndexRetrievalMixin:
             
             unique_results = filtered_results
 
+        # Prioritize high lexical scores before reranking
+        unique_results.sort(key=lambda x: x.get("score", 0), reverse=True)
+
+
         # STEP 3: Cross-Encoder Reranking
         if query_text:
             try:
@@ -296,3 +343,20 @@ class MultiIndexRetrievalMixin:
             r["pr_number"] = meta_norm.get_pr_number()
 
         return final_results
+    
+    STOPWORDS = {
+        "tell", "about", "what", "how", "why", "where",
+        "service", "module", "file", "page", "class"
+    }
+
+    def _tokenize_query(self, text: str):
+        import re
+        text = text.lower()
+        text = re.sub(r"[^\w\s]", " ", text)
+        tokens = text.split()
+        return [
+            t for t in tokens
+            if len(t) > 2 and t not in self.STOPWORDS
+        ]
+
+

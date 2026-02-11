@@ -618,3 +618,29 @@ class MultiIndexVectorStore:
                     return results
 
         return results
+    
+    def get_chunk_by_id(self, chunk_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve a chunk (metadata + content) by chunk_id across all loaded indices.
+        Used by hybrid lexical retrieval.
+        """
+        for index_type, index_db in self.indices.items():
+            if index_db is None:
+                continue
+
+            try:
+                for cid, meta in zip(index_db.chunk_ids, index_db.metadata):
+                    if cid == chunk_id:
+                        return {
+                            "chunk_id": cid,
+                            "metadata": meta,
+                            "content": meta.get("content") or "",
+                            "score": 0.0,
+                            "index_type": index_type
+                        }
+            except Exception:
+                continue
+
+        return None
+
+    
