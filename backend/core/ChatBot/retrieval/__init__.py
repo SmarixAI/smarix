@@ -476,10 +476,10 @@ class RetrievalMixin(
             self.logger.debug(f"DIRECT_LOOKUP | Query type: {query_type}")
             
             try:
-                from ..direct_lookup import get_issue_lookup
-                issue_lookup = get_issue_lookup()
+                issue_lookup = getattr(self, "issue_lookup", None)
+
                 
-                if not issue_lookup.is_loaded():
+                if not issue_lookup or not issue_lookup.is_loaded():
                     self.logger.debug("DIRECT_LOOKUP | Issue lookup not loaded, skipping direct issue lookup")
                 else:
                     self.logger.debug(f"DIRECT_LOOKUP | Issue lookup loaded with {len(issue_lookup.get_available_issue_numbers())} issues")
@@ -538,10 +538,9 @@ class RetrievalMixin(
             self.logger.debug(f"DIRECT_LOOKUP | Query type: {query_type}")
             
             try:
-                from ..direct_lookup import get_pr_lookup
-                pr_lookup = get_pr_lookup()
+                pr_lookup = getattr(self, "pr_lookup", None)
                 
-                if not pr_lookup.is_loaded():
+                if not pr_lookup or not pr_lookup.is_loaded():
                     self.logger.debug("DIRECT_LOOKUP | PR lookup not loaded, skipping direct lookup")
                 else:
                     self.logger.debug(f"DIRECT_LOOKUP | PR lookup loaded with {len(pr_lookup.get_available_pr_numbers())} PRs")

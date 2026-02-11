@@ -23,6 +23,8 @@ import concurrent.futures
 from functools import lru_cache
 from dotenv import load_dotenv
 from datetime import datetime
+from keyword_index_builder import build_keyword_index
+
 
 load_dotenv()
 
@@ -702,6 +704,27 @@ def main():
             print(f"❌ Failed: {folder_name} - {e}")
     
     processing_executor.shutdown(wait=True)
+
+    # 🔎 Build keyword index once for full repo
+    if all_metadata:
+        print("\n🔎 Building keyword inverted index...")
+
+        inverted_index, idf_scores = build_keyword_index(all_metadata)
+
+        keyword_prefix = f"{S3_VECTORDB_PREFIX}keyword_index/"
+
+        s3_manager.upload_json(
+            inverted_index,
+            f"{keyword_prefix}inverted_index.json"
+        )
+
+        s3_manager.upload_json(
+            idf_scores,
+            f"{keyword_prefix}idf_scores.json"
+        )
+
+        print(f"✅ Keyword index uploaded to s3://{S3_BUCKET}/{keyword_prefix}")
+
 
     # Build combined "all" index
     if all_vectors:
