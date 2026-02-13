@@ -293,33 +293,7 @@ export default function Sidebar({
           </div>
         </div>
 
-        {/* COUNTS */}
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <div className="rounded-xl p-3 bg-gradient-to-br from-blue-50 to-indigo-50 text-center border-2 border-blue-200/60">
-            <p
-              className={`${inter.className} text-xs text-blue-600 font-semibold mb-1`}
-            >
-              Tutorials
-            </p>
-            <p
-              className={`${inter.className} text-2xl font-bold text-blue-700`}
-            >
-              {tutorialsCount ?? 0}
-            </p>
-          </div>
-          <div className="rounded-xl p-3 bg-gradient-to-br from-amber-50 to-orange-50 text-center border-2 border-amber-200/60">
-            <p
-              className={`${inter.className} text-xs text-amber-600 font-semibold mb-1`}
-            >
-              Challenges
-            </p>
-            <p
-              className={`${inter.className} text-2xl font-bold text-amber-700`}
-            >
-              {challengesCount ?? 0}
-            </p>
-          </div>
-        </div>
+       
 
         {/* PROGRESS BAR */}
         <div className="mt-4">
