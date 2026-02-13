@@ -16,24 +16,52 @@ function getEmployeeIdFromRequest(request: NextRequest): string | null {
   return request.nextUrl.searchParams.get('employeeId')?.trim() || null;
 }
 
+/** Treat S3 missing key or "none of the files found" as non-fatal so we return empty data with 200. */
+function isS3NotFoundError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error);
+  const code = (error as { Code?: string })?.Code;
+  return code === 'NoSuchKey' || msg.includes('NoSuchKey') || msg.includes('None of the files found');
+}
+
 // --- GET handlers: read from Offboarding/{employeeId}/... ---
 async function getTasks(employeeId: string) {
-  const { data: jsonData } = await readJsonFromS3WithFallback(
-    ['tasks.json', '4employee_tasks_with_metadata_finalCallData.json'],
-    employeeId
-  );
-  const payload = jsonData.data ? { employees: jsonData.data.employees ?? [] } : jsonData;
-  return NextResponse.json(payload, { headers: cacheHeaders });
+  try {
+    const { data: jsonData } = await readJsonFromS3WithFallback(
+      ['tasks.json', '4employee_tasks_with_metadata_finalCallData.json'],
+      employeeId
+    );
+    const payload = jsonData.data ? { employees: jsonData.data.employees ?? [] } : jsonData;
+    return NextResponse.json(payload, { headers: cacheHeaders });
+  } catch (error) {
+    if (isS3NotFoundError(error)) {
+      return NextResponse.json({ employees: [] }, { headers: cacheHeaders });
+    }
+    throw error;
+  }
 }
 
 async function getHandovers(employeeId: string) {
-  const { data: jsonData } = await readJsonFromS3WithFallback(['handover_tasks.json'], employeeId);
-  return NextResponse.json(jsonData, { headers: cacheHeaders });
+  try {
+    const { data: jsonData } = await readJsonFromS3WithFallback(['handover_tasks.json'], employeeId);
+    return NextResponse.json(jsonData, { headers: cacheHeaders });
+  } catch (error) {
+    if (isS3NotFoundError(error)) {
+      return NextResponse.json({ employees: [] }, { headers: cacheHeaders });
+    }
+    throw error;
+  }
 }
 
 async function getDocuments(employeeId: string) {
-  const { data: jsonData } = await readJsonFromS3WithFallback(['documentation_tasks.json'], employeeId);
-  return NextResponse.json(jsonData, { headers: cacheHeaders });
+  try {
+    const { data: jsonData } = await readJsonFromS3WithFallback(['documentation_tasks.json'], employeeId);
+    return NextResponse.json(jsonData, { headers: cacheHeaders });
+  } catch (error) {
+    if (isS3NotFoundError(error)) {
+      return NextResponse.json({ employees: [] }, { headers: cacheHeaders });
+    }
+    throw error;
+  }
 }
 
 // --- POST handlers: read/write Offboarding/{employeeId}/... ---

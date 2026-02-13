@@ -23,6 +23,62 @@ export function getOffboardingKey(fileName: string, employeeId?: string | null):
 }
 
 /**
+ * Build S3 key under employee folder and a subfolder (e.g. Offboarding/{employeeId}/upload/{fileName}).
+ */
+export function getOffboardingKeyWithSubfolder(
+  employeeId: string,
+  subfolder: string,
+  fileName: string
+): string {
+  const safeId = employeeId?.trim() ? encodeURIComponent(employeeId.trim()) : '';
+  const safeSub = subfolder.replace(/\/|\.\./g, '');
+  return `${S3_BASE_PATH}/${safeId}/${safeSub}/${fileName}`;
+}
+
+/**
+ * Upload a raw file (e.g. .txt) to S3 under Offboarding/{employeeId}/{subfolder}/{fileName}.
+ */
+export async function uploadFileToS3(
+  employeeId: string,
+  subfolder: string,
+  fileName: string,
+  body: Buffer | Uint8Array,
+  contentType: string
+): Promise<void> {
+  const key = getOffboardingKeyWithSubfolder(employeeId, subfolder, fileName);
+  try {
+    await s3Client.send(
+      new PutObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: key,
+        Body: body,
+        ContentType: contentType,
+      })
+    );
+  } catch (error) {
+    console.error(`Error uploading ${fileName} to S3:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Read a raw file from S3 (e.g. .txt) from Offboarding/{employeeId}/{subfolder}/{fileName}.
+ * Returns Buffer (for .txt uses UTF-8 string then Buffer).
+ */
+export async function readFileFromS3(
+  employeeId: string,
+  subfolder: string,
+  fileName: string
+): Promise<Buffer> {
+  const key = getOffboardingKeyWithSubfolder(employeeId, subfolder, fileName);
+  const command = new GetObjectCommand({ Bucket: S3_BUCKET, Key: key });
+  const response = await s3Client.send(command);
+  const bodyString = await response.Body?.transformToString('utf-8');
+  if (bodyString == null) throw new Error('Empty response from S3');
+  return Buffer.from(bodyString, 'utf-8');
+}
+
+/**
  * Read JSON file from S3
  */
 export async function readJsonFromS3(fileName: string, employeeId?: string | null): Promise<any> {

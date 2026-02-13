@@ -17,6 +17,7 @@ import {
   Target,
   RefreshCcw,
   ArrowUpCircle,
+  Download,
 } from "lucide-react";
 import Loader from "../Loader";
 import { Inter, JetBrains_Mono } from "next/font/google";
@@ -51,6 +52,7 @@ type TaskAIStatus = {
   progress: number;
   score: number | null;
   fileName?: string;
+  report?: Record<string, unknown>;
 };
 
 type Props = {
@@ -114,6 +116,30 @@ export default function EmployeeDocumentationSection({
             initialStates[t.id] = { status: "idle", progress: 0, score: null };
           });
           setTaskAIStates(initialStates);
+
+          // Load existing AI reports from S3 for each task
+          docTasks.forEach(async (t: Task) => {
+            try {
+              const r = await fetch(
+                `/api/offboarding/aianalytics?employeeId=${encodeURIComponent(employeeId)}&taskId=${encodeURIComponent(t.id)}`
+              );
+              if (r.ok) {
+                const report = await r.json();
+                setTaskAIStates((prev) => ({
+                  ...prev,
+                  [t.id]: {
+                    status: "completed",
+                    progress: 100,
+                    score: report.score ?? null,
+                    fileName: "Document uploaded",
+                    report,
+                  },
+                }));
+              }
+            } catch {
+              // ignore; task stays idle
+            }
+          });
         }
       } catch (error) {
         console.error(error);
@@ -146,25 +172,53 @@ export default function EmployeeDocumentationSection({
       },
     }));
 
-    const formData = new FormData();
-    formData.append("employeeId", employeeId);
-    formData.append("documentId", taskId);
-    formData.append("file", file);
+    const formDataBackend = new FormData();
+    formDataBackend.append("employeeId", employeeId);
+    formDataBackend.append("documentId", taskId);
+    formDataBackend.append("file", file);
 
     try {
+      // 1) Upload .txt to S3: Offboarding/{employeeId}/upload/{taskId}.txt
+      const uploadForm = new FormData();
+      uploadForm.append("employeeId", employeeId);
+      uploadForm.append("taskId", taskId);
+      uploadForm.append("file", file);
+      const uploadRes = await fetch("/api/offboarding/upload", {
+        method: "POST",
+        body: uploadForm,
+      });
+      if (!uploadRes.ok) {
+        const errData = await uploadRes.json().catch(() => ({}));
+        throw new Error(errData.error || "Upload to S3 failed");
+      }
+
+      // 2) Run AI analysis (backend)
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/analyze-document`,
         {
           method: "POST",
-          body: formData,
+          body: formDataBackend,
         }
       );
 
       const data = await res.json();
-      console.log("AI RESPONSE:", data);
 
       if (!res.ok) {
         throw new Error(data.error || "AI failed");
+      }
+
+      // 3) Store AI report in S3: Offboarding/{employeeId}/aianalytics/{taskId}.json
+      const reportRes = await fetch("/api/offboarding/aianalytics", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          employeeId,
+          taskId,
+          report: data,
+        }),
+      });
+      if (!reportRes.ok) {
+        console.warn("AI report save to S3 failed", await reportRes.text());
       }
 
       setTaskAIStates((prev) => ({
@@ -179,7 +233,7 @@ export default function EmployeeDocumentationSection({
       }));
     } catch (err) {
       console.error(err);
-      alert("AI analysis failed");
+      alert(err instanceof Error ? err.message : "AI analysis failed");
       setTaskAIStates((prev) => ({
         ...prev,
         [taskId]: {
@@ -452,9 +506,19 @@ export default function EmployeeDocumentationSection({
                                 <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-100 flex gap-3 items-center">
                                   <FileCheck className="w-4 h-4 text-emerald-600 flex-shrink-0" />
                                   <p className="text-[11px] font-bold text-emerald-800 truncate">
-                                    {ai.fileName}
+                                    {ai.fileName ?? "Document uploaded"}
                                   </p>
                                 </div>
+
+                                <a
+                                  href={`/api/offboarding/upload?employeeId=${encodeURIComponent(employeeId)}&taskId=${encodeURIComponent(task.id)}`}
+                                  download={`${task.id}.txt`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="w-full flex items-center justify-center gap-2 py-2 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:bg-slate-50 hover:text-[#0E1B2E] transition-all uppercase tracking-widest"
+                                >
+                                  <Download className="w-3 h-3" /> Download uploaded file
+                                </a>
 
                                 <div className="space-y-2.5 py-2">
                                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
