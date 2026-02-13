@@ -75,9 +75,14 @@ export default function HandoverSection({
     setUpdateCounter(0); // Reset update counter
     setLoading(true);
 
+    if (!employeeId?.trim()) {
+      setLoading(false);
+      return;
+    }
+
     const fetchData = async () => {
       try {
-        const response = await fetch("/api/offboarding/handovers");
+        const response = await fetch(`/api/offboarding/handovers?employeeId=${encodeURIComponent(employeeId)}`);
         if (!response.ok) {
           console.error("Failed to fetch handovers data");
           setLoading(false);

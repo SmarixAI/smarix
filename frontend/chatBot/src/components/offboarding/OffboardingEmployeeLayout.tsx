@@ -157,7 +157,7 @@ export default function OffboardingEmployeeLayout({}: OffboardingEmployeeLayoutP
 
     const fetchTasks = async () => {
       try {
-        const response = await fetch("/api/offboarding/tasks");
+        const response = await fetch(`/api/offboarding/tasks?employeeId=${encodeURIComponent(employee.employeeId)}`);
         if (!response.ok) {
           console.error("Failed to fetch tasks data");
           return;

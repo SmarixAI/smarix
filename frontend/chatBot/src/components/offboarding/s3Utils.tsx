@@ -13,10 +13,20 @@ const s3Client = new S3Client({
 });
 
 /**
+ * Build S3 key, optionally under an employee folder (Offboarding/{employeeId}/fileName).
+ */
+export function getOffboardingKey(fileName: string, employeeId?: string | null): string {
+  if (employeeId?.trim()) {
+    return `${S3_BASE_PATH}/${encodeURIComponent(employeeId.trim())}/${fileName}`;
+  }
+  return `${S3_BASE_PATH}/${fileName}`;
+}
+
+/**
  * Read JSON file from S3
  */
-export async function readJsonFromS3(fileName: string): Promise<any> {
-  const key = `${S3_BASE_PATH}/${fileName}`;
+export async function readJsonFromS3(fileName: string, employeeId?: string | null): Promise<any> {
+  const key = getOffboardingKey(fileName, employeeId);
   
   try {
     const command = new GetObjectCommand({
@@ -39,10 +49,10 @@ export async function readJsonFromS3(fileName: string): Promise<any> {
 }
 
 /**
- * Write JSON file to S3
+ * Write JSON file to S3 (optionally under employee folder).
  */
-export async function writeJsonToS3(fileName: string, data: any): Promise<void> {
-  const key = `${S3_BASE_PATH}/${fileName}`;
+export async function writeJsonToS3(fileName: string, data: any, employeeId?: string | null): Promise<void> {
+  const key = getOffboardingKey(fileName, employeeId);
   
   try {
     const command = new PutObjectCommand({
@@ -60,18 +70,21 @@ export async function writeJsonToS3(fileName: string, data: any): Promise<void> 
 }
 
 /**
- * Try multiple file names and return the first one that exists
+ * Try multiple file names and return the first one that exists.
+ * If employeeId is provided, reads from Offboarding/{employeeId}/fileName.
  */
-export async function readJsonFromS3WithFallback(fileNames: string[]): Promise<{ data: any; fileName: string }> {
+export async function readJsonFromS3WithFallback(
+  fileNames: string[],
+  employeeId?: string | null
+): Promise<{ data: any; fileName: string }> {
   for (const fileName of fileNames) {
     try {
-      const data = await readJsonFromS3(fileName);
+      const data = await readJsonFromS3(fileName, employeeId);
       return { data, fileName };
     } catch (error) {
-      // Continue to next file
       continue;
     }
   }
-  
-  throw new Error(`None of the files found in S3: ${fileNames.join(', ')}`);
+  const prefix = employeeId ? `Offboarding/${employeeId}/` : 'Offboarding/';
+  throw new Error(`None of the files found in S3: ${fileNames.map((f) => prefix + f).join(', ')}`);
 }

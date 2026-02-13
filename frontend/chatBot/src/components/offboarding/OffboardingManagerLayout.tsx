@@ -52,94 +52,62 @@ export default function OffboardingManagerLayout({ darkMode = false, setDarkMode
 
   const [activeSection, setActiveSection] = useState<SectionType>('finalcall');
 
-  /* ================= FETCH LOGIC (Unchanged) ================= */
+  /* ================= FETCH LOGIC (from /api/users only) ================= */
   const fetchEmployees = async () => {
     try {
       const managerEmployeeId = user?.employeeId;
-      
       if (!managerEmployeeId) {
-        console.warn('Manager employeeId not found');
         setOffboardingEmployees([]);
         setAllUsersEmployees([]);
         setEmployees([]);
         setLoading(false);
         return;
       }
-      
-      const empResponse = await fetch('/api/offboarding/employees');
-      if (!empResponse.ok) {
+
+      const usersResponse = await fetch('/api/users');
+      if (!usersResponse.ok) {
         setLoading(false);
         return;
       }
-      const empData = await empResponse.json();
-      
-      const usersResponse = await fetch('/api/users');
-      let usersData = { users: [] };
-      if (usersResponse.ok) usersData = await usersResponse.json();
+      const usersData = await usersResponse.json();
+      const users = usersData.users || [];
 
-      if (empData.employees) {
-        setEmployees(empData.employees);
-        
-        const allEmployeeUsers = usersData.users.filter((u: any) => {
-          if (u.role !== 'employee') return false;
-          const employeeManagers = u.managers || [];
-          return employeeManagers.includes(managerEmployeeId);
-        });
-        setAllUsersEmployees(allEmployeeUsers);
-        
-        const offboardUsers = usersData.users.filter((u: any) => {
-          const isOffboardEmployee = u.role === 'employee' && u.status === 'offboard';
-          if (!isOffboardEmployee) return false;
-          const employeeManagers = u.managers || [];
-          return employeeManagers.includes(managerEmployeeId);
-        });
-        
-        const offboarding = empData.employees
-          .filter((emp: Employee) => {
-            const empId = emp.employeeId;
-            const empName = emp.name;
-            return offboardUsers.some((u: any) => {
-              const userId = u.employeeId;
-              const userName = u.name || u.username;
-              return (
-                (userId && userId === empId) ||
-                (userName && userName === empName) ||
-                (userName && empName && userName.toLowerCase() === empName.toLowerCase())
-              );
-            });
-          })
-          .map((emp: Employee) => {
-            const matchingUser = offboardUsers.find((u: any) => {
-              const userId = u.employeeId;
-              const userName = u.name || u.username;
-              const empId = emp.employeeId;
-              const empName = emp.name;
-              return (
-                (userId && userId === empId) ||
-                (userName && userName === empName) ||
-                (userName && empName && userName.toLowerCase() === empName.toLowerCase())
-              );
-            });
-            
-            if (matchingUser) {
-              return { 
-                ...emp, 
-                employeeId: emp.employeeId || matchingUser.employeeId,
-                lastDay: matchingUser.lastDay || emp.lastDay,
-                role: matchingUser.designation || emp.role,
-                designation: matchingUser.designation || emp.role
-              };
-            }
-            return { ...emp, employeeId: emp.employeeId };
-          });
-        
-        setOffboardingEmployees(offboarding);
-        
-        if (offboarding.length > 0) {
-          setSelectedEmployee(offboarding[0]);
-        } else {
-          setSelectedEmployee(null);
-        }
+      const allEmployeeUsers = users.filter((u: any) => {
+        if (u.role !== 'employee') return false;
+        const employeeManagers = u.managers || [];
+        return employeeManagers.includes(managerEmployeeId);
+      });
+      setAllUsersEmployees(allEmployeeUsers);
+
+      const employeesFromUsers: Employee[] = allEmployeeUsers.map((u: any) => ({
+        id: u.employeeId || u.username,
+        employeeId: u.employeeId || u.username,
+        name: u.name || u.username,
+        role: u.designation || 'Employee',
+        risk: 'medium' as const,
+        status: u.status === 'offboard' ? 'leaving' : 'active',
+        lastDay: u.lastDay || null,
+      }));
+      setEmployees(employeesFromUsers);
+
+      const offboarding = allEmployeeUsers
+        .filter((u: any) => u.status === 'offboard')
+        .map((u: any): Employee => ({
+          id: u.employeeId || u.username,
+          employeeId: u.employeeId || u.username,
+          name: u.name || u.username,
+          role: u.designation || 'Employee',
+          designation: u.designation,
+          risk: 'medium',
+          status: 'leaving',
+          lastDay: u.lastDay || null,
+        }));
+      setOffboardingEmployees(offboarding);
+
+      if (offboarding.length > 0) {
+        setSelectedEmployee(offboarding[0]);
+      } else {
+        setSelectedEmployee(null);
       }
     } catch (error) {
       console.error('Error fetching employees data:', error);

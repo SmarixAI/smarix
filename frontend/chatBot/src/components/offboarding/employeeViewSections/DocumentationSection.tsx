@@ -96,7 +96,7 @@ export default function EmployeeDocumentationSection({
     setLoading(true);
     const fetchData = async () => {
       try {
-        const response = await fetch("/api/offboarding/tasks");
+        const response = await fetch(`/api/offboarding/tasks?employeeId=${encodeURIComponent(employeeId)}`);
         const data = await response.json();
         const employee =
           data.employees?.find(
