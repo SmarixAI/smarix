@@ -58,6 +58,8 @@ type TaskAIStatus = {
 type Props = {
   employeeId: string;
   darkMode?: boolean;
+  initialTasksData?: { employees?: any[] } | null;
+  onTasksUpdated?: () => void;
 };
 
 const getPriorityStyles = (priority: Task["priority"]): string => {
@@ -71,6 +73,8 @@ const getPriorityStyles = (priority: Task["priority"]): string => {
 export default function EmployeeDocumentationSection({
   employeeId,
   darkMode = false,
+  initialTasksData,
+  onTasksUpdated,
 }: Props) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,61 +98,73 @@ export default function EmployeeDocumentationSection({
     return task.priority.toLowerCase() === activeFilter;
   });
 
+  const hasParentData = initialTasksData !== undefined;
+
   useEffect(() => {
-    setLoading(true);
-    const fetchData = async () => {
-      try {
-        const response = await fetch(`/api/offboarding/tasks?employeeId=${encodeURIComponent(employeeId)}`);
-        const data = await response.json();
-        const employee =
-          data.employees?.find(
-            (e: any) => String(e.employeeId) === String(employeeId),
-          ) ?? data.employees?.[0];
-
-        if (employee) {
-          const docTasks = (employee.tasks?.ai ?? [])
-            .filter((t: any) => t.id.startsWith("DOC"))
-            .map((t: any) => ({ ...t, tags: t.tags || ["Manual"] }));
-          setTasks(docTasks);
-
-          const initialStates: Record<string, TaskAIStatus> = {};
-          docTasks.forEach((t: Task) => {
-            initialStates[t.id] = { status: "idle", progress: 0, score: null };
-          });
-          setTaskAIStates(initialStates);
-
-          // Load existing AI reports from S3 for each task
-          docTasks.forEach(async (t: Task) => {
-            try {
-              const r = await fetch(
-                `/api/offboarding/aianalytics?employeeId=${encodeURIComponent(employeeId)}&taskId=${encodeURIComponent(t.id)}`
-              );
-              if (r.ok) {
-                const report = await r.json();
-                setTaskAIStates((prev) => ({
-                  ...prev,
-                  [t.id]: {
-                    status: "completed",
-                    progress: 100,
-                    score: report.score ?? null,
-                    fileName: "Document uploaded",
-                    report,
-                  },
-                }));
-              }
-            } catch {
-              // ignore; task stays idle
-            }
-          });
-        }
-      } catch (error) {
-        console.error(error);
-      } finally {
+    const applyData = (data: { employees?: any[] } | null) => {
+      if (!data?.employees?.length) {
+        setTasks([]);
+        setTaskAIStates({});
         setLoading(false);
+        return;
       }
+      const employee =
+        data.employees.find(
+          (e: any) => String(e.employeeId) === String(employeeId),
+        ) ?? data.employees[0];
+      const docTasks = (employee?.tasks?.ai ?? [])
+        .filter((t: any) => t.id.startsWith("DOC"))
+        .map((t: any) => ({ ...t, tags: t.tags || ["Manual"] }));
+      setTasks(docTasks);
+      const initialStates: Record<string, TaskAIStatus> = {};
+      docTasks.forEach((t: Task) => {
+        initialStates[t.id] = { status: "idle", progress: 0, score: null };
+      });
+      setTaskAIStates(initialStates);
+      docTasks.forEach((t: Task) => {
+        fetch(
+          `/api/offboarding/aianalytics?employeeId=${encodeURIComponent(employeeId)}&taskId=${encodeURIComponent(t.id)}`
+        )
+          .then((r) => (r.ok ? r.json() : null))
+          .then((report) => {
+            if (report) {
+              setTaskAIStates((prev) => ({
+                ...prev,
+                [t.id]: {
+                  status: "completed",
+                  progress: 100,
+                  score: report.score ?? null,
+                  fileName: "Document uploaded",
+                  report,
+                },
+              }));
+            }
+          })
+          .catch(() => {});
+      });
+      setLoading(false);
     };
-    fetchData();
-  }, [employeeId]);
+
+    if (hasParentData) {
+      if (initialTasksData == null) {
+        setLoading(true);
+        setTasks([]);
+        setTaskAIStates({});
+        return;
+      }
+      applyData(initialTasksData);
+      return;
+    }
+
+    setLoading(true);
+    fetch(`/api/offboarding/tasks?employeeId=${encodeURIComponent(employeeId)}`)
+      .then((res) => res.json())
+      .then((data) => applyData(data))
+      .catch((error) => {
+        console.error(error);
+        setLoading(false);
+      });
+  }, [employeeId, hasParentData, initialTasksData]);
 
   const handleFileUpload = async (
     taskId: string,

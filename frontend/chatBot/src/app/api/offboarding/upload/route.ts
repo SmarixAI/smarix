@@ -26,7 +26,9 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    if (msg.includes('NoSuchKey') || msg.includes('Empty response')) {
+    const code = (error as { Code?: string; name?: string })?.Code ?? (error as { Code?: string; name?: string })?.name;
+    const isNotFound = code === 'NoSuchKey' || msg.includes('NoSuchKey') || msg.includes('Empty response');
+    if (isNotFound) {
       return NextResponse.json({ error: 'Uploaded file not found' }, { status: 404 });
     }
     console.error('Offboarding upload GET error:', error);

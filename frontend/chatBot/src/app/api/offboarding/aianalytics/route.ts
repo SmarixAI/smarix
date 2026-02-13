@@ -21,7 +21,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(report);
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    if (msg.includes('NoSuchKey') || msg.includes('None of the files found')) {
+    const code = (error as { Code?: string; name?: string })?.Code ?? (error as { Code?: string; name?: string })?.name;
+    const isNotFound = code === 'NoSuchKey' || msg.includes('NoSuchKey') || msg.includes('None of the files found');
+    if (isNotFound) {
       return NextResponse.json({ error: 'Report not found' }, { status: 404 });
     }
     console.error('Offboarding AI analytics GET error:', error);

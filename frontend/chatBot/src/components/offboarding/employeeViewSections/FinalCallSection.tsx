@@ -49,6 +49,8 @@ type Task = {
 type Props = {
   employeeId: string;
   darkMode?: boolean;
+  initialTasksData?: { employees?: any[] } | null;
+  onTasksUpdated?: () => void;
 };
 
 /* ================= PRIORITY STYLES ================= */
@@ -66,6 +68,8 @@ const getPriorityStyles = (priority: Task["priority"]): string => {
 export default function EmployeeFinalCallSection({
   employeeId,
   darkMode = false,
+  initialTasksData,
+  onTasksUpdated,
 }: Props) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,8 +89,32 @@ export default function EmployeeFinalCallSection({
   });
 
   /* ================= LOAD DATA ================= */
+  const hasParentData = initialTasksData !== undefined;
 
   useEffect(() => {
+    if (hasParentData) {
+      if (initialTasksData == null) {
+        setLoading(true);
+        setTasks([]);
+        return;
+      }
+      const employee =
+        initialTasksData.employees?.find(
+          (e: any) => String(e.employeeId) === String(employeeId),
+        ) ?? initialTasksData.employees?.[0];
+      if (employee) {
+        const aiTasks = (employee.tasks?.ai ?? []).filter((t: Task) =>
+          t.id.startsWith("FC"),
+        );
+        const managerTasks = (employee.tasks?.manager ?? []).map(
+          (t: any) => ({ ...t, tags: t.tags || ["Managerial"] }),
+        );
+        setTasks([...aiTasks, ...managerTasks]);
+      }
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     const fetchData = async () => {
       try {
@@ -113,7 +141,7 @@ export default function EmployeeFinalCallSection({
       }
     };
     fetchData();
-  }, [employeeId]);
+  }, [employeeId, hasParentData, initialTasksData]);
 
   const toggleTaskDetails = (taskId: string) => {
     setExpandedTaskIds((prev) => {
