@@ -5,7 +5,6 @@ export async function GET() {
   try {
     const possibleFiles = [
       'documentation_tasks.json',
-      '6employee_documents.json',
     ];
 
     const { data: jsonData, fileName: filePath } = await readJsonFromS3WithFallback(possibleFiles);

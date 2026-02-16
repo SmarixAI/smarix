@@ -364,6 +364,11 @@ def register_route_modules():
     admin_routes = _import_route_module("admin_routes")
     app.include_router(admin_routes.router)
 
+    # Import and include document analysis routes
+    document_analysis = _import_route_module("document_analysis")
+    app.include_router(document_analysis.router)
+
+
 
 # Register route modules after all module-level code is executed
 # This breaks the circular dependency by ensuring chatbot_api is fully loaded

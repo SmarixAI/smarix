@@ -51,6 +51,10 @@ type TaskAIStatus = {
   progress: number;
   score: number | null;
   fileName?: string;
+  report?: {
+    improvements?: string[];
+    [key: string]: any;
+  };
 };
 
 type Props = {
@@ -124,42 +128,75 @@ export default function EmployeeDocumentationSection({
     fetchData();
   }, [employeeId]);
 
-  const handleFileUpload = (
+  const handleFileUpload = async (
     taskId: string,
-    e: React.ChangeEvent<HTMLInputElement>,
+    e: React.ChangeEvent<HTMLInputElement>
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (!file.name.endsWith(".txt")) {
+      alert("Only .txt files allowed");
+      return;
+    }
+
     setTaskAIStates((prev) => ({
       ...prev,
       [taskId]: {
-        ...prev[taskId],
         status: "analyzing",
         progress: 0,
+        score: null,
         fileName: file.name,
       },
     }));
 
-    let prog = 0;
-    const interval = setInterval(() => {
-      prog += 10;
+    const formData = new FormData();
+    formData.append("employeeId", employeeId);
+    formData.append("documentId", taskId);
+    formData.append("file", file);
+
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/analyze-document`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      const data = await res.json();
+      console.log("AI RESPONSE:", data);
+
+      if (!res.ok) {
+        throw new Error(data.error || "AI failed");
+      }
+
       setTaskAIStates((prev) => ({
         ...prev,
-        [taskId]: { ...prev[taskId], progress: prog },
+        [taskId]: {
+          status: "completed",
+          progress: 100,
+          score: data.score,
+          fileName: file.name,
+          report: data,
+        },
       }));
-      if (prog >= 100) {
-        clearInterval(interval);
-        setTimeout(() => {
-          setTaskAIStates((prev) => ({
-            ...prev,
-            [taskId]: { ...prev[taskId], status: "completed", score: 85 },
-          }));
-        }, 500);
-      }
-    }, 60);
+    } catch (err) {
+      console.error(err);
+      alert("AI analysis failed");
+      setTaskAIStates((prev) => ({
+        ...prev,
+        [taskId]: {
+          status: "idle",
+          progress: 0,
+          score: null,
+        },
+      }));
+    }
+
     e.target.value = "";
   };
+
 
   const toggleTaskDetails = (taskId: string) => {
     setExpandedTaskIds((prev) => {
@@ -199,11 +236,10 @@ export default function EmployeeDocumentationSection({
               <button
                 key={f}
                 onClick={() => setActiveFilter(f as any)}
-                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all uppercase tracking-widest ${
-                  activeFilter === f
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all uppercase tracking-widest ${activeFilter === f
                     ? "bg-gradient-to-r from-[#0E1B2E] to-blue-900 text-white shadow-md"
                     : "text-slate-400 hover:text-slate-600"
-                }`}
+                  }`}
               >
                 {f}
               </button>
@@ -429,18 +465,8 @@ export default function EmployeeDocumentationSection({
                                     Potential Improvements
                                   </p>
                                   <div className="space-y-2">
-                                    {[
-                                      "Detail internal workflow logic",
-                                      "Verify architectural dependencies",
-                                      "Include disaster recovery map",
-                                      "Document environment-specific configurations",
-                                      "Explain error handling and retry mechanisms",
-                                      "Add sequence diagram for critical flows",
-                                    ].map((item, idx) => (
-                                      <div
-                                        key={idx}
-                                        className="flex items-center gap-2 text-[10px] text-slate-600 font-bold bg-slate-50 p-2 rounded-lg border border-slate-100"
-                                      >
+                                    {ai.report?.improvements?.map((item, idx) => (
+                                      <div key={idx} className="flex items-center gap-2 text-[10px] text-slate-600 font-bold bg-slate-50 p-2 rounded-lg border border-slate-100">
                                         <div className="w-1 h-1 rounded-full bg-slate-300" />
                                         {item}
                                       </div>
