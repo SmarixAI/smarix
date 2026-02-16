@@ -65,7 +65,7 @@ export default function Sidebar({
     try {
       const raw = localStorage.getItem("onboard_practice_progress");
       if (raw) setCompletionMap(JSON.parse(raw));
-    } catch {}
+    } catch { }
   }, []);
 
   // ✅ NEW: Fetch tasks if sidebar is active and no props provided
@@ -202,11 +202,10 @@ export default function Sidebar({
                           onClick={() =>
                             onSelectPracticeTask?.(task.question_number)
                           }
-                          className={`${inter.className} w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-all group text-left ${
-                            isSelected
+                          className={`${inter.className} w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-all group text-left ${isSelected
                               ? "bg-[#0E1B2E] text-white shadow-lg"
                               : "hover:bg-slate-50 text-[#0E1B2E] border-2 border-transparent hover:border-blue-200"
-                          }`}
+                            }`}
                         >
                           <div
                             className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-[10px] flex-shrink-0 ${isSelected ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"}`}
@@ -220,11 +219,10 @@ export default function Sidebar({
 
                             {task.difficulty && (
                               <span
-                                className={`text-xs px-4 py-1 rounded border text-[10px] flex items-center justify-center tracking-wide w-12 h-[18px] ${
-                                  isSelected
+                                className={`text-xs px-4 py-1 rounded border text-[10px] flex items-center justify-center tracking-wide w-12 h-[18px] ${isSelected
                                     ? "border-white/20 bg-white/10"
                                     : getDifficultyColor(task.difficulty)
-                                }`}
+                                  }`}
                               >
                                 {task.difficulty === "Intermediate"
                                   ? "Medium"

@@ -302,11 +302,10 @@ export default function EmployeeDocumentationSection({
               <button
                 key={f}
                 onClick={() => setActiveFilter(f as any)}
-                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all uppercase tracking-widest ${
-                  activeFilter === f
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all uppercase tracking-widest ${activeFilter === f
                     ? "bg-gradient-to-r from-[#0E1B2E] to-blue-900 text-white shadow-md"
                     : "text-slate-400 hover:text-slate-600"
-                }`}
+                  }`}
               >
                 {f}
               </button>
