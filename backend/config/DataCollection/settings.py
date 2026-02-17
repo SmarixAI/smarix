@@ -18,6 +18,12 @@ class Config:
     )
 
     # ============================================
+    # GITHUB APP SETTINGS (For Private Repos)
+    # ============================================
+    GITHUB_APP_ID: Optional[str] = os.getenv("GITHUB_APP_ID")
+    GITHUB_PRIVATE_KEY: Optional[str] = os.getenv("GITHUB_PRIVATE_KEY")
+
+    # ============================================
     # ASYNC OPTIMIZATION SETTINGS (NEW)
     # ============================================
     # Concurrent request limits for async operations
@@ -398,6 +404,12 @@ class Config:
             warnings.append(
                 "⚠️  GITHUB_TOKEN is not set. API rate limits will be very low (60 req/hour)."
             )
+        
+        if cls.GITHUB_APP_ID and not cls.GITHUB_PRIVATE_KEY:
+            errors.append("❌ GITHUB_APP_ID is set but GITHUB_PRIVATE_KEY is missing")
+        
+        if cls.GITHUB_PRIVATE_KEY and not cls.GITHUB_APP_ID:
+            errors.append("❌ GITHUB_PRIVATE_KEY is set but GITHUB_APP_ID is missing")
 
         if cls.MAX_FILE_SIZE <= 0:
             errors.append("❌ MAX_FILE_SIZE must be greater than 0")
@@ -450,6 +462,8 @@ class Config:
 
         print("\n🔧 CORE SETTINGS:")
         print(f"  🔑 GitHub Token: {'✅ Set' if cls.GITHUB_TOKEN else '❌ Not Set'}")
+        print(f"  🔐 GitHub App ID: {'✅ Set' if cls.GITHUB_APP_ID else '❌ Not Set'}")
+        print(f"  🔒 GitHub App Key: {'✅ Set' if cls.GITHUB_PRIVATE_KEY else '❌ Not Set'}")
         print(f"  🌐 API Base URL: {cls.GITHUB_API_BASE_URL}")
         print(f"  📏 Max File Size: {cls.MAX_FILE_SIZE / (1024*1024):.1f}MB")
         print(f"  🔍 Max Recursion Depth: {cls.MAX_RECURSION_DEPTH}")
@@ -458,6 +472,14 @@ class Config:
             "All" if cls.MAX_FILES_TO_ANALYZE is None else cls.MAX_FILES_TO_ANALYZE
         )
         print(f"  📊 Max Files to Analyze: {max_files_display}")
+
+        print("\n🔐 AUTHENTICATION MODE:")
+        if cls.GITHUB_APP_ID and cls.GITHUB_PRIVATE_KEY:
+            print("  ✅ GitHub App (can access private repos)")
+        elif cls.GITHUB_TOKEN:
+            print("  ✅ Personal Access Token (public repos only)")
+        else:
+            print("  ⚠️  No authentication configured")
 
         print("\n⚡ ASYNC OPTIMIZATION:")
         print(

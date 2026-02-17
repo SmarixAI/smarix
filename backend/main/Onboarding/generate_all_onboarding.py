@@ -51,8 +51,8 @@ from main.Onboarding.generators.reading.generate_code_conventions import (
 # Import BugFix generators
 # ---------------------------------------------------------------------
 
-from main.Onboarding.generators.BugFix.generate_coding_questions import (
-    generate_coding_questions
+from main.Onboarding.generators.BugFix.generate_coding_question_answers import (
+    generate
 )
 from main.Onboarding.generators.BugFix.generate_pr_tutorial import (
     generate_pr_tutorials
@@ -121,7 +121,7 @@ def generate_all_onboarding_data(
         # ---------------- BugFix ----------------
         "coding_questions": {
             "name": "Coding Questions",
-            "func": generate_coding_questions,
+            "func": generate,
             "category": "bugfix",
         },
         "pr_tutorials": {

@@ -4,7 +4,7 @@ Contains all chat endpoints and WebSocket handlers
 """
 
 import boto3
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Request
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 from pathlib import Path
@@ -18,6 +18,7 @@ import re
 from routes.api import shared
 from botocore.exceptions import ClientError
 from datetime import datetime
+from utils.private_repo_state_manager import private_repo_state
 
 router = APIRouter()
 
@@ -752,6 +753,354 @@ async def get_config():
         "available_providers": shared.available_providers,
     }
 
+# ==================== GITHUB APP INTEGRATION ====================
+
+@router.get("/auth/github/callback")
+async def github_callback(
+    code: str,
+    installation_id: int,
+    setup_action: str,
+    state: str = None
+):
+    """
+    GitHub redirects here after app installation/configuration
+    """
+    print("=" * 80)
+    print("🎉 GITHUB APP CALLBACK RECEIVED")
+    print(f"⏰ Time: {time.strftime('%H:%M:%S')}")
+    print(f"Installation ID: {installation_id}")
+    print(f"Setup Action: {setup_action}")
+    if state:
+        print(f"State: {state}")
+    print("=" * 80)
+    
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    redirect_path = "/manager/pipeline"
+    
+    # Parse state for custom return URL
+    if state:
+        try:
+            import base64
+            import json
+            state_data = json.loads(base64.b64decode(state))
+            redirect_path = state_data.get("return_url", redirect_path)
+        except Exception as e:
+            print(f"⚠️ Failed to parse state: {e}")
+    
+    # Redirect with parameters for frontend to detect
+    redirect_url = (
+        f"{frontend_url}{redirect_path}"
+        f"?github_connected=true"
+        f"&installation_id={installation_id}"
+        f"&setup_action={setup_action}"
+    )
+    
+    print(f"🔄 Redirecting to: {redirect_url}")
+    print("=" * 80)
+    
+    return RedirectResponse(url=redirect_url)
+
+
+# ==================== GITHUB APP WEBHOOK ====================
+
+@router.post("/webhooks/github")
+async def github_webhook(request: Request):
+    """
+    GitHub sends webhooks here when:
+    - App is installed/uninstalled
+    - Repositories are added/removed
+    
+    Saves to private_runtime_state.json (single account only)
+    """
+    
+    try:
+        payload = await request.json()
+        event_type = request.headers.get("X-GitHub-Event")
+        action = payload.get("action", "N/A")
+        
+        print("=" * 80)
+        print(f"📨 GITHUB WEBHOOK RECEIVED")
+        print(f"Event Type: {event_type}")
+        print(f"Action: {action}")
+        print("=" * 80)
+        
+        if event_type == "installation":
+            installation_id = payload['installation']['id']
+            account = payload['installation']['account']
+            account_login = account['login']
+            account_type = account['type']  # 'User' or 'Organization'
+            
+            installer = payload.get('sender', {}).get('login', 'unknown')
+            
+            if action == "created":
+                repos = payload.get('repositories', [])
+                repo_list = [
+                    {
+                        "name": r['name'],
+                        "full_name": r['full_name'],
+                        "private": r.get('private', False)
+                    }
+                    for r in repos
+                ]
+                
+                print(f"✅ App installed on: {account_login} ({account_type})")
+                print(f"   Installed by: {installer}")
+                print(f"   Installation ID: {installation_id}")
+                print(f"   Repositories granted: {len(repo_list)}")
+                for r in repo_list:
+                    print(f"     - {r['full_name']} ({'🔒 private' if r['private'] else '🔓 public'})")
+                
+                # ✅ SAVE TO private_runtime_state.json
+                success = private_repo_state.set_state(
+                    owner=account_login,
+                    installation_id=installation_id,
+                    account_type=account_type,
+                    repositories=repo_list
+                )
+                if success:
+                    print(f"✅ Saved to private_runtime_state.json")
+                else:
+                    print(f"❌ Failed to save to private_runtime_state.json")
+                
+            elif action == "deleted":
+                print(f"❌ App uninstalled from: {account_login}")
+                print(f"   Uninstalled by: {installer}")
+                
+                # ✅ CLEAR private_runtime_state.json
+                current_owner = private_repo_state.get_owner()
+                if current_owner == account_login:
+                    success = private_repo_state.clear_state()
+                    if success:
+                        print(f"✅ Cleared private_runtime_state.json")
+                    else:
+                        print(f"⚠️ Failed to clear private_runtime_state.json")
+        
+        elif event_type == "installation_repositories":
+            # ✅ THIS IS THE KEY EVENT FOR ADDING/REMOVING REPOS
+            installation_id = payload['installation']['id']
+            account = payload['installation']['account']
+            account_login = account['login']
+            account_type = account['type']  # 'User' or 'Organization'
+            
+            added = payload.get('repositories_added', [])
+            removed = payload.get('repositories_removed', [])
+            
+            print(f"📝 Repository changes for: {account_login}")
+            print(f"   Installation ID: {installation_id}")
+            print(f"   Account Type: {account_type}")
+            
+            if added:
+                print(f"➕ Repositories added: {len(added)}")
+                for r in added:
+                    print(f"     + {r['full_name']}")
+            
+            if removed:
+                print(f"➖ Repositories removed: {len(removed)}")
+                for r in removed:
+                    print(f"     - {r['full_name']}")
+            
+            # ✅ UPDATE OR CREATE repositories in private_runtime_state.json
+            try:
+                current_state = private_repo_state.get_state()
+                
+                # ✅ FIX: If no state exists, CREATE it (reconnection scenario)
+                if not current_state:
+                    print(f"⚠️ No existing state found - creating new state for {account_login}")
+                    print(f"   This happens when reconnecting after disconnect")
+                    
+                    # Create new state with added repos
+                    repo_list = [
+                        {
+                            "name": r['name'],
+                            "full_name": r['full_name'],
+                            "private": r.get('private', False)
+                        }
+                        for r in added
+                    ]
+                    
+                    print(f"   Creating state with {len(repo_list)} repos")
+                    
+                    success = private_repo_state.set_state(
+                        owner=account_login,
+                        installation_id=installation_id,
+                        account_type=account_type,
+                        repositories=repo_list
+                    )
+                    
+                    if success:
+                        print(f"✅ Created new state successfully!")
+                        for r in repo_list:
+                            print(f"     - {r['full_name']}")
+                    else:
+                        print(f"❌ Failed to create new state")
+                    
+                    print("=" * 80)
+                    return {"status": "received", "event": event_type, "action": action}
+                
+                # State exists - update it
+                current_owner = current_state.get('owner')
+                
+                if current_owner == account_login:
+                    print(f"🔄 Updating repos for connected account: {current_owner}")
+                    
+                    current_repos = private_repo_state.get_repositories()
+                    print(f"   Current repos count: {len(current_repos)}")
+                    
+                    # Remove deleted repos
+                    removed_names = [r['full_name'] for r in removed]
+                    current_repos = [
+                        r for r in current_repos 
+                        if r['full_name'] not in removed_names
+                    ]
+                    print(f"   After removing: {len(current_repos)} repos")
+                    
+                    # Add new repos (avoid duplicates)
+                    existing_names = {r['full_name'] for r in current_repos}
+                    for repo in added:
+                        if repo['full_name'] not in existing_names:
+                            new_repo = {
+                                "name": repo['name'],
+                                "full_name": repo['full_name'],
+                                "private": repo.get('private', False)
+                            }
+                            current_repos.append(new_repo)
+                            print(f"   Added: {new_repo['full_name']}")
+                        else:
+                            print(f"   Skipped (duplicate): {repo['full_name']}")
+                    
+                    print(f"   Final repos count: {len(current_repos)}")
+                    
+                    # Update in S3
+                    success = private_repo_state.update_repositories(current_repos)
+                    if success:
+                        print(f"✅ Updated private_runtime_state.json")
+                        print(f"   Total repos now: {len(current_repos)}")
+                    else:
+                        print(f"❌ Failed to update repositories")
+                else:
+                    print(f"⚠️ Repository change for {account_login} but connected account is {current_owner}")
+                    print(f"   This might be a different user reconnecting")
+                    print(f"   Creating new state for {account_login}")
+                    
+                    # Create new state for this account (replaces old account)
+                    repo_list = [
+                        {
+                            "name": r['name'],
+                            "full_name": r['full_name'],
+                            "private": r.get('private', False)
+                        }
+                        for r in added
+                    ]
+                    
+                    success = private_repo_state.set_state(
+                        owner=account_login,
+                        installation_id=installation_id,
+                        account_type=account_type,
+                        repositories=repo_list
+                    )
+                    
+                    if success:
+                        print(f"✅ Created new state for {account_login} with {len(repo_list)} repos")
+                    else:
+                        print(f"❌ Failed to create new state")
+            
+            except Exception as e:
+                print(f"❌ Exception updating repositories: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        else:
+            print(f"ℹ️ Unhandled webhook event type: {event_type}")
+        
+        print("=" * 80)
+        print()
+        
+        return {"status": "received", "event": event_type, "action": action}
+    
+    except Exception as e:
+        print(f"❌ WEBHOOK ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+        print("=" * 80)
+        return {"status": "error", "message": str(e)}
+
+
+@router.get("/api/data-collection/private-repo-state")
+async def get_private_repo_state():
+    """
+    Get the current private repository state
+    Returns the connected account and its repositories
+    """
+    print("=" * 80)
+    print("📊 API: Loading private repo state...")
+    
+    try:
+        state = private_repo_state.get_state()
+        
+        if state:
+            print(f"✅ Loaded private repo state")
+            print(f"📍 S3 Key: Admin/state/private_runtime_state.json")
+            print(f"   Owner: {state.get('owner')}")
+            print(f"   Installation ID: {state.get('installation_id')}")
+            print(f"   Repositories: {len(state.get('repositories', []))}")
+            for repo in state.get('repositories', []):
+                print(f"     - {repo['full_name']} ({'🔒 private' if repo['private'] else '🔓 public'})")
+        else:
+            print("⚠️ No private repo state found")
+            print("💡 Connect your GitHub account to get started")
+        
+        print("=" * 80)
+        
+        return {
+            "connected": state is not None,
+            "state": state
+        }
+        
+    except Exception as e:
+        print(f"❌ Error loading private repo state: {e}")
+        import traceback
+        traceback.print_exc()
+        print("=" * 80)
+        return {
+            "connected": False,
+            "state": None,
+            "error": str(e)
+        }
+
+
+@router.post("/api/data-collection/disconnect-github")
+async def disconnect_github():
+    """
+    Disconnect the current GitHub account
+    """
+    print("=" * 80)
+    print("🔌 API: Disconnecting GitHub account...")
+    
+    try:
+        current_owner = private_repo_state.get_owner()
+        
+        if not current_owner:
+            print("⚠️ No account connected")
+            print("=" * 80)
+            return {"success": False, "message": "No account connected"}
+        
+        success = private_repo_state.clear_state()
+        
+        if success:
+            print(f"✅ Disconnected {current_owner}")
+            print("=" * 80)
+            return {"success": True, "message": f"Disconnected {current_owner}"}
+        else:
+            print(f"❌ Failed to disconnect {current_owner}")
+            print("=" * 80)
+            return {"success": False, "message": "Failed to disconnect account"}
+        
+    except Exception as e:
+        print(f"❌ Error disconnecting: {e}")
+        import traceback
+        traceback.print_exc()
+        print("=" * 80)
+        return {"success": False, "message": str(e)}
 
 def get_json_from_s3(key: str) -> Dict[str, Any]:
     try:
