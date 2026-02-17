@@ -23,7 +23,6 @@ import concurrent.futures
 from functools import lru_cache
 from dotenv import load_dotenv
 from datetime import datetime
-from keyword_index_builder import build_keyword_index
 
 
 load_dotenv()
@@ -33,7 +32,7 @@ backend_dir = Path(__file__).resolve().parent.parent.parent
 if str(backend_dir) not in sys.path:
     sys.path.insert(0, str(backend_dir))
 
-# Import s3_manager - use relative path from backend root
+from core.VectorDB.keyword_index_builder import build_keyword_index
 from utils.s3 import s3_manager
 
 # S3 Configuration
