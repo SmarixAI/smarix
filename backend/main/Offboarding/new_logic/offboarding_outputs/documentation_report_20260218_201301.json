@@ -1,0 +1,150 @@
+{
+    "domains": [
+        {
+            "domain": "lib/app/models",
+            "purpose": "Defines the data models used throughout the application, encapsulating the structure and behavior of the data.",
+            "high_level_architecture": "The models are structured to interact with the database and provide a clear interface for data manipulation.",
+            "key_classes_and_modules": [
+                "DataModel"
+            ],
+            "key_methods_and_flows": [
+                "createData()",
+                "updateData()",
+                "deleteData()",
+                "fetchData()"
+            ],
+            "api_contracts": [
+                {
+                    "endpoint": "/data",
+                    "method": "POST",
+                    "description": "Creates a new data entry."
+                },
+                {
+                    "endpoint": "/data/{id}",
+                    "method": "GET",
+                    "description": "Fetches data entry by ID."
+                }
+            ],
+            "database_schema_notes": [
+                "Data model corresponds to the 'data' table in the database.",
+                "Fields include id, name, value, created_at, updated_at."
+            ],
+            "external_integrations": [],
+            "configuration_requirements": [],
+            "testing_strategy": [
+                "Unit tests for each model method.",
+                "Integration tests for data fetching and manipulation."
+            ],
+            "operational_considerations": [
+                "Ensure data integrity during CRUD operations.",
+                "Handle exceptions and errors gracefully."
+            ]
+        },
+        {
+            "domain": "lib/app/modules",
+            "purpose": "Contains the various modules of the application, each responsible for a specific feature or functionality.",
+            "high_level_architecture": "Modules are organized by feature, with controllers managing the business logic and views handling the UI.",
+            "key_classes_and_modules": [
+                "HomeController",
+                "DetailRouteController",
+                "TaskDetailsController"
+            ],
+            "key_methods_and_flows": [
+                "loadTasks()",
+                "addTask()",
+                "navigateToDetail()",
+                "showTaskDetails()"
+            ],
+            "api_contracts": [
+                {
+                    "endpoint": "/tasks",
+                    "method": "GET",
+                    "description": "Retrieves a list of tasks."
+                },
+                {
+                    "endpoint": "/tasks/{id}",
+                    "method": "GET",
+                    "description": "Retrieves details of a specific task."
+                }
+            ],
+            "database_schema_notes": [
+                "Modules interact with the 'tasks' table for task-related operations.",
+                "Ensure foreign key relationships are maintained."
+            ],
+            "external_integrations": [
+                "Integration with notification service for task reminders."
+            ],
+            "configuration_requirements": [],
+            "testing_strategy": [
+                "Unit tests for controllers and views.",
+                "End-to-end tests for user flows."
+            ],
+            "operational_considerations": [
+                "Monitor performance of task loading and rendering.",
+                "Ensure responsiveness of UI components."
+            ]
+        },
+        {
+            "domain": "lib/app/utils",
+            "purpose": "Provides utility functions and classes that assist with common tasks and operations throughout the application.",
+            "high_level_architecture": "Utilities are stateless functions that can be reused across different modules and components.",
+            "key_classes_and_modules": [
+                "DatePickerInput",
+                "TaskFunctions"
+            ],
+            "key_methods_and_flows": [
+                "validateTask()",
+                "modifyTask()",
+                "patchTask()",
+                "calculateRecurrence()"
+            ],
+            "api_contracts": [],
+            "database_schema_notes": [],
+            "external_integrations": [],
+            "configuration_requirements": [],
+            "testing_strategy": [
+                "Unit tests for each utility function.",
+                "Mock external dependencies where applicable."
+            ],
+            "operational_considerations": [
+                "Optimize utility functions for performance.",
+                "Document usage and edge cases for each utility."
+            ]
+        },
+        {
+            "domain": "lib/app/v3",
+            "purpose": "Contains the version 3 of the application, focusing on new features and improvements over previous versions.",
+            "high_level_architecture": "Versioned architecture allows for backward compatibility while introducing new functionalities.",
+            "key_classes_and_modules": [
+                "TaskForReplica",
+                "TaskDatabase"
+            ],
+            "key_methods_and_flows": [
+                "syncTasks()",
+                "modifyTaskInDatabase()",
+                "fetchReplicaTasks()"
+            ],
+            "api_contracts": [
+                {
+                    "endpoint": "/v3/tasks",
+                    "method": "GET",
+                    "description": "Fetches tasks for version 3."
+                }
+            ],
+            "database_schema_notes": [
+                "New fields may be added to support version 3 features.",
+                "Migration scripts should be created for database upgrades."
+            ],
+            "external_integrations": [],
+            "configuration_requirements": [],
+            "testing_strategy": [
+                "Integration tests for new features.",
+                "Regression tests to ensure previous functionality is not broken."
+            ],
+            "operational_considerations": [
+                "Monitor for issues related to version compatibility.",
+                "Provide clear migration paths for users upgrading from previous versions."
+            ]
+        }
+    ]
+}
