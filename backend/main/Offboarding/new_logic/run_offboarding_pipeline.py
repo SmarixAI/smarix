@@ -1,18 +1,28 @@
 import json
 import logging
 import os
+import sys
+import argparse
 from datetime import datetime
 
-from employee_aggregator import EmployeeAggregator
-from domain_builder import DomainBuilder
-from risk_engine import RiskEngine
-from finalcall_llm_generator import FinalCallGenerator
-from handover_llm_generator import HandoverGenerator
-from documentation_llm_generator import DocumentationGenerator
+# --------------------------------------------------
+# Ensure project root is on sys.path
+# --------------------------------------------------
+
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../"))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+from backend.main.Offboarding.new_logic.employee_aggregator import EmployeeAggregator
+from backend.main.Offboarding.new_logic.domain_builder import DomainBuilder
+from backend.main.Offboarding.new_logic.risk_engine import RiskEngine
+from backend.main.Offboarding.new_logic.finalcall_llm_generator import FinalCallGenerator
+from backend.main.Offboarding.new_logic.handover_llm_generator import HandoverGenerator
+from backend.main.Offboarding.new_logic.documentation_llm_generator import DocumentationGenerator
 
 
 # --------------------------------------------------
-# CENTRAL LOGGING CONFIGURATION (ONLY HERE)
+# CENTRAL LOGGING CONFIGURATION
 # --------------------------------------------------
 
 logging.basicConfig(
@@ -24,60 +34,72 @@ logging.basicConfig(
     ]
 )
 
-logger = logging.getLogger("MainRunner")
+logger = logging.getLogger("OffboardingPipeline")
 
 
 # --------------------------------------------------
-# CONFIG
+# HELPERS
 # --------------------------------------------------
 
-INPUT_FILE = "taskwarrior-flutter.json"
-EMPLOYEE_NAME = "inderjeet20"
-OUTPUT_DIR = "offboarding_outputs"
-
-
-# --------------------------------------------------
-# HELPER
-# --------------------------------------------------
-
-def ensure_output_dir():
-    if not os.path.exists(OUTPUT_DIR):
-        os.makedirs(OUTPUT_DIR)
+def ensure_output_dir(output_dir: str):
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 
 
 # --------------------------------------------------
-# MAIN EXECUTION
+# MAIN PIPELINE
 # --------------------------------------------------
 
-def main():
+def run_pipeline(input_file: str, employee_name: str, output_dir: str):
 
     logger.info("==================================================")
     logger.info("Starting Offboarding Knowledge Transfer Pipeline")
+    logger.info(f"Employee: {employee_name}")
+    logger.info(f"Input File: {input_file}")
+    logger.info(f"Output Directory: {output_dir}")
 
-    ensure_output_dir()
+    ensure_output_dir(output_dir)
 
-    # Step 1 — Load repo data
+    # --------------------------------------------------
+    # Step 1 — Load Repository Data
+    # --------------------------------------------------
+
     logger.info("Loading repository data...")
-    with open(INPUT_FILE, "r", encoding="utf-8") as f:
+    if not os.path.exists(input_file):
+        raise FileNotFoundError(f"Input file not found: {input_file}")
+
+    with open(input_file, "r", encoding="utf-8") as f:
         repo_data = json.load(f)
 
-    # Step 2 — Aggregate employee data
-    logger.info("Running EmployeeAggregator...")
-    employee_data = EmployeeAggregator.extract(repo_data, EMPLOYEE_NAME)
+    # --------------------------------------------------
+    # Step 2 — Aggregate Employee Data
+    # --------------------------------------------------
 
-    # Step 3 — Build domains
+    logger.info("Running EmployeeAggregator...")
+    employee_data = EmployeeAggregator.extract(repo_data, employee_name)
+
+    if not employee_data:
+        raise ValueError(f"No data found for employee: {employee_name}")
+
+    # --------------------------------------------------
+    # Step 3 — Build Domains
+    # --------------------------------------------------
+
     logger.info("Running DomainBuilder...")
     domains = DomainBuilder.build(employee_data)
 
-    # Step 4 — Attach risk (volume + structural)
+    # --------------------------------------------------
+    # Step 4 — Attach Risk
+    # --------------------------------------------------
+
     logger.info("Running RiskEngine...")
     domains_with_risk = RiskEngine.attach(domains)
 
     # --------------------------------------------------
-    # Step 5 — Prepare Context Per Generator
+    # Step 5 — Prepare Generator Inputs
     # --------------------------------------------------
 
-    # FinalCall → only risky domains + structural signals
+    # FinalCall → Only HIGH & CRITICAL domains
     finalcall_input = [
         {
             "domain": d["domain"],
@@ -89,7 +111,7 @@ def main():
         if d["risk_level"] in ["HIGH", "CRITICAL"]
     ]
 
-    # Handover → operational ownership info
+    # Handover → Ownership + Files + Structural signals
     handover_input = [
         {
             "domain": d["domain"],
@@ -100,7 +122,7 @@ def main():
         for d in domains_with_risk
     ]
 
-    # Documentation → architecture-only view
+    # Documentation → Architecture-only
     documentation_input = [
         {
             "domain": d["domain"],
@@ -111,48 +133,81 @@ def main():
     ]
 
     # --------------------------------------------------
-    # Step 6A — Final Call
+    # Step 6 — Generate Reports
     # --------------------------------------------------
 
     logger.info("Running FinalCallGenerator...")
     finalcall_report = FinalCallGenerator().generate(finalcall_input)
 
-    # --------------------------------------------------
-    # Step 6B — Handover
-    # --------------------------------------------------
-
     logger.info("Running HandoverGenerator...")
     handover_report = HandoverGenerator().generate(handover_input)
-
-    # --------------------------------------------------
-    # Step 6C — Documentation
-    # --------------------------------------------------
 
     logger.info("Running DocumentationGenerator...")
     documentation_report = DocumentationGenerator().generate(documentation_input)
 
-
     # --------------------------------------------------
-    # Step 6 — Save All Outputs
+    # Step 7 — Save Outputs
     # --------------------------------------------------
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
+    finalcall_path = os.path.join(output_dir, f"finalcall.json")
+    handover_path = os.path.join(output_dir, f"handover.json")
+    documentation_path = os.path.join(output_dir, f"documentation.json")
+
     logger.info("Saving reports...")
 
-    with open(f"{OUTPUT_DIR}/finalcall_report_{timestamp}.json", "w", encoding="utf-8") as f:
+    with open(finalcall_path, "w", encoding="utf-8") as f:
         json.dump(finalcall_report, f, indent=4)
 
-    with open(f"{OUTPUT_DIR}/handover_report_{timestamp}.json", "w", encoding="utf-8") as f:
+    with open(handover_path, "w", encoding="utf-8") as f:
         json.dump(handover_report, f, indent=4)
 
-    with open(f"{OUTPUT_DIR}/documentation_report_{timestamp}.json", "w", encoding="utf-8") as f:
+    with open(documentation_path, "w", encoding="utf-8") as f:
         json.dump(documentation_report, f, indent=4)
 
     logger.info("All reports saved successfully.")
     logger.info("Pipeline completed successfully.")
     logger.info("==================================================")
 
+    return {
+        "success": True,
+        "employee": employee_name,
+        "files": {
+            "finalcall": finalcall_path,
+            "handover": handover_path,
+            "documentation": documentation_path
+        }
+    }
+
+
+# --------------------------------------------------
+# CLI ENTRY POINT (Used by FastAPI subprocess)
+# --------------------------------------------------
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Run Offboarding Knowledge Transfer Pipeline")
+
+    parser.add_argument("--input_file", required=True, help="Path to repository JSON file")
+    parser.add_argument("--employee_name", required=True, help="Employee username")
+    parser.add_argument("--output_dir", required=True, help="Directory to save outputs")
+
+    args = parser.parse_args()
+
+    try:
+        result = run_pipeline(
+            input_file=args.input_file,
+            employee_name=args.employee_name,
+            output_dir=args.output_dir
+        )
+
+        print(json.dumps(result))
+        sys.exit(0)
+
+    except Exception as e:
+        logger.exception("Pipeline failed.")
+        print(json.dumps({
+            "success": False,
+            "error": str(e)
+        }))
+        sys.exit(1)

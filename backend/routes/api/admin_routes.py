@@ -719,90 +719,56 @@ def run_onboarding(generators_to_run: list = None) -> Dict[str, Any]:
 
 
 def run_offboarding(steps_to_run: list = None, employee_name: str = None) -> Dict[str, Any]:
-    """Run offboarding data generation for the single user from GitHub data (top contributor)."""
     try:
+        if not employee_name:
+            return {"success": False, "error": "Employee name is required"}
+
         import sys
         from pathlib import Path
 
         repo_root = Path(__file__).resolve().parent.parent.parent
-        if str(repo_root) not in sys.path:
-            sys.path.insert(0, str(repo_root))
 
-        offboarding_script = repo_root / "main" / "Offboarding" / "generateOffboardingData.py"
-        if not offboarding_script.exists():
-            return {"success": False, "error": f"Offboarding script not found: {offboarding_script}"}
+        pipeline_script = repo_root / "main" / "Offboarding" / "new_logic" / "run_offboarding_pipeline.py"
 
-        env = os.environ.copy()
-        env['PYTHONIOENCODING'] = 'utf-8'
-        env['PYTHONUTF8'] = '1'
+        if not pipeline_script.exists():
+            return {"success": False, "error": f"Pipeline not found: {pipeline_script}"}
 
-        cmd = [sys.executable, str(offboarding_script)]
+        # Adjust this path according to your repo data location
+        input_file = Path("/Users/vishalkeshari/Desktop/smarix/backend/data/DataCollectionFromGit/CCExtractor/taskwarrior-flutter/taskwarrior-flutter.json")
+        output_dir = repo_root / "data" / "Offboarding" / employee_name
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        cmd = [
+            sys.executable,
+            str(pipeline_script),
+            "--input_file", str(input_file),
+            "--employee_name", employee_name,
+            "--output_dir", str(output_dir)
+        ]
 
         result = subprocess.run(
             cmd,
-            cwd=str(offboarding_script.parent),
             capture_output=True,
             text=True,
-            encoding='utf-8',
-            errors='replace',  # Replace problematic characters instead of failing
-            timeout=3600,  # 1 hour timeout
-            env=env
+            timeout=3600
         )
-        
-        # Get output for debugging
-        stdout_output = result.stdout if result.stdout else ""
-        stderr_output = result.stderr if result.stderr else ""
-        
+
         if result.returncode == 0:
-            # Check if output files were created
-            output_dir = repo_root / "data" / "Offboarding"
-            
-            expected_files = [
-                "4employee_tasks_with_metadata_finalCallData.json",
-                "final_call_tasks.json",
-                "handover_tasks.json",
-                "documentation_tasks.json",
-            ]
-            created_files = [f for f in expected_files if (output_dir / f).exists()]
-            message = f"Successfully generated offboarding data for single user from GitHub data ({len(created_files)} files)"
-            
             return {
                 "success": True,
-                "message": message,
-                "output_files": created_files,
-                "output_dir": str(output_dir),
+                "message": f"Offboarding pipeline executed successfully for {employee_name}",
+                "output_dir": str(output_dir)
             }
         else:
-            # Return detailed error information
-            error_msg = f"Offboarding script failed with exit code {result.returncode}"
-            if stderr_output:
-                # Get last few lines of stderr for context
-                stderr_lines = stderr_output.strip().split('\n')
-                last_error = '\n'.join(stderr_lines[-10:])  # Last 10 lines
-                error_msg += f"\n\nError output:\n{last_error}"
-            elif stdout_output:
-                # Sometimes errors go to stdout
-                stdout_lines = stdout_output.strip().split('\n')
-                last_output = '\n'.join(stdout_lines[-10:])  # Last 10 lines
-                error_msg += f"\n\nLast output:\n{last_output}"
-            
             return {
                 "success": False,
-                "error": error_msg,
-                "exit_code": result.returncode,
-                "stderr_preview": stderr_output[:1000] if stderr_output else None,
-                "stdout_preview": stdout_output[:1000] if stdout_output else None
+                "error": result.stderr or result.stdout
             }
+
     except subprocess.TimeoutExpired:
-        return {"success": False, "error": "Offboarding process timed out after 1 hour"}
+        return {"success": False, "error": "Pipeline timed out"}
     except Exception as e:
-        import traceback
-        error_trace = traceback.format_exc()
-        return {
-            "success": False,
-            "error": f"Exception while running offboarding: {str(e)}",
-            "traceback": error_trace
-        }
+        return {"success": False, "error": str(e)}
 
 
 def verify_employee_exists(employee_name: str) -> Dict[str, Any]:
@@ -1001,10 +967,13 @@ async def admin_onboarding(request: OnboardingRequest = None):
 
 
 @router.post("/admin/offboarding/run", response_model=SetupResponse)
-async def admin_offboarding(request: Optional[OffboardingRequest] = Body(default=None)):
-    """Run offboarding data generation for the single user from GitHub data (top contributor)."""
+async def admin_offboarding(request: OffboardingRequest = Body(...)):
     try:
-        result = run_offboarding()
+        if not request.employee_name:
+            raise HTTPException(status_code=400, detail="Employee name required")
+
+        result = run_offboarding(employee_name=request.employee_name)
+
         if result["success"]:
             return SetupResponse(
                 status="success",
@@ -1013,11 +982,13 @@ async def admin_offboarding(request: Optional[OffboardingRequest] = Body(default
                 details=result
             )
         else:
-            raise HTTPException(status_code=500, detail=result.get("error", "Offboarding generation failed"))
+            raise HTTPException(status_code=500, detail=result.get("error"))
+
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 
 # ==================== ADMIN HISTORY ENDPOINTS ====================

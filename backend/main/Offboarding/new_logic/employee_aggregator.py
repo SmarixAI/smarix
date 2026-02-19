@@ -4,7 +4,7 @@ from collections import defaultdict
 from typing import Dict, Any, List
 import os
 import logging
-from change_analyzer import ChangeAnalyzer
+from backend.main.Offboarding.new_logic.change_analyzer import ChangeAnalyzer
 
 
 # Use global logging configuration (defined in main runner)

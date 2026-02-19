@@ -6,7 +6,11 @@ import re
 import logging
 import time
 from typing import List, Dict, Any
-from openai import OpenAI
+try:
+    from openai import OpenAI
+except Exception:
+    OpenAI = None
+
 from dotenv import load_dotenv
 from pathlib import Path
 
@@ -19,6 +23,10 @@ logger = logging.getLogger(__name__)
 
 env_path = Path(__file__).resolve().parents[3] / ".env"
 load_dotenv(dotenv_path=env_path)
+# Also attempt to load repo root .env (higher up) if present
+repo_env_path = Path(__file__).resolve().parents[5] / ".env"
+if repo_env_path.exists():
+    load_dotenv(dotenv_path=repo_env_path)
 
 
 class FinalCallGenerator:
@@ -29,12 +37,17 @@ class FinalCallGenerator:
 
         api_key = os.getenv("OPENAI_API_KEY")
 
+        if OpenAI is None:
+            logger.warning("openai package not available; running in offline stub mode")
+            self.client = None
+            return
+
         if not api_key:
-            logger.error("OPENAI_API_KEY not found in environment")
-            raise ValueError("OPENAI_API_KEY not found")
+            logger.warning("OPENAI_API_KEY not found in environment; running in offline stub mode")
+            self.client = None
+            return
 
         self.client = OpenAI(api_key=api_key)
-
         logger.info("OpenAI client initialized successfully.")
 
     # -----------------------------------------
@@ -91,6 +104,21 @@ Domains:
 """
 
         logger.info("Calling OpenAI API...")
+        # If no OpenAI client available, return a deterministic stubbed response
+        if not self.client:
+            logger.warning("No OpenAI client: returning stubbed FinalCall report.")
+            stub = []
+            for d in domains:
+                stub.append({
+                    "domain": d.get("domain"),
+                    "risk_score": d.get("risk_score"),
+                    "risk_level": d.get("risk_level"),
+                    "why_risky": f"Auto-generated stub: risk level {d.get('risk_level')}",
+                    "fragile_areas": [],
+                    "handover_questions": [],
+                    "regression_focus": []
+                })
+            return {"final_calls": stub}
 
         try:
             response = self.client.chat.completions.create(

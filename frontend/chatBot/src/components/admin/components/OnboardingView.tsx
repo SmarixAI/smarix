@@ -486,62 +486,6 @@ export default function OnboardingView({
           </div>
         </div>
       </div>
-
-      {/* OUTPUT FILES SECTION */}
-      {onboardingStatus === "completed" && (
-        <div className="relative rounded-xl shadow-lg p-6 bg-white/80 backdrop-blur-xl border border-gray-200/50">
-          <div className="absolute inset-0 bg-[linear-gradient(to_right,#0E1B2E05_1px,transparent_1px),linear-gradient(to_bottom,#0E1B2E05_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none rounded-xl" />
-          <div className="relative z-10">
-            <h3 className={`${spaceGrotesk.className} text-xl font-semibold mb-4 text-[#0E1B2E]`}>
-              Generated Files
-            </h3>
-            {categories.map((category) => {
-              const categoryGenerators = category.generators.filter(g => 
-                selectedGenerators.includes(g.id)
-              );
-              
-              if (categoryGenerators.length === 0) return null;
-              
-              const CategoryIcon = category.icon;
-              
-              return (
-                <div key={category.id} className="mb-6 last:mb-0">
-                  <div className="flex items-center gap-2 mb-3">
-                    <CategoryIcon className="w-5 h-5 text-[#0E1B2E]/70" />
-                    <h4 className={`${spaceGrotesk.className} text-lg font-semibold text-[#0E1B2E]`}>
-                      {category.name}
-                    </h4>
-                    <span className={`${firaCode.className} text-xs px-2 py-1 rounded bg-[#0E1B2E]/10 text-[#0E1B2E]/70`}>
-                      {category.outputDir}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {categoryGenerators.map((generator) => {
-                      const Icon = generator.icon;
-                      return (
-                        <div
-                          key={generator.id}
-                          className="p-3 rounded-xl border border-gray-200/50 bg-white/50 backdrop-blur-sm"
-                        >
-                          <div className="flex items-center gap-2 mb-2">
-                            <Icon className="w-4 h-4 text-[#0E1B2E]/70" />
-                            <span className={`${spaceGrotesk.className} text-sm font-medium text-[#0E1B2E]`}>
-                              {generator.name}
-                            </span>
-                          </div>
-                          <p className={`${firaCode.className} text-xs text-[#0E1B2E]/60`}>
-                            {generator.outputFile}
-                          </p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

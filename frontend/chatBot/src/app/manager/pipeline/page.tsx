@@ -650,8 +650,7 @@ export default function Pipeline() {
 
     setOffboardingRunning(true);
     setOffboardingStatus("running");
-    setOffboardingMessage(`Starting offboarding data generation for ${selectedSteps.length} step(s) for employee "${employeeName.trim()}"...`);
-
+    
     const startTime = Date.now();
 
     try {
