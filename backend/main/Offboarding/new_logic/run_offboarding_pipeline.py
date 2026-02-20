@@ -4,6 +4,7 @@ import os
 import sys
 import argparse
 from datetime import datetime
+import boto3
 
 # --------------------------------------------------
 # Ensure project root is on sys.path
@@ -20,86 +21,164 @@ from backend.main.Offboarding.new_logic.finalcall_llm_generator import FinalCall
 from backend.main.Offboarding.new_logic.handover_llm_generator import HandoverGenerator
 from backend.main.Offboarding.new_logic.documentation_llm_generator import DocumentationGenerator
 
+# --------------------------------------------------
+# S3 CONFIG
+# --------------------------------------------------
+
+S3_BUCKET = "smarix-data-apsouth1"
+S3_SOURCE_PREFIX = "DataCollectionFromGit/"
+S3_OUTPUT_PREFIX = "Offboarding/"
+
+s3 = boto3.client("s3")
 
 # --------------------------------------------------
-# CENTRAL LOGGING CONFIGURATION
+# LOGGING
 # --------------------------------------------------
 
 logging.basicConfig(
     level=logging.INFO,
     format="[%(asctime)s] [%(name)s] %(levelname)s - %(message)s",
-    handlers=[
-        logging.FileHandler("offboarding_debug.log"),
-        logging.StreamHandler()
-    ]
 )
-
 logger = logging.getLogger("OffboardingPipeline")
 
-
 # --------------------------------------------------
-# HELPERS
+# S3 HELPERS
 # --------------------------------------------------
 
-def ensure_output_dir(output_dir: str):
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+def list_all_repo_json_files():
+    """
+    Traverse:
+    DataCollectionFromGit/<org>/<repo>/<repo>.json
+    """
+    repo_files = []
 
+    paginator = s3.get_paginator("list_objects_v2")
+    pages = paginator.paginate(
+        Bucket=S3_BUCKET,
+        Prefix=S3_SOURCE_PREFIX
+    )
+
+    for page in pages:
+        for obj in page.get("Contents", []):
+            key = obj["Key"]
+
+            # Must end with .json and have org/repo structure
+            if key.endswith(".json") and key.count("/") >= 3:
+                repo_files.append(key)
+
+    return repo_files
+
+
+def read_json_from_s3(key: str):
+    logger.info(f"Reading: s3://{S3_BUCKET}/{key}")
+    obj = s3.get_object(Bucket=S3_BUCKET, Key=key)
+    return json.loads(obj["Body"].read().decode("utf-8"))
+
+
+def upload_json_to_s3(data: dict, key: str):
+    logger.info(f"Uploading: s3://{S3_BUCKET}/{key}")
+    s3.put_object(
+        Bucket=S3_BUCKET,
+        Key=key,
+        Body=json.dumps(data, indent=4),
+        ContentType="application/json"
+    )
 
 # --------------------------------------------------
 # MAIN PIPELINE
 # --------------------------------------------------
 
-def run_pipeline(input_file: str, employee_name: str, output_dir: str):
+def run_pipeline(employee_name: str):
 
     logger.info("==================================================")
-    logger.info("Starting Offboarding Knowledge Transfer Pipeline")
-    logger.info(f"Employee: {employee_name}")
-    logger.info(f"Input File: {input_file}")
-    logger.info(f"Output Directory: {output_dir}")
-
-    ensure_output_dir(output_dir)
+    logger.info(f"Starting Offboarding Pipeline for: {employee_name}")
 
     # --------------------------------------------------
-    # Step 1 — Load Repository Data
+    # Step 1 — Collect All Repo Data
     # --------------------------------------------------
 
-    logger.info("Loading repository data...")
-    if not os.path.exists(input_file):
-        raise FileNotFoundError(f"Input file not found: {input_file}")
+    repo_keys = list_all_repo_json_files()
 
-    with open(input_file, "r", encoding="utf-8") as f:
-        repo_data = json.load(f)
+    if not repo_keys:
+        raise ValueError("No repository JSON files found in S3.")
+
+    logger.info(f"Found {len(repo_keys)} repositories.")
 
     # --------------------------------------------------
-    # Step 2 — Aggregate Employee Data
+    # Step 1 & 2 — Extract Employee Data Repo-by-Repo
     # --------------------------------------------------
 
-    logger.info("Running EmployeeAggregator...")
-    employee_data = EmployeeAggregator.extract(repo_data, employee_name)
+    all_employee_data = []
 
-    if not employee_data:
+    for key in repo_keys:
+        repo_data = read_json_from_s3(key)
+
+        # Your aggregator expects dict per repo
+        if not isinstance(repo_data, dict):
+            logger.warning(f"Skipping invalid repo format: {key}")
+            continue
+
+        extracted = EmployeeAggregator.extract(repo_data, employee_name)
+
+        if extracted:
+            if isinstance(extracted, list):
+                all_employee_data.extend(extracted)
+            else:
+                all_employee_data.append(extracted)
+
+    if not all_employee_data:
         raise ValueError(f"No data found for employee: {employee_name}")
 
+    merged_employee_data = {
+        "prs": [],
+        "commits": [],
+        "files": []
+    }
+
+    for data in all_employee_data:
+        if not isinstance(data, dict):
+            continue
+
+        merged_employee_data["prs"].extend(data.get("prs", []))
+        merged_employee_data["commits"].extend(data.get("commits", []))
+        merged_employee_data["files"].extend(data.get("files", []))
+
+    if not merged_employee_data["prs"] and not merged_employee_data["commits"]:
+        logger.warning(f"No contribution data found for employee: {employee_name}")
+
+        merged_employee_data = {
+            "prs": [],
+            "commits": [],
+            "files": [],
+            "metadata": {
+                "employee": employee_name,
+                "note": "No contributions found in available repositories."
+            }
+        }
+
+
+    employee_data = merged_employee_data
+
+
+    # if not employee_data:
+    #     raise ValueError(f"No data found for employee: {employee_name}")
+
     # --------------------------------------------------
-    # Step 3 — Build Domains
+    # Step 3 — Domain Building
     # --------------------------------------------------
 
-    logger.info("Running DomainBuilder...")
     domains = DomainBuilder.build(employee_data)
 
     # --------------------------------------------------
-    # Step 4 — Attach Risk
+    # Step 4 — Risk Engine
     # --------------------------------------------------
 
-    logger.info("Running RiskEngine...")
     domains_with_risk = RiskEngine.attach(domains)
 
     # --------------------------------------------------
     # Step 5 — Prepare Generator Inputs
     # --------------------------------------------------
 
-    # FinalCall → Only HIGH & CRITICAL domains
     finalcall_input = [
         {
             "domain": d["domain"],
@@ -111,7 +190,6 @@ def run_pipeline(input_file: str, employee_name: str, output_dir: str):
         if d["risk_level"] in ["HIGH", "CRITICAL"]
     ]
 
-    # Handover → Ownership + Files + Structural signals
     handover_input = [
         {
             "domain": d["domain"],
@@ -122,7 +200,6 @@ def run_pipeline(input_file: str, employee_name: str, output_dir: str):
         for d in domains_with_risk
     ]
 
-    # Documentation → Architecture-only
     documentation_input = [
         {
             "domain": d["domain"],
@@ -136,71 +213,41 @@ def run_pipeline(input_file: str, employee_name: str, output_dir: str):
     # Step 6 — Generate Reports
     # --------------------------------------------------
 
-    logger.info("Running FinalCallGenerator...")
     finalcall_report = FinalCallGenerator().generate(finalcall_input)
-
-    logger.info("Running HandoverGenerator...")
     handover_report = HandoverGenerator().generate(handover_input)
-
-    logger.info("Running DocumentationGenerator...")
     documentation_report = DocumentationGenerator().generate(documentation_input)
 
     # --------------------------------------------------
-    # Step 7 — Save Outputs
+    # Step 7 — Upload to S3 (NO TIMESTAMP FOLDER)
     # --------------------------------------------------
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    base_output_path = f"{S3_OUTPUT_PREFIX}{employee_name}/"
 
-    finalcall_path = os.path.join(output_dir, f"finalcall.json")
-    handover_path = os.path.join(output_dir, f"handover.json")
-    documentation_path = os.path.join(output_dir, f"documentation.json")
+    upload_json_to_s3(finalcall_report, base_output_path + "finalcall.json")
+    upload_json_to_s3(handover_report, base_output_path + "handover.json")
+    upload_json_to_s3(documentation_report, base_output_path + "documentation.json")
 
-    logger.info("Saving reports...")
-
-    with open(finalcall_path, "w", encoding="utf-8") as f:
-        json.dump(finalcall_report, f, indent=4)
-
-    with open(handover_path, "w", encoding="utf-8") as f:
-        json.dump(handover_report, f, indent=4)
-
-    with open(documentation_path, "w", encoding="utf-8") as f:
-        json.dump(documentation_report, f, indent=4)
-
-    logger.info("All reports saved successfully.")
     logger.info("Pipeline completed successfully.")
-    logger.info("==================================================")
 
     return {
         "success": True,
         "employee": employee_name,
-        "files": {
-            "finalcall": finalcall_path,
-            "handover": handover_path,
-            "documentation": documentation_path
-        }
+        "s3_output_path": f"s3://{S3_BUCKET}/{base_output_path}"
     }
 
-
 # --------------------------------------------------
-# CLI ENTRY POINT (Used by FastAPI subprocess)
+# CLI ENTRY
 # --------------------------------------------------
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run Offboarding Knowledge Transfer Pipeline")
+    parser = argparse.ArgumentParser(description="Run Offboarding Pipeline from S3")
 
-    parser.add_argument("--input_file", required=True, help="Path to repository JSON file")
-    parser.add_argument("--employee_name", required=True, help="Employee username")
-    parser.add_argument("--output_dir", required=True, help="Directory to save outputs")
+    parser.add_argument("--employee_name", required=True)
 
     args = parser.parse_args()
 
     try:
-        result = run_pipeline(
-            input_file=args.input_file,
-            employee_name=args.employee_name,
-            output_dir=args.output_dir
-        )
-
+        result = run_pipeline(employee_name=args.employee_name)
         print(json.dumps(result))
         sys.exit(0)
 

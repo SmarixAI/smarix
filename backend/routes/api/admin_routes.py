@@ -741,9 +741,7 @@ def run_offboarding(steps_to_run: list = None, employee_name: str = None) -> Dic
         cmd = [
             sys.executable,
             str(pipeline_script),
-            "--input_file", str(input_file),
-            "--employee_name", employee_name,
-            "--output_dir", str(output_dir)
+            "--employee_name", employee_name
         ]
 
         result = subprocess.run(

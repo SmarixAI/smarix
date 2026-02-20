@@ -89,37 +89,22 @@ const readingGenerators: OnboardingGenerator[] = [
 const bugfixGenerators: OnboardingGenerator[] = [
   {
     id: "coding_questions",
-    name: "Coding Questions",
-    description: "Generates coding questions based on UI, features, and test cases",
+    name: "Coding Question Answers",
+    description: "Generates coding question answers based on UI, features, and test cases",
     icon: Code,
-    outputFile: "onboarding_coding_questions.json",
+    outputFile: "onboarding_coding_question_answers.json",
     category: "bugfix"
   },
   {
     id: "pr_tutorials",
     name: "PR Tutorials",
-    description: "Creates pull request tutorials and code review guides",
+    description: "Creates pull request tutorials and structured code review guides",
     icon: FileText,
     outputFile: "onboarding_pr_tutorials.json",
     category: "bugfix"
-  },
-  {
-    id: "challenge_solution",
-    name: "Challenge Solutions",
-    description: "Generates challenge solutions and coding problem answers",
-    icon: CheckCircle2,
-    outputFile: "onboarding_challenge_solution.json",
-    category: "bugfix"
-  },
-  {
-    id: "challenge_submitted_code",
-    name: "Challenge Submitted Code",
-    description: "Documents submitted code examples for challenges",
-    icon: FileText,
-    outputFile: "onboarding_challenge_submitted_code.json",
-    category: "bugfix"
   }
 ];
+
 
 const practiceGenerators: OnboardingGenerator[] = [
   {
@@ -191,12 +176,12 @@ const categories: OnboardingCategory[] = [
     generators: readingGenerators,
     outputDir: "onboarding_reading_data"
   },
-  {
-    id: "bugfix",
-    name: "BugFix",
-    icon: Bug,
-    generators: bugfixGenerators,
-    outputDir: "onboarding_bugfix_data"
+    {
+    id: "qna",
+    name: "QnA",
+    icon: MessageSquare,
+    generators: qnaGenerators,
+    outputDir: "onboarding_QnA_data"
   },
   {
     id: "practice",
@@ -206,11 +191,11 @@ const categories: OnboardingCategory[] = [
     outputDir: "onboarding_practice_data"
   },
   {
-    id: "qna",
-    name: "QnA",
-    icon: MessageSquare,
-    generators: qnaGenerators,
-    outputDir: "onboarding_QnA_data"
+    id: "bugfix",
+    name: "BugFix",
+    icon: Bug,
+    generators: bugfixGenerators,
+    outputDir: "onboarding_bugfix_data"
   }
 ];
 
