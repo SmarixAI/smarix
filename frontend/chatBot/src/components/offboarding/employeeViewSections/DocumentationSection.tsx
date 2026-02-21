@@ -541,7 +541,7 @@ export default function EmployeeDocumentationSection({
                                     Potential Improvements
                                   </p>
                                   <div className="space-y-2">
-                                    {ai.report?.improvements?.map((item, idx) => (
+                                    {Array.isArray(ai.report?.improvements) && ai.report.improvements.map((item, idx) => (
                                       <div key={idx} className="flex items-center gap-2 text-[10px] text-slate-600 font-bold bg-slate-50 p-2 rounded-lg border border-slate-100">
                                         <div className="w-1 h-1 rounded-full bg-slate-300" />
                                         {item}

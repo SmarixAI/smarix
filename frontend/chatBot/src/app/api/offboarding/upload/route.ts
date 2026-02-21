@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   try {
     const fileName = `${taskId}.txt`;
     const buffer = await readFileFromS3(employeeId, UPLOAD_SUBFOLDER, fileName);
-    return new NextResponse(buffer, {
+    return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
