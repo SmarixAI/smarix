@@ -4,7 +4,6 @@ import { Database, History, UserPlus, UserMinus, Users, LogOut, Key, ArrowLeftCi
 import { Space_Grotesk, Fira_Code } from 'next/font/google';
 import { useAuth } from "@/components/auth/AuthContext";
 import Image from 'next/image';
-import { useRouter } from "next/navigation";
 
 const spaceGrotesk = Space_Grotesk({ subsets: ['latin'] });
 const firaCode = Fira_Code({ subsets: ['latin'] });
@@ -21,12 +20,6 @@ export default function Sidebar({
   onOpenChangePassword,
 }: SidebarProps) {
   const { user, logout } = useAuth();
-
-  const router = useRouter();
-
-  const handleBack = () => {
-    router.push('dashboard')
-  }
 
   return (
     <aside className="w-80 flex-shrink-0 border-r border-gray-200 bg-white relative z-10 flex flex-col">
@@ -47,7 +40,7 @@ export default function Sidebar({
           </h2>
         </div>
         <p className={`${firaCode.className} text-sm text-[#0E1B2E]/60 ml-11`}>
-          Manager Dashboard
+          Admin Dashboard
         </p>
       </div>
 
@@ -73,11 +66,11 @@ export default function Sidebar({
                   <Key className="w-4 h-4" />
                 </button> */}
                 <button
-                  onClick={handleBack}
+                  onClick={logout}
                   className="p-2 rounded-lg hover:bg-red-50 transition-colors"
                   title="Logout"
                 >
-                  <ArrowLeftCircleIcon />
+                  <LogOut className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -132,7 +125,7 @@ export default function Sidebar({
             <UserPlus className={`w-5 h-5 ${activeView === "onboarding" ? "scale-110" : ""} transition-transform`} />
             <span className={`${spaceGrotesk.className} font-medium`}>Onboarding</span>
           </button>
-          {/* <button
+          <button
             onClick={() => setActiveView("offboarding")}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
               activeView === "offboarding"
@@ -142,7 +135,7 @@ export default function Sidebar({
           >
             <UserMinus className={`w-5 h-5 ${activeView === "offboarding" ? "scale-110" : ""} transition-transform`} />
             <span className={`${spaceGrotesk.className} font-medium`}>Offboarding</span>
-          </button> */}
+          </button>
         </div>
       </nav>
     </aside>

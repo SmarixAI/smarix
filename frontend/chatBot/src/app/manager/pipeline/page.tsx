@@ -650,8 +650,7 @@ export default function Pipeline() {
 
     setOffboardingRunning(true);
     setOffboardingStatus("running");
-    setOffboardingMessage(`Starting offboarding data generation for ${selectedSteps.length} step(s) for employee "${employeeName.trim()}"...`);
-
+    
     const startTime = Date.now();
 
     try {
@@ -811,7 +810,7 @@ export default function Pipeline() {
                 onRunOnboarding={handleOnboarding}
               />
             )}
-{/* 
+
             {activeView === "offboarding" && (
               <OffboardingView
                 darkMode={false}
@@ -820,7 +819,7 @@ export default function Pipeline() {
                 offboardingRunning={offboardingRunning}
                 onRunOffboarding={handleOffboarding}
               />
-            )} */}
+            )}
 
             {activeView === "users" && (
               <UserManagementView darkMode={false} />

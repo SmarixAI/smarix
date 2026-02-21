@@ -4,7 +4,7 @@ Contains all admin endpoints and WebSocket handlers
 """
 
 from datetime import datetime
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Body, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 from pathlib import Path
@@ -65,8 +65,8 @@ class OnboardingRequest(BaseModel):
 
 
 class OffboardingRequest(BaseModel):
-    steps: Optional[List[str]] = None
-    employee_name: str
+    steps: Optional[List[str]] = None  # Ignored: pipeline runs all steps for single user
+    employee_name: Optional[str] = None  # Ignored: user is derived from GitHub data (top contributor)
 
 
 class CreateUserRequest(BaseModel):
@@ -719,121 +719,54 @@ def run_onboarding(generators_to_run: list = None) -> Dict[str, Any]:
 
 
 def run_offboarding(steps_to_run: list = None, employee_name: str = None) -> Dict[str, Any]:
-    """Run offboarding data generation"""
     try:
+        if not employee_name:
+            return {"success": False, "error": "Employee name is required"}
+
         import sys
         from pathlib import Path
-        
-        # Add the main directory to path
+
         repo_root = Path(__file__).resolve().parent.parent.parent
-        if str(repo_root) not in sys.path:
-            sys.path.insert(0, str(repo_root))
-        
-        # Get the offboarding script path
-        offboarding_script = repo_root / "main" / "Offboarding" / "generateOffboardingData.py"
-        
-        if not offboarding_script.exists():
-            return {"success": False, "error": f"Offboarding script not found: {offboarding_script}"}
-        
-        # Run the offboarding script with better error capture
-        # Set UTF-8 encoding for Windows compatibility (handles emoji characters)
-        env = os.environ.copy()
-        env['PYTHONIOENCODING'] = 'utf-8'
-        env['PYTHONUTF8'] = '1'
-        
-        # Build command with selected steps if provided
-        cmd = [sys.executable, str(offboarding_script)]
-        if steps_to_run:
-            cmd.extend(['--steps'] + steps_to_run)
-        if employee_name:
-            cmd.extend(['--employee', employee_name])
-        
+
+        pipeline_script = repo_root / "main" / "Offboarding" / "new_logic" / "run_offboarding_pipeline.py"
+
+        if not pipeline_script.exists():
+            return {"success": False, "error": f"Pipeline not found: {pipeline_script}"}
+
+        # Adjust this path according to your repo data location
+        input_file = Path("/Users/vishalkeshari/Desktop/smarix/backend/data/DataCollectionFromGit/CCExtractor/taskwarrior-flutter/taskwarrior-flutter.json")
+        output_dir = repo_root / "data" / "Offboarding" / employee_name
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        cmd = [
+            sys.executable,
+            str(pipeline_script),
+            "--employee_name", employee_name
+        ]
+
         result = subprocess.run(
             cmd,
-            cwd=str(offboarding_script.parent),
             capture_output=True,
             text=True,
-            encoding='utf-8',
-            errors='replace',  # Replace problematic characters instead of failing
-            timeout=3600,  # 1 hour timeout
-            env=env
+            timeout=3600
         )
-        
-        # Get output for debugging
-        stdout_output = result.stdout if result.stdout else ""
-        stderr_output = result.stderr if result.stderr else ""
-        
+
         if result.returncode == 0:
-            # Check if output files were created
-            output_dir = repo_root / "data" / "Offboarding"
-            
-            # Map step IDs to their expected output files
-            STEP_TO_OUTPUT_FILE = {
-                "extract_users": "1employees_with_ids.json",
-                "extract_files": "2employee_changed_files.json",
-                "add_criticality": "3employee_prs_with_criticality.json",
-                "add_metadata": "4employee_tasks_with_metadata_finalCallData.json",
-                "generate_handovers": "5employee_handovers.json",
-                "generate_documents": "6employee_documents.json"
-            }
-            
-            # Determine which files to check based on selected steps
-            if steps_to_run:
-                expected_files = [STEP_TO_OUTPUT_FILE[step] for step in steps_to_run if step in STEP_TO_OUTPUT_FILE]
-            else:
-                # If no steps specified, check all files (backward compatibility)
-                expected_files = list(STEP_TO_OUTPUT_FILE.values())
-            
-            created_files = []
-            for filename in expected_files:
-                if (output_dir / filename).exists():
-                    created_files.append(filename)
-            
-            # Build success message
-            if steps_to_run:
-                message = f"Successfully generated offboarding data ({len(created_files)}/{len(expected_files)} files) for {len(steps_to_run)} selected step(s)"
-            else:
-                message = f"Successfully generated offboarding data ({len(created_files)}/{len(expected_files)} files)"
-            
             return {
                 "success": True,
-                "message": message,
-                "output_files": created_files,
-                "output_dir": str(output_dir),
-                "steps_run": steps_to_run if steps_to_run else "all",
-                "expected_steps": len(expected_files)
+                "message": f"Offboarding pipeline executed successfully for {employee_name}",
+                "output_dir": str(output_dir)
             }
         else:
-            # Return detailed error information
-            error_msg = f"Offboarding script failed with exit code {result.returncode}"
-            if stderr_output:
-                # Get last few lines of stderr for context
-                stderr_lines = stderr_output.strip().split('\n')
-                last_error = '\n'.join(stderr_lines[-10:])  # Last 10 lines
-                error_msg += f"\n\nError output:\n{last_error}"
-            elif stdout_output:
-                # Sometimes errors go to stdout
-                stdout_lines = stdout_output.strip().split('\n')
-                last_output = '\n'.join(stdout_lines[-10:])  # Last 10 lines
-                error_msg += f"\n\nLast output:\n{last_output}"
-            
             return {
                 "success": False,
-                "error": error_msg,
-                "exit_code": result.returncode,
-                "stderr_preview": stderr_output[:1000] if stderr_output else None,
-                "stdout_preview": stdout_output[:1000] if stdout_output else None
+                "error": result.stderr or result.stdout
             }
+
     except subprocess.TimeoutExpired:
-        return {"success": False, "error": "Offboarding process timed out after 1 hour"}
+        return {"success": False, "error": "Pipeline timed out"}
     except Exception as e:
-        import traceback
-        error_trace = traceback.format_exc()
-        return {
-            "success": False,
-            "error": f"Exception while running offboarding: {str(e)}",
-            "traceback": error_trace
-        }
+        return {"success": False, "error": str(e)}
 
 
 def verify_employee_exists(employee_name: str) -> Dict[str, Any]:
@@ -1032,30 +965,13 @@ async def admin_onboarding(request: OnboardingRequest = None):
 
 
 @router.post("/admin/offboarding/run", response_model=SetupResponse)
-async def admin_offboarding(request: OffboardingRequest):
-    """Run offboarding data generation"""
+async def admin_offboarding(request: OffboardingRequest = Body(...)):
     try:
-        if not request:
-            raise HTTPException(status_code=400, detail="Request body is required")
-        
-        steps = request.steps
-        employee_name = request.employee_name
-        
-        if not employee_name or not employee_name.strip():
-            raise HTTPException(
-                status_code=400,
-                detail="Employee name is required and cannot be empty"
-            )
-        
-        # Verify employee exists
-        verification = verify_employee_exists(employee_name.strip())
-        if not verification.get("exists"):
-            raise HTTPException(
-                status_code=404,
-                detail=verification.get("error", f"Employee '{employee_name}' not found")
-            )
-        
-        result = run_offboarding(steps, employee_name.strip())
+        if not request.employee_name:
+            raise HTTPException(status_code=400, detail="Employee name required")
+
+        result = run_offboarding(employee_name=request.employee_name)
+
         if result["success"]:
             return SetupResponse(
                 status="success",
@@ -1064,11 +980,13 @@ async def admin_offboarding(request: OffboardingRequest):
                 details=result
             )
         else:
-            raise HTTPException(status_code=500, detail=result.get("error", "Offboarding generation failed"))
+            raise HTTPException(status_code=500, detail=result.get("error"))
+
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 
 # ==================== ADMIN HISTORY ENDPOINTS ====================

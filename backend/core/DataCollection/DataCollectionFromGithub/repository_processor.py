@@ -350,8 +350,31 @@ class AsyncRepositoryProcessor:
         prs_map = {}
         for pr in prs_raw:
             normalized_pr = self.normalizer._normalize_pr(pr)
-            prs_map[pr.get("number")] = normalized_pr["metadata"]  # Full enrichment preserved
-        print(f"   ✓ Collected {len(prs_map)} PRs with files & reviews")
+
+            pr_metadata = normalized_pr.get("metadata", {})
+
+            # Core PR fields
+            pr_metadata["number"] = pr.get("number")
+            pr_metadata["state"] = pr.get("state")
+            pr_metadata["title"] = pr.get("title")
+            pr_metadata["body"] = pr.get("body")
+            pr_metadata["author"] = pr.get("user", {}).get("login")
+            pr_metadata["created_at"] = pr.get("created_at")
+            pr_metadata["merged_at"] = pr.get("merged_at")
+            pr_metadata["closed_at"] = pr.get("closed_at")
+            merged_by = pr.get("merged_by")
+            pr_metadata["merged_by"] = merged_by.get("login") if merged_by else None
+            pr_metadata["merge_commit_sha"] = pr.get("merge_commit_sha")
+
+            # 🚨 IMPORTANT — Preserve enriched fields
+            pr_metadata["changed_files"] = pr.get("changed_files", [])
+            pr_metadata["review_comments"] = pr.get("review_comments", [])
+            pr_metadata["line_comments"] = pr.get("line_comments", [])
+            pr_metadata["commits_data"] = pr.get("commits_data", [])
+
+            prs_map[pr.get("number")] = pr_metadata
+
+
         
         # Bidirectional linking (minimal - github_client/normalizer already extracts most)
         for pr_num, pr_data in prs_map.items():
@@ -378,11 +401,18 @@ class AsyncRepositoryProcessor:
                 "message": c.get("message", "").strip(),
                 "author": c.get("author", {}),
                 "date": c.get("date"),
+                "files": c.get("files", []),  # IMPORTANT
+                "additions": c.get("additions"),
+                "deletions": c.get("deletions"),
             }
             for c in commits_raw
         ]
         repo_data["stats"]["commits_count"] = len(commits_raw)
         print(f"   ✓ Collected {len(commits_raw)} commits")
+
+        print("DEBUG PR SAMPLE:")
+        print(json.dumps(prs_raw[0], indent=2))
+
 
     async def _add_developer_and_activity_summary_async(
         self, owner: str, repo: str, repo_data: Dict, github_client: AsyncGitHubClient
@@ -392,29 +422,55 @@ class AsyncRepositoryProcessor:
         file_ownership = defaultdict(lambda: defaultdict(int))
         todos_detected = []
 
+        employee_knowledge_map = defaultdict(lambda: {
+            "prs": [],
+            "commits": [],
+            "files": set(),
+            "total_additions": 0,
+            "total_deletions": 0,
+            "directories": set(),
+            "file_types": defaultdict(int),
+        })
+
+
         # Process commits
         for commit in repo_data["commits"]:
             author = commit.get("author", {}).get("name", "unknown")
             developer_summary[author]["commits"] += 1
+            employee_knowledge_map[author]["commits"].append(commit.get("sha"))
+
 
         # Process PRs
         for pr in repo_data["prs"]:
-            author = pr.get("user", {}).get("login", "unknown")
+            author = pr.get("author", "unknown")
             developer_summary[author]["prs"] += 1
 
-            # File ownership from PR changed files
+            employee_knowledge_map[author]["prs"].append(pr.get("number"))
+
             for file_item in pr.get("changed_files", []):
-                filename = (
-                    file_item.get("filename")
-                    if isinstance(file_item, dict)
-                    else file_item
-                )
-                if filename:
-                    file_ownership[filename][author] += 1
+                if not isinstance(file_item, dict):
+                    continue
+
+                filename = file_item.get("filename")
+                if not filename:
+                    continue
+
+                employee_knowledge_map[author]["files"].add(filename)
+                employee_knowledge_map[author]["total_additions"] += file_item.get("additions", 0)
+                employee_knowledge_map[author]["total_deletions"] += file_item.get("deletions", 0)
+
+                if "/" in filename:
+                    directory = filename.split("/")[0]
+                    employee_knowledge_map[author]["directories"].add(directory)
+
+                if "." in filename:
+                    ext = filename.split(".")[-1]
+                    employee_knowledge_map[author]["file_types"][ext] += 1
+
 
         # Process issues
         for issue in repo_data["issues"]:
-            user = issue.get("user", {}).get("login", "unknown")
+            user = issue.get("author", "unknown")
             developer_summary[user]["issues"] += 1
 
         # Detect TODOs
@@ -428,6 +484,16 @@ class AsyncRepositoryProcessor:
         contributors_task = github_client.get_contributors_activity(owner, repo)
 
         branches, contributors = await asyncio.gather(branches_task, contributors_task)
+
+        # Convert sets to lists for JSON serialization
+        for author, data in employee_knowledge_map.items():
+            data["files"] = list(data["files"])
+            data["directories"] = list(data["directories"])
+            data["file_types"] = dict(data["file_types"])
+
+        repo_data["offboarding"]["employee_knowledge_map"] = dict(employee_knowledge_map)
+
+
 
         # Build response
         repo_data["developer_summary"] = {
@@ -525,15 +591,34 @@ class AsyncRepositoryProcessor:
             "knowledge_signals": tag_counts.get("knowledge", 0),
         }
 
+    # def save_repository_data(
+    #     self, repo_data: Dict[str, Any], owner: str, repo: str
+    # ) -> str:
+    #     """Save repository data to S3 (no local file)"""
+    #     s3_key = f"DataCollectionFromGit/{owner}/{repo}/{repo}.json"
+
+    #     s3_manager.upload_json(repo_data, s3_key, public_read=False)
+
+    #     return s3_key
+
     def save_repository_data(
         self, repo_data: Dict[str, Any], owner: str, repo: str
     ) -> str:
-        """Save repository data to S3 (no local file)"""
-        s3_key = f"DataCollectionFromGit/{owner}/{repo}/{repo}.json"
+        """Save repository data locally as JSON"""
 
-        s3_manager.upload_json(repo_data, s3_key, public_read=False)
+        # Create directory structure
+        base_dir = Path("local_repo_data") / owner / repo
+        base_dir.mkdir(parents=True, exist_ok=True)
 
-        return s3_key
+        # File path
+        file_path = base_dir / f"{repo}.json"
+
+        # Save JSON
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(repo_data, f, indent=2, ensure_ascii=False)
+
+        return str(file_path)
+
 
     def _find_original_file_path(self, duplicate_file: Dict, repo_data: Dict) -> str:
         """Find original file path (UNCHANGED)"""

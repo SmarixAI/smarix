@@ -138,20 +138,14 @@ export default function FinalCallSection({
     setUpdateCounter(0);
     setLoading(true);
 
+    if (!employeeId?.trim()) {
+      setLoading(false);
+      return;
+    }
+
     const fetchData = async () => {
       try {
-        const empResponse = await fetch("/api/offboarding/employees");
-        if (empResponse.ok) {
-          const empData = await empResponse.json();
-          const employee = empData.employees?.find(
-            (e: any) => e.employeeId === employeeId
-          );
-          if (employee) {
-            setEmployeeStatus(employee.status || "active");
-          }
-        }
-
-        const response = await fetch("/api/offboarding/tasks");
+        const response = await fetch(`/api/offboarding/tasks?employeeId=${encodeURIComponent(employeeId)}`);
         if (!response.ok) {
           console.error("Failed to fetch tasks data");
           setLoading(false);
@@ -251,7 +245,7 @@ export default function FinalCallSection({
     setUpdateCounter((prev) => prev + 1);
 
     try {
-      const response = await fetch("/api/offboarding/tasks", {
+      const response = await fetch(`/api/offboarding/tasks?employeeId=${encodeURIComponent(employeeId)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -312,7 +306,7 @@ export default function FinalCallSection({
     setUpdateCounter((prev) => prev + 1);
 
     try {
-      const response = await fetch("/api/offboarding/tasks", {
+      const response = await fetch(`/api/offboarding/tasks?employeeId=${encodeURIComponent(employeeId)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -379,7 +373,7 @@ export default function FinalCallSection({
     setNewPriority("Medium");
 
     try {
-      const response = await fetch("/api/offboarding/tasks", {
+      const response = await fetch(`/api/offboarding/tasks?employeeId=${encodeURIComponent(employeeId)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -1,6 +1,7 @@
-
 import json
 import os
+import sys
+from datetime import date
 from pathlib import Path
 from collections import defaultdict
 from difflib import SequenceMatcher
@@ -10,6 +11,22 @@ from dotenv import load_dotenv
 # Load environment variables from backend/.env
 env_path = Path(__file__).parent.parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
+
+# ---------------------------------------------------------------------------
+# Single-user offboarding config: GitHub repo data path (used to derive the
+# one employee = top contributor). All offboarding runs for this user only.
+# ---------------------------------------------------------------------------
+_BACKEND_ROOT = Path(__file__).resolve().parent.parent.parent
+_REPO_ROOT = _BACKEND_ROOT.parent
+# GitHub repo JSON from data collection (change path if your file is elsewhere)
+GITHUB_REPO_JSON_PATH = (
+    _BACKEND_ROOT / "data" / "DataCollectionFromGit" / "CCExtractor" / "taskwarrior-flutter" / "taskwarrior-flutter.json"
+)
+if not GITHUB_REPO_JSON_PATH.exists():
+    GITHUB_REPO_JSON_PATH = _REPO_ROOT / "data" / "DataCollectionFromGit" / "CCExtractor" / "taskwarrior-flutter" / "taskwarrior-flutter.json"
+OFFBOARDING_OUTPUT_DIR = _BACKEND_ROOT / "data" / "Offboarding"
+if not OFFBOARDING_OUTPUT_DIR.exists():
+    OFFBOARDING_OUTPUT_DIR = _REPO_ROOT / "data" / "Offboarding"
 
 # Initialize OpenAI client with API key from .env
 api_key = os.getenv("OPENAI_API_KEY")
@@ -1039,287 +1056,223 @@ def generate_knowledge_transfer_tasks(repo_data, use_ai=False, all_contributors=
         }
     }
 
-# Main execution
-if __name__ == "__main__":
-    print("Knowledge Transfer Task Generator")
-    print("=" * 50)
+def _load_employee_data(file_path):
+    """Load existing employee data from file, return empty structure if file doesn't exist"""
+    if file_path.exists():
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                if 'employees' in data:
+                    return data
+        except Exception as e:
+            print(f"⚠️  Warning: Could not load existing data from {file_path}: {e}")
+    return {"employees": []}
 
-    # Define paths
-    #C:\Users\vishalke\smarix\backend\data\DataCollectionFromGit\CCExtractor\taskwarrior-flutter\taskwarrior-flutter.json
-    input_file = Path(r"C:\Users\vishalke\smarix\backend\data\DataCollectionFromGit\CCExtractor\taskwarrior-flutter\taskwarrior-flutter.json")
-    output_dir = Path(r"C:\Users\vishalke\smarix\backend\data\Offboarding")
-    
-    # Create output directory if it doesn't exist
+
+def _save_employee_data(file_path, employee_name, employee_data):
+    """Save employee data (single employee; overwrites previous entry for same name)."""
+    existing_data = _load_employee_data(file_path)
+    existing_data["employees"] = [
+        emp for emp in existing_data["employees"]
+        if emp.get("employee_name") != employee_name
+    ]
+    new_entry = {"employee_name": employee_name, **employee_data}
+    existing_data["employees"].append(new_entry)
+    with open(file_path, "w", encoding='utf-8') as f:
+        json.dump(existing_data, f, indent=2, ensure_ascii=False)
+
+
+def _save_handover_file(employee_dir, employee_name, employee_id, handover_result):
+    """Save handover_tasks.json in employee folder (shape expected by API)."""
+    tasks = handover_result.get("tasks", [])
+    handovers = []
+    for idx, task in enumerate(tasks):
+        priority = (task.get("priority") or "Medium").capitalize()
+        if priority and len(priority) > 1:
+            priority = priority[0].upper() + priority[1:].lower()
+        handovers.append({
+            "id": task.get("taskId") or f"HO{idx + 1}",
+            "item": task.get("title", ""),
+            "currentOwner": employee_name,
+            "newOwner": task.get("suggested_recipient", ""),
+            "priority": priority or "Medium",
+            "status": "Pending",
+            "ktType": task.get("knowledge_type", []),
+            "lastUpdated": date.today().isoformat(),
+            "description": task.get("description"),
+            "questions": task.get("questions"),
+            "reference": task.get("reference"),
+            "suggested_recipient": task.get("suggested_recipient"),
+            "suggested_recipient_reason": task.get("suggested_recipient_reason"),
+        })
+    data = {"employees": [{"employeeId": employee_id, "employee_name": employee_name, "handovers": handovers}]}
+    path = employee_dir / "handover_tasks.json"
+    with open(path, "w", encoding='utf-8') as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+    print(f"✓ Saved {path}")
+
+
+def _save_documentation_file(employee_dir, employee_name, employee_id, doc_result):
+    """Save documentation_tasks.json in employee folder (shape expected by API)."""
+    tasks = doc_result.get("tasks", [])
+    documents = []
+    for idx, task in enumerate(tasks):
+        priority = (task.get("priority") or "Medium").capitalize()
+        if priority and len(priority) > 1:
+            priority = priority[0].upper() + priority[1:].lower()
+        documents.append({
+            "id": task.get("taskId") or f"DOC{idx + 1}",
+            "name": task.get("title", ""),
+            "status": "Missing",
+            "priority": priority or "Medium",
+            "owner": employee_name,
+            "aiFollowUp": task.get("ai_analyzed", False),
+            "lastUpdated": date.today().isoformat(),
+            "description": task.get("description"),
+            "questions": task.get("questions"),
+            "reference": task.get("reference"),
+        })
+    data = {"employees": [{"employeeId": employee_id, "employee_name": employee_name, "documents": documents}]}
+    path = employee_dir / "documentation_tasks.json"
+    with open(path, "w", encoding='utf-8') as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+    print(f"✓ Saved {path}")
+
+
+def _get_employee_id_from_name(employee_name):
+    """Try to get employeeId from users.json, otherwise use name as fallback"""
+    try:
+        users_file = _BACKEND_ROOT / "data" / "Admin" / "users.json"
+        if not users_file.exists():
+            users_file = _REPO_ROOT / "backend" / "data" / "Admin" / "users.json"
+        if users_file.exists():
+            with open(users_file, 'r', encoding='utf-8') as f:
+                users_data = json.load(f)
+                for user in users_data.get('users', []):
+                    if (user.get('name') or '').lower() == employee_name.lower() or \
+                       (user.get('username') or '').lower() == employee_name.lower():
+                        return user.get('employeeId') or employee_name
+    except Exception as e:
+        print(f"  ⚠️  Could not load users.json: {e}")
+    return employee_name
+
+
+def _convert_task_to_frontend_format(task, source='AI'):
+    """Convert our task format to frontend expected format"""
+    priority_map = {'critical': 'High', 'high': 'High', 'medium': 'Medium', 'low': 'Low'}
+    tags = task.get('knowledge_type', []) or ['AI Generated']
+    frontend_task = {
+        'id': task.get('taskId', ''),
+        'title': task.get('title') or task.get('description', ''),
+        'description': task.get('description', ''),
+        'priority': priority_map.get((task.get('priority') or 'low').lower(), 'Medium'),
+        'tags': tags,
+        'source': source
+    }
+    for key in ('reference', 'questions', 'estimated_time_minutes', 'knowledge_capture_method',
+                'suggested_recipient', 'suggested_recipient_reason', 'ai_analyzed'):
+        if key in task:
+            frontend_task[key] = task[key]
+    return frontend_task
+
+
+def _save_frontend_format_file(employee_dir, employee_name, employee_id, result):
+    """Save tasks in the format expected by the frontend (single employee) to employee_dir/tasks.json."""
+    ai_tasks = []
+    for task in result['final_call_tasks']['tasks']:
+        ai_tasks.append(_convert_task_to_frontend_format(task, 'AI'))
+    for task in result['handover_tasks']['tasks']:
+        ai_tasks.append(_convert_task_to_frontend_format(task, 'AI'))
+    for task in result['documentation_tasks']['tasks']:
+        ai_tasks.append(_convert_task_to_frontend_format(task, 'AI'))
+    frontend_file = employee_dir / "tasks.json"
+    data = {
+        "data": {
+            "employees": [{
+                "employeeId": employee_id,
+                "employee_name": employee_name,
+                "tasks": {"ai": ai_tasks, "manager": []}
+            }]
+        }
+    }
+    with open(frontend_file, "w", encoding='utf-8') as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+    print(f"✓ Saved {frontend_file} (Employee: {employee_name}, ID: {employee_id}, Tasks: {len(ai_tasks)})")
+
+
+def run_single_user_offboarding(repo_json_path=None, output_dir=None):
+    """
+    Run offboarding data generation for a single user derived from GitHub repo data.
+    The user is the top contributor in the repo JSON. Paths are hardcoded by default.
+    Returns True on success, False on failure.
+    """
+    input_file = Path(repo_json_path) if repo_json_path else GITHUB_REPO_JSON_PATH
+    output_dir = Path(output_dir) if output_dir else OFFBOARDING_OUTPUT_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Load the repository data
-    print(f"\nLoading repository data from {input_file}...")
+    print("Knowledge Transfer Task Generator (single user from GitHub data)")
+    print("=" * 50)
+    print(f"Repo data: {input_file}")
+    print(f"Output dir: {output_dir}")
+
+    if not input_file.exists():
+        print(f"✗ Error: {input_file} not found")
+        return False
+
     try:
         repo_data = load_repo_data(str(input_file))
-        print(f"✓ Successfully loaded repository data")
-    except FileNotFoundError:
-        print(f"✗ Error: {input_file} not found")
-        exit(1)
+        print("✓ Loaded repository data")
     except Exception as e:
         print(f"✗ Error loading data: {e}")
-        exit(1)
+        return False
 
-    # Find top contributor
-    print("\nFinding user with most contributions...")
     top_contributor_result = find_top_contributor(repo_data)
     if not top_contributor_result or top_contributor_result[0] is None:
         print("✗ Error: No contributors found in repository data")
-        exit(1)
-    
-    top_contributor_name, top_contributor_stats, all_contributors = top_contributor_result
-    print(f"✓ Top contributor: {top_contributor_name}")
-    print(f"  Commits: {top_contributor_stats['commits']}, PRs: {top_contributor_stats['prs']}, Total: {top_contributor_stats['total']}")
-    print(f"  Total contributors in repository: {len(all_contributors)}")
+        return False
 
-    # Filter data to only include top contributor's contributions
-    print(f"\nFiltering data for {top_contributor_name}...")
+    top_contributor_name, top_contributor_stats, all_contributors = top_contributor_result
+    print(f"✓ Single user (top contributor): {top_contributor_name}")
+    print(f"  Commits: {top_contributor_stats['commits']}, PRs: {top_contributor_stats['prs']}")
+
     filtered_data = filter_data_by_contributor(repo_data, top_contributor_name)
     print(f"✓ Filtered data: {len(filtered_data['code_files'])} code files, "
           f"{len(filtered_data['documentation'])} docs, {len(filtered_data['pull_requests'])} PRs")
 
-    # Check for OpenAI API key
     use_ai = api_key is not None and client is not None
     if use_ai:
-        print("✓ OpenAI API key detected - will use AI-enhanced descriptions")
+        print("✓ Using AI-enhanced descriptions")
     else:
-        print("ℹ No OpenAI API key found - using standard descriptions")
-        print("  (Set OPENAI_API_KEY in .env file to enable AI features)")
+        print("ℹ No OPENAI_API_KEY - using standard descriptions")
 
-    # Generate tasks
-    print("\nGenerating knowledge transfer tasks...")
     result = generate_knowledge_transfer_tasks(
-        filtered_data, 
-        use_ai=use_ai, 
+        filtered_data,
+        use_ai=use_ai,
         all_contributors=all_contributors,
         employee_name=top_contributor_name
     )
 
-    # Helper function to load existing employee data
-    def load_employee_data(file_path):
-        """Load existing employee data from file, return empty structure if file doesn't exist"""
-        if file_path.exists():
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    # Ensure it has the expected structure
-                    if 'employees' in data:
-                        return data
-            except Exception as e:
-                print(f"⚠️  Warning: Could not load existing data from {file_path}: {e}")
-        return {"employees": []}
-
-    # Helper function to save employee data
-    def save_employee_data(file_path, employee_name, employee_data):
-        """Save employee data, appending to existing data if file exists"""
-        existing_data = load_employee_data(file_path)
-        
-        # Check if employee already exists and remove old entry
-        existing_data["employees"] = [
-            emp for emp in existing_data["employees"] 
-            if emp.get("employee_name") != employee_name
-        ]
-        
-        # Add new employee data
-        new_employee_entry = {
-            "employee_name": employee_name,
-            **employee_data
-        }
-        
-        existing_data["employees"].append(new_employee_entry)
-        
-        # Save updated data
-        with open(file_path, "w", encoding='utf-8') as f:
-            json.dump(existing_data, f, indent=2, ensure_ascii=False)
-
-    # Helper function to get employeeId from users.json
-    def get_employee_id_from_name(employee_name):
-        """Try to get employeeId from users.json, otherwise use name as fallback"""
-        try:
-            repo_root = Path(__file__).resolve().parent.parent.parent
-            users_file = repo_root / "data" / "Admin" / "users.json"
-            
-            if not users_file.exists():
-                possible_paths = [
-                    repo_root / "backend" / "data" / "Admin" / "users.json",
-                    Path(r"C:\Users\vishalke\smarix\backend\data\Admin\users.json"),
-                ]
-                for path in possible_paths:
-                    if path.exists():
-                        users_file = path
-                        break
-            
-            if users_file.exists():
-                with open(users_file, 'r', encoding='utf-8') as f:
-                    users_data = json.load(f)
-                    users = users_data.get('users', [])
-                    for user in users:
-                        if user.get('name', '').lower() == employee_name.lower() or \
-                           user.get('username', '').lower() == employee_name.lower():
-                            return user.get('employeeId') or employee_name
-        except Exception as e:
-            print(f"  ⚠️  Could not load users.json: {e}")
-        
-        # Fallback: use name as employeeId
-        return employee_name
-
-    # Helper function to convert task to frontend format
-    def convert_task_to_frontend_format(task, source='AI'):
-        """Convert our task format to frontend expected format"""
-        # Map priority from lowercase to capitalized
-        priority_map = {
-            'critical': 'High',
-            'high': 'High',
-            'medium': 'Medium',
-            'low': 'Low'
-        }
-        
-        # Extract tags from knowledge_type or other fields
-        tags = task.get('knowledge_type', [])
-        if not tags:
-            tags = ['AI Generated']
-        
-        # Use short title if available, otherwise fall back to description
-        task_title = task.get('title') or task.get('description', '')
-        task_description = task.get('description', '')
-        
-        # Build frontend task
-        frontend_task = {
-            'id': task.get('taskId', ''),
-            'title': task_title,  # Short title for display
-            'description': task_description,  # Full description for expanded view
-            'priority': priority_map.get(task.get('priority', 'low').lower(), 'Medium'),
-            'tags': tags,
-            'source': source
-        }
-        
-        # Add optional fields if they exist
-        if 'reference' in task:
-            frontend_task['reference'] = task['reference']
-        if 'questions' in task:
-            frontend_task['questions'] = task['questions']
-        if 'estimated_time_minutes' in task:
-            frontend_task['estimated_time_minutes'] = task['estimated_time_minutes']
-        if 'knowledge_capture_method' in task:
-            frontend_task['knowledge_capture_method'] = task['knowledge_capture_method']
-        if 'suggested_recipient' in task:
-            frontend_task['suggested_recipient'] = task['suggested_recipient']
-        if 'suggested_recipient_reason' in task:
-            frontend_task['suggested_recipient_reason'] = task['suggested_recipient_reason']
-        if 'ai_analyzed' in task:
-            frontend_task['ai_analyzed'] = task['ai_analyzed']
-        
-        return frontend_task
-
-    # Helper function to save frontend format file
-    def save_frontend_format_file(output_dir, employee_name, result):
-        """Save tasks in the format expected by the frontend"""
-        employee_id = get_employee_id_from_name(employee_name)
-        
-        # Convert all tasks to frontend format
-        ai_tasks = []
-        
-        # Add final call tasks
-        for task in result['final_call_tasks']['tasks']:
-            ai_tasks.append(convert_task_to_frontend_format(task, 'AI'))
-        
-        # Add handover tasks
-        for task in result['handover_tasks']['tasks']:
-            ai_tasks.append(convert_task_to_frontend_format(task, 'AI'))
-        
-        # Add documentation tasks
-        for task in result['documentation_tasks']['tasks']:
-            ai_tasks.append(convert_task_to_frontend_format(task, 'AI'))
-        
-        # Load existing file if it exists
-        frontend_file = output_dir / "4employee_tasks_with_metadata_finalCallData.json"
-        existing_data = {"employees": []}
-        
-        if frontend_file.exists():
-            try:
-                with open(frontend_file, 'r', encoding='utf-8') as f:
-                    existing_data = json.load(f)
-                    if 'employees' not in existing_data:
-                        existing_data = {"employees": []}
-            except Exception as e:
-                print(f"  ⚠️  Could not load existing frontend file: {e}")
-        
-        # Remove existing entry for this employee
-        existing_data["employees"] = [
-            emp for emp in existing_data["employees"] 
-            if emp.get("employeeId") != employee_id and emp.get("employee_name") != employee_name
-        ]
-        
-        # Create new employee entry
-        new_employee_entry = {
-            "employeeId": employee_id,
-            "employee_name": employee_name,  # Keep for backward compatibility
-            "tasks": {
-                "ai": ai_tasks,
-                "manager": []  # Empty manager tasks array
-            }
-        }
-        
-        existing_data["employees"].append(new_employee_entry)
-        
-        # Save to file
-        with open(frontend_file, "w", encoding='utf-8') as f:
-            json.dump(existing_data, f, indent=2, ensure_ascii=False)
-        
-        print(f"✓ Saved {frontend_file} (Employee: {employee_name}, ID: {employee_id}, Tasks: {len(ai_tasks)})")
-
-    # Save to separate JSON files with employee name included
-    print("\nSaving task lists...")
-    final_call_path = output_dir / "final_call_tasks.json"
-    save_employee_data(
-        final_call_path,
-        top_contributor_name,
-        {"final_call_tasks": result["final_call_tasks"]}
-    )
-    print(f"✓ Saved {final_call_path} (Employee: {top_contributor_name})")
-
-    handover_path = output_dir / "handover_tasks.json"
-    save_employee_data(
-        handover_path,
-        top_contributor_name,
-        {"handover_tasks": result["handover_tasks"]}
-    )
-    print(f"✓ Saved {handover_path} (Employee: {top_contributor_name})")
-
-    documentation_path = output_dir / "documentation_tasks.json"
-    save_employee_data(
-        documentation_path,
-        top_contributor_name,
-        {"documentation_tasks": result["documentation_tasks"]}
-    )
-    print(f"✓ Saved {documentation_path} (Employee: {top_contributor_name})")
-    
-    # Save in frontend format
-    print("\nSaving frontend format file...")
-    save_frontend_format_file(output_dir, top_contributor_name, result)
+    employee_id = _get_employee_id_from_name(top_contributor_name)
+    employee_dir = output_dir / str(employee_id)
+    employee_dir.mkdir(parents=True, exist_ok=True)
+    print(f"\nSaving task lists to {employee_dir}...")
+    _save_employee_data(employee_dir / "final_call_tasks.json", top_contributor_name, {"final_call_tasks": result["final_call_tasks"]})
+    _save_handover_file(employee_dir, top_contributor_name, employee_id, result["handover_tasks"])
+    _save_documentation_file(employee_dir, top_contributor_name, employee_id, result["documentation_tasks"])
+    _save_frontend_format_file(employee_dir, top_contributor_name, employee_id, result)
 
     print("\n" + "=" * 50)
-    print("Task Generation Summary:")
+    print("Summary:")
     print(f"  Employee: {top_contributor_name}")
-    print(f"  Final Call Tasks: {len(result['final_call_tasks']['tasks'])}")
-    print(f"  Handover Tasks: {len(result['handover_tasks']['tasks'])}")
-    print(f"  Documentation Tasks: {len(result['documentation_tasks']['tasks'])}")
+    print(f"  Final Call: {len(result['final_call_tasks']['tasks'])} tasks")
+    print(f"  Handover: {len(result['handover_tasks']['tasks'])} tasks")
+    print(f"  Documentation: {len(result['documentation_tasks']['tasks'])} tasks")
     print("=" * 50)
+    print("✓ All files generated successfully!")
+    return True
 
 
-    # Display priority breakdown
-    priorities = {}
-    for task in result['final_call_tasks']['tasks']:
-        p = task['priority']
-        priorities[p] = priorities.get(p, 0) + 1
-
-    print("\nPriority Breakdown:")
-    for priority in ['critical', 'high', 'medium', 'low']:
-        if priority in priorities:
-            print(f"  {priority.upper()}: {priorities[priority]} tasks")
-
-    print("\n✓ All files generated successfully!")
+# Main execution
+if __name__ == "__main__":
+    success = run_single_user_offboarding()
+    sys.exit(0 if success else 1)

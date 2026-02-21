@@ -49,6 +49,8 @@ type Task = {
 type Props = {
   employeeId: string;
   darkMode?: boolean;
+  initialTasksData?: { employees?: any[] } | null;
+  onTasksUpdated?: () => void;
 };
 
 /* ================= PRIORITY STYLES ================= */
@@ -66,6 +68,8 @@ const getPriorityStyles = (priority: Task["priority"]): string => {
 export default function EmployeeHandoverSection({
   employeeId,
   darkMode = false,
+  initialTasksData,
+  onTasksUpdated,
 }: Props) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,12 +89,33 @@ export default function EmployeeHandoverSection({
   });
 
   /* ================= LOAD DATA ================= */
+  const hasParentData = initialTasksData !== undefined;
 
   useEffect(() => {
+    if (hasParentData) {
+      if (initialTasksData == null) {
+        setLoading(true);
+        setTasks([]);
+        return;
+      }
+      const employee =
+        initialTasksData.employees?.find(
+          (e: any) => String(e.employeeId) === String(employeeId),
+        ) ?? initialTasksData.employees?.[0];
+      if (employee) {
+        const handoverTasks = (employee.tasks?.ai ?? [])
+          .filter((t: any) => t.id.startsWith("HO"))
+          .map((t: any) => ({ ...t, tags: t.tags || ["Manual"] }));
+        setTasks(handoverTasks);
+      }
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     const fetchData = async () => {
       try {
-        const response = await fetch("/api/offboarding/tasks");
+        const response = await fetch(`/api/offboarding/tasks?employeeId=${encodeURIComponent(employeeId)}`);
         const data = await response.json();
         const employee =
           data.employees?.find(
@@ -110,7 +135,7 @@ export default function EmployeeHandoverSection({
       }
     };
     fetchData();
-  }, [employeeId]);
+  }, [employeeId, hasParentData, initialTasksData]);
 
   const toggleTaskDetails = (taskId: string) => {
     setExpandedTaskIds((prev) => {

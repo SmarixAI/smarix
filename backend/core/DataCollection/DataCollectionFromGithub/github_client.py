@@ -617,21 +617,46 @@ class AsyncGitHubClient:
     async def fetch_commits_batch(
         self, owner: str, repo: str, limit: int = None
     ) -> List[Dict]:
-        """Fetch commits (lightweight, without individual commit file fetching)"""
-        url = f"{self.config.GITHUB_API_BASE_URL}/repos/{owner}/{repo}/commits"
+        """
+        Fetch commits WITH file-level details and stats.
+        """
+
+        base_url = f"{self.config.GITHUB_API_BASE_URL}/repos/{owner}/{repo}/commits"
 
         max_pages = (
             (limit // 100 + 1) if limit else getattr(self.config, "MAX_PAGES", 5)
         )
 
-        commits = await self._paginate_all(url, max_pages=max_pages)
+        # Step 1: Fetch commit list
+        commit_list = await self._paginate_all(base_url, max_pages=max_pages)
 
         if limit:
-            commits = commits[:limit]
+            commit_list = commit_list[:limit]
 
-        # Return lightweight commit data (no file fetching per commit)
-        return [
-            {
+        if not commit_list:
+            return []
+
+        print(f"   Enriching {len(commit_list)} commits with file stats...")
+
+        # Step 2: Fetch detailed commit data concurrently
+        detail_tasks = [
+            self._make_request(f"{base_url}/{c['sha']}")
+            for c in commit_list
+            if c.get("sha")
+        ]
+
+        detailed_commits = await asyncio.gather(*detail_tasks)
+
+        enriched = []
+
+        for c in detailed_commits:
+            if not c:
+                continue
+
+            stats = c.get("stats") or {}
+            files = c.get("files") or []
+
+            enriched.append({
                 "sha": c.get("sha"),
                 "message": c.get("commit", {}).get("message", ""),
                 "author": {
@@ -639,9 +664,23 @@ class AsyncGitHubClient:
                     "email": c.get("commit", {}).get("author", {}).get("email"),
                 },
                 "date": c.get("commit", {}).get("author", {}).get("date"),
-            }
-            for c in commits
-        ]
+                "files": [
+                    {
+                        "filename": f.get("filename"),
+                        "additions": f.get("additions", 0),
+                        "deletions": f.get("deletions", 0),
+                        "changes": f.get("changes", 0),
+                        "status": f.get("status"),
+                    }
+                    for f in files
+                ],
+                "additions": stats.get("additions", 0),
+                "deletions": stats.get("deletions", 0),
+                "total_changes": stats.get("total", 0),
+            })
+
+        return enriched
+
 
     async def get_contributors_activity(self, owner: str, repo: str) -> List[Dict]:
         """Fetch contributor stats"""

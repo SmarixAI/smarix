@@ -17,6 +17,7 @@ import {
   Target,
   RefreshCcw,
   ArrowUpCircle,
+  Download,
 } from "lucide-react";
 import Loader from "../Loader";
 import { Inter, JetBrains_Mono } from "next/font/google";
@@ -51,15 +52,14 @@ type TaskAIStatus = {
   progress: number;
   score: number | null;
   fileName?: string;
-  report?: {
-    improvements?: string[];
-    [key: string]: any;
-  };
+  report?: Record<string, unknown>;
 };
 
 type Props = {
   employeeId: string;
   darkMode?: boolean;
+  initialTasksData?: { employees?: any[] } | null;
+  onTasksUpdated?: () => void;
 };
 
 const getPriorityStyles = (priority: Task["priority"]): string => {
@@ -73,6 +73,8 @@ const getPriorityStyles = (priority: Task["priority"]): string => {
 export default function EmployeeDocumentationSection({
   employeeId,
   darkMode = false,
+  initialTasksData,
+  onTasksUpdated,
 }: Props) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
@@ -96,37 +98,73 @@ export default function EmployeeDocumentationSection({
     return task.priority.toLowerCase() === activeFilter;
   });
 
+  const hasParentData = initialTasksData !== undefined;
+
   useEffect(() => {
-    setLoading(true);
-    const fetchData = async () => {
-      try {
-        const response = await fetch("/api/offboarding/tasks");
-        const data = await response.json();
-        const employee =
-          data.employees?.find(
-            (e: any) => String(e.employeeId) === String(employeeId),
-          ) ?? data.employees?.[0];
-
-        if (employee) {
-          const docTasks = (employee.tasks?.ai ?? [])
-            .filter((t: any) => t.id.startsWith("DOC"))
-            .map((t: any) => ({ ...t, tags: t.tags || ["Manual"] }));
-          setTasks(docTasks);
-
-          const initialStates: Record<string, TaskAIStatus> = {};
-          docTasks.forEach((t: Task) => {
-            initialStates[t.id] = { status: "idle", progress: 0, score: null };
-          });
-          setTaskAIStates(initialStates);
-        }
-      } catch (error) {
-        console.error(error);
-      } finally {
+    const applyData = (data: { employees?: any[] } | null) => {
+      if (!data?.employees?.length) {
+        setTasks([]);
+        setTaskAIStates({});
         setLoading(false);
+        return;
       }
+      const employee =
+        data.employees.find(
+          (e: any) => String(e.employeeId) === String(employeeId),
+        ) ?? data.employees[0];
+      const docTasks = (employee?.tasks?.ai ?? [])
+        .filter((t: any) => t.id.startsWith("DOC"))
+        .map((t: any) => ({ ...t, tags: t.tags || ["Manual"] }));
+      setTasks(docTasks);
+      const initialStates: Record<string, TaskAIStatus> = {};
+      docTasks.forEach((t: Task) => {
+        initialStates[t.id] = { status: "idle", progress: 0, score: null };
+      });
+      setTaskAIStates(initialStates);
+      docTasks.forEach((t: Task) => {
+        fetch(
+          `/api/offboarding/aianalytics?employeeId=${encodeURIComponent(employeeId)}&taskId=${encodeURIComponent(t.id)}`
+        )
+          .then((r) => (r.ok ? r.json() : null))
+          .then((report) => {
+            if (report) {
+              setTaskAIStates((prev) => ({
+                ...prev,
+                [t.id]: {
+                  status: "completed",
+                  progress: 100,
+                  score: report.score ?? null,
+                  fileName: "Document uploaded",
+                  report,
+                },
+              }));
+            }
+          })
+          .catch(() => {});
+      });
+      setLoading(false);
     };
-    fetchData();
-  }, [employeeId]);
+
+    if (hasParentData) {
+      if (initialTasksData == null) {
+        setLoading(true);
+        setTasks([]);
+        setTaskAIStates({});
+        return;
+      }
+      applyData(initialTasksData);
+      return;
+    }
+
+    setLoading(true);
+    fetch(`/api/offboarding/tasks?employeeId=${encodeURIComponent(employeeId)}`)
+      .then((res) => res.json())
+      .then((data) => applyData(data))
+      .catch((error) => {
+        console.error(error);
+        setLoading(false);
+      });
+  }, [employeeId, hasParentData, initialTasksData]);
 
   const handleFileUpload = async (
     taskId: string,
@@ -150,25 +188,53 @@ export default function EmployeeDocumentationSection({
       },
     }));
 
-    const formData = new FormData();
-    formData.append("employeeId", employeeId);
-    formData.append("documentId", taskId);
-    formData.append("file", file);
+    const formDataBackend = new FormData();
+    formDataBackend.append("employeeId", employeeId);
+    formDataBackend.append("documentId", taskId);
+    formDataBackend.append("file", file);
 
     try {
+      // 1) Upload .txt to S3: Offboarding/{employeeId}/upload/{taskId}.txt
+      const uploadForm = new FormData();
+      uploadForm.append("employeeId", employeeId);
+      uploadForm.append("taskId", taskId);
+      uploadForm.append("file", file);
+      const uploadRes = await fetch("/api/offboarding/upload", {
+        method: "POST",
+        body: uploadForm,
+      });
+      if (!uploadRes.ok) {
+        const errData = await uploadRes.json().catch(() => ({}));
+        throw new Error(errData.error || "Upload to S3 failed");
+      }
+
+      // 2) Run AI analysis (backend)
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/analyze-document`,
         {
           method: "POST",
-          body: formData,
+          body: formDataBackend,
         }
       );
 
       const data = await res.json();
-      console.log("AI RESPONSE:", data);
 
       if (!res.ok) {
         throw new Error(data.error || "AI failed");
+      }
+
+      // 3) Store AI report in S3: Offboarding/{employeeId}/aianalytics/{taskId}.json
+      const reportRes = await fetch("/api/offboarding/aianalytics", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          employeeId,
+          taskId,
+          report: data,
+        }),
+      });
+      if (!reportRes.ok) {
+        console.warn("AI report save to S3 failed", await reportRes.text());
       }
 
       setTaskAIStates((prev) => ({
@@ -183,7 +249,7 @@ export default function EmployeeDocumentationSection({
       }));
     } catch (err) {
       console.error(err);
-      alert("AI analysis failed");
+      alert(err instanceof Error ? err.message : "AI analysis failed");
       setTaskAIStates((prev) => ({
         ...prev,
         [taskId]: {
@@ -455,9 +521,19 @@ export default function EmployeeDocumentationSection({
                                 <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-100 flex gap-3 items-center">
                                   <FileCheck className="w-4 h-4 text-emerald-600 flex-shrink-0" />
                                   <p className="text-[11px] font-bold text-emerald-800 truncate">
-                                    {ai.fileName}
+                                    {ai.fileName ?? "Document uploaded"}
                                   </p>
                                 </div>
+
+                                <a
+                                  href={`/api/offboarding/upload?employeeId=${encodeURIComponent(employeeId)}&taskId=${encodeURIComponent(task.id)}`}
+                                  download={`${task.id}.txt`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="w-full flex items-center justify-center gap-2 py-2 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 hover:bg-slate-50 hover:text-[#0E1B2E] transition-all uppercase tracking-widest"
+                                >
+                                  <Download className="w-3 h-3" /> Download uploaded file
+                                </a>
 
                                 <div className="space-y-2.5 py-2">
                                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
@@ -470,7 +546,7 @@ export default function EmployeeDocumentationSection({
                                         <div className="w-1 h-1 rounded-full bg-slate-300" />
                                         {item}
                                       </div>
-                                    ))}
+                                    ))}                              
                                   </div>
                                 </div>
 

@@ -57,8 +57,30 @@ export default function OffboardingEmployeeLayout({}: OffboardingEmployeeLayoutP
     null
   );
   const [highRiskTasksPending, setHighRiskTasksPending] = useState<number>(0);
+  const [tasksData, setTasksData] = useState<{ employees?: any[] } | null>(null);
 
   const router = useRouter();
+
+  const refetchTasks = async () => {
+    if (!employee?.employeeId) return;
+    try {
+      const response = await fetch(`/api/offboarding/tasks?employeeId=${encodeURIComponent(employee.employeeId)}`);
+      if (!response.ok) return;
+      const data = await response.json();
+      setTasksData(data);
+      if (data?.employees?.length) {
+        const found = data.employees.find((e: any) => e.employeeId === employee.employeeId);
+        if (found) {
+          const ai = found.tasks?.ai ?? [];
+          const mgr = found.tasks?.manager ?? [];
+          const count = [...ai, ...mgr].filter((t: any) => t.priority === "High" && t.status !== "not_needed").length;
+          setHighRiskTasksPending(count);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching tasks:", error);
+    }
+  };
 
   const handleChatbot = () => {
     window.open("/chat", "_blank", "noopener,noreferrer");
@@ -152,42 +174,34 @@ export default function OffboardingEmployeeLayout({}: OffboardingEmployeeLayoutP
   useEffect(() => {
     if (!employee?.employeeId) {
       setHighRiskTasksPending(0);
+      setTasksData(null);
       return;
     }
 
+    let cancelled = false;
     const fetchTasks = async () => {
       try {
-        const response = await fetch("/api/offboarding/tasks");
-        if (!response.ok) {
-          console.error("Failed to fetch tasks data");
-          return;
-        }
+        const response = await fetch(`/api/offboarding/tasks?employeeId=${encodeURIComponent(employee.employeeId)}`);
+        if (!response.ok || cancelled) return;
         const data = await response.json();
-
-        if (!data?.employees?.length) return;
-
-        const foundEmployee = data.employees.find(
-          (e: any) => e.employeeId === employee.employeeId
-        );
-
-        if (!foundEmployee) return;
-
-        const aiTasks = foundEmployee.tasks?.ai ?? [];
-        const managerTasks = foundEmployee.tasks?.manager ?? [];
-        const allTasks = [...aiTasks, ...managerTasks];
-
-        const highRiskCount = allTasks.filter(
-          (task: any) =>
-            task.priority === "High" && task.status !== "not_needed"
-        ).length;
-
-        setHighRiskTasksPending(highRiskCount);
+        if (cancelled) return;
+        setTasksData(data);
+        if (data?.employees?.length) {
+          const found = data.employees.find((e: any) => e.employeeId === employee.employeeId);
+          if (found) {
+            const ai = found.tasks?.ai ?? [];
+            const mgr = found.tasks?.manager ?? [];
+            const count = [...ai, ...mgr].filter((t: any) => t.priority === "High" && t.status !== "not_needed").length;
+            setHighRiskTasksPending(count);
+          }
+        }
       } catch (error) {
-        console.error("Error fetching tasks:", error);
+        if (!cancelled) console.error("Error fetching tasks:", error);
       }
     };
 
     fetchTasks();
+    return () => { cancelled = true; };
   }, [employee?.employeeId]);
 
   if (loading) {
@@ -390,6 +404,8 @@ export default function OffboardingEmployeeLayout({}: OffboardingEmployeeLayoutP
               <EmployeeFinalCallSection
                 employeeId={employee.employeeId}
                 darkMode={false}
+                initialTasksData={tasksData}
+                onTasksUpdated={refetchTasks}
               />
             </div>
           )}
@@ -399,6 +415,8 @@ export default function OffboardingEmployeeLayout({}: OffboardingEmployeeLayoutP
               <EmployeeHandoverSection
                 employeeId={employee.employeeId}
                 darkMode={false}
+                initialTasksData={tasksData}
+                onTasksUpdated={refetchTasks}
               />
             </div>
           )}
@@ -408,6 +426,8 @@ export default function OffboardingEmployeeLayout({}: OffboardingEmployeeLayoutP
               <EmployeeDocumentationSection
                 employeeId={employee.employeeId}
                 darkMode={false}
+                initialTasksData={tasksData}
+                onTasksUpdated={refetchTasks}
               />
             </div>
           )}

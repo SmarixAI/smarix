@@ -85,9 +85,14 @@ export default function DocumentationSection({
     setUpdateCounter(0); // Reset update counter
     setLoading(true);
 
+    if (!employeeId?.trim()) {
+      setLoading(false);
+      return;
+    }
+
     const fetchData = async () => {
       try {
-        const response = await fetch('/api/offboarding/documents');
+        const response = await fetch(`/api/offboarding/documents?employeeId=${encodeURIComponent(employeeId)}`);
         if (!response.ok) {
           console.error('Failed to fetch documents data');
           setLoading(false);

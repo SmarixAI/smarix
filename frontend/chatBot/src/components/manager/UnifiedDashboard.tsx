@@ -1006,7 +1006,7 @@ export default function UnifiedDashboard() {
                       <span className={`${inter.className}`}>
                         {manageOffboardingMode
                           ? "View Analytics"
-                          : "Manage Offboarding"}
+                          : "Manage Offboarding Tasks"}
                       </span>
                     </button>
                   )}

@@ -268,7 +268,12 @@ def generate_question(pr: dict, category: str, difficulty: str) -> Optional[dict
 # ------------------------------------------------------------------
 
 
-def generate():
+def generate_coding_question_answers(
+    gmail_db_path=None,
+    provider="openai",
+    model=None,
+    db_path=None
+):
     print(f"🚀 Generator (API Verify Mode) starting for {REPO_OWNER}/{REPO_NAME}")
 
     pr_chunks = read_json_from_s3(S3_BUCKET, S3_INPUT_KEY)
@@ -368,4 +373,4 @@ def generate():
 
 
 if __name__ == "__main__":
-    generate()
+    generate_coding_question_answers()

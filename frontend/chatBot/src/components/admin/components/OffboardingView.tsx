@@ -197,7 +197,7 @@ export default function OffboardingView({
                 {getStepIcon(offboardingStatus)}
                 <div>
                   <h3 className={`${spaceGrotesk.className} text-lg font-semibold text-[#0E1B2E]`}>
-                    Offboarding Generation Status
+                    Offboarding Generation Tasks
                   </h3>
                   <p className={`${firaCode.className} text-sm text-[#0E1B2E]/60`}>
                     {offboardingStatus === "pending" && "Ready to generate offboarding data"}
@@ -245,44 +245,6 @@ export default function OffboardingView({
           </div>
         </div>
       </div>
-
-      {/* OUTPUT FILES SECTION */}
-      {offboardingStatus === "completed" && (
-        <div className="relative rounded-xl shadow-lg p-6 bg-white/80 backdrop-blur-xl border border-gray-200/50">
-          <div className="absolute inset-0 bg-[linear-gradient(to_right,#0E1B2E05_1px,transparent_1px),linear-gradient(to_bottom,#0E1B2E05_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none rounded-xl" />
-          <div className="relative z-10">
-            <h3 className={`${spaceGrotesk.className} text-xl font-semibold mb-4 text-[#0E1B2E]`}>
-              Generated Files
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {steps
-                .filter(s => selectedSteps.includes(s.id))
-                .map((step, index) => {
-                  const Icon = step.icon;
-                  return (
-                    <div
-                      key={step.id}
-                      className="p-3 rounded-xl border border-gray-200/50 bg-white/50 backdrop-blur-sm"
-                    >
-                      <div className="flex items-center gap-2 mb-2">
-                        <Icon className="w-4 h-4 text-[#0E1B2E]/70" />
-                        <span className={`${firaCode.className} text-xs font-semibold px-1.5 py-0.5 rounded bg-[#0E1B2E]/10 text-[#0E1B2E]`}>
-                          {index + 1}
-                        </span>
-                        <span className={`${spaceGrotesk.className} text-sm font-medium text-[#0E1B2E]`}>
-                          {step.name}
-                        </span>
-                      </div>
-                      <p className={`${firaCode.className} text-xs text-[#0E1B2E]/60`}>
-                        {step.outputFile}
-                      </p>
-                    </div>
-                  );
-                })}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
