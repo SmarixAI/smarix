@@ -291,7 +291,7 @@ export default function Sidebar({
           </div>
         </div>
 
-       
+
 
         {/* PROGRESS BAR */}
         <div className="mt-4">
