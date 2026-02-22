@@ -8,7 +8,7 @@ import re
 import os
 import logging
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Iterator
+from typing import List, Dict, Any, Optional, Iterator, Generator
 from datetime import datetime
 import time
 import uuid
@@ -389,6 +389,17 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         self.conversation_store.create_session(new_id, schema_name=schema_name)
         self.current_session_id = new_id
         return new_id
+
+    def _save_assistant_message(self, session_id: str, schema_name: str, answer: str, tokens_used: int = 0):
+        """Persist the assistant reply to conversation store."""
+        try:
+            self.conversation_store.add_message(
+                session_id, "assistant", answer,
+                schema_name=schema_name, tokens_used=tokens_used
+            )
+        except Exception as e:
+            self.logger.error(f"CONVERSATION_STORE | Failed to save assistant message: {e}")
+
     
     def retrieve_raw_chunks(
         self,
@@ -507,6 +518,23 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
         self.logger.info(f"NEW QUERY | {query}")
         active_session_id = self._ensure_session(session_id, schema_name=schema_name)
 
+        # STEP 0: Check for greetings FIRST (before any rewriting)
+        if self.is_greeting(query):
+            query_type = QueryType.GREETING
+            self.logger.info("CLASSIFICATION | Rule-based: GREETING (detected early)")
+            return save_assistant_message(self.greeting_handler.handle_greeting(query, query_type, active_session_id, schema_name=schema_name))
+        
+        # 🚫 LLM Noise Detection
+        if self._is_noise_llm(query):
+            self.logger.info("LLM NOISE DETECTED | Skipping rewrite and routing")
+            result = {
+                "answer": "I couldn't understand that. Could you rephrase your question?",
+                "query_type": "invalid",
+                "context_quality": 0.0,
+                "emails": []
+            }
+            return save_assistant_message(result)
+
         if not is_subquery:
             try:
                 self.conversation_store.add_message(
@@ -556,25 +584,6 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
             print(f"\n{'=' * 70}")
             print(f"Query: {query}")
             print(f"{'=' * 70}")
-
-        # STEP 0: Check for greetings FIRST (before any rewriting)
-        if self.is_greeting(query):
-            query_type = QueryType.GREETING
-            self.logger.info("CLASSIFICATION | Rule-based: GREETING (detected early)")
-            return save_assistant_message(self.greeting_handler.handle_greeting(query, query_type, active_session_id, schema_name=schema_name))
-        
-        # 🚫 LLM Noise Detection
-        if self._is_noise_llm(query):
-            self.logger.info("LLM NOISE DETECTED | Skipping rewrite and routing")
-            result = {
-                "answer": "I couldn't understand that. Could you rephrase your question?",
-                "query_type": "invalid",
-                "context_quality": 0.0,
-                "emails": []
-            }
-            return save_assistant_message(result)
-
-
 
         # Early entity detection to decide if rewriting is needed
         has_pr = bool(re.search(r'\bPR\s*#?\s*\d+|\bpull request\s*#?\s*\d+', query, re.IGNORECASE))
@@ -866,42 +875,36 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
     
     def _is_noise_llm(self, query: str) -> bool:
         """
-        Uses LLM to determine if query is meaningful or random noise.
-        Returns True if noise.
+        Fast rule-based noise detection. Avoids LLM call for obvious cases.
+        Falls back to LLM only for ambiguous medium-length inputs.
         """
+        q = query.strip()
 
-        prompt = f"""
-    You are a strict classifier.
+        # Too short to be meaningful
+        if len(q) < 3:
+            return True
 
-    Determine whether the following user input is:
-    1. A meaningful question/request
-    2. Random noise or meaningless input
+        # Only special characters / numbers
+        if re.match(r'^[\W\d_]+$', q):
+            return True
 
-    Respond ONLY with:
-    MEANINGFUL
-    or
-    NOISE
+        # Very long inputs are almost never noise
+        if len(q) > 30:
+            return False
 
-    User Input:
-    {query}
-    """
+        # Count real words (alpha tokens >= 2 chars)
+        words = [w for w in re.findall(r'[a-zA-Z]{2,}', q)]
+        if len(words) == 0:
+            return True
 
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                temperature=0,
-                messages=[{"role": "user", "content": prompt}]
-            )
+        # Random character sequences (low vowel ratio is a strong noise signal)
+        all_alpha = re.sub(r'[^a-zA-Z]', '', q).lower()
+        if len(all_alpha) >= 4:
+            vowel_ratio = sum(1 for c in all_alpha if c in 'aeiou') / len(all_alpha)
+            if vowel_ratio < 0.1:
+                return True
 
-            verdict = response.choices[0].message.content.strip().upper()
-
-            return verdict == "NOISE"
-
-        except Exception as e:
-            self.logger.warning(f"NOISE_CHECK_FAILED | {e}")
-            return False  # Fail open
-
-
+        return False  # Assume meaningful — fail open
 
     def _respond_with_results(
         self,
@@ -945,64 +948,429 @@ class RAGChatbot(ClassifierMixin, RetrievalMixin, LLMEmbeddingMixin):
     def _package_response(self, answer, github_results, email_results, query_type):
         return self.response_handler.package_response(answer, github_results, email_results, query_type)
 
+    def _respond_with_results_stream(
+        self,
+        results: List[Dict],
+        query_type: str,
+        query: str,
+        expanded_query: str,
+        role: Optional[str] = None
+    ) -> Iterator[Dict[str, Any]]:
+        """Streaming version of _respond_with_results — yields token/done chunks."""
+        
+        context = self.build_context_from_chunks(results, query_type)
+        entity = self.extract_entity_from_query(expanded_query, query_type)
+        system_prompt = self.get_dynamic_system_prompt(query_type, expanded_query, role=role)
+        user_prompt = self.build_user_prompt(expanded_query, context, "", query_type, entity, None)
 
-    def chat_stream(self, query: str, filters: Optional[Dict] = None, role: Optional[str] = None) -> Iterator[Dict[str, Any]]:
+        full_answer = ""
+        buffer = ""
+        for chunk in self.call_llm_stream(system_prompt, user_prompt):
+            full_answer += chunk
+            buffer += chunk
+            if "\n" in buffer or len(buffer) > 150:
+                yield {"type": "token", "content": buffer}
+                buffer = ""
+        if buffer:
+            yield {"type": "token", "content": buffer}
+
+        sources = []
+        for i, result in enumerate(results[:5], 1):
+            from utils.metadata_normalizer import MetadataNormalizer
+            meta_norm = MetadataNormalizer(result.get("metadata", {}), result)
+            sources.append({
+                "rank": i,
+                "file": meta_norm.get_file_path("unknown"),
+                "type": meta_norm.get_chunk_type("unknown"),
+                "score": result.get("score", 0.0),
+                "chunk_id": result.get("chunk_id", "")
+            })
+
+        yield {
+            "type": "done",
+            "content": full_answer,
+            "metadata": {
+                "sources": sources,
+                "chunks_retrieved": len(results),
+                "query_type": query_type,
+                "context_quality": min(results[0].get("score", 0), 1.0) if results else 0.0,
+                "emails": [],
+                "has_diagram": bool(re.search(r"```mermaid", full_answer or "")),
+                "related_knowledge": None,
+                "is_metrics_query": False,
+            }
+        }
+
+    def chat_stream(
+        self,
+        query: str,
+        schema_name: str,
+        filters: Optional[Dict] = None,
+        session_id: Optional[str] = None,
+        role: Optional[str] = None
+    ) -> Generator[Dict[str, Any], None, None]:
+        """
+        Full streaming version of chat().
+        Yields dicts:
+          {'type': 'status',  'content': str}   — progress updates
+          {'type': 'token',   'content': str}   — individual LLM tokens
+          {'type': 'done',    'content': str,   — final assembled answer
+           'metadata': dict}
+          {'type': 'error',   'content': str}   — on failure
+        """
+        if role is None:
+            role = "general"
+
+        is_subquery = filters.get("is_subquery", False) if filters else False
+
         self.logger.info("=" * 80)
         self.logger.info(f"NEW STREAM QUERY | {query}")
 
-        active_session_id = self._ensure_session(None)
+        active_session_id = self._ensure_session(session_id, schema_name=schema_name)
 
-        if self.verbose:
-            print(f"\n{'=' * 70}")
-            print(f"Query (streaming): {query}")
-            print(f"{'=' * 70}")
+        # ── helpers ──────────────────────────────────────────────────────
+        def _yield_static(result: Dict[str, Any]):
+            """
+            For non-streaming paths (cache hits, direct lookups) emit the
+            answer as a single token burst then a done event.
+            """
+            answer = result.get("answer", "")
+            yield {"type": "token", "content": answer}
+            yield {
+                "type": "done",
+                "content": answer,
+                "metadata": {
+                    **{k: v for k, v in result.items() if k != "answer"},
+                    "session_id": active_session_id
+                }
+            }
 
-        # MULTI-QUERY DETECTION (EARLY)
-        if not filters or not filters.get("is_subquery"):
-            if self.enable_multi_query:
-                subqueries = self.multi_query_handler.split_into_subqueries(query)
-                if len(subqueries) > 1:
-                    self.logger.info(f"MULTI-QUERY | Detected {len(subqueries)} sub-questions")
-                    return self.multi_query_handler.handle_multi_query(
-                        subqueries, query, active_session_id
-                    )
+        def _finalise(answer: str, result_meta: Dict):
+            """Persist to DB and cache after stream completes."""
+            if not is_subquery:
+                self._save_assistant_message(active_session_id, schema_name, answer, result_meta.get("tokens_used", 0))
+            full_result = {"answer": answer, **result_meta}
+            self.cache_handler.update_caches(query, full_result, active_session_id)
 
+        # ── noise guard ──────────────────────────────────────────────────
+        if self.is_greeting(query):
+            yield {"type": "status", "content": "👋 Greeting detected..."}
+            query_type = QueryType.GREETING
+            for chunk in self.greeting_handler.handle_greeting_stream(query, query_type):
+                yield chunk
+            return
 
-        yield {'type': 'status', 'content': 'Analyzing query...'}
-        expanded_query = self.expand_query(query)
+        if self._is_noise_llm(query):
+            self.logger.info("LLM NOISE DETECTED | Skipping stream")
+            msg = "I couldn't understand that. Could you rephrase your question?"
+            yield {"type": "token", "content": msg}
+            yield {"type": "done", "content": msg, "metadata": {"query_type": "invalid"}}
+            return
 
+        # ── persist user message ─────────────────────────────────────────
+        if not is_subquery:
+            try:
+                self.conversation_store.add_message(active_session_id, "user", query, schema_name=schema_name, tokens_used=0)
+            except Exception as e:
+                self.logger.error(f"CONVERSATION_STORE | Failed to save user message: {e}")
+
+        # ── cache check ──────────────────────────────────────────────────
+        yield {"type": "status", "content": "Checking cache..."}
+        self.cache_handler.update_cache_ages()
+
+        cached_result = self.cache_handler.get_semantic_cache(query, active_session_id)
+        if cached_result:
+            result = self.cache_handler.handle_cached_result(cached_result, query, active_session_id, schema_name=schema_name)
+            if result:
+                self.logger.info(f"STREAM CACHE HIT | confidence={result.get('cache_confidence', 'N/A')}")
+                yield {"type": "status", "content": "⚡ Returning cached answer..."}
+                yield from _yield_static(result)
+                _finalise(result.get("answer", ""), {k: v for k, v in result.items() if k != "answer"})
+                return
+            self.logger.info("Semantic cache requires generation, proceeding to RAG")
+        else:
+            cached_response = self.cache_handler.get_response_cache(query, active_session_id)
+            if cached_response:
+                answer = cached_response.get('answer', '')
+                is_failure = (
+                    len(answer) < 150
+                    or 'no information' in answer.lower()
+                    or 'no context' in answer.lower()
+                    or "don't have" in answer.lower()
+                    or 'not found' in answer.lower()
+                )
+                if not is_failure:
+                    self.logger.info("STREAM OLD CACHE HIT | Returning cached response")
+                    yield {"type": "status", "content": "⚡ Returning cached answer..."}
+                    yield from _yield_static(cached_response)
+                    _finalise(cached_response.get("answer", ""), {k: v for k, v in cached_response.items() if k != "answer"})
+                    return
+
+        # ── query rewriting ──────────────────────────────────────────────
+        yield {"type": "status", "content": "Understanding your question..."}
+
+        has_pr     = bool(re.search(r'\bPR\s*#?\s*\d+|\bpull request\s*#?\s*\d+', query, re.IGNORECASE))
+        has_issue  = bool(re.search(r'\bissue\s*#?\s*\d+|\bbug\s*#?\s*\d+',       query, re.IGNORECASE))
+        has_commit = bool(re.search(r'\b[a-f0-9]{7,40}\b',                         query, re.IGNORECASE))
+        skip_rewrite = has_pr or has_issue or has_commit
+
+        if active_session_id and not skip_rewrite:
+            session_context_query = self.query_rewriter.rewrite(query, active_session_id, schema_name=schema_name)
+            rewritten_query = session_context_query if (session_context_query and session_context_query != query) else query
+            if rewritten_query != query:
+                self.logger.info(f"SESSION REWRITE | '{query}' -> '{rewritten_query}'")
+        else:
+            rewritten_query = query
+
+        expanded_query = self.expand_query(rewritten_query)
+        if expanded_query != rewritten_query:
+            self.logger.info(f"QUERY EXPANSION | '{rewritten_query}' -> '{expanded_query}'")
+
+        query_lower = expanded_query.lower()
+
+        # ── multi-query split ────────────────────────────────────────────
+        if not is_subquery and self.enable_multi_query:
+            subqueries = self.multi_query_handler.split_into_subqueries(query)
+            if len(subqueries) > 1:
+                self.logger.info(f"MULTI-QUERY STREAM | Detected {len(subqueries)} sub-questions")
+                yield {"type": "status", "content": f"Detected {len(subqueries)} sub-questions, processing..."}
+                # multi_query returns a full result dict — emit as static stream
+                result = self.multi_query_handler.handle_multi_query(subqueries, query, active_session_id, schema_name=schema_name)
+                yield from _yield_static(result)
+                _finalise(result.get("answer", ""), {k: v for k, v in result.items() if k != "answer"})
+                return
+
+        # ── classification ───────────────────────────────────────────────
+        yield {"type": "status", "content": "Classifying query..."}
         query_type = self.classify_query(expanded_query)
-        entity = self.extract_entity_from_query(expanded_query, query_type)
+        entity     = self.extract_entity_from_query(expanded_query, query_type)
+        self.logger.info(f"STREAM QUERY TYPE | {query_type}")
 
-
-        if query_type == QueryType.RANDOM_PR_GENERATOR:
-            self.logger.info("RANDOM PR GENERATOR | Will retrieve merged PRs with code changes for LLM selection")
-
+        # ── greeting (late detection) ────────────────────────────────────
         if query_type == QueryType.GREETING:
-            for response in self.greeting_handler.handle_greeting_stream(query, query_type):
-                yield response
+            for chunk in self.greeting_handler.handle_greeting_stream(query, query_type):
+                yield chunk
             return
 
+        # ── PR/Issue tutorial & coding question ──────────────────────────
+        if query_type == QueryType.PR_ISSUE_TUTORIAL and entity:
+            self.logger.info(f"STREAM PR-ISSUE TUTORIAL | {entity['type']} #{entity['number']}")
+            yield {"type": "status", "content": f"Generating tutorial for {entity['type']} #{entity['number']}..."}
+            result = self.pr_handler.handle_pr_issue_tutorial(entity, query, expanded_query)
+            yield from _yield_static(result)
+            _finalise(result.get("answer", ""), {k: v for k, v in result.items() if k != "answer"})
+            return
+
+        if query_type == QueryType.PR_ISSUE_CODING_QUESTION and entity:
+            self.logger.info(f"STREAM PR-ISSUE CODING Q | {entity['type']} #{entity['number']}")
+            yield {"type": "status", "content": f"Generating coding question for {entity['type']} #{entity['number']}..."}
+            result = self.pr_handler.handle_pr_issue_coding_question(entity, query, expanded_query)
+            yield from _yield_static(result)
+            _finalise(result.get("answer", ""), {k: v for k, v in result.items() if k != "answer"})
+            return
+
+        # ── direct lookups (Issue / PR / Commit) ─────────────────────────
+        if entity and entity.get("type") == "issue":
+            issue_number = entity.get("number")
+            yield {"type": "status", "content": f"Looking up Issue #{issue_number}..."}
+            direct_issue = self.issue_lookup.lookup_by_number(issue_number) if self.issue_lookup else None
+            if direct_issue:
+                wrapped = {"source": "direct_lookup", "content": direct_issue, "score": 1.0}
+                yield {"type": "status", "content": f"Generating answer for Issue #{issue_number}..."}
+                final_answer = ""
+                result_meta = {}
+                for chunk in self._respond_with_results_stream([wrapped], QueryType.ISSUE_SPECIFIC, query, expanded_query, role=role):
+                    if chunk["type"] == "token":
+                        final_answer += chunk["content"]
+                    elif chunk["type"] == "done":
+                        result_meta = chunk.get("metadata", {})
+                        result_meta["session_id"] = active_session_id
+                        final_answer = chunk.get("content", final_answer)
+                    yield chunk
+                _finalise(final_answer, result_meta)
+                return
+            else:
+                result = self.issue_handler.handle_issue_direct_lookup(entity, query, expanded_query, query_type, active_session_id, role=role)
+                if result:
+                    yield from _yield_static(result)
+                    _finalise(result.get("answer", ""), {k: v for k, v in result.items() if k != "answer"})
+                    return
+
+        if entity and entity.get("type") == "pr":
+            pr_number = entity.get("number")
+            yield {"type": "status", "content": f"Looking up PR #{pr_number}..."}
+            direct_pr = self.pr_lookup.lookup_by_number(pr_number) if self.pr_lookup else None
+            if direct_pr:
+                wrapped = {"source": "direct_lookup", "content": direct_pr, "score": 1.0}
+                yield {"type": "status", "content": f"Generating answer for PR #{pr_number}..."}
+                final_answer = ""
+                for chunk in self._respond_with_results_stream([wrapped], QueryType.PR_SPECIFIC, query, expanded_query, role=role):
+                    if chunk["type"] == "token":
+                        final_answer += chunk["content"]
+                    elif chunk["type"] == "done":
+                        chunk["metadata"]["session_id"] = active_session_id
+                        final_answer = chunk.get("content", final_answer)
+                    yield chunk
+                _finalise(final_answer, {})
+                return
+            else:
+                result = self.pr_handler.handle_pr_direct_lookup(entity, query, expanded_query, active_session_id, role=role)
+                if result:
+                    yield from _yield_static(result)
+                    _finalise(result.get("answer", ""), {k: v for k, v in result.items() if k != "answer"})
+                    return
+
+        if entity and entity.get("type") == "commit":
+            yield {"type": "status", "content": f"Looking up commit {entity.get('number', '')}..."}
+            result = self.commit_handler.handle_commit_direct_lookup(entity, query, expanded_query, query_type, active_session_id, role=role)
+            if result:
+                yield from _yield_static(result)
+                _finalise(result.get("answer", ""), {k: v for k, v in result.items() if k != "answer"})
+                return
+
+        # ── override handlers (numbered PR / Issue / Commit) ─────────────
+        raw_num = re.search(r'\b(\d+)\b', expanded_query.lower())
+        pr_results = None
+
+        if raw_num and (query_type == QueryType.PR_SPECIFIC or "pr" in query_lower or "pull request" in query_lower or "merge request" in query_lower or "mr" in query_lower):
+            yield {"type": "status", "content": f"Looking up PR #{raw_num.group()}..."}
+            result = self.pr_handler.handle_pr_override(raw_num, query, expanded_query, query_lower, query_type, active_session_id, role=role, schema_name=schema_name)
+            if result:
+                yield from _yield_static(result)
+                _finalise(result.get("answer", ""), {k: v for k, v in result.items() if k != "answer"})
+                return
+            pr_results = False
+
+        if query_type == QueryType.PR_SPECIFIC and raw_num and pr_results is False:
+            result = self.pr_handler.handle_pr_not_found(raw_num, query_type, query, active_session_id)
+            if result:
+                yield from _yield_static(result)
+                _finalise(result.get("answer", ""), {k: v for k, v in result.items() if k != "answer"})
+                return
+
+        issue_results = None
+        if raw_num and (query_type == QueryType.ISSUE_SPECIFIC or "issue" in query_lower or "bug" in query_lower or "ticket" in query_lower or "report" in query_lower):
+            yield {"type": "status", "content": f"Looking up Issue #{raw_num.group()}..."}
+            result = self.issue_handler.handle_issue_override(raw_num, query, expanded_query, query_type, active_session_id, role=role, schema_name=schema_name)
+            if result:
+                yield from _yield_static(result)
+                _finalise(result.get("answer", ""), {k: v for k, v in result.items() if k != "answer"})
+                return
+            issue_results = False
+
+        if query_type == QueryType.ISSUE_SPECIFIC and raw_num and issue_results is False:
+            result = self.issue_handler.handle_issue_not_found(raw_num, query_type, query, active_session_id)
+            if result:
+                yield from _yield_static(result)
+                _finalise(result.get("answer", ""), {k: v for k, v in result.items() if k != "answer"})
+                return
+
+        raw_sha = re.search(r'\b([a-f0-9]{7,40})\b', expanded_query.lower())
+        if query_type == QueryType.COMMIT_SPECIFIC and raw_sha:
+            yield {"type": "status", "content": f"Looking up commit {raw_sha.group()[:8]}..."}
+            result = self.commit_handler.handle_commit_override(raw_sha, query, expanded_query, query_lower, query_type, active_session_id, role=role, schema_name=schema_name)
+            if result:
+                yield from _yield_static(result)
+                _finalise(result.get("answer", ""), {k: v for k, v in result.items() if k != "answer"})
+                return
+            result = self.commit_handler.handle_commit_not_found(raw_sha, query_type, query, active_session_id)
+            if result:
+                yield from _yield_static(result)
+                _finalise(result.get("answer", ""), {k: v for k, v in result.items() if k != "answer"})
+                return
+
+        # ── chronological ────────────────────────────────────────────────
         chrono_query = self.detect_chronological_query(expanded_query)
-
         if chrono_query:
-            for response in self.chronological_handler.handle_chronological_stream(
-                chrono_query, query, expanded_query, active_session_id, role=role
-            ):
-                yield response
+            yield {"type": "status", "content": "Fetching chronological data..."}
+            for chunk in self.chronological_handler.handle_chronological_stream(chrono_query, query, expanded_query, active_session_id, role=role):
+                yield chunk
             return
 
-        if self.verbose:
-            print(f"Query Type: {query_type}")
-
-        entity = self.extract_entity_from_query(expanded_query, query_type)
+        # ── general query — TRUE STREAMING PATH ─────────────────────────
+        yield {"type": "status", "content": "Retrieving relevant context..."}
         keywords = self.extract_keywords(expanded_query)
 
-        # Use general query handler for streaming
-        for response in self.general_query_handler.handle_general_query_stream(
-            query, expanded_query, query_type, entity, keywords, role=role
+        accumulated_tokens: List[str] = []
+        result_meta: Dict[str, Any] = {}
+
+        for chunk in self.general_query_handler.handle_general_query_stream(
+            query, expanded_query, query_type, None, keywords, role=role, schema_name=schema_name, session_id=active_session_id
         ):
-            yield response
+            chunk_type = chunk.get("type")
+
+            if chunk_type == "status":
+                yield chunk
+
+            elif chunk_type == "token":
+                accumulated_tokens.append(chunk["content"])
+                yield chunk
+
+            elif chunk_type == "done":
+                # handler signals completion — collect metadata
+                result_meta = chunk.get("metadata", {})
+                final_answer = chunk.get("content") or "".join(accumulated_tokens)
+                yield {
+                    "type": "done",
+                    "content": final_answer,
+                    "metadata": result_meta
+                }
+                _finalise(final_answer, result_meta)
+                return
+
+            elif chunk_type == "error":
+                yield chunk
+                return
+
+            else:
+                # forward any unknown chunk types transparently
+                yield chunk
+
+        # If handler exhausted without emitting 'done'
+        final_answer = "".join(accumulated_tokens)
+        if final_answer:
+            yield {"type": "done", "content": final_answer, "metadata": result_meta}
+            _finalise(final_answer, result_meta)
+
+    def _is_noise_llm(self, query: str) -> bool:
+        q = query.strip()
+        if len(q) < 3:
+            return True
+        if re.match(r'^[\W\d_]+$', q):
+            return True
+        if len(q) > 30:
+            return False
+        words = [w for w in re.findall(r'[a-zA-Z]{2,}', q)]
+        if len(words) == 0:
+            return True
+        all_alpha = re.sub(r'[^a-zA-Z]', '', q).lower()
+        if len(all_alpha) >= 4:
+            vowel_ratio = sum(1 for c in all_alpha if c in 'aeiou') / len(all_alpha)
+            if vowel_ratio < 0.1:
+                return True
+        return False
+
+    # ------------------------------------------------------------------ #
+    #  Internal helpers                                                    #
+    # ------------------------------------------------------------------ #
+
+    def _respond_with_results(self, github_results, query_type, query, expanded_query, role=None):
+        return self.response_handler.respond_with_results(
+            github_results, query_type, query, expanded_query, role=role, intent=None
+        )
+
+    def split_into_subqueries(self, query: str) -> List[str]:
+        return self.multi_query_handler.split_into_subqueries(query)
+
+    def handle_multi_query(self, subqueries, original_query, session_id, schema_name):
+        return self.multi_query_handler.handle_multi_query(subqueries, original_query, session_id, schema_name=schema_name)
+
+    def merge_multi_answers(self, results, original_query):
+        return self.response_handler.merge_multi_answers(results, original_query)
+
+    def _package_response(self, answer, github_results, email_results, query_type):
+        return self.response_handler.package_response(answer, github_results, email_results, query_type)
+
 
 
     def clear_history(self):

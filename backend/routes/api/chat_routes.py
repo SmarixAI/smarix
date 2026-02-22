@@ -3,6 +3,8 @@ Chat-related API routes for the RAG Chatbot
 Contains all chat endpoints and WebSocket handlers
 """
 
+import time
+
 import boto3
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Request
 from pydantic import BaseModel
@@ -19,6 +21,7 @@ from routes.api import shared
 from botocore.exceptions import ClientError
 from datetime import datetime
 from utils.private_repo_state_manager import private_repo_state
+from fastapi.responses import RedirectResponse, StreamingResponse
 
 router = APIRouter()
 
@@ -416,7 +419,6 @@ async def chat(request: ChatRequest):
         result.setdefault("query_type", None)
         result.setdefault("context_quality", None)
 
-
         sources = result.get("sources", []) or []
 
         enriched_sources = []
@@ -430,12 +432,10 @@ async def chat(request: ChatRequest):
             }
             enriched_sources.append(enriched_source)
 
-
         email_count = len(result.get("emails", []))
-        
+
         chunks_retrieved = result.get("chunks_retrieved", 0)
         print(f"Response: {chunks_retrieved} code chunks", end="")
-
 
         if email_count > 0:
             print(f" + {email_count} emails")
@@ -753,14 +753,13 @@ async def get_config():
         "available_providers": shared.available_providers,
     }
 
+
 # ==================== GITHUB APP INTEGRATION ====================
+
 
 @router.get("/auth/github/callback")
 async def github_callback(
-    code: str,
-    installation_id: int,
-    setup_action: str,
-    state: str = None
+    code: str, installation_id: int, setup_action: str, state: str = None
 ):
     """
     GitHub redirects here after app installation/configuration
@@ -773,20 +772,21 @@ async def github_callback(
     if state:
         print(f"State: {state}")
     print("=" * 80)
-    
+
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
     redirect_path = "/manager/pipeline"
-    
+
     # Parse state for custom return URL
     if state:
         try:
             import base64
             import json
+
             state_data = json.loads(base64.b64decode(state))
             redirect_path = state_data.get("return_url", redirect_path)
         except Exception as e:
             print(f"⚠️ Failed to parse state: {e}")
-    
+
     # Redirect with parameters for frontend to detect
     redirect_url = (
         f"{frontend_url}{redirect_path}"
@@ -794,14 +794,15 @@ async def github_callback(
         f"&installation_id={installation_id}"
         f"&setup_action={setup_action}"
     )
-    
+
     print(f"🔄 Redirecting to: {redirect_url}")
     print("=" * 80)
-    
+
     return RedirectResponse(url=redirect_url)
 
 
 # ==================== GITHUB APP WEBHOOK ====================
+
 
 @router.post("/webhooks/github")
 async def github_webhook(request: Request):
@@ -809,63 +810,65 @@ async def github_webhook(request: Request):
     GitHub sends webhooks here when:
     - App is installed/uninstalled
     - Repositories are added/removed
-    
+
     Saves to private_runtime_state.json (single account only)
     """
-    
+
     try:
         payload = await request.json()
         event_type = request.headers.get("X-GitHub-Event")
         action = payload.get("action", "N/A")
-        
+
         print("=" * 80)
         print(f"📨 GITHUB WEBHOOK RECEIVED")
         print(f"Event Type: {event_type}")
         print(f"Action: {action}")
         print("=" * 80)
-        
+
         if event_type == "installation":
-            installation_id = payload['installation']['id']
-            account = payload['installation']['account']
-            account_login = account['login']
-            account_type = account['type']  # 'User' or 'Organization'
-            
-            installer = payload.get('sender', {}).get('login', 'unknown')
-            
+            installation_id = payload["installation"]["id"]
+            account = payload["installation"]["account"]
+            account_login = account["login"]
+            account_type = account["type"]  # 'User' or 'Organization'
+
+            installer = payload.get("sender", {}).get("login", "unknown")
+
             if action == "created":
-                repos = payload.get('repositories', [])
+                repos = payload.get("repositories", [])
                 repo_list = [
                     {
-                        "name": r['name'],
-                        "full_name": r['full_name'],
-                        "private": r.get('private', False)
+                        "name": r["name"],
+                        "full_name": r["full_name"],
+                        "private": r.get("private", False),
                     }
                     for r in repos
                 ]
-                
+
                 print(f"✅ App installed on: {account_login} ({account_type})")
                 print(f"   Installed by: {installer}")
                 print(f"   Installation ID: {installation_id}")
                 print(f"   Repositories granted: {len(repo_list)}")
                 for r in repo_list:
-                    print(f"     - {r['full_name']} ({'🔒 private' if r['private'] else '🔓 public'})")
-                
+                    print(
+                        f"     - {r['full_name']} ({'🔒 private' if r['private'] else '🔓 public'})"
+                    )
+
                 # ✅ SAVE TO private_runtime_state.json
                 success = private_repo_state.set_state(
                     owner=account_login,
                     installation_id=installation_id,
                     account_type=account_type,
-                    repositories=repo_list
+                    repositories=repo_list,
                 )
                 if success:
                     print(f"✅ Saved to private_runtime_state.json")
                 else:
                     print(f"❌ Failed to save to private_runtime_state.json")
-                
+
             elif action == "deleted":
                 print(f"❌ App uninstalled from: {account_login}")
                 print(f"   Uninstalled by: {installer}")
-                
+
                 # ✅ CLEAR private_runtime_state.json
                 current_owner = private_repo_state.get_owner()
                 if current_owner == account_login:
@@ -874,102 +877,103 @@ async def github_webhook(request: Request):
                         print(f"✅ Cleared private_runtime_state.json")
                     else:
                         print(f"⚠️ Failed to clear private_runtime_state.json")
-        
+
         elif event_type == "installation_repositories":
             # ✅ THIS IS THE KEY EVENT FOR ADDING/REMOVING REPOS
-            installation_id = payload['installation']['id']
-            account = payload['installation']['account']
-            account_login = account['login']
-            account_type = account['type']  # 'User' or 'Organization'
-            
-            added = payload.get('repositories_added', [])
-            removed = payload.get('repositories_removed', [])
-            
+            installation_id = payload["installation"]["id"]
+            account = payload["installation"]["account"]
+            account_login = account["login"]
+            account_type = account["type"]  # 'User' or 'Organization'
+
+            added = payload.get("repositories_added", [])
+            removed = payload.get("repositories_removed", [])
+
             print(f"📝 Repository changes for: {account_login}")
             print(f"   Installation ID: {installation_id}")
             print(f"   Account Type: {account_type}")
-            
+
             if added:
                 print(f"➕ Repositories added: {len(added)}")
                 for r in added:
                     print(f"     + {r['full_name']}")
-            
+
             if removed:
                 print(f"➖ Repositories removed: {len(removed)}")
                 for r in removed:
                     print(f"     - {r['full_name']}")
-            
+
             # ✅ UPDATE OR CREATE repositories in private_runtime_state.json
             try:
                 current_state = private_repo_state.get_state()
-                
+
                 # ✅ FIX: If no state exists, CREATE it (reconnection scenario)
                 if not current_state:
-                    print(f"⚠️ No existing state found - creating new state for {account_login}")
+                    print(
+                        f"⚠️ No existing state found - creating new state for {account_login}"
+                    )
                     print(f"   This happens when reconnecting after disconnect")
-                    
+
                     # Create new state with added repos
                     repo_list = [
                         {
-                            "name": r['name'],
-                            "full_name": r['full_name'],
-                            "private": r.get('private', False)
+                            "name": r["name"],
+                            "full_name": r["full_name"],
+                            "private": r.get("private", False),
                         }
                         for r in added
                     ]
-                    
+
                     print(f"   Creating state with {len(repo_list)} repos")
-                    
+
                     success = private_repo_state.set_state(
                         owner=account_login,
                         installation_id=installation_id,
                         account_type=account_type,
-                        repositories=repo_list
+                        repositories=repo_list,
                     )
-                    
+
                     if success:
                         print(f"✅ Created new state successfully!")
                         for r in repo_list:
                             print(f"     - {r['full_name']}")
                     else:
                         print(f"❌ Failed to create new state")
-                    
+
                     print("=" * 80)
                     return {"status": "received", "event": event_type, "action": action}
-                
+
                 # State exists - update it
-                current_owner = current_state.get('owner')
-                
+                current_owner = current_state.get("owner")
+
                 if current_owner == account_login:
                     print(f"🔄 Updating repos for connected account: {current_owner}")
-                    
+
                     current_repos = private_repo_state.get_repositories()
                     print(f"   Current repos count: {len(current_repos)}")
-                    
+
                     # Remove deleted repos
-                    removed_names = [r['full_name'] for r in removed]
+                    removed_names = [r["full_name"] for r in removed]
                     current_repos = [
-                        r for r in current_repos 
-                        if r['full_name'] not in removed_names
+                        r for r in current_repos if r["full_name"] not in removed_names
                     ]
                     print(f"   After removing: {len(current_repos)} repos")
-                    
+
                     # Add new repos (avoid duplicates)
-                    existing_names = {r['full_name'] for r in current_repos}
+                    existing_names = {r["full_name"] for r in current_repos}
                     for repo in added:
-                        if repo['full_name'] not in existing_names:
+                        if repo["full_name"] not in existing_names:
                             new_repo = {
-                                "name": repo['name'],
-                                "full_name": repo['full_name'],
-                                "private": repo.get('private', False)
+                                "name": repo["name"],
+                                "full_name": repo["full_name"],
+                                "private": repo.get("private", False),
                             }
                             current_repos.append(new_repo)
                             print(f"   Added: {new_repo['full_name']}")
                         else:
                             print(f"   Skipped (duplicate): {repo['full_name']}")
-                    
+
                     print(f"   Final repos count: {len(current_repos)}")
-                    
+
                     # Update in S3
                     success = private_repo_state.update_repositories(current_repos)
                     if success:
@@ -978,48 +982,54 @@ async def github_webhook(request: Request):
                     else:
                         print(f"❌ Failed to update repositories")
                 else:
-                    print(f"⚠️ Repository change for {account_login} but connected account is {current_owner}")
+                    print(
+                        f"⚠️ Repository change for {account_login} but connected account is {current_owner}"
+                    )
                     print(f"   This might be a different user reconnecting")
                     print(f"   Creating new state for {account_login}")
-                    
+
                     # Create new state for this account (replaces old account)
                     repo_list = [
                         {
-                            "name": r['name'],
-                            "full_name": r['full_name'],
-                            "private": r.get('private', False)
+                            "name": r["name"],
+                            "full_name": r["full_name"],
+                            "private": r.get("private", False),
                         }
                         for r in added
                     ]
-                    
+
                     success = private_repo_state.set_state(
                         owner=account_login,
                         installation_id=installation_id,
                         account_type=account_type,
-                        repositories=repo_list
+                        repositories=repo_list,
                     )
-                    
+
                     if success:
-                        print(f"✅ Created new state for {account_login} with {len(repo_list)} repos")
+                        print(
+                            f"✅ Created new state for {account_login} with {len(repo_list)} repos"
+                        )
                     else:
                         print(f"❌ Failed to create new state")
-            
+
             except Exception as e:
                 print(f"❌ Exception updating repositories: {e}")
                 import traceback
+
                 traceback.print_exc()
-        
+
         else:
             print(f"ℹ️ Unhandled webhook event type: {event_type}")
-        
+
         print("=" * 80)
         print()
-        
+
         return {"status": "received", "event": event_type, "action": action}
-    
+
     except Exception as e:
         print(f"❌ WEBHOOK ERROR: {e}")
         import traceback
+
         traceback.print_exc()
         print("=" * 80)
         return {"status": "error", "message": str(e)}
@@ -1033,39 +1043,35 @@ async def get_private_repo_state():
     """
     print("=" * 80)
     print("📊 API: Loading private repo state...")
-    
+
     try:
         state = private_repo_state.get_state()
-        
+
         if state:
             print(f"✅ Loaded private repo state")
             print(f"📍 S3 Key: Admin/state/private_runtime_state.json")
             print(f"   Owner: {state.get('owner')}")
             print(f"   Installation ID: {state.get('installation_id')}")
             print(f"   Repositories: {len(state.get('repositories', []))}")
-            for repo in state.get('repositories', []):
-                print(f"     - {repo['full_name']} ({'🔒 private' if repo['private'] else '🔓 public'})")
+            for repo in state.get("repositories", []):
+                print(
+                    f"     - {repo['full_name']} ({'🔒 private' if repo['private'] else '🔓 public'})"
+                )
         else:
             print("⚠️ No private repo state found")
             print("💡 Connect your GitHub account to get started")
-        
+
         print("=" * 80)
-        
-        return {
-            "connected": state is not None,
-            "state": state
-        }
-        
+
+        return {"connected": state is not None, "state": state}
+
     except Exception as e:
         print(f"❌ Error loading private repo state: {e}")
         import traceback
+
         traceback.print_exc()
         print("=" * 80)
-        return {
-            "connected": False,
-            "state": None,
-            "error": str(e)
-        }
+        return {"connected": False, "state": None, "error": str(e)}
 
 
 @router.post("/api/data-collection/disconnect-github")
@@ -1075,17 +1081,17 @@ async def disconnect_github():
     """
     print("=" * 80)
     print("🔌 API: Disconnecting GitHub account...")
-    
+
     try:
         current_owner = private_repo_state.get_owner()
-        
+
         if not current_owner:
             print("⚠️ No account connected")
             print("=" * 80)
             return {"success": False, "message": "No account connected"}
-        
+
         success = private_repo_state.clear_state()
-        
+
         if success:
             print(f"✅ Disconnected {current_owner}")
             print("=" * 80)
@@ -1094,13 +1100,15 @@ async def disconnect_github():
             print(f"❌ Failed to disconnect {current_owner}")
             print("=" * 80)
             return {"success": False, "message": "Failed to disconnect account"}
-        
+
     except Exception as e:
         print(f"❌ Error disconnecting: {e}")
         import traceback
+
         traceback.print_exc()
         print("=" * 80)
         return {"success": False, "message": str(e)}
+
 
 def get_json_from_s3(key: str) -> Dict[str, Any]:
     try:
@@ -1134,11 +1142,15 @@ async def evaluate_submission(request: EvaluationRequest):
     """
     Evaluates submission using data strictly from S3.
     """
-    print(f"🚀 START: Evaluating Submission {request.submission_id} for PR {request.pr_number}")
-    
+    print(
+        f"🚀 START: Evaluating Submission {request.submission_id} for PR {request.pr_number}"
+    )
+
     # 1. Define S3 Paths based on Repo Name
     submitted_key = f"Onboarding/{request.repo_name}/bugfix/onboarding_challenge_submitted_code.json"
-    solution_key = f"Onboarding/{request.repo_name}/bugfix/onboarding_coding_questions.json"
+    solution_key = (
+        f"Onboarding/{request.repo_name}/bugfix/onboarding_coding_questions.json"
+    )
 
     print(f"Fetching from S3 bucket: {S3_BUCKET}")
     print(f"Submission Key: {submitted_key}")
@@ -1150,11 +1162,15 @@ async def evaluate_submission(request: EvaluationRequest):
 
     if not submitted_data:
         print(f"❌ Submission file missing at: {submitted_key}")
-        raise HTTPException(status_code=404, detail=f"Submission file not found: {submitted_key}")
+        raise HTTPException(
+            status_code=404, detail=f"Submission file not found: {submitted_key}"
+        )
 
     if not solution_data:
         print(f"❌ Solution file missing at: {solution_key}")
-        raise HTTPException(status_code=404, detail=f"Solution file not found: {solution_key}")
+        raise HTTPException(
+            status_code=404, detail=f"Solution file not found: {solution_key}"
+        )
 
     # 3. Locate Specific Submission
     submission = None
@@ -1164,14 +1180,22 @@ async def evaluate_submission(request: EvaluationRequest):
         if sub["submission_id"] == request.submission_id:
             submission = sub
             break
-    
+
     # Fallback: If exact ID not found (rare race condition), try finding latest by PR
     if not submission:
-        print(f"⚠️ Submission ID {request.submission_id} not found immediately. Searching by PR...")
-        matching = [s for s in submissions_list if str(s.get("pr_number")) == str(request.pr_number)]
+        print(
+            f"⚠️ Submission ID {request.submission_id} not found immediately. Searching by PR..."
+        )
+        matching = [
+            s
+            for s in submissions_list
+            if str(s.get("pr_number")) == str(request.pr_number)
+        ]
         if matching:
-            submission = matching[-1] # Take latest
-            print(f"✅ Found latest submission for PR {request.pr_number}: {submission['submission_id']}")
+            submission = matching[-1]  # Take latest
+            print(
+                f"✅ Found latest submission for PR {request.pr_number}: {submission['submission_id']}"
+            )
 
     if not submission:
         raise HTTPException(
@@ -1181,26 +1205,22 @@ async def evaluate_submission(request: EvaluationRequest):
 
     # 4. Locate Specific Solution (Robust Lookup)
     solution_pr = None
-    
+
     # ✅ FIX: Added "questions" to the lookup list to match your JSON format
     pr_list = (
-        solution_data.get("pull_requests") 
-        or solution_data.get("challenges") 
+        solution_data.get("pull_requests")
+        or solution_data.get("challenges")
         or solution_data.get("questions")  # <--- Added this!
         or []
     )
 
     available_ids = []
-    
+
     for pr in pr_list:
         # Check multiple possible ID fields
-        pr_id = str(
-            pr.get("pr_number") 
-            or pr.get("question_number") 
-            or pr.get("id") 
-        )
+        pr_id = str(pr.get("pr_number") or pr.get("question_number") or pr.get("id"))
         available_ids.append(pr_id)
-        
+
         if pr_id == str(request.pr_number):
             solution_pr = pr
             break
@@ -1209,10 +1229,10 @@ async def evaluate_submission(request: EvaluationRequest):
         # LOGGING FOR DEBUGGING
         print(f"❌ PR {request.pr_number} not found.")
         print(f"ℹ️  IDs actually found in file: {available_ids}")
-        
+
         raise HTTPException(
             status_code=404,
-            detail=f"Solution for PR #{request.pr_number} not found in S3 file. Available IDs: {available_ids[:5]}..."
+            detail=f"Solution for PR #{request.pr_number} not found in S3 file. Available IDs: {available_ids[:5]}...",
         )
 
     openai_api_key = os.getenv("OPENAI_API_KEY")
@@ -1261,7 +1281,7 @@ async def evaluate_submission(request: EvaluationRequest):
         pr_title = solution_pr.get("title", "")
         # Handle your JSON's nested scenario object
         pr_description = (
-            solution_pr.get("description", "") 
+            solution_pr.get("description", "")
             or solution_pr.get("scenario", {}).get("problem_statement", "")
             or solution_pr.get("scenario", {}).get("context", "")
         )
@@ -1329,10 +1349,10 @@ async def evaluate_submission(request: EvaluationRequest):
             )
 
             result = json.loads(analysis_response.choices[0].message.content)
-            
+
             scores = result.get("scores", {})
             feedback = result.get("feedback", {})
-            
+
             correctness = float(scores.get("correctness", 0))
             quality = float(scores.get("quality", 0))
             completeness = float(scores.get("completeness", 0))
@@ -1357,7 +1377,7 @@ async def evaluate_submission(request: EvaluationRequest):
             total_quality += quality
             total_completeness += completeness
             files_evaluated += 1
-            
+
             print(f"  ✅ Evaluated {file_path} - Score: {correctness}/10")
 
         except Exception as e:
@@ -1371,7 +1391,9 @@ async def evaluate_submission(request: EvaluationRequest):
         avg_quality = 0.0
         avg_completeness = 0.0
         overall_score = 0.0
-        summary_text = "No matching files found between submission and solution to evaluate."
+        summary_text = (
+            "No matching files found between submission and solution to evaluate."
+        )
     else:
         avg_correctness = total_correctness / files_evaluated
         avg_quality = total_quality / files_evaluated
@@ -1381,7 +1403,7 @@ async def evaluate_submission(request: EvaluationRequest):
 
     # STEP 4: Generate Overall Summary (Optional - simple logic here to save time/cost)
     # You can add another OpenAI call here if you want a synthesized summary of all files.
-    
+
     return EvaluationResponse(
         submission_id=request.submission_id,
         pr_number=request.pr_number,
@@ -1391,7 +1413,7 @@ async def evaluate_submission(request: EvaluationRequest):
         completeness_score=round(avg_completeness, 2),
         evaluation_summary=summary_text,
         file_evaluations=file_evaluations,
-        suggestions=[], # Populated from individual files in frontend if needed
+        suggestions=[],  # Populated from individual files in frontend if needed
         strengths=[],
         areas_for_improvement=[],
         evaluated_at=datetime.now().isoformat(),
@@ -1400,6 +1422,70 @@ async def evaluate_submission(request: EvaluationRequest):
 
 # ==================== WEBSOCKET HANDLERS ====================
 
+@router.post("/chat/stream")
+async def chat_stream(request: ChatRequest):
+    if shared.chatbot_instance is None:
+        raise HTTPException(status_code=503, detail="Chatbot not initialized")
+
+    schema_name = get_user_schema_name(request.username)
+
+    user_repo = shared.get_user_repo(request.username)
+    if user_repo:
+        owner = user_repo.get("owner")
+        repo_name = user_repo.get("name")
+        if owner and repo_name:
+            if not shared.ensure_chatbot_for_repo(owner, repo_name):
+                print(f"⚠ Warning: Could not switch to repo {owner}/{repo_name}")
+
+    async def event_generator():
+        try:
+            loop = asyncio.get_event_loop()
+            queue: asyncio.Queue = asyncio.Queue()
+
+            def run_sync_generator():
+                try:
+                    gen = shared.chatbot_instance.chat_stream(
+                        request.query,
+                        schema_name,
+                        request.filters,
+                        session_id=request.session_id,
+                        role=request.role or "general",
+                    )
+                    for chunk in gen:
+                        loop.call_soon_threadsafe(queue.put_nowait, chunk)
+                except Exception as e:
+                    import traceback
+                    traceback.print_exc()
+                    loop.call_soon_threadsafe(
+                        queue.put_nowait,
+                        {"type": "error", "content": str(e)}
+                    )
+                finally:
+                    loop.call_soon_threadsafe(queue.put_nowait, None)  # sentinel
+
+            from concurrent.futures import ThreadPoolExecutor
+            executor = ThreadPoolExecutor(max_workers=1)
+            loop.run_in_executor(executor, run_sync_generator)
+
+            while True:
+                chunk = await queue.get()
+                if chunk is None:
+                    break
+                yield f"data: {json.dumps(chunk)}\n\n"
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 @router.websocket("/ws/chat")
 async def websocket_chat(websocket: WebSocket):
@@ -1421,6 +1507,8 @@ async def websocket_chat(websocket: WebSocket):
 
             query = message.get("query")
             username = message.get("username")
+            session_id = message.get("session_id")
+            role = message.get("role", "general")
 
             if not query:
                 await websocket.send_json(
@@ -1428,59 +1516,50 @@ async def websocket_chat(websocket: WebSocket):
                 )
                 continue
 
-            # Determine which repo to use based on username
-            user_repo = shared.get_user_repo(username)
+            schema_name = get_user_schema_name(username)
 
+            # Swap to correct repo for this user
+            user_repo = shared.get_user_repo(username)
             if user_repo:
                 owner = user_repo.get("owner")
                 repo_name = user_repo.get("name")
-
                 if owner and repo_name:
-                    # Ensure chatbot is using the correct repo database
                     if not shared.ensure_chatbot_for_repo(owner, repo_name):
                         await websocket.send_json(
                             {
                                 "type": "status",
-                                "message": f"Warning: Could not switch to repo {owner}/{repo_name}, using current database",
+                                "content": f"Warning: Could not switch to repo {owner}/{repo_name}, using current database",
                             }
                         )
 
-            await websocket.send_json(
-                {"type": "status", "message": "Searching GitHub codebase..."}
-            )
-
-            result = shared.chatbot_instance.chat(query, message.get("filters"))
-
-            if result.get("emails"):
-                await websocket.send_json(
-                    {
-                        "type": "status",
-                        "message": f"Found {len(result['emails'])} relevant emails",
-                    }
+            # Stream via chat_stream generator
+            try:
+                loop = asyncio.get_event_loop()
+                gen = shared.chatbot_instance.chat_stream(
+                    query,
+                    schema_name,
+                    message.get("filters"),
+                    session_id=session_id,
+                    role=role,
                 )
+                for chunk in gen:
+                    await websocket.send_json(chunk)
+                    await asyncio.sleep(0) 
 
-            sentences = re.split(r"(?<=[.!?])\s+", result["answer"])
-            for sentence in sentences:
-                await websocket.send_json({"type": "chunk", "content": sentence + " "})
-                await asyncio.sleep(0.05)
+            except Exception as stream_err:
+                import traceback
 
-            await websocket.send_json(
-                {
-                    "type": "complete",
-                    "answer": result["answer"],
-                    "sources": result["sources"],
-                    "chunks_retrieved": result["chunks_retrieved"],
-                    "related_knowledge": result.get("related_knowledge"),
-                    "emails": result.get("emails", []),
-                    "has_diagram": result.get("has_diagram", False),
-                    "flow_data": result.get("flow_data"),
-                    "query_type": result.get("query_type"),
-                    "context_quality": result.get("context_quality"),
-                }
-            )
+                traceback.print_exc()
+                await websocket.send_json({"type": "error", "message": str(stream_err)})
 
     except WebSocketDisconnect:
         print("Client disconnected\n")
     except Exception as e:
         print(f"WebSocket error: {e}\n")
-        await websocket.send_json({"type": "error", "message": str(e)})
+        import traceback
+
+        traceback.print_exc()
+        try:
+            await websocket.send_json({"type": "error", "message": str(e)})
+        except Exception:
+            pass  # socket already closed, ignore

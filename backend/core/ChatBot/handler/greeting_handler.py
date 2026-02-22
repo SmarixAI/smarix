@@ -74,15 +74,19 @@ class GreetingHandler:
         # Stream greeting response chunks
         for chunk in self.chatbot.generate_greeting_response_streaming():
             greeting_response += chunk
-            yield {'type': 'chunk', 'content': chunk}
+            yield {'type': 'token', 'content': chunk}
 
         # Update history with complete response
         self.chatbot.history.append({'role': 'assistant', 'content': greeting_response})
 
         # Yield final complete response
         yield {
-            'type': 'complete',
-            'content': self._build_response_dict(greeting_response, query_type)
+            'type': 'done',                   
+            'content': greeting_response,       
+            'metadata': {
+                k: v for k, v in self._build_response_dict(greeting_response, query_type).items()
+                if k != 'answer'               
+            }
         }
     
     def _collect_greeting_response(self) -> str:

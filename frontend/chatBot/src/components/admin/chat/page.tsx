@@ -47,6 +47,7 @@ import { useRouter } from "next/navigation";
 import { Fira_Code, Space_Grotesk } from "next/font/google";
 import Image from "next/image";
 import { useAuth } from "@/components/auth/AuthContext";
+import StreamStatusLoader from "./StreamStatusLoader";
 
 const firaCode = Fira_Code({
   weight: ["400", "500", "600", "700"],
@@ -94,6 +95,7 @@ if (typeof window !== "undefined") {
 }
 
 const sanitizeMermaidCode = (code: string): string => {
+  if (!code || typeof code !== "string") return "";
   const lines = code.split("\n");
 
   const sanitizedLines = lines.map((line) => {
@@ -137,7 +139,8 @@ const MermaidDiagram = ({ code }: { code: string }) => {
   const [zoom, setZoom] = useState(1);
 
   useEffect(() => {
-    if (!code || !containerRef.current) return;
+    if (!code || typeof code !== "string" || code.trim() === "") return;
+    if (!containerRef.current) return;
 
     const renderDiagram = async () => {
       setIsLoading(true);
@@ -398,6 +401,7 @@ export default function ChatPage() {
 
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState("");
+  const [streamStatus, setStreamStatus] = useState<string>("");
 
 
   // Check if user has status "general"
@@ -405,7 +409,7 @@ export default function ChatPage() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  
+
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -421,7 +425,7 @@ export default function ChatPage() {
   }, [user]);
 
   const convertFlowDataToMermaid = (flowData: FlowData): string => {
-    if (!flowData || !flowData.nodes || !flowData.edges) return "";
+    if (!flowData || !flowData.nodes?.length || !flowData.edges?.length) return "";
 
     const direction = flowData.metadata?.direction || "TD";
     let mermaidCode = `%%{init: {'theme':'default', 'themeVariables': {'primaryColor':'#0E1B2E','primaryTextColor':'#FAFAFA','primaryBorderColor':'#0E1B2E','lineColor':'#0E1B2E','secondaryColor':'#1a2f4d','tertiaryColor':'#FAFAFA'},'flowchart':{'defaultRenderer':'elk','htmlLabels':true,'curve':'basis'}}}%%\n`;
@@ -677,7 +681,6 @@ export default function ChatPage() {
   };
 
   const sendMessage = async () => {
-    console.log(user.username);
     if (!input.trim() || isLoading || !user?.username) return;
 
     const userMessage: Message = {
@@ -688,79 +691,118 @@ export default function ChatPage() {
     };
 
     setMessages((prev) => [...prev, userMessage]);
+    const currentInput = input;
     setInput("");
     setIsLoading(true);
 
+    // Placeholder assistant message to stream into
+    const assistantId = (Date.now() + 1).toString();
+    setMessages((prev) => [
+      ...prev,
+      { id: assistantId, role: "assistant", content: "", timestamp: new Date() },
+    ]);
+
     try {
-      const requestBody: {
-        query: string;
-        session_id?: string;
-        username: string;
-        role?: string;
-      } = {
-        query: input,
+      const requestBody: any = {
+        query: currentInput,
         role: selectedRole,
         username: user.username,
       };
+      if (sessionId) requestBody.session_id = sessionId;
 
-      if (sessionId) {
-        requestBody.session_id = sessionId;
-      }
-
-      const response = await fetch(`${baseURL}/chat`, {
+      const response = await fetch(`${baseURL}/chat/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to get response");
+      if (!response.ok || !response.body) throw new Error("Stream failed");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let accumulated = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";   // keep incomplete line
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const raw = line.slice(6).trim();
+          if (!raw || raw === "[DONE]") continue;
+
+          try {
+            const chunk = JSON.parse(raw);
+
+            if (chunk.type === "status") {
+              setStreamStatus(chunk.content);
+            }
+
+            if (chunk.type === "token") {
+              accumulated += chunk.content;
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId ? { ...m, content: accumulated } : m
+                )
+              );
+            }
+
+            if (chunk.type === "done") {
+              const meta = chunk.metadata ?? {};
+              const normalizedRelated = normalizeRelatedKnowledge(
+                meta.related_knowledge
+              );
+
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? {
+                      ...m,
+                      content: chunk.content || accumulated,
+                      sources: meta.sources ?? [],
+                      chunks_retrieved: meta.chunks_retrieved ?? 0,
+                      related_knowledge: {
+                        issues: normalizedRelated.issues,
+                        prs: normalizedRelated.prs,
+                        commits: normalizedRelated.commits,
+                      },
+                      metrics_summary: normalizedRelated.metricsSummary,
+                    }
+                    : m
+                )
+              );
+
+              if (meta.session_id && (!sessionId || sessionId !== meta.session_id)) {
+                setSessionId(meta.session_id);
+                setSelectedSessionId(meta.session_id);
+                await loadSessions();
+              }
+              setStreamStatus("");
+            }
+          } catch {
+            // partial JSON — ignore
+          }
+        }
       }
-
-      const data = await response.json();
-
-      if (
-        data.conversation_id &&
-        (!sessionId || sessionId !== data.conversation_id)
-      ) {
-        setSessionId(data.conversation_id);
-        setSelectedSessionId(data.conversation_id);
-        await loadSessions();
-        console.log(`New session created: ${data.conversation_id}`);
-      }
-
-      const normalizedRelated = normalizeRelatedKnowledge(
-        data.related_knowledge,
-      );
-
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: data.answer,
-        sources: data.sources,
-        chunks_retrieved: data.chunks_retrieved,
-        flow_data: data.flow_data,
-        related_knowledge: {
-          issues: normalizedRelated.issues,
-          prs: normalizedRelated.prs,
-          commits: normalizedRelated.commits,
-        },
-        metrics_summary: normalizedRelated.metricsSummary,
-        timestamp: new Date(),
-      };
-
-      setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
-      console.error("Error:", error);
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content:
-          "Sorry, I encountered an error. Please make sure the backend is running and try again.",
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
+      console.error("Stream error:", error);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantId
+            ? {
+              ...m,
+              content: "Sorry, I encountered an error. Please try again.",
+            }
+            : m
+        )
+      );
     } finally {
+      setStreamStatus("");
       setIsLoading(false);
     }
   };
@@ -774,16 +816,22 @@ export default function ChatPage() {
     // 1️⃣ Remove everything AFTER edited message
     const trimmedMessages = messages.slice(0, index);
 
-    // 2️⃣ Replace edited message
+    // 2️⃣ Replace edited message with updated content
     const editedMessage: Message = {
       ...messages[index],
       content: editingContent,
       timestamp: new Date(),
     };
 
-    const updatedMessages = [...trimmedMessages, editedMessage];
+    const assistantId = (Date.now() + 1).toString();
 
-    setMessages(updatedMessages);
+    // 3️⃣ Add edited user message + empty assistant placeholder in one shot
+    setMessages([
+      ...trimmedMessages,
+      editedMessage,
+      { id: assistantId, role: "assistant", content: "", timestamp: new Date() },
+    ]);
+
     setEditingMessageId(null);
     setEditingContent("");
     setIsLoading(true);
@@ -804,43 +852,110 @@ export default function ChatPage() {
         requestBody.session_id = sessionId;
       }
 
-      const response = await fetch(`${baseURL}/chat`, {
+      const response = await fetch(`${baseURL}/chat/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
       });
 
-      if (!response.ok) throw new Error("Failed to regenerate");
+      if (!response.ok || !response.body) throw new Error("Stream failed");
 
-      const data = await response.json();
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let accumulated = "";
 
-      const normalizedRelated = normalizeRelatedKnowledge(
-        data.related_knowledge,
-      );
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: data.answer,
-        sources: data.sources,
-        chunks_retrieved: data.chunks_retrieved,
-        flow_data: data.flow_data,
-        related_knowledge: {
-          issues: normalizedRelated.issues,
-          prs: normalizedRelated.prs,
-          commits: normalizedRelated.commits,
-        },
-        metrics_summary: normalizedRelated.metricsSummary,
-        timestamp: new Date(),
-      };
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";   // keep incomplete line for next iteration
 
-      setMessages((prev) => [...prev, assistantMessage]);
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const raw = line.slice(6).trim();
+          if (!raw || raw === "[DONE]") continue;
+
+          try {
+            const chunk = JSON.parse(raw);
+
+            if (chunk.type === "status") {
+              setStreamStatus(chunk.content);
+            }
+
+            if (chunk.type === "token") {
+              accumulated += chunk.content;
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId ? { ...m, content: accumulated } : m
+                )
+              );
+            }
+
+            if (chunk.type === "done") {
+              const meta = chunk.metadata ?? {};
+              const normalizedRelated = normalizeRelatedKnowledge(
+                meta.related_knowledge
+              );
+
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? {
+                      ...m,
+                      content: chunk.content || accumulated,
+                      sources: meta.sources ?? [],
+                      chunks_retrieved: meta.chunks_retrieved ?? 0,
+                      flow_data: meta.flow_data ?? null,
+                      related_knowledge: {
+                        issues: normalizedRelated.issues,
+                        prs: normalizedRelated.prs,
+                        commits: normalizedRelated.commits,
+                      },
+                      metrics_summary: normalizedRelated.metricsSummary,
+                    }
+                    : m
+                )
+              );
+
+              // Update session if new one was created
+              if (
+                meta.session_id &&
+                (!sessionId || sessionId !== meta.session_id)
+              ) {
+                setSessionId(meta.session_id);
+                setSelectedSessionId(meta.session_id);
+                await loadSessions();
+              }
+
+              setStreamStatus("");
+            }
+          } catch {
+            // Partial JSON line — skip and wait for next chunk
+          }
+        }
+      }
     } catch (error) {
       console.error("Resend failed:", error);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantId
+            ? {
+              ...m,
+              content:
+                "Sorry, I encountered an error while regenerating. Please try again.",
+            }
+            : m
+        )
+      );
     } finally {
+      setStreamStatus("");
       setIsLoading(false);
     }
   };
+
 
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -976,7 +1091,7 @@ export default function ChatPage() {
                   setMessages([]);
 
                   await loadSessions();
-                } catch (err) {}
+                } catch (err) { }
               }}
               className="w-full p-3 bg-[#0E1B2E] hover:bg-[#1a2f4d] text-white rounded-lg transition-all flex items-center justify-center gap-2 group hover:scale-[1.02] active:scale-[0.98] shadow-md hover:shadow-lg hover:shadow-[#0E1B2E]/20"
             >
@@ -1068,11 +1183,10 @@ export default function ChatPage() {
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: 20 }}
-                      className={`p-3 cursor-pointer rounded-lg transition-all mb-2 group relative ${
-                        selectedSessionId === session.session_id
-                          ? "bg-[#0E1B2E] text-white border border-[#0E1B2E] shadow-lg"
-                          : "hover:bg-white/60 backdrop-blur-sm border border-transparent hover:border-[#0E1B2E]/20 bg-white/40"
-                      }`}
+                      className={`p-3 cursor-pointer rounded-lg transition-all mb-2 group relative ${selectedSessionId === session.session_id
+                        ? "bg-[#0E1B2E] text-white border border-[#0E1B2E] shadow-lg"
+                        : "hover:bg-white/60 backdrop-blur-sm border border-transparent hover:border-[#0E1B2E]/20 bg-white/40"
+                        }`}
                       onClick={() => loadSession(session.session_id)}
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -1168,23 +1282,21 @@ export default function ChatPage() {
                       key={message.id}
                       onClick={() => scrollToMessage(message.id)}
                       whileHover={{ x: 2 }}
-                      className={`w-full text-left px-3 py-2 rounded-lg transition-colors mb-1 ${
-                        selectedMessageId === message.id
-                          ? "bg-[#0E1B2E] text-white border border-[#0E1B2E] shadow-lg"
-                          : "hover:bg-white/60 backdrop-blur-sm border border-transparent hover:border-[#0E1B2E]/20 bg-white/40"
-                      }`}
+                      className={`w-full text-left px-3 py-2 rounded-lg transition-colors mb-1 ${selectedMessageId === message.id
+                        ? "bg-[#0E1B2E] text-white border border-[#0E1B2E] shadow-lg"
+                        : "hover:bg-white/60 backdrop-blur-sm border border-transparent hover:border-[#0E1B2E]/20 bg-white/40"
+                        }`}
                     >
                       <div className="flex items-start space-x-2">
                         <div
-                          className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                            message.role === "user"
-                              ? selectedMessageId === message.id
-                                ? "bg-white/20"
-                                : "bg-[#0E1B2E]"
-                              : selectedMessageId === message.id
-                                ? "bg-white/20"
-                                : "bg-[#0E1B2E]/80"
-                          }`}
+                          className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${message.role === "user"
+                            ? selectedMessageId === message.id
+                              ? "bg-white/20"
+                              : "bg-[#0E1B2E]"
+                            : selectedMessageId === message.id
+                              ? "bg-white/20"
+                              : "bg-[#0E1B2E]/80"
+                            }`}
                         >
                           {message.role === "user" ? (
                             <User className="w-3 h-3 text-white" />
@@ -1195,22 +1307,20 @@ export default function ChatPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-0.5">
                             <span
-                              className={`${spaceGrotesk.className} text-xs font-medium ${
-                                selectedMessageId === message.id
-                                  ? "text-white"
-                                  : message.role === "user"
-                                    ? "text-[#0E1B2E]"
-                                    : "text-[#0E1B2E]/80"
-                              }`}
+                              className={`${spaceGrotesk.className} text-xs font-medium ${selectedMessageId === message.id
+                                ? "text-white"
+                                : message.role === "user"
+                                  ? "text-[#0E1B2E]"
+                                  : "text-[#0E1B2E]/80"
+                                }`}
                             >
                               {message.role === "user" ? "You" : "Assistant"}
                             </span>
                             <span
-                              className={`${firaCode.className} text-[10px] ${
-                                selectedMessageId === message.id
-                                  ? "text-white/70"
-                                  : "text-[#0E1B2E]/50"
-                              }`}
+                              className={`${firaCode.className} text-[10px] ${selectedMessageId === message.id
+                                ? "text-white/70"
+                                : "text-[#0E1B2E]/50"
+                                }`}
                             >
                               {message.timestamp.toLocaleTimeString([], {
                                 hour: "2-digit",
@@ -1219,11 +1329,10 @@ export default function ChatPage() {
                             </span>
                           </div>
                           <p
-                            className={`${spaceGrotesk.className} text-xs line-clamp-2 ${
-                              selectedMessageId === message.id
-                                ? "text-white/90"
-                                : "text-[#0E1B2E]/70"
-                            }`}
+                            className={`${spaceGrotesk.className} text-xs line-clamp-2 ${selectedMessageId === message.id
+                              ? "text-white/90"
+                              : "text-[#0E1B2E]/70"
+                              }`}
                           >
                             {getMessagePreview(message.content)}
                           </p>
@@ -1372,7 +1481,7 @@ export default function ChatPage() {
           )}
 
           <AnimatePresence>
-            {messages.map((message) => (
+            {messages.filter(message => !(message.role === "assistant" && message.content === "")).map((message) => (
               <motion.div
                 key={message.id}
                 ref={(el) => {
@@ -1381,13 +1490,11 @@ export default function ChatPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className={`flex gap-4 transition-all duration-300 ${
-                  message.role === "user" ? "justify-end" : "justify-start"
-                } ${
-                  selectedMessageId === message.id
+                className={`flex gap-4 transition-all duration-300 ${message.role === "user" ? "justify-end" : "justify-start"
+                  } ${selectedMessageId === message.id
                     ? "bg-[#0E1B2E]/5 rounded-lg px-2 py-1 -mx-2 -my-1"
                     : ""
-                }`}
+                  }`}
               >
                 {message.role === "assistant" && (
                   <div className="w-8 h-8 bg-[#0E1B2E] rounded-lg flex items-center justify-center flex-shrink-0 mt-1 shadow-md">
@@ -1396,16 +1503,14 @@ export default function ChatPage() {
                 )}
 
                 <div
-                  className={`max-w-4xl flex-1 min-w-0 ${
-                    message.role === "user" ? "order-first" : ""
-                  }`}
+                  className={`max-w-4xl flex-1 min-w-0 ${message.role === "user" ? "order-first" : ""
+                    }`}
                 >
                   <div
-                    className={`p-5 rounded-2xl max-w-full overflow-x-auto ${
-                      message.role === "user"
-                        ? "bg-[#0E1B2E] text-white border border-[#0E1B2E] shadow-md"
-                        : "bg-white/60 backdrop-blur-sm border border-[#0E1B2E]/10 shadow-sm"
-                    }`}
+                    className={`p-5 rounded-2xl max-w-full overflow-x-auto ${message.role === "user"
+                      ? "bg-[#0E1B2E] text-white border border-[#0E1B2E] shadow-md"
+                      : "bg-white/60 backdrop-blur-sm border border-[#0E1B2E]/10 shadow-sm"
+                      }`}
                     style={{
                       WebkitFontSmoothing: "antialiased",
                       MozOsxFontSmoothing: "grayscale",
@@ -1422,7 +1527,7 @@ export default function ChatPage() {
                                 {message.content.slice(0, 150)}...
                               </p>
                             </div>
-                            
+
                           </div>
                         ) : (
                           <>
@@ -1564,12 +1669,9 @@ export default function ChatPage() {
                                     }
 
                                     if (!inline && language === "mermaid") {
-                                      const mermaidCode = String(
-                                        children,
-                                      ).replace(/\n$/, "");
-                                      return (
-                                        <MermaidDiagram code={mermaidCode} />
-                                      );
+                                      const mermaidCode = String(children ?? "").replace(/\n$/, "").trim();
+                                      if (!mermaidCode) return null;
+                                      return <MermaidDiagram code={mermaidCode} />;
                                     }
 
                                     return !inline && match ? (
@@ -1685,9 +1787,8 @@ export default function ChatPage() {
 
                                     return (
                                       <td
-                                        className={`px-4 py-3 text-sm text-[#0E1B2E] border-b border-[#0E1B2E]/10 ${
-                                          isFilePath ? "font-mono text-xs" : ""
-                                        } ${spaceGrotesk.className}`}
+                                        className={`px-4 py-3 text-sm text-[#0E1B2E] border-b border-[#0E1B2E]/10 ${isFilePath ? "font-mono text-xs" : ""
+                                          } ${spaceGrotesk.className}`}
                                         {...props}
                                       >
                                         {isFilePath ? (
@@ -1696,33 +1797,31 @@ export default function ChatPage() {
                                           </code>
                                         ) : isStatus ? (
                                           <span
-                                            className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-                                              cellContent
+                                            className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${cellContent
+                                              .toLowerCase()
+                                              .includes("added")
+                                              ? "bg-green-100 text-green-800"
+                                              : cellContent
                                                 .toLowerCase()
-                                                .includes("added")
-                                                ? "bg-green-100 text-green-800"
+                                                .includes("deleted")
+                                                ? "bg-red-100 text-red-800"
                                                 : cellContent
-                                                      .toLowerCase()
-                                                      .includes("deleted")
-                                                  ? "bg-red-100 text-red-800"
-                                                  : cellContent
-                                                        .toLowerCase()
-                                                        .includes("modified")
-                                                    ? "bg-blue-100 text-blue-800"
-                                                    : "bg-gray-100 text-gray-800"
-                                            }`}
+                                                  .toLowerCase()
+                                                  .includes("modified")
+                                                  ? "bg-blue-100 text-blue-800"
+                                                  : "bg-gray-100 text-gray-800"
+                                              }`}
                                           >
                                             {cellContent}
                                           </span>
                                         ) : isChange ? (
                                           <span
-                                            className={`font-mono font-semibold ${
-                                              cellContent.startsWith("+")
-                                                ? "text-green-600"
-                                                : cellContent.startsWith("-")
-                                                  ? "text-red-600"
-                                                  : "text-[#0E1B2E]"
-                                            }`}
+                                            className={`font-mono font-semibold ${cellContent.startsWith("+")
+                                              ? "text-green-600"
+                                              : cellContent.startsWith("-")
+                                                ? "text-red-600"
+                                                : "text-[#0E1B2E]"
+                                              }`}
                                           >
                                             {cellContent}
                                           </span>
@@ -1859,95 +1958,93 @@ export default function ChatPage() {
                             <FileCode className="w-3 h-3" />
                             {message.chunks_retrieved} sources
                             <ChevronDown
-                              className={`w-3 h-3 transition-transform ${
-                                showSources[message.id] ? "rotate-180" : ""
-                              }`}
+                              className={`w-3 h-3 transition-transform ${showSources[message.id] ? "rotate-180" : ""
+                                }`}
                             />
                           </button>
                         )}
 
                         {((message.related_knowledge &&
                           (message.related_knowledge.issues?.length || 0) +
-                            (message.related_knowledge.prs?.length || 0) +
-                            (message.related_knowledge.commits?.length || 0) >
-                            0) ||
+                          (message.related_knowledge.prs?.length || 0) +
+                          (message.related_knowledge.commits?.length || 0) >
+                          0) ||
                           message.metrics_summary) && (
-                          <button
-                            onClick={() => toggleRelatedKnowledge(message.id)}
-                            className={`text-xs text-[#0E1B2E]/70 hover:text-[#0E1B2E] transition-colors flex items-center gap-1.5 px-2 py-1 hover:bg-[#0E1B2E]/5 rounded ${spaceGrotesk.className}`}
-                          >
-                            <GitPullRequest className="w-3 h-3" />
-                            Related{" "}
-                            {message.related_knowledge
-                              ? message.related_knowledge.issues.length +
+                            <button
+                              onClick={() => toggleRelatedKnowledge(message.id)}
+                              className={`text-xs text-[#0E1B2E]/70 hover:text-[#0E1B2E] transition-colors flex items-center gap-1.5 px-2 py-1 hover:bg-[#0E1B2E]/5 rounded ${spaceGrotesk.className}`}
+                            >
+                              <GitPullRequest className="w-3 h-3" />
+                              Related{" "}
+                              {message.related_knowledge
+                                ? message.related_knowledge.issues.length +
                                 message.related_knowledge.prs.length +
                                 message.related_knowledge.commits.length
-                              : 0}
-                            {message.metrics_summary ? " • metrics" : ""}
-                            <ChevronDown
-                              className={`w-3 h-3 transition-transform ${
-                                showRelatedKnowledge[message.id]
+                                : 0}
+                              {message.metrics_summary ? " • metrics" : ""}
+                              <ChevronDown
+                                className={`w-3 h-3 transition-transform ${showRelatedKnowledge[message.id]
                                   ? "rotate-180"
                                   : ""
-                              }`}
-                            />
-                          </button>
-                        )}
+                                  }`}
+                              />
+                            </button>
+                          )}
                       </div>
                     )}
                     {message.role === "user" && (
-                    <div className="mt-3 flex justify-end items-center gap-3 pt-3 border-t border-white/20">
-                      
-                      {/* Collapse Button */}
-                      <button
-                        onClick={() => toggleCollapse(message.id)}
-                        className="text-xs text-white/70 hover:text-white transition-colors flex items-center gap-1.5 px-2 py-1 hover:bg-white/10 rounded"
-                      >
-                        {collapsedMessages[message.id] ? (
-                          <>
-                            <Maximize2 className="w-3 h-3" />
-                            Expand
-                          </>
-                        ) : (
-                          <>
-                            <Minimize2 className="w-3 h-3" />
-                            Collapse
-                          </>
-                        )}
-                      </button>
+                      <div className="mt-3 flex justify-end items-center gap-3 pt-3 border-t border-white/20">
 
-                      {/* Copy Button */}
-                      <button
-                        onClick={() => copyToClipboard(message.content, message.id)}
-                        className="text-xs text-white/70 hover:text-white transition-colors flex items-center gap-1.5 px-2 py-1 hover:bg-white/10 rounded"
-                      >
-                        {copiedId === message.id ? (
-                          <>
-                            <Check className="w-3 h-3" />
-                            Copied
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3 h-3" />
-                            Copy
-                          </>
-                        )}
-                      </button>
+                        {/* Collapse Button */}
+                        <button
+                          onClick={() => toggleCollapse(message.id)}
+                          className="text-xs text-white/70 hover:text-white transition-colors flex items-center gap-1.5 px-2 py-1 hover:bg-white/10 rounded"
+                        >
+                          {collapsedMessages[message.id] ? (
+                            <>
+                              <Maximize2 className="w-3 h-3" />
+                              Expand
+                            </>
+                          ) : (
+                            <>
+                              <Minimize2 className="w-3 h-3" />
+                              Collapse
+                            </>
+                          )}
+                        </button>
 
-                      {/* Edit Button */}
-                      <button
-                        onClick={() => {
-                          setEditingMessageId(message.id);
-                          setEditingContent(message.content);
-                        }}
-                        className="text-xs text-white/70 hover:text-white transition-colors flex items-center gap-1.5 px-2 py-1 hover:bg-white/10 rounded"
-                      >
-                        ✏️ Edit
-                      </button>
+                        {/* Copy Button */}
+                        <button
+                          onClick={() => copyToClipboard(message.content, message.id)}
+                          className="text-xs text-white/70 hover:text-white transition-colors flex items-center gap-1.5 px-2 py-1 hover:bg-white/10 rounded"
+                        >
+                          {copiedId === message.id ? (
+                            <>
+                              <Check className="w-3 h-3" />
+                              Copied
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3" />
+                              Copy
+                            </>
+                          )}
+                        </button>
+
+                        {/* Edit Button */}
+                        <button
+                          onClick={() => {
+                            setEditingMessageId(message.id);
+                            setEditingContent(message.content);
+                          }}
+                          className="text-xs text-white/70 hover:text-white transition-colors flex items-center gap-1.5 px-2 py-1 hover:bg-white/10 rounded"
+                        >
+                          ✏️ Edit
+                        </button>
 
 
-                    </div>
-                  )}
+                      </div>
+                    )}
 
 
                     {/* Sources Display */}
@@ -2028,26 +2125,12 @@ export default function ChatPage() {
             ))}
           </AnimatePresence>
 
-          {isLoading && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex gap-4"
-            >
-              <div className="w-8 h-8 bg-[#0E1B2E] rounded-lg flex items-center justify-center shadow-md">
-                <Bot className="w-5 h-5 text-white" />
-              </div>
-              <div className="p-4 bg-white/60 backdrop-blur-sm border border-[#0E1B2E]/10 rounded-2xl shadow-sm">
-                <div className="flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin text-[#0E1B2E]" />
-                  <span
-                    className={`text-sm text-[#0E1B2E]/70 ${spaceGrotesk.className}`}
-                  >
-                    Searching through your codebase and related knowledge
-                  </span>
-                </div>
-              </div>
-            </motion.div>
+          {isLoading && !messages.find(
+            (m) => m.role === "assistant" &&
+            m.content.length > 0 &&
+            m.id === messages[messages.length - 1]?.id
+          ) && (
+            <StreamStatusLoader streamStatus={streamStatus} />
           )}
 
           <div ref={messagesEndRef} />

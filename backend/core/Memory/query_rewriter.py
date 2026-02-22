@@ -72,22 +72,23 @@ class LLMQueryRewriter:
         if not session_id:
             return raw_query
 
-        # Decide if query should be rewritten using history.
-        if self._is_self_contained(raw_query, session_id):
-            return raw_query
-
+        # Check Redis cache FIRST (cheapest operation, no DB needed)
         if self.redis_cache:
             cached = self.redis_cache.get_rewritten_query(session_id, raw_query)
             if cached:
                 logger.info(f"REWRITE CACHE HIT | {cached[:50]}...")
                 return cached
 
+        # Now fetch messages once for both self_contained check and context building
         try:
             messages = self.conversation_store.get_messages(session_id, schema_name=schema_name, limit=6)
         except Exception:
             return raw_query
 
         if len(messages) < 2:
+            return raw_query
+
+        if self._is_self_contained(raw_query, session_id=session_id, messages=messages):
             return raw_query
 
         session_context = self._format_session_context(messages)
@@ -99,102 +100,45 @@ class LLMQueryRewriter:
 
         return rewritten_query if rewritten_query else raw_query
 
-    def _is_self_contained(self, query: str, session_id: str = None, schema_name: str = None) -> bool:
-        """
-        Decide whether a query has enough information to be used as-is
-        without rewriting against prior context.
-
-        This is intentionally conservative: many short follow-ups should be
-        rewritten so they carry context, which also reduces bad cache hits.
-        """
+    def _is_self_contained(self, query: str, session_id: str = None, schema_name: str = None, messages: list = None) -> bool:
         q = query.strip()
         query_lower = q.lower()
 
-        # Explicit PR / issue patterns are "anchored" but may still need context.
-        # Do NOT early-return here; just record flags.
-        has_pr_ref = bool(
-            re.search(r"\bpr[#\s-]?\d+|\bpull request[#\s-]?\d+", query_lower)
-        )
-        has_issue_ref = bool(
-            re.search(r"\bissue[#\s-]?\d+|\bbug[#\s-]?\d+", query_lower)
-        )
+        has_pr_ref = bool(re.search(r"\bpr[#\s-]?\d+|\bpull request[#\s-]?\d+", query_lower))
+        has_issue_ref = bool(re.search(r"\bissue[#\s-]?\d+|\bbug[#\s-]?\d+", query_lower))
 
-        # Very long queries are usually self-contained.
         if len(q.split()) >= 20:
             return True
 
-        # Architecture/overview queries are often independent.
-        if any(
-            word in query_lower
-            for word in ["architecture", "structure", "overview", "diagram"]
-        ):
+        if any(word in query_lower for word in ["architecture", "structure", "overview", "diagram"]):
             return True
 
-        # High technical density → likely self-contained.
-        tech_words = len(
-            re.findall(
-                r"\b(py|js|db|api|service|plugin|function|class|module)\b", query_lower
-            )
-        )
+        tech_words = len(re.findall(r"\b(py|js|db|api|service|plugin|function|class|module)\b", query_lower))
         if tech_words >= 3:
             return True
 
-        # Conversational indicators → needs context.
         context_indicators = [
-            "it",
-            "this",
-            "that",
-            "these",
-            "those",
-            "they",
-            "them",
-            "what about",
-            "how about",
-            "tell me more",
-            "explain",
-            "also",
-            "and",
-            "but",
-            "more details",
-            "elaborate",
-            "same",
-            "similar",
-            "related",
-            "another",
-            "there",
+            "it", "this", "that", "these", "those", "they", "them",
+            "what about", "how about", "tell me more", "explain", "also",
+            "and", "but", "more details", "elaborate", "same", "similar",
+            "related", "another", "there",
         ]
         if any(indicator in query_lower for indicator in context_indicators):
             logger.info(f"NEEDS CONTEXT | Conversational indicator: '{q[:60]}'")
             return False
 
-        # Short question starters usually need context.
-        question_starters = (
-            "what",
-            "how",
-            "why",
-            "when",
-            "where",
-            "can you",
-            "could you",
-            "is",
-            "are",
-            "does",
-            "do",
-            "did",
-        )
+        question_starters = ("what", "how", "why", "when", "where", "can you", "could you", "is", "are", "does", "do", "did")
         if query_lower.startswith(question_starters) and len(q.split()) <= 8:
-            # Heuristic: if it references PR/issue and is short, treat as follow-up.
             if has_pr_ref or has_issue_ref:
                 logger.info(f"NEEDS CONTEXT | Short PR/issue question: '{q[:60]}'")
                 return False
             logger.info(f"NEEDS CONTEXT | Short question: '{q[:60]}'")
             return False
 
-        # Session-based similarity check: only skip rewriting if query is
-        # extremely similar to a recent one (true repeat / minor edit).
+        # Use pre-fetched messages if available, avoid DB call
         if session_id:
             try:
-                recent_messages = self.conversation_store.get_messages(
+                recent_messages = messages if messages is not None else self.conversation_store.get_messages(
                     session_id, schema_name=schema_name, limit=4
                 )
                 if recent_messages:
@@ -203,33 +147,22 @@ class LLMQueryRewriter:
                         for msg in recent_messages
                         if msg.get("role") == "user"
                     ]
-
                     query_words = set(query_lower.split())
-
                     for recent_q in recent_queries[-2:]:
                         recent_words = set(recent_q.split())
                         if not query_words or not recent_words:
                             continue
-
-                        overlap = len(query_words & recent_words) / len(
-                            query_words | recent_words
-                        )
-
-                        # Strict overlap threshold so only near-duplicates are self-contained.
+                        overlap = len(query_words & recent_words) / len(query_words | recent_words)
                         if overlap >= 0.70:
-                            logger.info(
-                                f"SKIP REWRITING | Very similar to recent (overlap={overlap * 100:.0f}%)"
-                            )
+                            logger.info(f"SKIP REWRITING | Very similar to recent (overlap={overlap * 100:.0f}%)")
                             return True
             except Exception as e:
                 logger.debug(f"Could not check recent queries: {e}")
 
-        # For isolated PR/issue queries with enough specificity, allow self-contained.
         if (has_pr_ref or has_issue_ref) and len(q.split()) >= 6:
             logger.info(f"SELF-CONTAINED | Specific PR/issue query: '{q[:60]}'")
             return True
 
-        # Default: require context. This encourages rewriting for most short or ambiguous queries.
         return False
 
     def _format_session_context(self, messages: List[Dict[str, Any]]) -> str:
