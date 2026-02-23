@@ -36,6 +36,7 @@ if str(repo_root) not in sys.path:
 from utils.s3 import s3_manager
 
 from routes.api.data_collection_routes import router as data_collection_router
+from routes.api.docs_routes import router as docs_router
 
 # S3 Configuration
 S3_BUCKET = "smarix-data-apsouth1"
@@ -322,6 +323,8 @@ app.add_middleware(
 app.include_router(auth_routes.router)
 
 app.include_router(data_collection_router)
+
+app.include_router(docs_router)
 
 # Helper function to handle imports when running as script vs module
 def _import_route_module(module_name: str):

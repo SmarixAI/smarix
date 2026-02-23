@@ -10,9 +10,9 @@ try:
     from ..formatters.temporal_context import format_temporal_context
     from ..formatters.correlation_context import format_correlation_context
     from ..extractors.content_extractor import extract_main_content
+    from ..extractors.code_structure_extractor import extract_code_structure
     from ..config.state import load_current_repo_from_state
 except ImportError:
-    # If relative imports fail, use absolute imports
     workspace_root = Path(__file__).resolve().parents[4]
     if str(workspace_root) not in sys.path:
         sys.path.insert(0, str(workspace_root))
@@ -20,10 +20,10 @@ except ImportError:
     from backend.main.GenerateEmbedding.formatters.temporal_context import format_temporal_context
     from backend.main.GenerateEmbedding.formatters.correlation_context import format_correlation_context
     from backend.main.GenerateEmbedding.extractors.content_extractor import extract_main_content
+    from backend.main.GenerateEmbedding.extractors.code_structure_extractor import extract_code_structure
     from backend.main.GenerateEmbedding.config.state import load_current_repo_from_state
 
 REPO_OWNER, REPO_NAME = load_current_repo_from_state()
-
 
 
 def prepare_enhanced_chunk_for_embedding(chunk: Dict[str, Any]) -> Dict[str, Any]:
@@ -36,17 +36,14 @@ def prepare_enhanced_chunk_for_embedding(chunk: Dict[str, Any]) -> Dict[str, Any
     chunk_type = chunk.get("chunk_type") or chunk.get("type") or "unknown"
     source = chunk.get("source", "unknown")
 
-    # 🔥 AUTO-EXTRACT file path, filename, directory & language from content (handles dict/string)
-    # Try multiple content fields when chunk['content'] is a dict (common case)
+    # 🔥 AUTO-EXTRACT file path, filename, directory & language from content
     raw_content = chunk.get("content", "")
     content_text = ""
     if isinstance(raw_content, dict):
-        # prefer common fields that hold the textual payload
         for candidate in ("content", "body", "snippet", "text", "code", "raw"):
             if raw_content.get(candidate):
                 content_text = raw_content.get(candidate)
                 break
-        # fallback to a compact JSON representation
         if not content_text:
             try:
                 content_text = json.dumps(raw_content)
@@ -56,15 +53,11 @@ def prepare_enhanced_chunk_for_embedding(chunk: Dict[str, Any]) -> Dict[str, Any
         content_text = raw_content
 
     if content_text:
-        # Look for common header patterns, case-insensitive
         m_path = re.search(r"(?:Path|file|File):\s*([^\n]+)", content_text, flags=re.IGNORECASE)
         if m_path:
             extracted_path = m_path.group(1).strip().strip('`')
             chunk.setdefault("entities", {})["path"] = extracted_path
-            # top-level convenience field
             chunk["file_path"] = extracted_path
-
-            # Also populate filename and directory
             try:
                 p = Path(extracted_path)
                 fname = p.name
@@ -74,14 +67,12 @@ def prepare_enhanced_chunk_for_embedding(chunk: Dict[str, Any]) -> Dict[str, Any
             except Exception:
                 pass
 
-        # language can be declared in header or inferred from extension
         m_lang = re.search(r"Language:\s*([^\n]+)", content_text, flags=re.IGNORECASE)
         if m_lang:
             lang_val = m_lang.group(1).strip().lower()
             chunk.setdefault("entities", {})["language"] = lang_val
             chunk["language"] = lang_val
         else:
-            # try to infer from extracted_path if present and language missing
             ep = chunk.setdefault("entities", {}).get("path") or chunk.get("file_path")
             if ep and not chunk.get("language") and ep.count('.'):
                 try:
@@ -91,7 +82,6 @@ def prepare_enhanced_chunk_for_embedding(chunk: Dict[str, Any]) -> Dict[str, Any
                         chunk["language"] = inferred
                 except Exception:
                     pass
-
 
     entities = chunk.get("entities") or {}
     content = chunk.get("content", {})
@@ -158,38 +148,60 @@ def prepare_enhanced_chunk_for_embedding(chunk: Dict[str, Any]) -> Dict[str, Any
 
     final_content = f"{' | '.join(context_parts)}\n\n{main_content}" if context_parts else main_content
 
-    # --- derive file path/filename/directory/language for metadata ---
+    # --- Derive file path/filename/directory/language for metadata ---
     from backend.utils.path_normalizer import normalize_path, extract_filename, extract_directory
-    
+
     file_path_raw = entities.get('path') or chunk.get('path') or chunk.get('repo_file_path') or chunk.get('file_path')
-    # Normalize file path using path normalizer
     file_path_val = normalize_path(file_path_raw, '') if file_path_raw else ''
     derived_filename = None
     derived_directory = None
     if file_path_val:
-        # Use path normalizer for consistent extraction
         derived_filename = extract_filename(file_path_val) or ''
         derived_directory = extract_directory(file_path_val) or ''
 
+    # ── NEW: Extract code structure for code chunks ──────────────────────────
+    # Only runs for code chunks — zero cost for pr/issue/commit chunks
+    code_structure = {
+        "code_chunk_type": None,
+        "function_name":   None,
+        "class_name":      None,
+        "has_docstring":   False,
+    }
+    if chunk_type == "code":
+        resolved_lang = (
+            entities.get("language")
+            or chunk.get("language")
+            or (Path(file_path_val).suffix.lstrip('.').lower() if file_path_val else None)
+        )
+        code_structure = extract_code_structure(content_text, resolved_lang)
+    # ─────────────────────────────────────────────────────────────────────────
+
     # --- Metadata object used in RAG + vector DB ---
-    # CRITICAL: Always set repo_name to current repo (chunks are already filtered by repo)
     chunk_repo = chunk.get("repo_name", "").strip()
     if not chunk_repo or chunk_repo != REPO_NAME:
-        # Use current repo - chunks are already filtered to current repo
         chunk_repo = REPO_NAME
-    
+
     storage_metadata = {
         "chunk_id": chunk_id,
-        "chunk_type": chunk_type,   # <-- CRITICAL for retriever & embedding
+        "chunk_type": chunk_type,
         "type": chunk_type,
         "source": source,
-        "repo_name": chunk_repo,  # Always use current repo name
+        "repo_name": chunk_repo,
         "repo_owner": REPO_OWNER,
         "file_path": file_path_val,
         "language": entities.get("language") or chunk.get("language"),
         "filename": entities.get("filename") or derived_filename,
         "directory": entities.get("directory") or derived_directory,
         "retrieval_priority": chunk.get("retrieval_priority", 3),
+
+        # ── NEW: Code structure fields (None for non-code chunks) ──
+        "code_chunk_type": code_structure["code_chunk_type"],  # function|class|module|other
+        "function_name":   code_structure["function_name"],
+        "class_name":      code_structure["class_name"],
+        "has_docstring":   code_structure["has_docstring"],
+        "start_line":      chunk.get("start_line"),            # pass-through if chunker provides it
+        "end_line":        chunk.get("end_line"),              # pass-through if chunker provides it
+        # ──────────────────────────────────────────────────────────
 
         # Entity metadata
         "issue_number": entities.get("issue_number"),
@@ -256,7 +268,7 @@ def prepare_enhanced_chunk_for_embedding(chunk: Dict[str, Any]) -> Dict[str, Any
         "skip_embedding": False,
     }
 
-    # promote file_path & language to top-level for retriever
+    # Promote file_path & language to top-level for retriever
     prepared["file_path"] = prepared["metadata"].get("file_path")
     prepared["language"] = prepared["metadata"].get("language")
 
@@ -264,13 +276,13 @@ def prepare_enhanced_chunk_for_embedding(chunk: Dict[str, Any]) -> Dict[str, Any
     for field in [
         "chunk_type", "category", "importance_score", "file_path",
         "function_name", "class_name", "semantic_tags", "keywords",
-        "language", "repo_name", "repo_owner", "source", "type", "retrieval_priority"
+        "language", "repo_name", "repo_owner", "source", "type", "retrieval_priority",
+        # ── NEW fields also promoted to top-level ──
+        "code_chunk_type", "has_docstring", "start_line", "end_line",
     ]:
-        if field in chunk:                       # if raw chunk carried these
+        if field in chunk:
             prepared[field] = chunk[field]
-        if field in storage_metadata:            # if computed during metadata build
+        if field in storage_metadata:
             prepared[field] = storage_metadata[field]
 
     return prepared
-
-
