@@ -137,19 +137,19 @@ export default function ImpactPanel({
 
                 <Section title="Top Risky Symbols">
                   {(projectSymbols.top_risky_symbols || []).slice(0, 10).map((s: any) => (
-                    <SymbolCard key={s.symbol} data={s} onClick={() => onOpenSymbolGraph(s.symbol)} />
+                    <SymbolCard key={s.symbol} data={s} onClick={() => openSymbol(s.symbol)} />
                   ))}
                 </Section>
 
                 <Section title="Most Depended Symbols">
                   {(projectSymbols.most_depended_symbols || []).slice(0, 10).map((s: any) => (
-                    <SymbolCard key={s.symbol} data={s} onClick={() => onOpenSymbolGraph(s.symbol)} />
+                    <SymbolCard key={s.symbol} data={s} onClick={() => openSymbol(s.symbol)} />
                   ))}
                 </Section>
 
                 <Section title="Most Outgoing Symbols">
                   {(projectSymbols.most_outgoing_symbols || []).slice(0, 10).map((s: any) => (
-                    <SymbolCard key={s.symbol} data={s} onClick={() => onOpenSymbolGraph(s.symbol)} />
+                    <SymbolCard key={s.symbol} data={s} onClick={() => openSymbol(s.symbol)} />
                   ))}
                 </Section>
               </>

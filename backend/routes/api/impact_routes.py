@@ -600,7 +600,23 @@ def get_file_graph(
     file_risk = metadata["risk"]["files"]
 
     if path not in file_dependencies:
-        raise HTTPException(status_code=404, detail="File not found in metadata")
+        return {
+            "center": path,
+            "fan_in": 0,
+            "fan_out": 0,
+            "total_nodes": 1,
+            "total_edges": 0,
+            "nodes": [
+                {
+                    "id": path,
+                    "label": path.split("/")[-1],
+                    "severity": "LOW",
+                    "category": "center",
+                    "is_center": True
+                }
+            ],
+            "edges": []
+        }
 
     outgoing_list = file_dependencies.get(path, [])
     incoming_list = reverse_dependencies.get(path, [])
@@ -803,7 +819,7 @@ def get_symbol_graph(
 
 
 # ---------------------------------------------------------
-# 9️⃣ Project Symbol Graph (All Symbols - Depth 1)
+# 9️⃣ Project Core Architecture Graph (Filtered)
 # ---------------------------------------------------------
 @router.get("/impact/project-graph/{repo_id}/{commit_hash}")
 def get_project_graph(repo_id: str, commit_hash: str):
@@ -824,6 +840,12 @@ def get_project_graph(repo_id: str, commit_hash: str):
     visited_edges = set()
 
     # -------------------------------
+    # Filter Thresholds (Tune Later)
+    # -------------------------------
+    MIN_BLAST = 25
+    MIN_FAN_IN = 8
+
+    # -------------------------------
     # Add Node Helper
     # -------------------------------
     def add_node(sid: str):
@@ -835,11 +857,20 @@ def get_project_graph(repo_id: str, commit_hash: str):
         symbol_info = symbols.get(sid, {})
         blast = risk_data.get(sid, 0)
 
+        fan_in = len(reverse_symbol_dependencies.get(sid, []))
+        fan_out = len(symbol_dependencies.get(sid, []))
+
+        instability = (
+            0 if (fan_in + fan_out == 0)
+            else round(fan_out / (fan_in + fan_out), 2)
+        )
+
+        # Severity
         if blast > 75:
             severity = "CRITICAL"
-        elif blast > 30:
+        elif blast > 40:
             severity = "HIGH"
-        elif blast > 10:
+        elif blast > 15:
             severity = "MEDIUM"
         else:
             severity = "LOW"
@@ -849,7 +880,11 @@ def get_project_graph(repo_id: str, commit_hash: str):
             "label": sid.split("::")[-1],
             "file": symbol_info.get("file"),
             "type": symbol_info.get("type"),
-            "severity": severity
+            "severity": severity,
+            "fan_in": fan_in,
+            "fan_out": fan_out,
+            "blast_radius": blast,
+            "instability": instability
         })
 
     # -------------------------------
@@ -868,18 +903,80 @@ def get_project_graph(repo_id: str, commit_hash: str):
         })
 
     # -------------------------------
-    # Build Full Graph
+    # Filter Important Symbols Only
     # -------------------------------
+    important_symbols = set()
+
     for symbol_id in symbols.keys():
+
+        fan_in = len(reverse_symbol_dependencies.get(symbol_id, []))
+        blast = risk_data.get(symbol_id, 0)
+
+        # 🔥 Keep only structurally important nodes
+        if blast >= MIN_BLAST or fan_in >= MIN_FAN_IN:
+            important_symbols.add(symbol_id)
+
+    # -------------------------------
+    # Build Graph Only Among Important Symbols
+    # -------------------------------
+    for symbol_id in important_symbols:
+
         add_node(symbol_id)
 
         for callee in symbol_dependencies.get(symbol_id, []):
-            add_node(callee)
-            add_edge(symbol_id, callee)
+
+            if callee in important_symbols:
+                add_node(callee)
+                add_edge(symbol_id, callee)
 
     return {
         "total_nodes": len(nodes),
         "total_edges": len(edges),
         "nodes": nodes,
         "edges": edges
+    }
+
+
+# ---------------------------------------------------------
+# 🔟 High Risk Files (Project-Level)
+# ---------------------------------------------------------
+@router.get("/impact/high-risk-files/{repo_id}/{commit_hash}")
+def get_high_risk_files(repo_id: str, commit_hash: str):
+
+    metadata, _ = load_metadata(repo_id, commit_hash)
+
+    file_risk = metadata["risk"]["files"]
+    file_dependencies = metadata["relationships"]["file_dependencies"]
+    reverse_dependencies = metadata["reverse_relationships"]["file_dependencies"]
+
+    result = []
+
+    for file_path, blast_radius in file_risk.items():
+
+        incoming = len(reverse_dependencies.get(file_path, []))
+        outgoing = len(file_dependencies.get(file_path, []))
+
+        # Severity classification (same logic as file-impact)
+        if blast_radius > 50:
+            severity = "HIGH"
+        elif blast_radius > 15:
+            severity = "MEDIUM"
+        else:
+            severity = "LOW"
+
+        result.append({
+            "file": file_path,
+            "name": file_path.split("/")[-1],
+            "blast_radius": blast_radius,
+            "fan_in": incoming,
+            "fan_out": outgoing,
+            "severity": severity
+        })
+
+    # Sort by highest blast first
+    result.sort(key=lambda x: x["blast_radius"], reverse=True)
+
+    return {
+        "total_files": len(result),
+        "high_risk_files": result[:50]   # limit to top 50
     }

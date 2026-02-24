@@ -137,7 +137,12 @@ export default function ImpactLayout() {
     <div className="flex h-screen text-white bg-[#1E1E1E]">
 
       {/* LEFT */}
-      <Sidebar tree={tree} onSelectFile={setSelectedFile} />
+      <Sidebar
+        tree={tree}
+        repoId={REPO_ID}
+        commitHash={COMMIT_HASH}
+        onSelectFile={setSelectedFile}
+      />
 
       {/* MIDDLE */}
       <div className="flex flex-col flex-1 min-w-0 border-l border-r border-[#2D2D2D]">
@@ -168,12 +173,15 @@ export default function ImpactLayout() {
         prev === "file-symbol" ? "code" : "file-symbol"
       )
     }
+    disabled={!selectedFile}
     className={`px-3 py-1.5 text-xs rounded transition
       ${
         viewMode === "file-symbol"
           ? "bg-blue-600 text-white"
           : "bg-[#2D2D2D] text-gray-300 hover:bg-[#3A3D41]"
-      }`}
+      }
+      ${!selectedFile ? "opacity-50 cursor-not-allowed hover:bg-[#2D2D2D]" : ""}
+    `}
   >
     File Symbols
   </button>
