@@ -1,5 +1,7 @@
 {
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.981.0"
+    "@aws-sdk/client-s3": "^3.981.0",
+    "dagre": "^0.8.5",
+    "reactflow": "^11.11.4"
   }
 }
