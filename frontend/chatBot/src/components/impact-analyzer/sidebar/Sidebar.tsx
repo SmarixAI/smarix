@@ -18,16 +18,17 @@ export default function Sidebar({
   onSelectFile,
 }: Props) {
   const [search, setSearch] = useState("");
-  const [showHighRiskFiles, setShowHighRiskFiles] = useState(false);
+  const [hoverHighRisk, setHoverHighRisk] = useState(false);
 
   const [highRiskFiles, setHighRiskFiles] = useState<any[]>([]);
   const [loadingHighRisk, setLoadingHighRisk] = useState(false);
 
   // --------------------------------------------
-  // 🔥 Load High Risk Files
+  // 🔥 Load High Risk Files (On Hover)
   // --------------------------------------------
   useEffect(() => {
-    if (!showHighRiskFiles) return;
+    if (!hoverHighRisk) return;
+    if (highRiskFiles.length > 0) return; // cache
 
     async function loadHighRiskFiles() {
       try {
@@ -37,20 +38,17 @@ export default function Sidebar({
           `http://localhost:8000/impact/high-risk-files/${repoId}/${commitHash}`
         );
 
-        if (!res.ok) throw new Error("Failed to fetch");
-
         const data = await res.json();
         setHighRiskFiles(data.high_risk_files || []);
-      } catch (err) {
+      } catch {
         console.error("Failed to load high risk files");
-        setHighRiskFiles([]);
       } finally {
         setLoadingHighRisk(false);
       }
     }
 
     loadHighRiskFiles();
-  }, [showHighRiskFiles, repoId, commitHash]);
+  }, [hoverHighRisk, repoId, commitHash]);
 
   // --------------------------------------------
   // 🔍 Search Filter
@@ -85,7 +83,7 @@ export default function Sidebar({
   }, [search, tree]);
 
   // --------------------------------------------
-  // 🎨 Severity Color Helper
+  // 🎨 Severity Color
   // --------------------------------------------
   function getSeverityColor(severity: string) {
     if (severity === "HIGH") return "text-red-400";
@@ -94,14 +92,14 @@ export default function Sidebar({
   }
 
   return (
-    <div className="w-80 border-r border-[#2D2D2D] bg-[#1E1E1E] flex flex-col">
+    <div className="w-80 border-r border-[#1F2937] bg-[#0F172A] flex flex-col">
 
-      {/* 🔎 Search + Icons */}
-      <div className="p-3 border-b border-[#2D2D2D]">
+      {/* 🔎 Search + Flame */}
+      <div className="p-3 border-b border-[#1F2937] relative">
         <div className="flex items-center gap-2">
 
-          {/* Search Input */}
-          <div className="flex items-center bg-[#252526] px-2 py-1 rounded-md flex-1">
+          {/* Search */}
+          <div className="flex items-center bg-[#111827] px-2 py-1 rounded-md flex-1 border border-[#1F2937]">
             <Search size={16} className="text-gray-400" />
             <input
               type="text"
@@ -112,67 +110,78 @@ export default function Sidebar({
             />
           </div>
 
-          {/* High Risk Files Toggle */}
-          <button
-            onClick={() => setShowHighRiskFiles((prev) => !prev)}
-            className={`p-2 rounded-md ${
-              showHighRiskFiles
-                ? "bg-[#3C3C3C]"
-                : "hover:bg-[#2A2D2E]"
-            }`}
+          {/* 🔥 High Risk Hover Icon */}
+          <div
+            className="relative"
+            onMouseEnter={() => setHoverHighRisk(true)}
+            onMouseLeave={() => setHoverHighRisk(false)}
           >
-            <Flame size={18} className="text-orange-400" />
-          </button>
+            <div className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-[#162036] transition cursor-pointer">
+              <Flame size={18} className="text-orange-400" />
+            </div>
+
+            {/* 🔥 Floating Panel */}
+            {hoverHighRisk && (
+              <div className="absolute left-12 top-0 w-80 
+                              bg-[#111827] border border-[#1F2937]
+                              rounded-xl shadow-2xl p-4 z-50
+                              animate-fade-in">
+
+                <div className="text-xs uppercase tracking-wide text-orange-400 mb-3">
+                  High Risk Files
+                </div>
+
+                {loadingHighRisk && (
+                  <div className="text-gray-400 text-sm">
+                    Loading...
+                  </div>
+                )}
+
+                {!loadingHighRisk && highRiskFiles.length === 0 && (
+                  <div className="text-gray-500 text-sm">
+                    No high risk files found.
+                  </div>
+                )}
+
+                <div className="space-y-2 max-h-72 overflow-y-auto">
+                  {highRiskFiles.map((file) => (
+                    <div
+                      key={file.file}
+                      onClick={() => onSelectFile(file.file)}
+                      className="px-3 py-2 rounded-lg hover:bg-orange-500/10 
+                                 cursor-pointer transition"
+                    >
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-200 truncate max-w-[160px]">
+                          {file.name}
+                        </span>
+                        <span
+                          className={`text-xs font-semibold ${getSeverityColor(
+                            file.severity
+                          )}`}
+                        >
+                          {file.severity}
+                        </span>
+                      </div>
+
+                      <div className="text-xs text-gray-500 mt-1">
+                        Blast: {file.blast_radius} • 
+                        Fan-In: {file.fan_in} • 
+                        Fan-Out: {file.fan_out}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+          </div>
         </div>
       </div>
 
-      {/* 📂 Content Area */}
+      {/* 📂 File Tree */}
       <div className="flex-1 overflow-auto p-3">
-
-        {/* 🔥 High Risk Files Mode */}
-        {showHighRiskFiles ? (
-          <>
-            {loadingHighRisk && (
-              <div className="text-gray-400 text-sm">
-                Loading high risk files...
-              </div>
-            )}
-
-            {!loadingHighRisk && highRiskFiles.length === 0 && (
-              <div className="text-gray-500 text-sm">
-                No high risk files found.
-              </div>
-            )}
-
-            {!loadingHighRisk &&
-              highRiskFiles.map((file) => (
-                <div
-                  key={file.file}
-                  onClick={() => onSelectFile(file.file)}
-                  className="mb-3 p-3 bg-[#252526] rounded hover:bg-[#2A2D2E] cursor-pointer transition"
-                >
-                  <div className="flex justify-between">
-                    <div className="text-white text-sm truncate">
-                      {file.name}
-                    </div>
-                    <div
-                      className={`text-xs font-semibold ${getSeverityColor(
-                        file.severity
-                      )}`}
-                    >
-                      {file.severity}
-                    </div>
-                  </div>
-
-                  <div className="text-xs text-gray-400 mt-1">
-                    Blast: {file.blast_radius} | Fan-In: {file.fan_in} | Fan-Out: {file.fan_out}
-                  </div>
-                </div>
-              ))}
-          </>
-        ) : (
-          <FileTree tree={filteredTree} onSelectFile={onSelectFile} />
-        )}
+        <FileTree tree={filteredTree} onSelectFile={onSelectFile} />
       </div>
     </div>
   );
