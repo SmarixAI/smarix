@@ -1,3 +1,6 @@
+##/Users/vishalkeshari/Desktop/smarix/backend/main/CodeIntelligence/scanner/ignore_rules.py
+
+
 IGNORE_DIRS = {
     ".git",
     "node_modules",

@@ -13,7 +13,8 @@ LANGUAGE_EXTENSIONS = {
     "csharp": [".cs"],
     "cpp": [".cpp", ".hpp", ".h"],
     "kotlin": [".kt"],
-    "swift": [".swift"]
+    "swift": [".swift"],
+    "dart": [".dart"],  # ✅ ADDED DART SUPPORT
 }
 
 TEMPLATE_EXTENSIONS = [".html", ".jinja", ".jinja2"]
@@ -34,8 +35,6 @@ TEST_FILE_PATTERNS = {
 ALL_LANGUAGE_EXTS = set(
     ext for exts in LANGUAGE_EXTENSIONS.values() for ext in exts
 )
-
-
 
 
 class ProjectStructureScanner:
@@ -86,8 +85,6 @@ class ProjectStructureScanner:
                 if self.is_test_file(relative_path, ext, file):
                     test_files.append(relative_path)
 
-
-
         return {
             "total_files": len(all_files),
             "file_count_by_extension": file_count_by_ext,
@@ -95,9 +92,9 @@ class ProjectStructureScanner:
             "templates": templates,
             "static_assets": static_assets,
             "config_files": config_files,
-            "test_files": test_files
+            "test_files": test_files,
         }
-    
+
     def is_test_file(self, relative_path, ext, filename):
         parts = relative_path.split(os.sep)
 
@@ -106,10 +103,11 @@ class ProjectStructureScanner:
             return False
 
         # Rule 1: Inside test directory
-        if any(part.lower() in {"tests", "test", "__tests__", "spec"} for part in parts):
+        if any(part.lower() in TEST_DIR_NAMES for part in parts):
             return True
 
         # Rule 2: Naming conventions
+
         if ext == ".py" and (
             filename.startswith("test_") or filename.endswith("_test.py")
         ):
@@ -130,5 +128,3 @@ class ProjectStructureScanner:
             return True
 
         return False
-
-

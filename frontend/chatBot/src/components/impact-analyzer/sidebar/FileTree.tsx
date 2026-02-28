@@ -5,7 +5,7 @@ import { useState } from "react";
 interface Node {
   type: "file" | "folder";
   name: string;
-  path: string;
+  path?: string; // 🔥 path optional for folders
   children?: Node[];
 }
 
@@ -24,9 +24,9 @@ export default function FileTree({
 }: Props) {
   return (
     <div>
-      {tree.map((node) => (
+      {tree.map((node, index) => (
         <TreeNode
-          key={node.path}
+          key={`${level}-${node.type}-${node.name}-${node.path ?? index}`}
           node={node}
           onSelectFile={onSelectFile}
           selectedFile={selectedFile}
@@ -50,10 +50,13 @@ function TreeNode({
 }) {
   const [isOpen, setIsOpen] = useState(true);
 
-  const isActive = selectedFile === node.path;
+  const isActive = node.path && selectedFile === node.path;
 
   const paddingLeft = 12 + level * 14;
 
+  // ==============================
+  // 📂 Folder
+  // ==============================
   if (node.type === "folder") {
     return (
       <div>
@@ -83,10 +86,13 @@ function TreeNode({
     );
   }
 
+  // ==============================
+  // 📄 File
+  // ==============================
   return (
     <div
       style={{ paddingLeft }}
-      onClick={() => onSelectFile(node.path)}
+      onClick={() => node.path && onSelectFile(node.path)}
       className={`flex items-center gap-2 text-sm py-1 cursor-pointer truncate
         ${
           isActive

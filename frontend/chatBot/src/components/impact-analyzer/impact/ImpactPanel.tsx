@@ -3,20 +3,20 @@
 import { useEffect, useState } from "react";
 
 interface Props {
+  extractorId: string;
   repoId: string;
-  commitHash: string;
   selectedFile: string | null;
   impact: any;
-  onOpenProjectGraph: () => void;
   onOpenSymbolGraph: (symbolId: string) => void;
 }
 
+const API_BASE = "http://localhost:8000";
+
 export default function ImpactPanel({
+  extractorId,
   repoId,
-  commitHash,
   selectedFile,
   impact,
-  onOpenProjectGraph,
   onOpenSymbolGraph,
 }: Props) {
   const [tab, setTab] = useState<"impact" | "project" | "symbol">("impact");
@@ -29,14 +29,26 @@ export default function ImpactPanel({
 
   // ================= Load Project Symbols =================
   useEffect(() => {
+    setProjectSymbols(null);
+    setSelectedSymbol(null);
+  }, [repoId]);
+
+  useEffect(() => {
     if (tab !== "project") return;
+    if (projectSymbols) return; // cache
 
     async function loadProjectSymbols() {
       try {
         setLoadingProject(true);
+
+        if (!extractorId || !repoId) return;
+
         const res = await fetch(
-          `http://localhost:8000/impact/project-symbols/${repoId}/${commitHash}`
+          `${API_BASE}/impact/project-symbols/${extractorId}/repos/${repoId}`
         );
+
+        if (!res.ok) throw new Error();
+
         const data = await res.json();
         setProjectSymbols(data);
       } catch {
@@ -47,8 +59,9 @@ export default function ImpactPanel({
     }
 
     loadProjectSymbols();
-  }, [tab, repoId, commitHash]);
+  }, [tab, extractorId, repoId, projectSymbols]);
 
+  
   // ================= Load Symbol Details =================
   async function openSymbol(symbolId: string) {
     try {
@@ -56,9 +69,7 @@ export default function ImpactPanel({
       setTab("symbol");
 
       const res = await fetch(
-        `http://localhost:8000/impact/symbol-details/${repoId}/${commitHash}?symbol_id=${encodeURIComponent(
-          symbolId
-        )}`
+        `${API_BASE}/impact/${extractorId}/repos/${repoId}/symbol-details?symbol_id=${encodeURIComponent(symbolId)}`
       );
 
       const data = await res.json();
@@ -323,6 +334,9 @@ function DependencyList({ items = [], onClick, color }: any) {
     return <div className="text-gray-500 text-xs">None</div>;
   }
 
+  // Remove duplicates safely while preserving order
+  const uniqueItems = Array.from(new Set(items));
+
   const baseColor =
     color === "green"
       ? "hover:bg-green-500/10 text-green-400"
@@ -330,9 +344,9 @@ function DependencyList({ items = [], onClick, color }: any) {
 
   return (
     <div className="space-y-2">
-      {items.map((item: string) => (
+      {uniqueItems.map((item: string, index: number) => (
         <div
-          key={item}
+          key={`${item}-${index}`}   // <-- guaranteed unique
           onClick={() => onClick?.(item)}
           className={`truncate px-3 py-2 rounded-md text-xs cursor-pointer transition ${baseColor}`}
         >

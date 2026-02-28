@@ -7,8 +7,8 @@ import SymbolView from "./main/SymbolView";
 import ImpactPanel from "./impact/ImpactPanel";
 import GraphEditorView from "./main/GraphEditorView";
 
-const REPO_ID = "0550c1f7c52e3807222e968766843d27";
-const COMMIT_HASH = "c34d6e81fd8e405e6d4178bf24b364918811ef17";
+const API_BASE = "http://localhost:8000";
+
 
 type ViewMode =
   | "code"
@@ -30,20 +30,33 @@ export default function ImpactLayout() {
   const [loadingProjectGraph, setLoadingProjectGraph] = useState(false);
   const [loadingFileGraph, setLoadingFileGraph] = useState(false);
 
+  const [extractorId, setExtractorId] = useState<string>("");
+  const [repoId, setRepoId] = useState<string>("");
+
   const [viewMode, setViewMode] = useState<ViewMode>("code");
 
   // ================= Load Project Structure =================
   useEffect(() => {
+    if (!extractorId || !repoId) return;
+
     async function loadStructure() {
-      const res = await fetch(
-        `http://localhost:8000/impact/project-structure/${REPO_ID}/${COMMIT_HASH}`
-      );
-      const data = await res.json();
-      setTree(data.tree);
+      try {
+        const res = await fetch(
+          `${API_BASE}/impact/${extractorId}/repos/${repoId}/project-structure`
+        );
+
+        if (!res.ok) throw new Error("Failed to fetch structure");
+
+        const data = await res.json();
+        setTree(Array.isArray(data.tree) ? data.tree : []);
+      } catch {
+        console.error("Failed to load project structure");
+        setTree([]);
+      }
     }
 
     loadStructure();
-  }, []);
+  }, [extractorId, repoId]);
 
   // ================= Load File Data =================
   useEffect(() => {
@@ -54,30 +67,41 @@ export default function ImpactLayout() {
 
     async function loadFileData() {
       try {
+        const encodedPath = encodeURIComponent(selectedFile);
+
         const [contentRes, impactRes, symbolRes] = await Promise.all([
           fetch(
-            `http://localhost:8000/impact/file-content/${REPO_ID}/${COMMIT_HASH}?path=${selectedFile}`
+            `${API_BASE}/impact/${extractorId}/repos/${repoId}/file-content?path=${encodedPath}`
           ),
           fetch(
-            `http://localhost:8000/impact/file-impact/${REPO_ID}/${COMMIT_HASH}?path=${selectedFile}`
+            `${API_BASE}/impact/${extractorId}/repos/${repoId}/file-impact?path=${encodedPath}`
           ),
           fetch(
-            `http://localhost:8000/impact/file-symbols/${REPO_ID}/${COMMIT_HASH}?path=${selectedFile}`
+            `${API_BASE}/impact/${extractorId}/repos/${repoId}/file-symbols?path=${encodedPath}`
           ),
         ]);
 
-        const contentData = await contentRes.json();
-        setFileContent(contentData.content ?? "");
+        if (!contentRes.ok || !impactRes.ok || !symbolRes.ok) {
+          throw new Error("File data request failed");
+        }
 
-        setImpactData(await impactRes.json());
-        setFileSymbols(await symbolRes.json());
+        const contentData = await contentRes.json();
+        const impactData = await impactRes.json();
+        const symbolData = await symbolRes.json();
+
+        setFileContent(contentData.content ?? "");
+        setImpactData(impactData);
+        setFileSymbols(symbolData);
       } catch (err) {
         console.error("Failed to load file data");
+        setFileContent("");
+        setImpactData(null);
+        setFileSymbols(null);
       }
     }
 
     loadFileData();
-  }, [selectedFile]);
+  }, [selectedFile, extractorId, repoId]);
 
   // ================= File Graph =================
   async function loadFileGraph() {
@@ -88,7 +112,11 @@ export default function ImpactLayout() {
       return;
     }
 
-    if (fileGraphData) {
+    // Prevent stale graph bug
+    if (
+      fileGraphData &&
+      fileGraphData.center === selectedFile
+    ) {
       setViewMode("file-graph");
       return;
     }
@@ -96,11 +124,16 @@ export default function ImpactLayout() {
     try {
       setLoadingFileGraph(true);
 
+      const encodedPath = encodeURIComponent(selectedFile);
+
       const res = await fetch(
-        `http://localhost:8000/impact/file-graph/${REPO_ID}/${COMMIT_HASH}?path=${selectedFile}`
+        `${API_BASE}/impact/${extractorId}/repos/${repoId}/file-graph?path=${encodedPath}`
       );
 
+      if (!res.ok) throw new Error("File graph request failed");
+
       const data = await res.json();
+
       setFileGraphData(data);
       setViewMode("file-graph");
     } catch {
@@ -117,14 +150,23 @@ export default function ImpactLayout() {
       return;
     }
 
+    // Cache project graph
+    if (projectGraphData) {
+      setViewMode("project-graph");
+      return;
+    }
+
     try {
       setLoadingProjectGraph(true);
 
       const res = await fetch(
-        `http://localhost:8000/impact/project-graph/${REPO_ID}/${COMMIT_HASH}`
+        `${API_BASE}/impact/${extractorId}/repos/${repoId}/project-graph`
       );
 
+      if (!res.ok) throw new Error("Project graph request failed");
+
       const data = await res.json();
+
       setProjectGraphData(data);
       setViewMode("project-graph");
     } catch {
@@ -140,9 +182,14 @@ export default function ImpactLayout() {
       {/* ================= LEFT SIDEBAR ================= */}
       <Sidebar
         tree={tree}
-        repoId={REPO_ID}
-        commitHash={COMMIT_HASH}
+        extractorId={extractorId}
+        repoId={repoId}
         onSelectFile={setSelectedFile}
+        onProjectChange={(ext, repo) => {
+          setExtractorId(ext);
+          setRepoId(repo);
+          setSelectedFile(null);
+        }}
       />
 
       {/* ================= CENTER ================= */}
@@ -164,7 +211,6 @@ export default function ImpactLayout() {
             )}
           </div>
 
-          {/* Segmented Control */}
           <div className="flex items-center bg-[#111827] border border-[#1F2937] rounded-xl p-1">
 
             <SegmentButton
@@ -212,7 +258,7 @@ export default function ImpactLayout() {
             <CodeViewer content={fileContent} />
           )}
 
-          {viewMode === "file-symbol" && (
+          {viewMode === "file-symbol" && fileSymbols && (
             <SymbolView fileSymbols={fileSymbols} />
           )}
 
@@ -243,8 +289,8 @@ export default function ImpactLayout() {
 
       {/* ================= RIGHT PANEL ================= */}
       <ImpactPanel
-        repoId={REPO_ID}
-        commitHash={COMMIT_HASH}
+        extractorId={extractorId}
+        repoId={repoId}
         selectedFile={selectedFile}
         impact={impactData}
       />

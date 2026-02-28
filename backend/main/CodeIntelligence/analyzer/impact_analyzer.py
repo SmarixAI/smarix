@@ -1,3 +1,5 @@
+##/Users/vishalkeshari/Desktop/smarix/backend/main/CodeIntelligence/analyzer/impact_analyzer.py
+
 class ImpactAnalyzer:
 
     def __init__(
@@ -55,5 +57,16 @@ class ImpactAnalyzer:
     # Risk Score
     # ----------------------------
     def compute_file_risk(self, file_path):
-        file_impact = len(self.get_impacted_files(file_path))
-        return file_impact
+        impacted_files = self.get_impacted_files(file_path)
+        impacted_methods = [
+            m for m in self.reverse_call_graph
+            if m.startswith(file_path)
+        ]
+
+        fan_in = len(self.reverse_file_graph.get(file_path, []))
+
+        return (
+            len(impacted_files) * 2
+            + len(impacted_methods)
+            + fan_in * 3
+        )
