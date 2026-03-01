@@ -26,3 +26,9 @@ python build_indices.py
 
 python build_snapshot.py CCExtractor taskwarrior-flutter
 python build_snapshot.py KernelTestFramework ktf
+
+
+=====
+npm install @monaco-editor/react
+npm install react-syntax-highlighter
+npm install shiki

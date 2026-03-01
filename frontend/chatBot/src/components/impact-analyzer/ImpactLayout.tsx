@@ -255,7 +255,10 @@ export default function ImpactLayout() {
         <div className="flex-1 min-h-0 flex">
 
           {viewMode === "code" && (
-            <CodeViewer content={fileContent} />
+            <CodeViewer
+              content={fileContent}
+              fileName={selectedFile ?? undefined}
+            />
           )}
 
           {viewMode === "file-symbol" && fileSymbols && (
