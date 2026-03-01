@@ -149,150 +149,150 @@ def find_vector_databases_s3():
     return github_db_s3_path, None, owner, repo_name
 
 
-async def startup():
-    """Initialize chatbot on startup"""
-
-    print("\n" + "=" * 70)
-    print("SUPER EMPLOYEE RAG CHATBOT API v2.1 (S3 OPTIMIZED)")
-    print("=" * 70 + "\n")
-
-    db_url = os.getenv("MEMORY_DB_URL", "")
-    if not db_url.startswith("postgresql"):
-        print("🚨 CRITICAL WARNING: MEMORY_DB_URL is not set to PostgreSQL.")
-        print("   Multi-tenancy (Schema Isolation) will NOT work.")
-        print("   Fallback to SQLite (Shared Mode).")
-    else:
-        print("✓ Database Mode: PostgreSQL Multi-Tenancy (Schemas Enabled)")
-
-    print("Checking API Keys...")
-    shared.available_providers = check_api_keys()
-
-    default_provider = None
-    if shared.available_providers.get("openai"):
-        default_provider = "openai"
-    elif shared.available_providers.get("anthropic"):
-        default_provider = "anthropic"
-
-    if not default_provider:
-        print("\nWARNING: No API keys found!")
-        print("   Please set OPENAI_API_KEY or ANTHROPIC_API_KEY in .env file")
-        shared.chatbot_config = {"status": "waiting", "error": "No API keys configured"}
-        return
-
-    print(f"\nUsing provider: {default_provider}\n")
-
-    print("Looking for vector databases in S3...")
-    github_db_path, gmail_db_path, db_owner, db_repo = find_vector_databases_s3()
-
-    if not github_db_path:
-        print("❌ No multi-index vector database found in S3.")
-        print("    Required: s3://bucket/VectorDB/{owner}/{repo_name} with index files")
-        print("    Run: python backend/core/VectorDB/build_indices.py")
-        shared.chatbot_config = {
-            "status": "error",
-            "error": "Multi-index database not found in S3. Please build it first using build_indices.py",
-        }
-        return
-
-    if not gmail_db_path:
-        print("ℹ️  No Gmail database found (optional).")
-
-    try:
-        print("Initializing RAG Chatbot with S3 VectorDB...")
-        print("   Using Multi-Index mode (routing: llm)")
-        print(f"   S3 Path: {github_db_path}")
-
-        shared.chatbot_instance = RAGChatbot(
-            vector_db_path=github_db_path,
-            gmail_db_path=gmail_db_path,
-            provider=default_provider,
-            temperature=0.7,
-            top_k=5,
-            use_hybrid_retrieval=True,
-            verbose=False,
-            routing_method="llm",
-            repo_owner=db_owner,
-            repo_name=db_repo,
-        )
-
-        databases = []
-        total_vectors = 0
-
-        if shared.chatbot_instance.multi_index_store:
-            stats = shared.chatbot_instance.multi_index_store.get_statistics()
-            total_vectors = stats.get("total_vectors", 0)
-            databases.append(
-                f"Multi-Index ({total_vectors} vectors across {stats.get('total_indices', 0)} indices)"
-            )
-            for idx_type, idx_stats in stats.get("by_index", {}).items():
-                if "total_vectors" in idx_stats:
-                    databases.append(
-                        f"  - {idx_type}: {idx_stats['total_vectors']} vectors"
-                    )
-
-        features = [
-            "GitHub + Gmail Integration",
-            "Hybrid Retrieval",
-            "Flow Diagrams",
-            "Keyword Issue/PR Filtering",
-            "Related Knowledge",
-            "Email Context Support",
-            "Multi-Index with Query Routing",
-            "S3-backed Vector Storage",
-        ]
-
-        shared.chatbot_config = {
-            "github_db_path": github_db_path,
-            "gmail_db_path": gmail_db_path,
-            "provider": default_provider,
-            "model": shared.chatbot_instance.model,
-            "total_vectors": total_vectors,
-            "databases": databases,
-            "status": "ready",
-            "available_providers": shared.available_providers,
-            "features": features,
-            "storage_backend": "s3",
-        }
-
-        print("\n✅ Chatbot Ready!")
-        print(f"📊 Databases: {', '.join(databases)}")
-        print(f"🤖 Model: {shared.chatbot_instance.model}")
-        print(f"📈 Total Vectors: {total_vectors}")
-        print(f"🔍 Retrieval: Hybrid")
-        print(f"☁️  Storage: S3")
-        if gmail_db_path:
-            print("📧 Gmail: Enabled")
-        print()
-
-    except Exception as e:
-        print(f"\n❌ Failed to initialize chatbot: {e}\n")
-        import traceback
-
-        traceback.print_exc()
-        shared.chatbot_config = {"status": "error", "error": str(e)}
-        chatbot_instance = None
-
-
 # async def startup():
-#     """Initialize application based on APP_MODE"""
+#     """Initialize chatbot on startup"""
 
-#     mode = os.getenv("APP_MODE", "full").lower()
-#     print(f"\n🚀 Starting in MODE: {mode.upper()}\n")
+#     print("\n" + "=" * 70)
+#     print("SUPER EMPLOYEE RAG CHATBOT API v2.1 (S3 OPTIMIZED)")
+#     print("=" * 70 + "\n")
 
-#     # -------------------------------------------------
-#     # IMPACT MODE → Skip chatbot & S3 completely
-#     # -------------------------------------------------
-#     if mode == "impact":
-#         print("⚡ Impact Analyzer Mode Enabled")
-#         print("   Skipping RAG, S3, VectorDB initialization\n")
+#     db_url = os.getenv("MEMORY_DB_URL", "")
+#     if not db_url.startswith("postgresql"):
+#         print("🚨 CRITICAL WARNING: MEMORY_DB_URL is not set to PostgreSQL.")
+#         print("   Multi-tenancy (Schema Isolation) will NOT work.")
+#         print("   Fallback to SQLite (Shared Mode).")
+#     else:
+#         print("✓ Database Mode: PostgreSQL Multi-Tenancy (Schemas Enabled)")
+
+#     print("Checking API Keys...")
+#     shared.available_providers = check_api_keys()
+
+#     default_provider = None
+#     if shared.available_providers.get("openai"):
+#         default_provider = "openai"
+#     elif shared.available_providers.get("anthropic"):
+#         default_provider = "anthropic"
+
+#     if not default_provider:
+#         print("\nWARNING: No API keys found!")
+#         print("   Please set OPENAI_API_KEY or ANTHROPIC_API_KEY in .env file")
+#         shared.chatbot_config = {"status": "waiting", "error": "No API keys configured"}
 #         return
 
-#     # -------------------------------------------------
-#     # CHAT / FULL MODE → Normal startup
-#     # -------------------------------------------------
-#     print("Initializing RAG Chatbot...")
+#     print(f"\nUsing provider: {default_provider}\n")
 
-#     # Your existing startup logic below
+#     print("Looking for vector databases in S3...")
+#     github_db_path, gmail_db_path, db_owner, db_repo = find_vector_databases_s3()
+
+#     if not github_db_path:
+#         print("❌ No multi-index vector database found in S3.")
+#         print("    Required: s3://bucket/VectorDB/{owner}/{repo_name} with index files")
+#         print("    Run: python backend/core/VectorDB/build_indices.py")
+#         shared.chatbot_config = {
+#             "status": "error",
+#             "error": "Multi-index database not found in S3. Please build it first using build_indices.py",
+#         }
+#         return
+
+#     if not gmail_db_path:
+#         print("ℹ️  No Gmail database found (optional).")
+
+#     try:
+#         print("Initializing RAG Chatbot with S3 VectorDB...")
+#         print("   Using Multi-Index mode (routing: llm)")
+#         print(f"   S3 Path: {github_db_path}")
+
+#         shared.chatbot_instance = RAGChatbot(
+#             vector_db_path=github_db_path,
+#             gmail_db_path=gmail_db_path,
+#             provider=default_provider,
+#             temperature=0.7,
+#             top_k=5,
+#             use_hybrid_retrieval=True,
+#             verbose=False,
+#             routing_method="llm",
+#             repo_owner=db_owner,
+#             repo_name=db_repo,
+#         )
+
+#         databases = []
+#         total_vectors = 0
+
+#         if shared.chatbot_instance.multi_index_store:
+#             stats = shared.chatbot_instance.multi_index_store.get_statistics()
+#             total_vectors = stats.get("total_vectors", 0)
+#             databases.append(
+#                 f"Multi-Index ({total_vectors} vectors across {stats.get('total_indices', 0)} indices)"
+#             )
+#             for idx_type, idx_stats in stats.get("by_index", {}).items():
+#                 if "total_vectors" in idx_stats:
+#                     databases.append(
+#                         f"  - {idx_type}: {idx_stats['total_vectors']} vectors"
+#                     )
+
+#         features = [
+#             "GitHub + Gmail Integration",
+#             "Hybrid Retrieval",
+#             "Flow Diagrams",
+#             "Keyword Issue/PR Filtering",
+#             "Related Knowledge",
+#             "Email Context Support",
+#             "Multi-Index with Query Routing",
+#             "S3-backed Vector Storage",
+#         ]
+
+#         shared.chatbot_config = {
+#             "github_db_path": github_db_path,
+#             "gmail_db_path": gmail_db_path,
+#             "provider": default_provider,
+#             "model": shared.chatbot_instance.model,
+#             "total_vectors": total_vectors,
+#             "databases": databases,
+#             "status": "ready",
+#             "available_providers": shared.available_providers,
+#             "features": features,
+#             "storage_backend": "s3",
+#         }
+
+#         print("\n✅ Chatbot Ready!")
+#         print(f"📊 Databases: {', '.join(databases)}")
+#         print(f"🤖 Model: {shared.chatbot_instance.model}")
+#         print(f"📈 Total Vectors: {total_vectors}")
+#         print(f"🔍 Retrieval: Hybrid")
+#         print(f"☁️  Storage: S3")
+#         if gmail_db_path:
+#             print("📧 Gmail: Enabled")
+#         print()
+
+#     except Exception as e:
+#         print(f"\n❌ Failed to initialize chatbot: {e}\n")
+#         import traceback
+
+#         traceback.print_exc()
+#         shared.chatbot_config = {"status": "error", "error": str(e)}
+#         chatbot_instance = None
+
+
+async def startup():
+    """Initialize application based on APP_MODE"""
+
+    mode = os.getenv("APP_MODE", "full").lower()
+    print(f"\n🚀 Starting in MODE: {mode.upper()}\n")
+
+    # -------------------------------------------------
+    # IMPACT MODE → Skip chatbot & S3 completely
+    # -------------------------------------------------
+    if mode == "impact":
+        print("⚡ Impact Analyzer Mode Enabled")
+        print("   Skipping RAG, S3, VectorDB initialization\n")
+        return
+
+    # -------------------------------------------------
+    # CHAT / FULL MODE → Normal startup
+    # -------------------------------------------------
+    print("Initializing RAG Chatbot...")
+
+    # Your existing startup logic below
 
 
 
@@ -408,6 +408,10 @@ register_route_modules()
 # 🔥 ADD THESE TWO LINES BELOW
 impact_routes = _import_route_module("impact_routes")
 app.include_router(impact_routes.router)
+
+# 🔥 PROMPT BUILDER ROUTES
+prompt_builder_routes = _import_route_module("prompt_builder_routes")
+app.include_router(prompt_builder_routes.router)
 
 # ==================== SHARED HELPER FUNCTIONS ====================
 # These are used by both chat and admin routes

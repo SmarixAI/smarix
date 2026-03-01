@@ -1,7 +1,7 @@
+"use client";
+
+import PromptLayout from "@/components/prompt-builder/PromptBuilderLayout";
+
 export default function PromptBuilderPage() {
-    return (
-        <div className="p-8">
-            <h1 className="text-4xl font-bold">Prompt Builder</h1>
-        </div>
-    );
+  return <PromptLayout />;
 }
