@@ -22,7 +22,9 @@ export default function CodeViewer({ content, fileName }: Props) {
     useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const decorationsRef = useRef<string[]>([]);
 
-  // 🔥 Detect language
+  /* =====================================================
+     🔥 Detect Language from Extension
+  ====================================================== */
   const language = useMemo(() => {
     if (!fileName) return "plaintext";
     const ext = fileName.split(".").pop()?.toLowerCase();
@@ -50,14 +52,19 @@ export default function CodeViewer({ content, fileName }: Props) {
     return map[ext || ""] || "plaintext";
   }, [fileName]);
 
-  // 🔥 Copy
+  /* =====================================================
+     🔥 Copy to Clipboard
+  ====================================================== */
   async function handleCopy() {
+    if (!content) return;
     await navigator.clipboard.writeText(content);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }
 
-  // 🔥 Highlight search matches
+  /* =====================================================
+     🔥 Highlight Search Matches
+  ====================================================== */
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor) return;
@@ -65,6 +72,7 @@ export default function CodeViewer({ content, fileName }: Props) {
     const model = editor.getModel();
     if (!model) return;
 
+    // Clear previous decorations
     decorationsRef.current = editor.deltaDecorations(
       decorationsRef.current,
       []
@@ -103,6 +111,9 @@ export default function CodeViewer({ content, fileName }: Props) {
     }
   }, [search, content]);
 
+  /* =====================================================
+     🔥 Editor Mount
+  ====================================================== */
   const handleEditorMount: OnMount = (editor) => {
     editorRef.current = editor;
 
@@ -114,18 +125,31 @@ export default function CodeViewer({ content, fileName }: Props) {
     });
   };
 
-  if (!content) {
+  /* =====================================================
+     🧠 EMPTY STATE (BASED ON SELECTION)
+  ====================================================== */
+  if (!fileName) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-[#1E1E1E] text-gray-500">
-        Select a file to view content
+      <div className="flex-1 flex items-center justify-center bg-[#1E1E1E]">
+        <div className="text-center">
+          <div className="text-gray-300 text-lg mb-2">
+            No file selected
+          </div>
+          <div className="text-gray-500 text-sm">
+            Select a file from the project tree to view its content
+          </div>
+        </div>
       </div>
     );
   }
 
+  /* =====================================================
+     🚀 MAIN VIEW
+  ====================================================== */
   return (
     <div className="relative flex-1 bg-[#1E1E1E]">
 
-      {/* 🔥 Floating Controls */}
+      {/* Floating Controls */}
       <div className="absolute top-4 right-4 z-20 flex flex-col items-end gap-2">
 
         {/* Search + Copy Row */}
@@ -164,18 +188,17 @@ export default function CodeViewer({ content, fileName }: Props) {
           </button>
         </div>
 
-        {/* Code Locator */}
+        {/* Cursor Position */}
         <div className="text-xs text-gray-400 bg-[#111827]/90 backdrop-blur-md px-3 py-1 rounded-md border border-[#1F2937] shadow">
           Ln {cursorPosition.line}, Col {cursorPosition.column}
         </div>
-
       </div>
 
-      {/* 🔥 Monaco Editor */}
+      {/* Monaco Editor */}
       <Editor
         height="100%"
         language={language}
-        value={content}
+        value={content || ""}
         theme="vs-dark"
         onMount={handleEditorMount}
         options={{
@@ -191,7 +214,6 @@ export default function CodeViewer({ content, fileName }: Props) {
           automaticLayout: true,
         }}
       />
-
     </div>
   );
 }

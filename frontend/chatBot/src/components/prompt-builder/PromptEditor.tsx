@@ -7,7 +7,7 @@ interface Props {
   fileName: string;
   extractorId: string;
   repoId: string;
-  contextData: any; // 🔥 cached context from parent
+  contextData: any;
   onContextGenerated: (data: any) => void;
 }
 
@@ -25,6 +25,25 @@ export default function PromptEditor({
   const [promptLoading, setPromptLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  /* =====================================================
+     🧠 EMPTY STATE — NO FILE SELECTED
+  ====================================================== */
+  if (!fileName || !fileContent) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-[#1E1E1E] p-6">
+        <div className="text-center max-w-md">
+          <div className="text-lg text-gray-300 mb-3">
+            No file selected
+          </div>
+          <div className="text-sm text-gray-500 leading-relaxed">
+            Click on any file from the project tree to view its code,
+            analyze impact, and generate a context-aware prompt.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   async function buildPrompt() {
     if (!instruction) return;
 
@@ -33,9 +52,6 @@ export default function PromptEditor({
     try {
       let activeContext = contextData;
 
-      /* =====================================================
-         1️⃣ BUILD CONTEXT (ONLY IF NOT CACHED)
-      ====================================================== */
       if (!activeContext) {
         setContextLoading(true);
 
@@ -56,16 +72,11 @@ export default function PromptEditor({
         if (!contextRes.ok) throw new Error("Context build failed");
 
         activeContext = await contextRes.json();
-
-        // Send to sidebar
         onContextGenerated(activeContext);
 
         setContextLoading(false);
       }
 
-      /* =====================================================
-         2️⃣ GENERATE PROMPT (ALWAYS RUN)
-      ====================================================== */
       setPromptLoading(true);
 
       const promptRes = await fetch(
@@ -88,10 +99,8 @@ export default function PromptEditor({
       if (!promptRes.ok) throw new Error("Prompt generation failed");
 
       const promptData = await promptRes.json();
-
       setGeneratedPrompt(promptData.llm_refined_prompt ?? "");
       setPromptLoading(false);
-
     } catch (err) {
       console.error("Prompt build failed:", err);
       setContextLoading(false);
@@ -115,7 +124,6 @@ export default function PromptEditor({
 
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-[#1E1E1E] p-6 gap-6">
-
       {/* ================= Instruction ================= */}
       <div className="shrink-0">
         <div className="flex items-center justify-between mb-2">
@@ -146,10 +154,9 @@ export default function PromptEditor({
 
       {/* ================= Prompt Preview ================= */}
       <div className="flex-1 min-h-0 flex flex-col">
-
         <div className="flex items-center justify-between mb-2 shrink-0">
           <div className="text-sm text-gray-400">
-            Generated Engineering Prompt
+            Generated Context aware Prompt
           </div>
 
           <button
@@ -157,7 +164,7 @@ export default function PromptEditor({
             disabled={!generatedPrompt}
             className="text-xs bg-[#2A2D2E] hover:bg-[#3A3D3E] px-3 py-1 rounded-md text-gray-200 transition disabled:opacity-40"
           >
-            {copied ? "Copied ✓" : "Copy"}
+            {copied ? "Prompt Copied ✓" : "Copy Prompt"}
           </button>
         </div>
 

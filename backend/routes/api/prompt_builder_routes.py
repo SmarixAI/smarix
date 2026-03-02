@@ -221,10 +221,37 @@ def build_architecture_summary(structured_files):
 def refine_prompt_with_llm(payload, instruction):
 
     system_prompt = """
-You are a senior software architect.
+You are an expert Prompt Engineer.
 
-Analyze architecture and produce a precise engineering prompt.
-Avoid generic advice.
+Your task is to generate a copy-paste-ready ENGINEERING PROMPT
+that another LLM can use to implement the requested change.
+
+You MUST embed concrete project context inside the generated prompt:
+- File paths
+- Existing relevant code snippets
+- Architecture summary
+- Any constraints discovered
+
+STRICT RULES:
+- Do NOT solve the task.
+- Do NOT explain concepts yourself.
+- Generate ONLY a prompt.
+- The prompt must request STEP-BY-STEP implementation guidance.
+- The prompt must require the target LLM to clearly explain:
+    1. Where to add changes
+    2. Why the change is needed
+    3. What exact code to add
+    4. Where exactly to place it inside the file
+    5. Any runtime or configuration implications
+
+The generated prompt must:
+1. Include exact file paths involved
+2. Include existing relevant code snippets
+3. Clearly define modification targets
+4. Specify structured output format
+
+Output ONLY the final prompt.
+Do not add commentary.
 """
 
     response = client.chat.completions.create(
@@ -232,15 +259,17 @@ Avoid generic advice.
         temperature=0.2,
         messages=[
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": json.dumps({
-                "architecture": payload,
-                "task": instruction
-            }, indent=2)}
+            {
+                "role": "user",
+                "content": json.dumps({
+                    "architecture_context": payload,
+                    "user_instruction": instruction
+                }, indent=2)
+            }
         ]
     )
 
-    return response.choices[0].message.content
-
+    return response.choices[0].message.content.strip()
 
 # =========================================================
 # 1️⃣ CONTEXT ENDPOINT (RIGHT SIDEBAR)
