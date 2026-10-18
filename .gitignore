@@ -85,3 +85,8 @@ node_modules/
 # *.json.bak.*
 backend/data/DataCollectionFromGit/ 
 backend/data/*
+
+# Local databases (contain user data)
+*.db
+*.sqlite
+*.sqlite3
